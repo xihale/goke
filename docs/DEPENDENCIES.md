@@ -12,6 +12,7 @@
 | JUnit 5（jupiter） | :core、:script 测试 | EPL-2.0 | 纯 JVM 单元测试 |
 | JUnit 4 + Robolectric + compose ui-test-junit4 | :app 测试 | EPL-1.0 / MIT / Apache-2.0 | 在 JVM 上渲染页面做冒烟测试（无设备时也能发现崩溃） |
 | Spotless Gradle 插件 + ktlint 1.8.0 | 构建期工具（不进 APK） | Apache-2.0 / MIT | 格式化与静态检查：`spotlessCheck` / `spotlessApply`，规则见 `.editorconfig`，关闭了 if-else-wrapping 与 mixed-condition-operators 两条 |
+| modernc.org/sqlite（Go，server/） | 同步服务端 | BSD-3-Clause | 纯 Go 的 SQLite 驱动，无需 cgo |
 
 ## 没有引入的依赖（及原因）
 
