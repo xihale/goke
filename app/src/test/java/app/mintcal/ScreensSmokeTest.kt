@@ -52,6 +52,7 @@ import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.ParcelScreen
 import app.mintcal.ui.screens.PeriodsScreen
 import app.mintcal.ui.screens.SettingsScreen
+import app.mintcal.ui.screens.SyncScreen
 import app.mintcal.ui.screens.TaskDetailScreen
 import app.mintcal.ui.screens.TimetableScreen
 import app.mintcal.ui.screens.TodayScreen
@@ -157,6 +158,7 @@ class ScreensSmokeTest {
                 "settings" to { SettingsScreen {} },
                 "ai_settings" to { AiSettingsScreen {} },
                 "data" to { DataScreen {} },
+                "sync" to { SyncScreen {} },
                 "import" to { ImportScreen(null) {} },
                 "trash" to { TrashScreen {} },
                 "history" to { HistoryScreen {} },

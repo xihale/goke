@@ -443,4 +443,34 @@
         <item>中</item>
         <item>高</item>
     </string-array>
+    <!-- 账号与同步 -->
+    <string name="sync_title">账号与同步</string>
+    <string name="sync_row_desc">本地模式 / 登录自建服务器同步</string>
+    <string name="sync_mode_local">本地模式</string>
+    <string name="sync_local_desc">目前没有登录，所有数据只保存在这台手机上，功能不受影响。如果你有自建的薄荷日程服务器，可以登录后在多台设备间同步。</string>
+    <string name="sync_login_section">登录自建服务器</string>
+    <string name="sync_login_hint">账号由服务器管理员创建，没有注册入口。</string>
+    <string name="sync_server">服务器地址</string>
+    <string name="sync_http_warning">这是未加密的 http 地址，密码和日程会明文传输。仅建议在可信的内网使用，公网请配置 https。</string>
+    <string name="sync_username">用户名</string>
+    <string name="sync_password">密码</string>
+    <string name="sync_login">登录并开启同步</string>
+    <string name="sync_no_account">没有账号或忘记密码，请联系服务器管理员。</string>
+    <string name="sync_mode_cloud">云端模式</string>
+    <string name="sync_cloud_desc">已登录，本地数据会在后台与服务器同步。断网时照常使用，恢复后自动同步。</string>
+    <string name="sync_account">账号</string>
+    <string name="sync_role_admin">管理员</string>
+    <string name="sync_last">上次同步</string>
+    <string name="sync_running">正在同步…</string>
+    <string name="sync_never">尚未同步</string>
+    <string name="sync_now">立即同步</string>
+    <string name="sync_done_toast">同步完成，从服务器更新了 %1$d 条</string>
+    <string name="sync_change_password">修改密码</string>
+    <string name="sync_old_password">原密码</string>
+    <string name="sync_new_password">新密码</string>
+    <string name="sync_password_rule">至少 8 位</string>
+    <string name="sync_password_changed">密码已修改</string>
+    <string name="sync_open_admin">打开管理后台</string>
+    <string name="sync_logout">退出登录</string>
+    <string name="sync_logout_message">退出后回到本地模式，这台手机上的数据会保留，服务器上的数据也不会被删除。</string>
 </resources>

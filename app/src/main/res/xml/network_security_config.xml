@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自建同步服务器可能只在内网提供 http；是否使用由用户决定，App 的「账号与同步」页会对 http 地址给出风险提示。 -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

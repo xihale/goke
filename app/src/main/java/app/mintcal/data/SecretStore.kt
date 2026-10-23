@@ -10,10 +10,17 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/** 用 Android Keystore 里的 AES-GCM 密钥加密保存 AI Key；明文永远不落盘、不进备份与日志。 */
+/** 同步令牌的保管处：真机上由 [SecretStore]（Keystore 加密）实现，测试里可用内存实现。 */
+interface SyncTokenVault {
+    fun syncToken(): String?
+
+    fun setSyncToken(plain: String)
+}
+
+/** 用 Android Keystore 里的 AES-GCM 密钥加密保存 AI Key 与同步令牌；明文永远不落盘、不进备份与日志。 */
 class SecretStore(
     context: Context,
-) {
+) : SyncTokenVault {
     private val sp = context.getSharedPreferences("secrets", Context.MODE_PRIVATE)
 
     private fun key(): SecretKey {
@@ -31,22 +38,23 @@ class SecretStore(
         return gen.generateKey()
     }
 
-    fun setAiKey(plain: String) {
+    private fun put(
+        name: String,
+        plain: String,
+    ) {
         if (plain.isBlank()) {
-            sp.edit().remove("ai").apply()
+            sp.edit().remove(name).apply()
             return
         }
         val c = Cipher.getInstance("AES/GCM/NoPadding")
         c.init(Cipher.ENCRYPT_MODE, key())
         val enc = c.doFinal(plain.toByteArray(Charsets.UTF_8))
         val packed = c.iv + enc
-        sp.edit().putString("ai", Base64.encodeToString(packed, Base64.NO_WRAP)).apply()
+        sp.edit().putString(name, Base64.encodeToString(packed, Base64.NO_WRAP)).apply()
     }
 
-    fun hasAiKey(): Boolean = sp.contains("ai")
-
-    fun aiKey(): String? {
-        val s = sp.getString("ai", null) ?: return null
+    private fun get(name: String): String? {
+        val s = sp.getString(name, null) ?: return null
         return runCatching {
             val bytes = Base64.decode(s, Base64.NO_WRAP)
             val c = Cipher.getInstance("AES/GCM/NoPadding")
@@ -54,6 +62,17 @@ class SecretStore(
             String(c.doFinal(bytes.copyOfRange(12, bytes.size)), Charsets.UTF_8)
         }.getOrNull()
     }
+
+    fun setAiKey(plain: String) = put("ai", plain)
+
+    fun hasAiKey(): Boolean = sp.contains("ai")
+
+    fun aiKey(): String? = get("ai")
+
+    /** 同步服务器的设备令牌（登录后由服务器签发，退出登录时清除）。 */
+    override fun setSyncToken(plain: String) = put("sync_token", plain)
+
+    override fun syncToken(): String? = get("sync_token")
 
     companion object {
         private const val ALIAS = "mintcal_ai_key"

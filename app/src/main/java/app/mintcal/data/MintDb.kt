@@ -23,18 +23,27 @@ data class OpRow(
  */
 class MintDb(
     context: Context,
-) : SQLiteOpenHelper(context, "mintcal.db", null, 1) {
+    name: String = "mintcal.db",
+) : SQLiteOpenHelper(context, name, null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY, kind TEXT NOT NULL, json TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER)")
         db.execSQL("CREATE TABLE oplog (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, description TEXT NOT NULL, source TEXT NOT NULL, json TEXT NOT NULL, undone_at INTEGER)")
         db.execSQL("CREATE INDEX idx_oplog_created ON oplog(created_at)")
+        createPurged(db)
+    }
+
+    /** 登录同步服务器后，被物理删除（例如撤销「新增」）但还没告诉服务器的记录，以删除墓碑的形式暂存。 */
+    private fun createPurged(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS purged (id TEXT PRIMARY KEY, json TEXT NOT NULL)")
     }
 
     override fun onUpgrade(
         db: SQLiteDatabase,
         oldVersion: Int,
         newVersion: Int,
-    ) {}
+    ) {
+        if (oldVersion < 2) createPurged(db)
+    }
 
     fun loadRecords(): List<Record> {
         val out = ArrayList<Record>()
@@ -52,6 +61,7 @@ class MintDb(
         deletes: Collection<String>,
         op: OpRow? = null,
         markUndone: Pair<String, Long?>? = null,
+        purged: Collection<Record> = emptyList(),
     ) {
         val db = writableDatabase
         db.beginTransaction()
@@ -80,6 +90,13 @@ class MintDb(
                     }
                 db.insertWithOnConflict("oplog", null, v, SQLiteDatabase.CONFLICT_REPLACE)
             }
+            for (r in purged) {
+                val v = ContentValues().apply {
+                    put("id", r.id)
+                    put("json", MintJson.encodeToString(Record.serializer(), r))
+                }
+                db.insertWithOnConflict("purged", null, v, SQLiteDatabase.CONFLICT_REPLACE)
+            }
             if (markUndone != null) {
                 db.execSQL("UPDATE oplog SET undone_at = ? WHERE id = ?", arrayOf<Any?>(markUndone.second, markUndone.first))
             }
@@ -101,6 +118,27 @@ class MintDb(
                 }
             }
         return out
+    }
+
+    fun loadPurged(): List<Record> {
+        val out = ArrayList<Record>()
+        readableDatabase.rawQuery("SELECT json FROM purged", null).use { c ->
+            while (c.moveToNext()) {
+                runCatching { MintJson.decodeFromString(Record.serializer(), c.getString(0)) }.getOrNull()?.let(out::add)
+            }
+        }
+        return out
+    }
+
+    fun clearPurged(ids: Collection<String>) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            for (id in ids) db.delete("purged", "id = ?", arrayOf(id))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
     }
 
     fun clearAll() {

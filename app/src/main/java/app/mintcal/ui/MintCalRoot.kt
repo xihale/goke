@@ -45,6 +45,7 @@ import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.ParcelScreen
 import app.mintcal.ui.screens.PeriodsScreen
 import app.mintcal.ui.screens.SettingsScreen
+import app.mintcal.ui.screens.SyncScreen
 import app.mintcal.ui.screens.TaskDetailScreen
 import app.mintcal.ui.screens.TimetableScreen
 import app.mintcal.ui.screens.TodayScreen
@@ -135,6 +136,7 @@ private fun RouteContent(
         Route.About -> AboutScreen(back)
         Route.AiSettings -> AiSettingsScreen(back)
         Route.Data -> DataScreen(back)
+        Route.Sync -> SyncScreen(back)
         is Route.Import -> ImportScreen(route.uri, back)
         is Route.CourseEdit -> CourseEditScreen(route.id, back)
         is Route.EventEdit -> EventEditScreen(route.id, route.date, back)

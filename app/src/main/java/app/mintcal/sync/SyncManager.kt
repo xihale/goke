@@ -1,0 +1,153 @@
+package app.mintcal.sync
+
+import android.os.Build
+import app.mintcal.core.sync.SyncCodec
+import app.mintcal.core.sync.SyncPlanner
+import app.mintcal.data.Repository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+data class SyncUiState(
+    val account: SyncAccount? = null,
+    val syncing: Boolean = false,
+    val lastSyncAt: Long? = null,
+    val lastError: String? = null,
+)
+
+/**
+ * 同步管理：登录 / 退出，以及「先拉后推」的按记录同步（冲突按 updatedAt 较新者胜，见 ADR-0005）。
+ * 本地模式（未登录）下什么都不做；App 始终只读写本地数据库。
+ */
+class SyncManager(
+    private val repo: Repository,
+    private val store: SyncStore,
+    private val scope: CoroutineScope,
+    private val clock: () -> Long = System::currentTimeMillis,
+) {
+    private val mutex = Mutex()
+    private var pending: Job? = null
+    private val _state = MutableStateFlow(snapshotState(false))
+    val state: StateFlow<SyncUiState> = _state.asStateFlow()
+
+    init {
+        repo.trackPurges = store.account.value != null
+    }
+
+    private fun snapshotState(syncing: Boolean) = SyncUiState(store.account.value, syncing, store.lastSyncAt, store.lastError)
+
+    private fun publish(syncing: Boolean = false) {
+        _state.value = snapshotState(syncing)
+    }
+
+    val lastServerUrl: String get() = store.lastServerUrl
+    val lastUsername: String get() = store.lastUsername
+
+    /** 登录并立刻同步一次。失败时抛出 [SyncException]。 */
+    suspend fun login(
+        serverUrl: String,
+        username: String,
+        password: String,
+    ) {
+        val url = SyncClient.normalizeUrl(serverUrl) ?: throw SyncException("服务器地址不正确")
+        val res = SyncClient(url).login(username.trim(), password, deviceName())
+        store.lastServerUrl = url
+        store.lastUsername = res.user.username
+        store.signIn(SyncAccount(url, res.user.username, res.user.role), res.token)
+        repo.trackPurges = true
+        publish()
+        syncNow()
+    }
+
+    /** 退出登录（尽力通知服务器注销本设备），本地数据保留。 */
+    suspend fun logout() {
+        val acct = store.account.value
+        val token = store.token()
+        if (acct != null && token != null) runCatching { SyncClient(acct.serverUrl, token).logout() }
+        pending?.cancel()
+        store.signOut()
+        repo.trackPurges = false
+        publish()
+    }
+
+    suspend fun changePassword(
+        old: String,
+        new: String,
+    ) {
+        val acct = store.account.value ?: throw SyncException("尚未登录")
+        SyncClient(acct.serverUrl, store.token()).changePassword(old, new)
+    }
+
+    /** 数据变化或打开 App 时调用：稍后（防抖）同步一次。未登录时无操作。 */
+    fun requestSync(delayMs: Long = 4000) {
+        if (store.account.value == null) return
+        pending?.cancel()
+        pending =
+            scope.launch {
+                delay(delayMs)
+                runCatching { syncNow() }
+            }
+    }
+
+    /** 立即同步。返回从服务器写入本地的记录数；失败抛出 [SyncException]（同时记录到状态里）。 */
+    suspend fun syncNow(): Int =
+        mutex.withLock {
+            val acct = store.account.value ?: return 0
+            val token = store.token() ?: return 0
+            publish(syncing = true)
+            try {
+                val client = SyncClient(acct.serverUrl, token)
+                var applied = 0
+
+                // 首次同步：服务器已有数据而本地只有自动创建的默认学期时，丢弃本地默认学期，避免出现两个学期。
+                if (store.cursor == 0L && client.me().cursor > 0 && SyncPlanner.isPristine(repo.snapshot.value)) {
+                    repo.discardAllLocal()
+                }
+
+                // 1. 拉取
+                while (true) {
+                    val page = client.pull(store.cursor)
+                    applied += repo.applyRemote(page.records.mapNotNull(SyncCodec::decode))
+                    store.cursor = page.cursor
+                    if (!page.more) break
+                }
+                repo.ensureDefaultSemester()
+
+                // 2. 推送：本地水位线之后改动的记录 + 已被物理删除但服务器还不知道的墓碑
+                val snap = repo.snapshot.value
+                val purged = repo.pendingPurged()
+                val stale = purged.filter { snap.find(it.id) != null }.map { it.id } // 又被重做回来的，不再需要墓碑
+                if (stale.isNotEmpty()) repo.clearPurged(stale)
+                val tombstones = purged.filter { snap.find(it.id) == null }
+                val changed = SyncPlanner.pending(snap, store.watermark)
+                var newMark = store.watermark
+                val outgoing = changed + tombstones
+                for (batch in outgoing.chunked(500)) {
+                    val res = client.push(batch.map(SyncCodec::encode))
+                    val rejected = res.rejected.mapNotNull(SyncCodec::decode)
+                    applied += repo.applyRemote(rejected)
+                    newMark = maxOf(newMark, rejected.maxOfOrNull { it.updatedAt } ?: 0)
+                }
+                newMark = maxOf(newMark, changed.maxOfOrNull { it.updatedAt } ?: 0)
+                store.watermark = newMark
+                if (tombstones.isNotEmpty()) repo.clearPurged(tombstones.map { it.id })
+
+                store.lastSyncAt = clock()
+                store.lastError = null
+                publish()
+                applied
+            } catch (e: SyncException) {
+                store.lastError = if (e.unauthorized) "登录已失效，请重新登录" else e.message
+                publish()
+                throw e
+            }
+        }
+
+    private fun deviceName(): String = "${Build.MANUFACTURER} ${Build.MODEL}".trim().take(60)
+}

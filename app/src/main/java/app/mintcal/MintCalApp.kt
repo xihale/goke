@@ -9,6 +9,8 @@ import app.mintcal.data.SecretStore
 import app.mintcal.data.SettingsStore
 import app.mintcal.notify.Notifications
 import app.mintcal.notify.ReminderScheduler
+import app.mintcal.sync.SyncManager
+import app.mintcal.sync.SyncStore
 import app.mintcal.widget.TodayWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +33,8 @@ class MintCalApp : Application() {
         private set
     lateinit var advanced: AdvancedController
         private set
+    lateinit var sync: SyncManager
+        private set
 
     @OptIn(FlowPreview::class)
     override fun onCreate() {
@@ -40,9 +44,13 @@ class MintCalApp : Application() {
         secrets = SecretStore(this)
         reminders = ReminderScheduler(this)
         advanced = AdvancedController(this)
+        sync = SyncManager(repo, SyncStore(this, secrets), scope)
         Notifications.ensureChannels(this)
         scope.launch {
             repo.load()
+            sync.requestSync(1000)
+            // 本地数据有变化（含从服务器写入的）后，登录状态下稍后同步一次；未登录时 requestSync 什么都不做
+            launch { repo.snapshot.collect { sync.requestSync() } }
             // 数据或设置变化后重新排提醒并刷新小组件（防抖，避免连续编辑时反复调度）
             combine(repo.snapshot, settings.flow) { s, st -> s to st }
                 .debounce(800)

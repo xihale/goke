@@ -38,6 +38,8 @@ sealed interface Route {
 
     data object Data : Route
 
+    data object Sync : Route
+
     /** uri 为空表示先让用户选择文件。 */
     data class Import(
         val uri: String?,
