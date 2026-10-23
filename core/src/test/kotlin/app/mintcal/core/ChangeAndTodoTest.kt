@@ -7,6 +7,8 @@ import app.mintcal.core.change.ChangeViews
 import app.mintcal.core.change.Conflicts
 import app.mintcal.core.change.SnapshotDiff
 import app.mintcal.core.change.apply
+import app.mintcal.core.change.canRedo
+import app.mintcal.core.change.canUndo
 import app.mintcal.core.change.undo
 import app.mintcal.core.export.ExportBundle
 import app.mintcal.core.importer.ImportPlanner
@@ -25,6 +27,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -52,6 +55,41 @@ class ChangeAndTodoTest {
         assertEquals(listOf("高数", "英语"), undone.courses.sortedBy { it.id }.map { it.name })
         // 幂等
         assertEquals(after.live().courses.map { it.name }, after.apply(cs).live().courses.map { it.name })
+    }
+
+    @Test fun `undo multiple steps out of order and redo`() {
+        val c1 = ChangeSet("c1", "rename a", Source.MANUAL, 1L, listOf(Change.Modify(base.courses[0], course("a", "高等数学"))))
+        val s1 = base.apply(c1, 10L)
+        val c2 = ChangeSet("c2", "add c", Source.MANUAL, 2L, listOf(Change.Add(course("c", "物理", dow = 3))))
+        val s2 = s1.apply(c2, 20L)
+        val c3 = ChangeSet("c3", "rename a again", Source.MANUAL, 3L, listOf(Change.Modify(course("a", "高等数学"), course("a", "微积分"))))
+        val s3 = s2.apply(c3, 30L)
+        // c1 被 c3 覆盖，不能单独撤销；c2 与其他无关，可以乱序撤销
+        assertFalse(s3.canUndo(c1))
+        assertTrue(s3.canUndo(c2)); assertTrue(s3.canUndo(c3))
+        val noC = s3.undo(c2, 40L)
+        assertEquals(listOf("a", "b"), noC.live().courses.map { it.id }.sorted())
+        assertTrue(noC.canRedo(c2)); assertFalse(noC.canUndo(c2))
+        // 连续撤销 c3 再撤销 c1
+        val back3 = noC.undo(c3, 50L)
+        assertTrue(back3.canUndo(c1))
+        val back1 = back3.undo(c1, 60L)
+        assertEquals(listOf("高数", "英语"), back1.live().courses.sortedBy { it.id }.map { it.name })
+        // 重做 c1 → c3 → c2
+        assertTrue(back1.canRedo(c1)); assertFalse(back1.canRedo(c3))
+        val r1 = back1.apply(c1, 70L)
+        assertTrue(r1.canRedo(c3))
+        val r2 = r1.apply(c3, 80L).apply(c2, 90L)
+        assertEquals(listOf("微积分", "英语", "物理"), r2.live().courses.sortedBy { it.id }.map { it.name })
+        assertTrue(r2.canUndo(c2)); assertTrue(r2.canUndo(c3))
+    }
+
+    @Test fun `undo remove then restore`() {
+        val cs = ChangeSet("r", "del b", Source.MANUAL, 1L, listOf(Change.Remove(base.courses[1])))
+        val s = base.apply(cs, 10L)
+        assertTrue(s.canUndo(cs)); assertFalse(s.canRedo(cs))
+        val u = s.undo(cs, 20L)
+        assertFalse(u.canUndo(cs)); assertTrue(u.canRedo(cs))
     }
 
     @Test fun `diff of snapshots`() {

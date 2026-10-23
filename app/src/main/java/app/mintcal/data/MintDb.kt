@@ -41,7 +41,7 @@ class MintDb(context: Context) : SQLiteOpenHelper(context, "mintcal.db", null, 1
     }
 
     /** 事务内：写入记录、删除记录、追加操作历史。 */
-    fun write(upserts: Collection<Record>, deletes: Collection<String>, op: OpRow? = null, markUndone: Pair<String, Long>? = null) {
+    fun write(upserts: Collection<Record>, deletes: Collection<String>, op: OpRow? = null, markUndone: Pair<String, Long?>? = null) {
         val db = writableDatabase
         db.beginTransaction()
         try {

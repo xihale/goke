@@ -75,6 +75,37 @@ fun Snapshot.undo(cs: ChangeSet, at: Long): Snapshot {
     return s
 }
 
+private fun Record.sameContent(o: Record) = withMeta(0, null) == o.withMeta(0, null)
+
+/**
+ * 能否安全撤销 [cs]：每条记录当前的状态必须仍然等于该变更集应用后的状态。
+ * 若之后又有别的操作改动了同一条记录，则不允许单独撤销，避免覆盖后来的修改。
+ */
+fun Snapshot.canUndo(cs: ChangeSet): Boolean {
+    if (cs.isEmpty) return false
+    return cs.changes.groupBy { it.record.id }.values.all { list ->
+        val cur = find(list.last().record.id)
+        when (val c = list.last()) {
+            is Change.Add -> cur != null && cur.deletedAt == null && cur.sameContent(c.after)
+            is Change.Modify -> cur != null && cur.deletedAt == c.after.deletedAt && cur.sameContent(c.after)
+            is Change.Remove -> cur != null && cur.deletedAt != null
+        }
+    }
+}
+
+/** 能否安全重做 [cs]（已被撤销）：每条记录当前状态必须仍等于变更集应用前的状态。 */
+fun Snapshot.canRedo(cs: ChangeSet): Boolean {
+    if (cs.isEmpty) return false
+    return cs.changes.groupBy { it.record.id }.values.all { list ->
+        val cur = find(list.first().record.id)
+        when (val c = list.first()) {
+            is Change.Add -> cur == null
+            is Change.Modify -> cur != null && cur.deletedAt == c.before.deletedAt && cur.sameContent(c.before)
+            is Change.Remove -> cur != null && cur.deletedAt == null && cur.sameContent(c.before)
+        }
+    }
+}
+
 /** 把「脚本 / AI 产出的新快照」与旧快照对比，得到变更列表（只对比未删除的记录）。 */
 object SnapshotDiff {
     fun diff(before: Snapshot, after: Snapshot): List<Change> {

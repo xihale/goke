@@ -132,7 +132,7 @@ fun HistoryScreen(onBack: () -> Unit) {
     val actions = LocalActions.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val history by app.repo.history.collectAsState()
-    val latestId = history.firstOrNull { it.undoneAt == null }?.id
+    val snapshot by app.repo.snapshot.collectAsState()
 
     MintScreen(title = stringResource(R.string.history_title), onBack = onBack) {
         if (history.isEmpty()) {
@@ -150,12 +150,23 @@ fun HistoryScreen(onBack: () -> Unit) {
                     }
                     Text("${stamp(op.createdAt)} · ${ctx.getString(src)}" + if (op.undoneAt != null) " · " + ctx.getString(R.string.history_undone) else "",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (op.id == latestId) {
+                    val canUndo = app.repo.undoable(op, snapshot)
+                    val canRedo = app.repo.redoable(op, snapshot)
+                    if (canUndo || canRedo) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                             TextButton(onClick = {
-                                scope.launch { app.repo.undo(op.id); actions.toast(ctx.getString(R.string.undone_toast)) }
-                            }) { Text(stringResource(R.string.undo)) }
+                                scope.launch {
+                                    val ok = if (canUndo) app.repo.undo(op.id) else app.repo.redo(op.id)
+                                    val msg = if (!ok) R.string.history_blocked_toast else if (canUndo) R.string.undone_toast else R.string.redone_toast
+                                    actions.toast(ctx.getString(msg))
+                                }
+                            }) { Text(stringResource(if (canUndo) R.string.undo else R.string.redo)) }
                         }
+                    } else {
+                        Text(
+                            stringResource(if (op.undoneAt == null) R.string.history_blocked_undo else R.string.history_blocked_redo),
+                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }

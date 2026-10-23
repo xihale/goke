@@ -27,6 +27,8 @@
     <string name="saved_toast">已保存</string>
     <string name="deleted_toast">已删除</string>
     <string name="undone_toast">已撤销</string>
+    <string name="redone_toast">已重做</string>
+    <string name="redo">重做</string>
     <string name="copied_toast">已复制到新学期</string>
     <string name="imported_toast">已导入</string>
     <string name="applied_toast">已应用 %1$d 项修改</string>
@@ -387,7 +389,10 @@
     <string name="trash_empty_confirm">回收站里的内容将被永久删除，无法恢复。</string>
     <string name="trash_hint">删除的内容会保留 %1$d 天，之后自动清除。</string>
     <string name="history_empty">还没有操作记录</string>
-    <string name="history_hint">每次修改都会记录下来。目前只能撤销最近一次。</string>
+    <string name="history_hint">每次修改都会记录下来，可以连续撤销多步，也可以重做已撤销的操作。若之后的修改涉及相同内容，需要先撤销那些修改。</string>
+    <string name="history_blocked_undo">之后的修改涉及相同内容，暂时无法撤销</string>
+    <string name="history_blocked_redo">内容已被改动，无法重做</string>
+    <string name="history_blocked_toast">内容已被后来的修改改动，无法操作</string>
     <string name="history_unnamed">未命名操作</string>
     <string name="history_undone">已撤销</string>
     <string name="source_manual">手动</string>

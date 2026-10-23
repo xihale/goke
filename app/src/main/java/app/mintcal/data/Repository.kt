@@ -4,6 +4,8 @@ import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
 import app.mintcal.core.change.apply
 import app.mintcal.core.change.record
+import app.mintcal.core.change.canRedo
+import app.mintcal.core.change.canUndo
 import app.mintcal.core.change.undo
 import app.mintcal.core.model.GdutPeriods
 import app.mintcal.core.model.Record
@@ -79,18 +81,41 @@ class Repository(
         }
     }
 
-    /** 撤销某次操作（仅允许撤销最近一个未撤销的操作，避免覆盖之后的修改）。 */
+    /** 某次操作当前能否撤销 / 重做（状态比对，见 [canUndo]、[canRedo]）。 */
+    fun undoable(op: OpRow, snapshot: Snapshot = _snapshot.value): Boolean =
+        op.undoneAt == null && runCatching { snapshot.canUndo(ChangeSet.fromJson(op.json)) }.getOrDefault(false)
+
+    fun redoable(op: OpRow, snapshot: Snapshot = _snapshot.value): Boolean =
+        op.undoneAt != null && runCatching { snapshot.canRedo(ChangeSet.fromJson(op.json)) }.getOrDefault(false)
+
+    /** 撤销某次操作。若之后的操作改动了同样的内容则返回 false，不做任何事。可连续撤销多步。 */
     suspend fun undo(opId: String): Boolean = withContext(Dispatchers.IO) {
         lock.withLock {
-            val latest = _history.value.firstOrNull { it.undoneAt == null } ?: return@withLock false
-            if (latest.id != opId) return@withLock false
-            val cs = ChangeSet.fromJson(latest.json)
+            val op = db.ops(100).firstOrNull { it.id == opId && it.undoneAt == null } ?: return@withLock false
+            val cs = ChangeSet.fromJson(op.json)
+            if (!_snapshot.value.canUndo(cs)) return@withLock false
             val now = clock()
             val next = _snapshot.value.undo(cs, now)
             val touched = cs.changes.map { it.record.id }.distinct()
             val deletes = cs.changes.filterIsInstance<Change.Add>().map { it.after.id }
             val upserts = touched.filter { it !in deletes }.mapNotNull { next.find(it) }
             db.write(upserts, deletes, null, opId to now)
+            _snapshot.value = next
+            _history.value = db.ops(100)
+            true
+        }
+    }
+
+    /** 重做一个已撤销的操作；当前内容已和撤销后不同则返回 false。 */
+    suspend fun redo(opId: String): Boolean = withContext(Dispatchers.IO) {
+        lock.withLock {
+            val op = db.ops(100).firstOrNull { it.id == opId && it.undoneAt != null } ?: return@withLock false
+            val cs = ChangeSet.fromJson(op.json)
+            if (!_snapshot.value.canRedo(cs)) return@withLock false
+            val now = clock()
+            val next = _snapshot.value.apply(cs, now)
+            val upserts = cs.changes.map { it.record.id }.distinct().mapNotNull { next.find(it) }
+            db.write(upserts, emptyList(), null, opId to null)
             _snapshot.value = next
             _history.value = db.ops(100)
             true

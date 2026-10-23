@@ -1,4 +1,6 @@
 [versions]
+spotless = "8.10.4"
+ktlint = "1.8.0"
 agp = "9.3.2"
 kotlin = "2.4.10"
 ksp = "2.3.12"
@@ -55,6 +57,7 @@ androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-man
 materialkolor = { group = "com.materialkolor", name = "material-kolor", version.ref = "materialKolor" }
 
 [plugins]
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
