@@ -23,9 +23,10 @@ Kotlin · Jetpack Compose · Material 3 Expressive · 手写 SQLite（ADR-0002�
 ./gradlew :app:testDebugUnitTest         # Robolectric 渲染冒烟测试（截图输出到 app/build/shots）
 ./gradlew :app:assembleDebug             # 生成 debug APK
 python3 scripts/check_strings.py --unused  # 字符串资源检查
+./gradlew spotlessCheck                  # ktlint 格式检查；spotlessApply 自动格式化（规则见 .editorconfig）
 ```
 
-`scripts/xbuild.sh <任务>` 用于在远程构建机后台运行 Gradle 并写日志。AI 功能需在「设置 → AI」自行填写 API Key，Key 仅保存在本机。
+`scripts/xbuild.sh <任务>` 用于在远程构建机后台运行 Gradle 并写日志。字体目前使用系统默认，圆润标题字体待定（见 `docs/adr/0004-defaults.md`）。AI 功能需在「设置 → AI」自行填写 API Key，Key 仅保存在本机。
 
 ## 许可证
 

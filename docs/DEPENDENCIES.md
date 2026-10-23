@@ -11,6 +11,7 @@
 | quickjs-kt（io.github.dokar3） | :script、:app | MIT | 内嵌 QuickJS 引擎，运行「高级修改」脚本；支持超时、内存与栈限制，沙箱内无 IO |
 | JUnit 5（jupiter） | :core、:script 测试 | EPL-2.0 | 纯 JVM 单元测试 |
 | JUnit 4 + Robolectric + compose ui-test-junit4 | :app 测试 | EPL-1.0 / MIT / Apache-2.0 | 在 JVM 上渲染页面做冒烟测试（无设备时也能发现崩溃） |
+| Spotless Gradle 插件 + ktlint 1.8.0 | 构建期工具（不进 APK） | Apache-2.0 / MIT | 格式化与静态检查：`spotlessCheck` / `spotlessApply`，规则见 `.editorconfig`，关闭了 if-else-wrapping 与 mixed-condition-operators 两条 |
 
 ## 没有引入的依赖（及原因）
 
