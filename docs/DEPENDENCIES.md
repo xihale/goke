@@ -20,3 +20,4 @@
 - **DataStore**：设置项很少，`SharedPreferences` + `StateFlow` 足够。
 - **OkHttp / Retrofit**：AI 请求只有一个 POST，用 `HttpURLConnection` 即可。
 - **图片 / 动画库**：课表图片用 `Canvas` 直接绘制。
+- **前端框架 / 打包器 / npm 依赖（Web 端）**：Web 端是原生 ES 模块，`go:embed` 进服务端；测试只用 Node 内置的 `node:test`，见 [ADR-0006](adr/0006-web-client-vanilla-esm.md)。

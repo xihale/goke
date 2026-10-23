@@ -23,6 +23,10 @@ cd server && go run ./cmd/mintcal-server
 | `MINTCAL_ADMIN_PASSWORD` | 首次启动的管理员密码；不设置则随机生成并打印一次 | 随机 |
 | `MINTCAL_TRUST_PROXY` | 设为 `1` 时用 `X-Forwarded-For` 识别客户端 IP（反向代理后面使用） | 关 |
 
+## Web 端
+
+浏览器打开 `http://服务器:8080/`，用与 App 相同的账号登录，就能在手机或电脑上查看 / 编辑课表、日历、日程和待办（窄屏是手机布局，宽屏是电脑布局），数据与 App 双向同步。手机浏览器里可以「添加到主屏幕」。它内嵌在服务端二进制里，不需要额外部署；不含导入、AI / 脚本修改、快递识别与分享（这些仍在 App 里）。令牌保存在浏览器里，公网使用务必加 HTTPS。设计见 [S011](../docs/specs/011-web-client.md) 与 [ADR-0006](../docs/adr/0006-web-client-vanilla-esm.md)。
+
 ## 管理后台
 
 浏览器打开 `http://服务器:8080/admin/`，用管理员账号登录，可以：创建用户、重置密码、停用 / 启用、设为管理员 / 普通用户、让某用户的所有设备退出登录、删除用户（连同其同步数据）。系统始终至少保留一个可用的管理员；不能停用、降级或删除自己。
@@ -49,5 +53,7 @@ cd server && go run ./cmd/mintcal-server
 cd server
 go vet ./... && go test ./...
 ```
+
+Web 端的前端逻辑测试需要 Node ≥ 20：`cd server && node --test webtest/*.test.mjs`（默认用内置模拟服务）；`bash scripts/web-e2e.sh` 会启动真实服务端再跑一遍同步测试。`node webtest/mock.mjs 8099` 可起一个带演示数据的模拟服务（账号 demo / demopassword），配合 `webtest/shots.mjs` 截图检查布局。
 
 仓库根目录的 `scripts/sync-e2e.sh` 会启动一个临时服务端，用两台「设备」（Robolectric 里的两份本地数据库）跑端到端同步测试。
