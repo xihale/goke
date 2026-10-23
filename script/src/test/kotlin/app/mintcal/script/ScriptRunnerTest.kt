@@ -123,7 +123,7 @@ class ScriptRunnerTest {
 
     @Test fun readOnlyHelpers() {
         val cs = ok("console.log(mc.currentWeek, mc.dateOf(2, 3), mc.weekOf('2026-09-14'), mc.periods.length, mc.today)")
-        assertEquals(listOf("1 2026-09-09 3 0 2026-09-02".replace(" 0 ", " 12 ")), cs.logs.map { it }.let { listOf(it.single().replace(" 0 ", " 12 ")) })
+        assertEquals(listOf("1 2026-09-09 3 12 2026-09-02"), cs.logs)
     }
 
     @Test fun syntaxErrorReported() {
