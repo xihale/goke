@@ -311,5 +311,47 @@ func TestAdminPageServed(t *testing.T) {
 	}
 }
 
+func TestWebAppServed(t *testing.T) {
+	e := newEnv(t)
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		e.h.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		return rec
+	}
+	cases := []struct{ path, ctype, contains string }{
+		{"/", "text/html", "manifest.webmanifest"},
+		{"/app/js/main.js", "javascript", "import"},
+		{"/app/app.css", "text/css", "--primary"},
+		{"/app/manifest.webmanifest", "", "MintCal"},
+		{"/app/icon-192.png", "image/png", ""},
+		{"/admin/", "text/html", "管理后台"},
+	}
+	for _, c := range cases {
+		rec := get(c.path)
+		if rec.Code != 200 {
+			t.Fatalf("%s: %d", c.path, rec.Code)
+		}
+		if c.ctype != "" && !strings.Contains(rec.Header().Get("Content-Type"), c.ctype) {
+			t.Fatalf("%s: content-type %q", c.path, rec.Header().Get("Content-Type"))
+		}
+		if c.contains != "" && !strings.Contains(rec.Body.String(), c.contains) {
+			t.Fatalf("%s: body lacks %q", c.path, c.contains)
+		}
+		csp := rec.Header().Get("Content-Security-Policy")
+		if !strings.Contains(csp, "script-src 'self'") || !strings.Contains(csp, "manifest-src 'self'") {
+			t.Fatalf("%s: CSP %q", c.path, csp)
+		}
+	}
+	if got := get("/").Header().Get("Cache-Control"); got != "no-cache" {
+		t.Fatalf("index cache-control %q", got)
+	}
+	if rec := get("/app/nope.js"); rec.Code != 404 {
+		t.Fatalf("missing asset: %d", rec.Code)
+	}
+	if rec := get("/nope"); rec.Code != 404 {
+		t.Fatalf("unknown path: %d", rec.Code)
+	}
+}
+
 func itoa(n int64) string   { b, _ := json.Marshal(n); return string(b) }
 func mustJSON(v any) []byte { b, _ := json.Marshal(v); return b }

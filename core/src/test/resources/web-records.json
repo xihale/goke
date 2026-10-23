@@ -1,0 +1,377 @@
+[
+  {
+    "id": "1fbfbd06-05e2-47c2-bbf1-e83a527cccc6",
+    "kind": "Semester",
+    "data": {
+      "_t": "semester",
+      "id": "1fbfbd06-05e2-47c2-bbf1-e83a527cccc6",
+      "updatedAt": 1700000000000,
+      "deletedAt": null,
+      "userId": null,
+      "name": "大一下",
+      "week1Monday": "2026-08-31",
+      "totalWeeks": 20,
+      "periods": [
+        {
+          "index": 1,
+          "start": "08:30",
+          "end": "09:15"
+        },
+        {
+          "index": 2,
+          "start": "09:20",
+          "end": "10:05"
+        },
+        {
+          "index": 3,
+          "start": "10:25",
+          "end": "11:10"
+        },
+        {
+          "index": 4,
+          "start": "11:15",
+          "end": "12:00"
+        },
+        {
+          "index": 5,
+          "start": "13:50",
+          "end": "14:35"
+        },
+        {
+          "index": 6,
+          "start": "14:40",
+          "end": "15:25"
+        },
+        {
+          "index": 7,
+          "start": "15:30",
+          "end": "16:15"
+        },
+        {
+          "index": 8,
+          "start": "16:30",
+          "end": "17:15"
+        },
+        {
+          "index": 9,
+          "start": "17:20",
+          "end": "18:05"
+        },
+        {
+          "index": 10,
+          "start": "18:30",
+          "end": "19:15"
+        },
+        {
+          "index": 11,
+          "start": "19:20",
+          "end": "20:05"
+        },
+        {
+          "index": 12,
+          "start": "20:10",
+          "end": "20:55"
+        }
+      ],
+      "isCurrent": true
+    },
+    "updatedAt": 1700000000000,
+    "deletedAt": null
+  },
+  {
+    "id": "2543be38-67ec-4162-ba94-b0a7461f9369",
+    "kind": "Course",
+    "data": {
+      "_t": "course",
+      "id": "2543be38-67ec-4162-ba94-b0a7461f9369",
+      "updatedAt": 1700000000001,
+      "deletedAt": null,
+      "userId": null,
+      "semesterId": "1fbfbd06-05e2-47c2-bbf1-e83a527cccc6",
+      "name": "高等数学",
+      "teacher": "王老师",
+      "room": "教3-204",
+      "dayOfWeek": 2,
+      "startPeriod": 1,
+      "endPeriod": 2,
+      "weeks": [
+        1,
+        2,
+        3,
+        5
+      ],
+      "colorIndex": 3,
+      "remindMinutes": 15,
+      "note": "带计算器",
+      "source": "MANUAL"
+    },
+    "updatedAt": 1700000000001,
+    "deletedAt": null
+  },
+  {
+    "id": "67aacf9d-1a71-497f-af14-3e9fe73ff01e",
+    "kind": "CourseException",
+    "data": {
+      "_t": "courseException",
+      "id": "67aacf9d-1a71-497f-af14-3e9fe73ff01e",
+      "updatedAt": 1700000000002,
+      "deletedAt": null,
+      "userId": null,
+      "courseId": "2543be38-67ec-4162-ba94-b0a7461f9369",
+      "week": 2,
+      "type": "CANCEL",
+      "newWeek": null,
+      "newDayOfWeek": null,
+      "newStartPeriod": null,
+      "newEndPeriod": null,
+      "newRoom": null
+    },
+    "updatedAt": 1700000000002,
+    "deletedAt": null
+  },
+  {
+    "id": "bd8e497b-4be7-4a74-8949-351b90b8be1c",
+    "kind": "CourseException",
+    "data": {
+      "_t": "courseException",
+      "id": "bd8e497b-4be7-4a74-8949-351b90b8be1c",
+      "updatedAt": 1700000000003,
+      "deletedAt": null,
+      "userId": null,
+      "courseId": "2543be38-67ec-4162-ba94-b0a7461f9369",
+      "week": 3,
+      "type": "RESCHEDULE",
+      "newWeek": 4,
+      "newDayOfWeek": 5,
+      "newStartPeriod": 3,
+      "newEndPeriod": 4,
+      "newRoom": "教5-105"
+    },
+    "updatedAt": 1700000000003,
+    "deletedAt": null
+  },
+  {
+    "id": "057651b5-cd5a-440b-82da-cf9521f6cbbc",
+    "kind": "Event",
+    "data": {
+      "_t": "event",
+      "id": "057651b5-cd5a-440b-82da-cf9521f6cbbc",
+      "updatedAt": 1700000000004,
+      "deletedAt": null,
+      "userId": null,
+      "title": "社团例会",
+      "start": "2026-10-23T20:00",
+      "end": "2026-10-23T21:30",
+      "allDay": false,
+      "location": "活动中心",
+      "note": "",
+      "colorIndex": 2,
+      "category": "社团",
+      "remindMinutes": 10,
+      "recurrence": {
+        "freq": "WEEKLY",
+        "interval": 2,
+        "byDays": [
+          5,
+          1
+        ],
+        "until": "2026-12-31",
+        "count": null,
+        "exDates": [
+          "2026-11-06"
+        ]
+      },
+      "kind": "EXAM",
+      "source": "MANUAL"
+    },
+    "updatedAt": 1700000000004,
+    "deletedAt": null
+  },
+  {
+    "id": "b875b877-ad7c-40f0-9cb6-b6c349c894f1",
+    "kind": "Event",
+    "data": {
+      "_t": "event",
+      "id": "b875b877-ad7c-40f0-9cb6-b6c349c894f1",
+      "updatedAt": 1700000000005,
+      "deletedAt": null,
+      "userId": null,
+      "title": "生日",
+      "start": "2026-10-25T00:00",
+      "end": "2026-10-25T23:59",
+      "allDay": true,
+      "location": "",
+      "note": "",
+      "colorIndex": 4,
+      "category": "",
+      "remindMinutes": null,
+      "recurrence": null,
+      "kind": "COUNTDOWN",
+      "source": "MANUAL"
+    },
+    "updatedAt": 1700000000005,
+    "deletedAt": null
+  },
+  {
+    "id": "16294041-b1e6-41fc-9206-0be5b516b0b0",
+    "kind": "TaskList",
+    "data": {
+      "_t": "taskList",
+      "id": "16294041-b1e6-41fc-9206-0be5b516b0b0",
+      "updatedAt": 1700000000006,
+      "deletedAt": null,
+      "userId": null,
+      "name": "学习",
+      "colorIndex": 2,
+      "sort": 1
+    },
+    "updatedAt": 1700000000006,
+    "deletedAt": null
+  },
+  {
+    "id": "b4d963e9-6cca-451f-8e41-ad8094915ffe",
+    "kind": "Task",
+    "data": {
+      "_t": "task",
+      "id": "b4d963e9-6cca-451f-8e41-ad8094915ffe",
+      "updatedAt": 1700000000007,
+      "deletedAt": null,
+      "userId": null,
+      "title": "交作业",
+      "note": "",
+      "listId": "16294041-b1e6-41fc-9206-0be5b516b0b0",
+      "tags": [
+        "数学",
+        "紧急"
+      ],
+      "priority": 3,
+      "startDate": "2026-10-20",
+      "due": "2026-10-23T18:00",
+      "dueHasTime": true,
+      "estimateMinutes": 90,
+      "done": false,
+      "doneAt": null,
+      "parentId": null,
+      "repeat": {
+        "freq": "DAILY",
+        "interval": 2,
+        "byDays": [],
+        "until": null,
+        "count": 5,
+        "exDates": []
+      },
+      "remindMinutes": 30,
+      "courseId": "2543be38-67ec-4162-ba94-b0a7461f9369",
+      "dueBeforeNextClass": false,
+      "blockStart": null,
+      "blockMinutes": null,
+      "sortOrder": 0,
+      "source": "MANUAL",
+      "extra": {}
+    },
+    "updatedAt": 1700000000007,
+    "deletedAt": null
+  },
+  {
+    "id": "22260362-91d2-4953-b3b8-6497b207e651",
+    "kind": "Task",
+    "data": {
+      "_t": "task",
+      "id": "22260362-91d2-4953-b3b8-6497b207e651",
+      "updatedAt": 1700000000008,
+      "deletedAt": null,
+      "userId": null,
+      "title": "子任务",
+      "note": "",
+      "listId": null,
+      "tags": [],
+      "priority": 0,
+      "startDate": null,
+      "due": null,
+      "dueHasTime": false,
+      "estimateMinutes": null,
+      "done": false,
+      "doneAt": null,
+      "parentId": "b4d963e9-6cca-451f-8e41-ad8094915ffe",
+      "repeat": null,
+      "remindMinutes": null,
+      "courseId": null,
+      "dueBeforeNextClass": false,
+      "blockStart": null,
+      "blockMinutes": null,
+      "sortOrder": 2,
+      "source": "MANUAL",
+      "extra": {}
+    },
+    "updatedAt": 1700000000008,
+    "deletedAt": null
+  },
+  {
+    "id": "9c33fae8-109d-4de8-bdf3-dbb1747141b6",
+    "kind": "Task",
+    "data": {
+      "_t": "task",
+      "id": "9c33fae8-109d-4de8-bdf3-dbb1747141b6",
+      "updatedAt": 1700000000009,
+      "deletedAt": null,
+      "userId": null,
+      "title": "已完成",
+      "note": "",
+      "listId": null,
+      "tags": [],
+      "priority": 0,
+      "startDate": null,
+      "due": null,
+      "dueHasTime": false,
+      "estimateMinutes": null,
+      "done": true,
+      "doneAt": 1700000009000,
+      "parentId": null,
+      "repeat": null,
+      "remindMinutes": null,
+      "courseId": null,
+      "dueBeforeNextClass": false,
+      "blockStart": null,
+      "blockMinutes": null,
+      "sortOrder": 0,
+      "source": "MANUAL",
+      "extra": {}
+    },
+    "updatedAt": 1700000000009,
+    "deletedAt": null
+  },
+  {
+    "id": "5e02dd82-4b77-451b-b08d-47ac0f6e582e",
+    "kind": "Task",
+    "data": {
+      "_t": "task",
+      "id": "5e02dd82-4b77-451b-b08d-47ac0f6e582e",
+      "updatedAt": 1700000000020,
+      "deletedAt": 1700000000020,
+      "userId": null,
+      "title": "已删除",
+      "note": "",
+      "listId": null,
+      "tags": [],
+      "priority": 0,
+      "startDate": null,
+      "due": null,
+      "dueHasTime": false,
+      "estimateMinutes": null,
+      "done": false,
+      "doneAt": null,
+      "parentId": null,
+      "repeat": null,
+      "remindMinutes": null,
+      "courseId": null,
+      "dueBeforeNextClass": false,
+      "blockStart": null,
+      "blockMinutes": null,
+      "sortOrder": 0,
+      "source": "MANUAL",
+      "extra": {}
+    },
+    "updatedAt": 1700000000020,
+    "deletedAt": 1700000000020
+  }
+]

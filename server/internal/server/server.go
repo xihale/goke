@@ -57,12 +57,26 @@ func (s *Server) routes() {
 	m.Handle("DELETE /api/v1/admin/users/{id}", s.auth(true, s.handleDeleteUser))
 	m.Handle("POST /api/v1/admin/users/{id}/signout", s.auth(true, s.handleSignOutUser))
 
-	sub, _ := fs.Sub(webFS, "web")
-	m.Handle("GET /admin/", http.StripPrefix("/admin/", http.FileServerFS(sub)))
+	adminFS, _ := fs.Sub(webFS, "web/admin")
+	m.Handle("GET /admin/", http.StripPrefix("/admin/", http.FileServerFS(adminFS)))
 	m.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
 	})
-	m.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/admin/", http.StatusFound) })
+
+	// Web 端（单页应用，hash 路由，无构建步骤）：/ 返回入口页，静态资源在 /app/ 下。
+	appFS, _ := fs.Sub(webFS, "web/app")
+	m.Handle("GET /app/", noCache(http.StripPrefix("/app/", http.FileServerFS(appFS))))
+	m.Handle("GET /{$}", noCache(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFileFS(w, r, appFS, "index.html")
+	})))
+}
+
+// noCache 让浏览器每次向服务器确认静态资源（升级服务端后立即生效）。
+func noCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // secure 加上通用的安全响应头并限制请求体大小。
@@ -72,7 +86,7 @@ func (s *Server) secure(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("X-Frame-Options", "DENY")
-		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'")
+		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; form-action 'self'; manifest-src 'self'; base-uri 'none'; frame-ancestors 'none'")
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			h.Set("Cache-Control", "no-store")
 		}
