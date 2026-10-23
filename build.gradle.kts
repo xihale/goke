@@ -12,11 +12,11 @@ spotless {
     kotlin {
         target("**/*.kt")
         targetExclude("**/build/**")
-        ktlint(libs.versions.ktlint.get())
+        ktlint(libs.versions.ktlint.get()).setEditorConfigPath("$rootDir/.editorconfig")
     }
     kotlinGradle {
         target("**/*.gradle.kts")
         targetExclude("**/build/**")
-        ktlint(libs.versions.ktlint.get())
+        ktlint(libs.versions.ktlint.get()).setEditorConfigPath("$rootDir/.editorconfig")
     }
 }
