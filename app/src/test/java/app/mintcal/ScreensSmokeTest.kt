@@ -81,7 +81,7 @@ class ScreensSmokeTest {
     private val app get() = ApplicationProvider.getApplicationContext<MintCalApp>()
 
     @Before
-    fun seed() = runBlocking {
+    fun seed() { runBlocking {
         app.repo.load()
         val snap = app.repo.snapshot.value
         val sem = snap.currentSemester!!
@@ -103,7 +103,7 @@ class ScreensSmokeTest {
         val ev = Event(Ids.next(), "社团例会", today.atTime(19, 0), today.atTime(20, 30), location = "活动室", remindMinutes = 15)
         val exam = Event(Ids.next(), "期末考试", today.plusDays(10).atTime(9, 0), today.plusDays(10).atTime(11, 0), kind = EventKind.EXAM)
         app.repo.commit(Edits.saveAll(app.repo.snapshot.value, listOf<app.mintcal.core.model.Record>(list) + tasks + ev + exam, "seed", now))
-    }
+    } }
 
     @Composable
     private fun Host(content: @Composable () -> Unit) {
