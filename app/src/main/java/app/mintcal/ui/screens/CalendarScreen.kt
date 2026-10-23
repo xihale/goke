@@ -1,5 +1,6 @@
 package app.mintcal.ui.screens
 
+import app.mintcal.ui.theme.MintTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -116,7 +117,7 @@ fun CalendarScreen() {
             }
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    Row(Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surface).padding(3.dp)) {
+                    Row(Modifier.clip(CircleShape).background(MintTheme.card).padding(3.dp)) {
                         CalMode.entries.forEach { m ->
                             val sel = m == mode
                             Text(
@@ -132,7 +133,7 @@ fun CalendarScreen() {
             }
             if (mode != CalMode.DAY) {
                 item {
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(MaterialTheme.colorScheme.surface).padding(8.dp)) {
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(MintTheme.card).padding(8.dp)) {
                         Row(Modifier.fillMaxWidth()) {
                             for (i in 0..6) {
                                 val d = first.plus(i.toLong())

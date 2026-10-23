@@ -86,6 +86,10 @@ val LocalReduceMotion = compositionLocalOf { false }
 object MintTheme {
     val colors: MintColors @Composable @ReadOnlyComposable get() = LocalMintColors.current
 
+    /** 卡片底色：浅色用最亮的容器色（在带色调的背景上显出白卡片），深色用较亮的容器色。 */
+    val card: Color @Composable @ReadOnlyComposable get() =
+        if (LocalMintColors.current.dark) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainerLowest
+
     /** 弹簧动效（阻尼 0.7）；系统「移除动画」时直接切换。 */
     @Composable
     fun <T> spec(): FiniteAnimationSpec<T> =
@@ -169,6 +173,9 @@ fun MintCalTheme(settings: Settings, content: @Composable () -> Unit) {
     }
     val scheme = resolveColorScheme(settings, dark)
     CompositionLocalProvider(LocalMintColors provides mintColors(dark), LocalReduceMotion provides reduce) {
-        MaterialTheme(colorScheme = scheme, shapes = MintShapes, typography = MintTypography, content = content)
+        MaterialTheme(colorScheme = scheme, shapes = MintShapes, typography = MintTypography) {
+            // 提供默认内容色：没有 Surface 包裹时文字会是黑色，深色模式下看不见
+            androidx.compose.material3.Surface(color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground, content = content)
+        }
     }
 }

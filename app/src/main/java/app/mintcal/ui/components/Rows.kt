@@ -109,7 +109,7 @@ private fun RowShell(
 @Composable
 fun TaskRow(task: Task, onToggle: (Task, Boolean) -> Unit, onOpen: (String) -> Unit, subtitle: String? = null) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surface)
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MintTheme.card)
             .clickable { onOpen(task.id) }.padding(start = 8.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -231,7 +231,7 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
 
     MintScreen(stringResource(R.string.advanced_title), onBack) {
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp).imePadding().navigationBarsPadding()) {
-            Row(Modifier.fillMaxWidth().clip(CircleShape).background(MaterialTheme.colorScheme.surface).padding(4.dp)) {
+            Row(Modifier.fillMaxWidth().clip(CircleShape).background(MintTheme.card).padding(4.dp)) {
                 listOf(R.string.seg_describe, R.string.seg_code, R.string.seg_preview).forEachIndexed { i, label ->
                     Text(
                         stringResource(label), Modifier.weight(1f).clip(CircleShape)
@@ -250,7 +250,7 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                         Text(stringResource(R.string.examples), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         EXAMPLES.forEach { ex ->
                             Text(
-                                stringResource(ex.desc), Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surface)
+                                stringResource(ex.desc), Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MintTheme.card)
                                     .clickable { app.advanced.setDescription(ctx.getString(ex.desc)); app.advanced.setCode(ex.code); seg = 1 }.padding(14.dp),
                                 style = MaterialTheme.typography.bodyMedium,
                             )

@@ -91,7 +91,7 @@ fun MintScreen(
 @Composable
 fun MintCard(
     modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.surface,
+    color: Color = MintTheme.card,
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp),
     onClick: (() -> Unit)? = null,
     border: BorderStroke? = null,
@@ -184,7 +184,7 @@ fun FloatingNavBar(tab: Tab, onTab: (Tab) -> Unit, modifier: Modifier = Modifier
     )
     Surface(
         modifier = modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth(),
-        shape = RoundedCornerShape(32.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp, tonalElevation = 2.dp,
+        shape = RoundedCornerShape(32.dp), color = MintTheme.card, shadowElevation = 8.dp, tonalElevation = 2.dp,
     ) {
         Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             items.forEach { it ->

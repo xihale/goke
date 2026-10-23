@@ -98,7 +98,7 @@ private fun ChangeCard(v: ChangeView, snap: Snapshot) {
     val colors = MintTheme.colors
     val bar = when (v.op) { ChangeOp.ADD -> colors.added; ChangeOp.MODIFY -> colors.modified; ChangeOp.REMOVE -> colors.removed }
     val opLabel = when (v.op) { ChangeOp.ADD -> R.string.op_add; ChangeOp.MODIFY -> R.string.op_modify; ChangeOp.REMOVE -> R.string.op_remove }
-    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surface)) {
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(18.dp)).background(MintTheme.card)) {
         Box(Modifier.width(5.dp).fillMaxHeight().background(bar))
         Column(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {

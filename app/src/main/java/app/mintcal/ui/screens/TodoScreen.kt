@@ -180,7 +180,7 @@ private fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit) {
     Text(
         text,
         modifier = Modifier.clip(CircleShape)
-            .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
+            .background(if (selected) MaterialTheme.colorScheme.primary else MintTheme.card)
             .clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 8.dp),
         style = MaterialTheme.typography.labelLarge,
         color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,

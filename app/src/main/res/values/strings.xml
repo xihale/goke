@@ -64,7 +64,6 @@
     <string name="minutes_n">%1$d 分钟</string>
     <string name="color_n">颜色 %1$d</string>
     <string name="all_day">全天</string>
-    <string name="timetable_title">%1$s · 第 %2$d 周</string>
     <string name="this_week">本周</string>
     <string name="back_to_this_week">回到本周</string>
     <string name="semester_not_started">学期尚未开始</string>

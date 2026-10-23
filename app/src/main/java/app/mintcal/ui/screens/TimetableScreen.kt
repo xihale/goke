@@ -141,7 +141,7 @@ fun TimetableScreen() {
         Row(Modifier.fillMaxWidth().height(64.dp).padding(start = 20.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    ctx.getString(R.string.timetable_title, sem.name.take(14), pager.currentPage + 1),
+                    ctx.getString(R.string.week_n, pager.currentPage + 1),
                     style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 val w = pager.currentPage + 1

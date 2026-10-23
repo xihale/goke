@@ -123,7 +123,7 @@ fun EditTimetableScreen(onBack: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 courses.forEach { c ->
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surface)
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(MintTheme.card)
                             .clickable { nav.push(Route.CourseEdit(c.id)) }.padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
