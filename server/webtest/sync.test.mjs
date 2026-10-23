@@ -121,6 +121,7 @@ test('离线时修改保留，恢复网络后自动推送；缓存可恢复', as
     assert.equal(a.store.status, 'offline');
     assert.equal(a.store.pending, 1);
     a.store.flush();
+    a.store.unload(false); // 「关闭页面」：停掉定时重试，避免它在恢复网络后抢先推送
   } finally {
     globalThis.fetch = realFetch;
   }
