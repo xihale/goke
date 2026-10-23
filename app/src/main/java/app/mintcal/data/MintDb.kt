@@ -65,7 +65,7 @@ class MintDb(context: Context) : SQLiteOpenHelper(context, "mintcal.db", null, 1
                 db.insertWithOnConflict("oplog", null, v, SQLiteDatabase.CONFLICT_REPLACE)
             }
             if (markUndone != null) {
-                db.execSQL("UPDATE oplog SET undone_at = ? WHERE id = ?", arrayOf(markUndone.second, markUndone.first))
+                db.execSQL("UPDATE oplog SET undone_at = ? WHERE id = ?", arrayOf<Any?>(markUndone.second, markUndone.first))
             }
             db.setTransactionSuccessful()
         } finally {

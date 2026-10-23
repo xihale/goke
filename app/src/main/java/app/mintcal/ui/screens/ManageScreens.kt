@@ -44,6 +44,7 @@ import app.mintcal.core.model.Task
 import app.mintcal.core.model.displayTitle
 import app.mintcal.core.model.entityType
 import app.mintcal.core.parcel.ParcelParser
+import app.mintcal.data.Repository
 import app.mintcal.notify.ParcelTasks
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
@@ -92,10 +93,10 @@ fun TrashScreen(onBack: () -> Unit) {
         if (trashed.isEmpty()) {
             Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center) {
                 Text(stringResource(R.string.trash_empty), style = MaterialTheme.typography.titleMedium)
-                Text(stringResource(R.string.trash_hint, app.mintcal.data.Repository.TRASH_DAYS), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.trash_hint, Repository.TRASH_DAYS), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else LazyColumn(Modifier.fillMaxSize().navigationBarsPadding(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            item { Text(stringResource(R.string.trash_hint, app.mintcal.data.Repository.TRASH_DAYS), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item { Text(stringResource(R.string.trash_hint, Repository.TRASH_DAYS), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             items(trashed, key = { it.id }) { r ->
                 MintCard {
                     Text(r.displayTitle, style = MaterialTheme.typography.titleMedium)

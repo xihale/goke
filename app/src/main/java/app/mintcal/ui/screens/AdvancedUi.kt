@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.mintcal.R
+import app.mintcal.core.model.Source
 import app.mintcal.ai.AdvancedController
 import app.mintcal.script.ScriptOutcome
 import app.mintcal.script.ScriptSdk
@@ -265,7 +266,7 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                             textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp),
                             placeholder = { Text("// mc.courses.query(...)") }, shape = RoundedCornerShape(18.dp),
                         )
-                        if (st.codeSource == app.mintcal.core.model.Source.AI && st.code.isNotBlank()) Text(stringResource(R.string.code_from_ai), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
+                        if (st.codeSource == Source.AI && st.code.isNotBlank()) Text(stringResource(R.string.code_from_ai), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Button(onClick = { app.advanced.dryRun(); seg = 2 }, enabled = st.code.isNotBlank() && !st.running) { Text(stringResource(R.string.dry_run)) }
                             OutlinedButton(onClick = { showApi = true }) { Text(stringResource(R.string.api_reference)) }

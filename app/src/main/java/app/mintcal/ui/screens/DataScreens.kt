@@ -54,6 +54,7 @@ import app.mintcal.share.Sharing
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
+import app.mintcal.ui.Route
 import app.mintcal.ui.Tab
 import app.mintcal.ui.components.ChangeList
 import app.mintcal.ui.components.ChipChoice
@@ -96,7 +97,7 @@ fun DataScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             FormSection(stringResource(R.string.section_import)) {
-                NavRow(stringResource(R.string.import_file), stringResource(R.string.import_file_desc), Icons.Rounded.UploadFile) { nav.push(app.mintcal.ui.Route.Import(null)) }
+                NavRow(stringResource(R.string.import_file), stringResource(R.string.import_file_desc), Icons.Rounded.UploadFile) { nav.push(Route.Import(null)) }
             }
             FormSection(stringResource(R.string.section_export)) {
                 NavRow(stringResource(R.string.export_ics), stringResource(R.string.export_ics_desc), Icons.Rounded.IosShare) {

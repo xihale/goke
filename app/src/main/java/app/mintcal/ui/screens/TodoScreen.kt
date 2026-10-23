@@ -215,9 +215,10 @@ fun TodoCard(task: Task, snap: Snapshot, now: LocalDateTime) {
                     else -> ctx.dueLabel(due, task.dueHasTime, now.toLocalDate())
                 }
                 if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = if (overdue) colors.removed else MaterialTheme.colorScheme.onSurfaceVariant)
-                if (task.blockStart != null) {
+                val bStart = task.blockStart
+                if (bStart != null) {
                     val end = TaskLogic.blockEnd(task, 60)!!
-                    Text(stringResource(R.string.block_in_calendar, task.blockStart.hm(), end.hm()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.block_in_calendar, bStart.hm(), end.hm()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
                 if (total > 0) {
                     Spacer(Modifier.height(6.dp))
@@ -289,7 +290,7 @@ fun buildQuickTask(snap: Snapshot, p: app.mintcal.core.todo.QuickAddResult, defa
         val existing = snap.lists.firstOrNull { it.name == p.listName }
         if (existing != null) listId = existing.id
         else {
-            val l = TaskList(Ids.next(), p.listName, colorIndex = snap.lists.size % 8, sort = snap.lists.size)
+            val l = TaskList(Ids.next(), p.listName.orEmpty(), colorIndex = snap.lists.size % 8, sort = snap.lists.size)
             changes += Change.Add(l); listId = l.id
         }
     }

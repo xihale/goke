@@ -58,10 +58,8 @@ private fun entityLabel(t: EntityType): Int = when (t) {
     EntityType.TASK -> R.string.entity_task; EntityType.LIST -> R.string.entity_list; EntityType.SEMESTER -> R.string.entity_semester
 }
 
-@Composable
-private fun fieldValue(d: FieldDiff, v: String?, snap: Snapshot): String {
+private fun fieldValue(ctx: android.content.Context, d: FieldDiff, v: String?, snap: Snapshot): String {
     if (v == null) return ""
-    val ctx = LocalContext.current
     return when (d.key) {
         FieldKey.DAY -> v.toIntOrNull()?.let { ctx.weekdayFull(it) } ?: v
         FieldKey.PERIODS -> ctx.getString(R.string.periods_value, v)
@@ -96,6 +94,7 @@ fun ChangeList(cs: ChangeSet, snap: Snapshot, modifier: Modifier = Modifier, lim
 
 @Composable
 private fun ChangeCard(v: ChangeView, snap: Snapshot) {
+    val ctx = LocalContext.current
     val colors = MintTheme.colors
     val bar = when (v.op) { ChangeOp.ADD -> colors.added; ChangeOp.MODIFY -> colors.modified; ChangeOp.REMOVE -> colors.removed }
     val opLabel = when (v.op) { ChangeOp.ADD -> R.string.op_add; ChangeOp.MODIFY -> R.string.op_modify; ChangeOp.REMOVE -> R.string.op_remove }
@@ -113,15 +112,15 @@ private fun ChangeCard(v: ChangeView, snap: Snapshot) {
                 ChangeOp.MODIFY -> v.summary.forEach { d ->
                     Row {
                         Text(stringResource(fieldLabel(d.key)) + "  ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (!d.before.isNullOrEmpty()) Text(fieldValue(d, d.before, snap), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textDecoration = TextDecoration.LineThrough)
+                        if (!d.before.isNullOrEmpty()) Text(fieldValue(ctx, d, d.before, snap), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textDecoration = TextDecoration.LineThrough)
                         Text("  →  ", style = MaterialTheme.typography.bodySmall)
-                        Text(if (d.after.isNullOrEmpty()) stringResource(R.string.none) else fieldValue(d, d.after, snap), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        Text(if (d.after.isNullOrEmpty()) stringResource(R.string.none) else fieldValue(ctx, d, d.after, snap), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                     }
                 }
                 else -> {
                     val keys = v.summary.filter { it.key != FieldKey.NAME && it.key != FieldKey.COLOR }.take(4)
                     if (keys.isNotEmpty()) Text(
-                        keys.joinToString("  ·  ") { d -> fieldValue(d, d.after ?: d.before, snap) },
+                        keys.joinToString("  ·  ") { d -> fieldValue(ctx, d, d.after ?: d.before, snap) },
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
