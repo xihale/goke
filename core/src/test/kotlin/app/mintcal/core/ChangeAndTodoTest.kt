@@ -57,10 +57,6 @@ class ChangeAndTodoTest {
     @Test fun `diff of snapshots`() {
         val after = base.copy(courses = listOf(course("a", "高数", weeks = setOf(1, 2, 3)), course("z", "新课", dow = 5)))
         val diff = SnapshotDiff.diff(base, after)
-        assertEquals(listOf("Modify", "Add", "Remove"), diff.map { it::class.simpleName }.let { names ->
-            // 稳定顺序：课程内先 add/modify（按 after 顺序），再 remove
-            names
-        }.let { listOf("Modify", "Add", "Remove") })
         assertEquals(1, diff.count { it is Change.Modify }); assertEquals(1, diff.count { it is Change.Add }); assertEquals(1, diff.count { it is Change.Remove })
         val views = ChangeViews.of(ChangeSet("x", changes = diff))
         val mod = views.single { it.op == ChangeOp.MODIFY }
