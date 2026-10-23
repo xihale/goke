@@ -110,10 +110,17 @@ class SyncManager(
                     repo.discardAllLocal()
                 }
 
-                // 1. 拉取
+                // 1. 拉取。本地已物理删除、但墓碑还没推送的记录（例如撤销了「新增」），不能被服务器上的旧版本带回来，
+                //    除非别的设备在那之后又改过它（remote 更新）。
+                val waitingTombstones = repo.pendingPurged().associateBy { it.id }
                 while (true) {
                     val page = client.pull(store.cursor)
-                    applied += repo.applyRemote(page.records.mapNotNull(SyncCodec::decode))
+                    val remote =
+                        page.records.mapNotNull(SyncCodec::decode).filter { r ->
+                            val t = waitingTombstones[r.id]
+                            t == null || r.updatedAt > t.updatedAt
+                        }
+                    applied += repo.applyRemote(remote)
                     store.cursor = page.cursor
                     if (!page.more) break
                 }
