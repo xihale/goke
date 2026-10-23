@@ -51,12 +51,32 @@ class SyncIntegrationTest {
     private fun course(
         semesterId: String,
         name: String,
-    ) = Course(app.mintcal.core.util.Ids.next(), semesterId, name, dayOfWeek = 1, startPeriod = 1, endPeriod = 2, weeks = setOf(1, 2, 3))
+    ) = Course(
+        app.mintcal.core.util.Ids
+            .next(),
+        semesterId,
+        name,
+        dayOfWeek = 1,
+        startPeriod = 1,
+        endPeriod = 2,
+        weeks = setOf(1, 2, 3),
+    )
 
     private fun add(
         repo: Repository,
         c: Course,
-    ) = runBlocking { repo.commit(ChangeSet(app.mintcal.core.util.Ids.next(), "add", Source.MANUAL, System.currentTimeMillis(), listOf(Change.Add(c)))) }
+    ) = runBlocking {
+        repo.commit(
+            ChangeSet(
+                app.mintcal.core.util.Ids
+                    .next(),
+                "add",
+                Source.MANUAL,
+                System.currentTimeMillis(),
+                listOf(Change.Add(c)),
+            ),
+        )
+    }
 
     private fun names(repo: Repository) =
         repo.snapshot.value
@@ -87,14 +107,32 @@ class SyncIntegrationTest {
             // B 是全新的设备，只有自动创建的默认学期：登录后应丢弃它，得到 A 的学期与课程，且只有一个学期
             b.sync.login(server, user, pass)
             assertEquals(listOf("高数"), names(b.repo))
-            assertEquals(1, b.repo.snapshot.value.live().semesters.size)
-            assertEquals(semA.id, b.repo.snapshot.value.currentSemester!!.id)
+            assertEquals(
+                1,
+                b.repo.snapshot.value
+                    .live()
+                    .semesters.size,
+            )
+            assertEquals(
+                semA.id,
+                b.repo.snapshot.value.currentSemester!!
+                    .id,
+            )
 
             // B 改名，A 同步后看到新名字
-            val bMath = b.repo.snapshot.value.courses.single { it.id == math.id }
+            val bMath =
+                b.repo.snapshot.value.courses
+                    .single { it.id == math.id }
             runBlocking {
                 b.repo.commit(
-                    ChangeSet(app.mintcal.core.util.Ids.next(), "rename", Source.MANUAL, System.currentTimeMillis(), listOf(Change.Modify(bMath, bMath.copy(name = "高等数学")))),
+                    ChangeSet(
+                        app.mintcal.core.util.Ids
+                            .next(),
+                        "rename",
+                        Source.MANUAL,
+                        System.currentTimeMillis(),
+                        listOf(Change.Modify(bMath, bMath.copy(name = "高等数学"))),
+                    ),
                 )
             }
             b.sync.syncNow()
@@ -102,8 +140,19 @@ class SyncIntegrationTest {
             assertEquals(listOf("高等数学"), names(a.repo))
 
             // A 删除，B 同步后课程消失（墓碑）
-            val aMath = a.repo.snapshot.value.courses.single { it.id == math.id }
-            a.repo.commit(ChangeSet(app.mintcal.core.util.Ids.next(), "del", Source.MANUAL, System.currentTimeMillis(), listOf(Change.Remove(aMath))))
+            val aMath =
+                a.repo.snapshot.value.courses
+                    .single { it.id == math.id }
+            a.repo.commit(
+                ChangeSet(
+                    app.mintcal.core.util.Ids
+                        .next(),
+                    "del",
+                    Source.MANUAL,
+                    System.currentTimeMillis(),
+                    listOf(Change.Remove(aMath)),
+                ),
+            )
             a.sync.syncNow()
             b.sync.syncNow()
             assertEquals(emptyList<String>(), names(b.repo))
@@ -122,7 +171,12 @@ class SyncIntegrationTest {
             // 退出登录后回到本地模式，本地数据保留
             b.sync.logout()
             assertTrue(b.sync.state.value.account == null)
-            assertEquals(1, b.repo.snapshot.value.live().semesters.size)
+            assertEquals(
+                1,
+                b.repo.snapshot.value
+                    .live()
+                    .semesters.size,
+            )
         }
     }
 }

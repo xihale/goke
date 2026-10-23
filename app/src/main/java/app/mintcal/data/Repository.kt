@@ -7,11 +7,11 @@ import app.mintcal.core.change.canRedo
 import app.mintcal.core.change.canUndo
 import app.mintcal.core.change.record
 import app.mintcal.core.change.undo
-import app.mintcal.core.sync.SyncPlanner
 import app.mintcal.core.model.GdutPeriods
 import app.mintcal.core.model.Record
 import app.mintcal.core.model.Semester
 import app.mintcal.core.model.Snapshot
+import app.mintcal.core.sync.SyncPlanner
 import app.mintcal.core.util.IdGenerator
 import app.mintcal.core.util.Ids
 import kotlinx.coroutines.Dispatchers

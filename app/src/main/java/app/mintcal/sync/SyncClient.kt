@@ -108,8 +108,7 @@ class SyncClient(
         limit: Int = 500,
     ): PullResponse = call("GET", "/sync/pull?since=$since&limit=$limit", null)?.let { json.decodeFromString<PullResponse>(it) } ?: fail()
 
-    suspend fun push(records: List<WireRecord>): PushResponse =
-        call("POST", "/sync/push", json.encodeToString(PushRequest.serializer(), PushRequest(records)))?.let { json.decodeFromString<PushResponse>(it) } ?: fail()
+    suspend fun push(records: List<WireRecord>): PushResponse = call("POST", "/sync/push", json.encodeToString(PushRequest.serializer(), PushRequest(records)))?.let { json.decodeFromString<PushResponse>(it) } ?: fail()
 
     private fun fail(): Nothing = throw SyncException("服务器返回了空响应")
 

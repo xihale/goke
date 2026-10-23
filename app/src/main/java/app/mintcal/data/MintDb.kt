@@ -91,10 +91,11 @@ class MintDb(
                 db.insertWithOnConflict("oplog", null, v, SQLiteDatabase.CONFLICT_REPLACE)
             }
             for (r in purged) {
-                val v = ContentValues().apply {
-                    put("id", r.id)
-                    put("json", MintJson.encodeToString(Record.serializer(), r))
-                }
+                val v =
+                    ContentValues().apply {
+                        put("id", r.id)
+                        put("json", MintJson.encodeToString(Record.serializer(), r))
+                    }
                 db.insertWithOnConflict("purged", null, v, SQLiteDatabase.CONFLICT_REPLACE)
             }
             if (markUndone != null) {
