@@ -59,7 +59,9 @@ func (s *Server) routes() {
 
 	sub, _ := fs.Sub(webFS, "web")
 	m.Handle("GET /admin/", http.StripPrefix("/admin/", http.FileServerFS(sub)))
-	m.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/admin/", http.StatusMovedPermanently) })
+	m.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
+	})
 	m.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/admin/", http.StatusFound) })
 }
 
