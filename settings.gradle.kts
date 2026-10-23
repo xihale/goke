@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 rootProject.name = "mintcal"
 include(":core")
 include(":script")
+include(":app")
