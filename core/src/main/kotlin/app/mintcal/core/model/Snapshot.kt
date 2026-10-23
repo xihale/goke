@@ -16,41 +16,45 @@ data class Snapshot(
     val lists: List<TaskList> = emptyList(),
 ) {
     val currentSemester: Semester?
-        get() = semesters.firstOrNull { it.isCurrent && it.deletedAt == null }
-            ?: semesters.firstOrNull { it.deletedAt == null }
+        get() =
+            semesters.firstOrNull { it.isCurrent && it.deletedAt == null }
+                ?: semesters.firstOrNull { it.deletedAt == null }
 
-    fun live(): Snapshot = Snapshot(
-        semesters.filter { it.deletedAt == null },
-        courses.filter { it.deletedAt == null },
-        exceptions.filter { it.deletedAt == null },
-        events.filter { it.deletedAt == null },
-        tasks.filter { it.deletedAt == null },
-        lists.filter { it.deletedAt == null },
-    )
+    fun live(): Snapshot =
+        Snapshot(
+            semesters.filter { it.deletedAt == null },
+            courses.filter { it.deletedAt == null },
+            exceptions.filter { it.deletedAt == null },
+            events.filter { it.deletedAt == null },
+            tasks.filter { it.deletedAt == null },
+            lists.filter { it.deletedAt == null },
+        )
 
     fun allRecords(): List<Record> = semesters + courses + exceptions + events + tasks + lists
 
     fun find(id: String): Record? = allRecords().firstOrNull { it.id == id }
 
     /** 插入或替换（按 id）。 */
-    fun put(r: Record): Snapshot = when (r) {
-        is Semester -> copy(semesters = semesters.upsert(r))
-        is Course -> copy(courses = courses.upsert(r))
-        is CourseException -> copy(exceptions = exceptions.upsert(r))
-        is Event -> copy(events = events.upsert(r))
-        is Task -> copy(tasks = tasks.upsert(r))
-        is TaskList -> copy(lists = lists.upsert(r))
-    }
+    fun put(r: Record): Snapshot =
+        when (r) {
+            is Semester -> copy(semesters = semesters.upsert(r))
+            is Course -> copy(courses = courses.upsert(r))
+            is CourseException -> copy(exceptions = exceptions.upsert(r))
+            is Event -> copy(events = events.upsert(r))
+            is Task -> copy(tasks = tasks.upsert(r))
+            is TaskList -> copy(lists = lists.upsert(r))
+        }
 
     /** 物理移除（仅用于撤销「新增」）。 */
-    fun purge(r: Record): Snapshot = when (r) {
-        is Semester -> copy(semesters = semesters.filterNot { it.id == r.id })
-        is Course -> copy(courses = courses.filterNot { it.id == r.id })
-        is CourseException -> copy(exceptions = exceptions.filterNot { it.id == r.id })
-        is Event -> copy(events = events.filterNot { it.id == r.id })
-        is Task -> copy(tasks = tasks.filterNot { it.id == r.id })
-        is TaskList -> copy(lists = lists.filterNot { it.id == r.id })
-    }
+    fun purge(r: Record): Snapshot =
+        when (r) {
+            is Semester -> copy(semesters = semesters.filterNot { it.id == r.id })
+            is Course -> copy(courses = courses.filterNot { it.id == r.id })
+            is CourseException -> copy(exceptions = exceptions.filterNot { it.id == r.id })
+            is Event -> copy(events = events.filterNot { it.id == r.id })
+            is Task -> copy(tasks = tasks.filterNot { it.id == r.id })
+            is TaskList -> copy(lists = lists.filterNot { it.id == r.id })
+        }
 
     private fun <T : Record> List<T>.upsert(item: T): List<T> {
         val idx = indexOfFirst { it.id == item.id }
@@ -62,21 +66,23 @@ data class Snapshot(
 enum class EntityType { SEMESTER, COURSE, EXCEPTION, EVENT, TASK, LIST }
 
 val Record.entityType: EntityType
-    get() = when (this) {
-        is Semester -> EntityType.SEMESTER
-        is Course -> EntityType.COURSE
-        is CourseException -> EntityType.EXCEPTION
-        is Event -> EntityType.EVENT
-        is Task -> EntityType.TASK
-        is TaskList -> EntityType.LIST
-    }
+    get() =
+        when (this) {
+            is Semester -> EntityType.SEMESTER
+            is Course -> EntityType.COURSE
+            is CourseException -> EntityType.EXCEPTION
+            is Event -> EntityType.EVENT
+            is Task -> EntityType.TASK
+            is TaskList -> EntityType.LIST
+        }
 
 val Record.displayTitle: String
-    get() = when (this) {
-        is Semester -> name
-        is Course -> name
-        is CourseException -> "#$week"
-        is Event -> title
-        is Task -> title
-        is TaskList -> name
-    }
+    get() =
+        when (this) {
+            is Semester -> name
+            is Course -> name
+            is CourseException -> "#$week"
+            is Event -> title
+            is Task -> title
+            is TaskList -> name
+        }

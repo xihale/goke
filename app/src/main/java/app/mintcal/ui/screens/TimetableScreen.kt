@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -89,8 +89,8 @@ import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.weekdayFull
 import app.mintcal.ui.weekdayShort
-import java.time.LocalDate
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 private val TimeColW = 34.dp
 private val RowH = 60.dp
@@ -99,7 +99,10 @@ private val HeaderH = 46.dp
 
 private fun groupBoundaries(periodCount: Int) = listOf(4, 8).filter { it < periodCount }
 
-private fun periodTop(p: Int, periodCount: Int): Dp {
+private fun periodTop(
+    p: Int,
+    periodCount: Int,
+): Dp {
     val gaps = groupBoundaries(periodCount).count { p > it }
     return RowH * (p - 1) + GroupGap * gaps
 }
@@ -142,13 +145,16 @@ fun TimetableScreen() {
             Column(Modifier.weight(1f)) {
                 Text(
                     ctx.getString(R.string.week_n, pager.currentPage + 1),
-                    style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 val w = pager.currentPage + 1
                 Text(
                     "${ctx.getString(R.string.fmt_range_md, cal.weekStart(w).monthValue, cal.weekStart(w).dayOfMonth, cal.weekEnd(w).monthValue, cal.weekEnd(w).dayOfMonth)}" +
                         if (w == currentWeek) " · ${stringResource(R.string.this_week)}" else "",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             if (pager.currentPage + 1 != currentWeek && currentWeek in 1..sem.totalWeeks) {
@@ -174,11 +180,19 @@ fun TimetableScreen() {
 }
 
 @Composable
-private fun PreviewBanner(cs: ChangeSet, onApply: () -> Unit, onDiscard: () -> Unit) {
+private fun PreviewBanner(
+    cs: ChangeSet,
+    onApply: () -> Unit,
+    onDiscard: () -> Unit,
+) {
     val colors = MintTheme.colors
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.tertiaryContainer).padding(horizontal = 14.dp, vertical = 8.dp),
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.tertiaryContainer)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -196,8 +210,14 @@ private fun PreviewBanner(cs: ChangeSet, onApply: () -> Unit, onDiscard: () -> U
 
 @Composable
 private fun WeekGrid(
-    sem: Semester, cal: SemesterCalendar, week: Int, today: LocalDate, cells: List<TimetableCell>,
-    showTeacher: Boolean, scroll: androidx.compose.foundation.ScrollState, onClick: (TimetableCell) -> Unit,
+    sem: Semester,
+    cal: SemesterCalendar,
+    week: Int,
+    today: LocalDate,
+    cells: List<TimetableCell>,
+    showTeacher: Boolean,
+    scroll: androidx.compose.foundation.ScrollState,
+    onClick: (TimetableCell) -> Unit,
 ) {
     val ctx = LocalContext.current
     val periods = sem.periods.sortedBy { it.index }
@@ -211,9 +231,13 @@ private fun WeekGrid(
                 val date = cal.dateOf(week, d)
                 val isToday = date == today
                 Column(
-                    Modifier.weight(1f).padding(2.dp).clip(RoundedCornerShape(14.dp))
+                    Modifier
+                        .weight(1f)
+                        .padding(2.dp)
+                        .clip(RoundedCornerShape(14.dp))
                         .background(if (isToday) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
                 ) {
                     Text(ctx.weekdayShort(d), style = MaterialTheme.typography.labelMedium, color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("${date.monthValue}/${date.dayOfMonth}", fontSize = 10.sp, color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -227,7 +251,8 @@ private fun WeekGrid(
                 periods.forEach { p ->
                     Column(
                         Modifier.absoluteOffset(0.dp, periodTop(p.index, n)).width(TimeColW).height(RowH),
-                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
                     ) {
                         Text("${p.index}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         Text(p.start.hm(), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -237,13 +262,22 @@ private fun WeekGrid(
                 val todayDow = if (cal.weekOf(today) == week) today.dayOfWeek.value else null
                 if (todayDow != null) {
                     Box(
-                        Modifier.absoluteOffset(TimeColW + colW * (todayDow - 1), 0.dp).width(colW).height(totalH)
+                        Modifier
+                            .absoluteOffset(TimeColW + colW * (todayDow - 1), 0.dp)
+                            .width(colW)
+                            .height(totalH)
                             .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f)),
                     )
                 }
                 // 组间分隔（上午 / 下午 / 晚上之间的留白）
                 groupBoundaries(n).forEach { b ->
-                    Box(Modifier.absoluteOffset(TimeColW, periodTop(b, n) + RowH + GroupGap / 2).width(maxWidth - TimeColW).height(1.dp).background(outline))
+                    Box(
+                        Modifier
+                            .absoluteOffset(TimeColW, periodTop(b, n) + RowH + GroupGap / 2)
+                            .width(maxWidth - TimeColW)
+                            .height(1.dp)
+                            .background(outline),
+                    )
                 }
                 // 课程块
                 cells.forEach { cell ->
@@ -251,9 +285,12 @@ private fun WeekGrid(
                     val top = periodTop(o.startPeriod.coerceAtMost(n), n) + 2.dp
                     val bottom = periodTop(o.endPeriod.coerceIn(o.startPeriod, n), n) + RowH - 2.dp
                     CourseBlock(
-                        cell, showTeacher,
-                        Modifier.absoluteOffset(TimeColW + colW * (o.date.dayOfWeek.value - 1) + 1.5.dp, top)
-                            .width(colW - 3.dp).height(bottom - top),
+                        cell,
+                        showTeacher,
+                        Modifier
+                            .absoluteOffset(TimeColW + colW * (o.date.dayOfWeek.value - 1) + 1.5.dp, top)
+                            .width(colW - 3.dp)
+                            .height(bottom - top),
                         onClick = { onClick(cell) },
                     )
                 }
@@ -263,28 +300,43 @@ private fun WeekGrid(
 }
 
 @Composable
-private fun CourseBlock(cell: TimetableCell, showTeacher: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun CourseBlock(
+    cell: TimetableCell,
+    showTeacher: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
     val o = cell.occ
     val colors = MintTheme.colors
     val bg = colors.bg(o.course.colorIndex)
     val fg = colors.fg(o.course.colorIndex)
-    val borderColor = when (cell.kind) {
-        CellKind.ADDED -> colors.added
-        CellKind.MODIFIED -> colors.modified
-        CellKind.REMOVED -> colors.removed
-        CellKind.NORMAL -> null
-    }
+    val borderColor =
+        when (cell.kind) {
+            CellKind.ADDED -> colors.added
+            CellKind.MODIFIED -> colors.modified
+            CellKind.REMOVED -> colors.removed
+            CellKind.NORMAL -> null
+        }
     val shape = RoundedCornerShape(14.dp)
     Column(
-        modifier.alpha(if (cell.kind == CellKind.REMOVED) 0.6f else 1f).clip(shape)
+        modifier
+            .alpha(if (cell.kind == CellKind.REMOVED) 0.6f else 1f)
+            .clip(shape)
             .background(if (cell.kind == CellKind.REMOVED) colors.conflictBg else bg)
             .let { if (borderColor != null) it.border(2.dp, borderColor, shape) else it }
-            .clickable(onClick = onClick).padding(horizontal = 5.dp, vertical = 5.dp),
+            .clickable(onClick = onClick)
+            .padding(horizontal = 5.dp, vertical = 5.dp),
     ) {
         val strike = if (cell.kind == CellKind.REMOVED) TextDecoration.LineThrough else null
         Text(
-            o.course.name, color = if (cell.kind == CellKind.REMOVED) colors.removed else fg, fontSize = 11.sp, lineHeight = 13.sp,
-            fontWeight = FontWeight.Bold, maxLines = 4, overflow = TextOverflow.Ellipsis, textDecoration = strike,
+            o.course.name,
+            color = if (cell.kind == CellKind.REMOVED) colors.removed else fg,
+            fontSize = 11.sp,
+            lineHeight = 13.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 4,
+            overflow = TextOverflow.Ellipsis,
+            textDecoration = strike,
         )
         if (o.room.isNotBlank()) Text("@" + o.room, color = (if (cell.kind == CellKind.REMOVED) colors.removed else fg).copy(alpha = 0.85f), fontSize = 9.sp, lineHeight = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, textDecoration = strike)
         if (showTeacher && o.course.teacher.isNotBlank()) Text(o.course.teacher, color = fg.copy(alpha = 0.75f), fontSize = 9.sp, lineHeight = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -293,7 +345,12 @@ private fun CourseBlock(cell: TimetableCell, showTeacher: Boolean, modifier: Mod
 }
 
 @Composable
-private fun CourseSheet(cell: TimetableCell, snap: Snapshot, sem: Semester, onDismiss: () -> Unit) {
+private fun CourseSheet(
+    cell: TimetableCell,
+    snap: Snapshot,
+    sem: Semester,
+    onDismiss: () -> Unit,
+) {
     val ctx = LocalContext.current
     val nav = LocalNav.current
     val actions = LocalActions.current
@@ -306,7 +363,8 @@ private fun CourseSheet(cell: TimetableCell, snap: Snapshot, sem: Semester, onDi
             Text(c.name, style = MaterialTheme.typography.titleLarge)
             Text(
                 "${ctx.weekdayShort(o.date.dayOfWeek.value).let { stringResource(R.string.weekday_prefix, it) }} ${cal.startTime(o.startPeriod)?.hm().orEmpty()}–${cal.endTime(o.endPeriod)?.hm().orEmpty()} · ${stringResource(R.string.periods_range, o.startPeriod, o.endPeriod)}",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (o.room.isNotBlank()) Text(stringResource(R.string.label_room_value, o.room), style = MaterialTheme.typography.bodyMedium)
             if (c.teacher.isNotBlank()) Text(stringResource(R.string.label_teacher_value, c.teacher), style = MaterialTheme.typography.bodyMedium)
@@ -315,7 +373,10 @@ private fun CourseSheet(cell: TimetableCell, snap: Snapshot, sem: Semester, onDi
             Spacer(Modifier.height(8.dp))
             if (cell.kind == CellKind.NORMAL) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { onDismiss(); nav.push(Route.CourseEdit(c.id)) }) { Text(stringResource(R.string.edit)) }
+                    Button(onClick = {
+                        onDismiss()
+                        nav.push(Route.CourseEdit(c.id))
+                    }) { Text(stringResource(R.string.edit)) }
                     FilledTonalButton(onClick = {
                         val ex = CourseException(Ids.next(), c.id, origWeek(snap, c, o.date, cal), ExceptionType.CANCEL)
                         val old = snap.exceptions.firstOrNull { it.courseId == c.id && it.week == ex.week }
@@ -340,19 +401,33 @@ private fun CourseSheet(cell: TimetableCell, snap: Snapshot, sem: Semester, onDi
         }
     }
     if (reschedule) {
-        RescheduleDialog(c, o.date, cal, snap, onDismiss = { reschedule = false; onDismiss() })
+        RescheduleDialog(c, o.date, cal, snap, onDismiss = {
+            reschedule = false
+            onDismiss()
+        })
     }
 }
 
 /** 课程的「原始周次」：调课后课程出现在别的周，需要找回对应的原周。 */
-private fun origWeek(snap: Snapshot, c: Course, date: LocalDate, cal: SemesterCalendar): Int {
+private fun origWeek(
+    snap: Snapshot,
+    c: Course,
+    date: LocalDate,
+    cal: SemesterCalendar,
+): Int {
     val shown = cal.weekOf(date)
     if (shown in c.weeks) return shown
     return snap.exceptions.firstOrNull { it.courseId == c.id && it.type == ExceptionType.RESCHEDULE && (it.newWeek ?: it.week) == shown }?.week ?: shown
 }
 
 @Composable
-private fun RescheduleDialog(c: Course, date: LocalDate, cal: SemesterCalendar, snap: Snapshot, onDismiss: () -> Unit) {
+private fun RescheduleDialog(
+    c: Course,
+    date: LocalDate,
+    cal: SemesterCalendar,
+    snap: Snapshot,
+    onDismiss: () -> Unit,
+) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
     val week = origWeek(snap, c, date, cal)
@@ -386,7 +461,14 @@ private fun RescheduleDialog(c: Course, date: LocalDate, cal: SemesterCalendar, 
 }
 
 @Composable
-fun Stepper(label: String, value: Int, min: Int, max: Int, display: (Int) -> String = { it.toString() }, onChange: (Int) -> Unit) {
+fun Stepper(
+    label: String,
+    value: Int,
+    min: Int,
+    max: Int,
+    display: (Int) -> String = { it.toString() },
+    onChange: (Int) -> Unit,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
         TextButton(onClick = { if (value > min) onChange(value - 1) }, enabled = value > min) { Text("−") }
@@ -394,4 +476,3 @@ fun Stepper(label: String, value: Int, min: Int, max: Int, display: (Int) -> Str
         TextButton(onClick = { if (value < max) onChange(value + 1) }, enabled = value < max) { Text("+") }
     }
 }
-

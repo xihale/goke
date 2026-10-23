@@ -18,41 +18,67 @@ sealed interface AgendaItem {
     val rank: Int
 }
 
-data class CourseItem(val occ: CourseOccurrence) : AgendaItem {
+data class CourseItem(
+    val occ: CourseOccurrence,
+) : AgendaItem {
     override val sortKey get() = occ.start
     override val rank get() = 1
 }
 
-data class EventItem(val event: Event, val start: LocalDateTime, val end: LocalDateTime, val allDay: Boolean) : AgendaItem {
+data class EventItem(
+    val event: Event,
+    val start: LocalDateTime,
+    val end: LocalDateTime,
+    val allDay: Boolean,
+) : AgendaItem {
     override val sortKey get() = if (allDay) start.toLocalDate().atStartOfDay() else start
     override val rank get() = if (allDay) 0 else 1
 }
 
 /** 当天截止的待办（若带具体时间则按时间排，否则排到末尾）。 */
-data class TaskItem(val task: Task, val due: LocalDateTime, val hasTime: Boolean) : AgendaItem {
+data class TaskItem(
+    val task: Task,
+    val due: LocalDateTime,
+    val hasTime: Boolean,
+) : AgendaItem {
     override val sortKey get() = if (hasTime) due else due.toLocalDate().atTime(LocalTime.MAX)
     override val rank get() = if (hasTime) 1 else 2
 }
 
 /** 排入日历的待办时间块（虚线块）。 */
-data class BlockItem(val task: Task, val start: LocalDateTime, val end: LocalDateTime) : AgendaItem {
+data class BlockItem(
+    val task: Task,
+    val start: LocalDateTime,
+    val end: LocalDateTime,
+) : AgendaItem {
     override val sortKey get() = start
     override val rank get() = 1
 }
 
-data class DayMarks(val courses: Int, val events: Int, val tasks: Int) {
+data class DayMarks(
+    val courses: Int,
+    val events: Int,
+    val tasks: Int,
+) {
     val total get() = courses + events + tasks
 }
 
 object Agenda {
     /** 展开 [from, to] 范围每天的条目。传入的快照应已过滤删除项（内部也会过滤）。 */
     fun range(
-        snapshot: Snapshot, from: LocalDate, to: LocalDate, defaultBlockMinutes: Int = 60,
+        snapshot: Snapshot,
+        from: LocalDate,
+        to: LocalDate,
+        defaultBlockMinutes: Int = 60,
         includeDoneTasks: Boolean = true,
     ): Map<LocalDate, List<AgendaItem>> {
         val s = snapshot.live()
         val out = HashMap<LocalDate, MutableList<AgendaItem>>()
-        fun add(d: LocalDate, item: AgendaItem) {
+
+        fun add(
+            d: LocalDate,
+            item: AgendaItem,
+        ) {
             if (d.isBefore(from) || d.isAfter(to)) return
             out.getOrPut(d) { mutableListOf() }.add(item)
         }
@@ -63,7 +89,14 @@ object Agenda {
         for (o in EventExpander.occurrences(s.events, from, to)) {
             val all = o.event.allDay
             var d = o.start.toLocalDate()
-            val last = if (all) o.end.toLocalDate() else if (o.end.toLocalTime() == LocalTime.MIDNIGHT && o.end.isAfter(o.start)) o.end.toLocalDate().minusDays(1) else o.end.toLocalDate()
+            val last =
+                if (all) {
+                    o.end.toLocalDate()
+                } else if (o.end.toLocalTime() == LocalTime.MIDNIGHT && o.end.isAfter(o.start)) {
+                    o.end.toLocalDate().minusDays(1)
+                } else {
+                    o.end.toLocalDate()
+                }
             while (!d.isAfter(last) && !d.isAfter(to)) {
                 add(d, EventItem(o.event, o.start, o.end, all))
                 d = d.plusDays(1)
@@ -82,10 +115,17 @@ object Agenda {
         return out.mapValues { (_, v) -> v.sortedWith(compareBy({ it.rank.takeIf { r -> r == 0 } ?: 1 }, { it.sortKey }, { it.rank })) }
     }
 
-    fun forDay(snapshot: Snapshot, date: LocalDate, defaultBlockMinutes: Int = 60): List<AgendaItem> =
-        range(snapshot, date, date, defaultBlockMinutes)[date].orEmpty()
+    fun forDay(
+        snapshot: Snapshot,
+        date: LocalDate,
+        defaultBlockMinutes: Int = 60,
+    ): List<AgendaItem> = range(snapshot, date, date, defaultBlockMinutes)[date].orEmpty()
 
-    fun marks(snapshot: Snapshot, from: LocalDate, to: LocalDate): Map<LocalDate, DayMarks> =
+    fun marks(
+        snapshot: Snapshot,
+        from: LocalDate,
+        to: LocalDate,
+    ): Map<LocalDate, DayMarks> =
         range(snapshot, from, to).mapValues { (_, items) ->
             DayMarks(
                 items.count { it is CourseItem },

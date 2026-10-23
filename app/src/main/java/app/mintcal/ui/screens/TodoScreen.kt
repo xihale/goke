@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,7 +34,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -105,9 +105,15 @@ fun TodoScreen() {
 
     val overdue = remember(snap, now) { TaskLogic.filter(snap.tasks, SmartList.OVERDUE, now) }
     val todayList = remember(snap, now) { TaskLogic.filter(snap.tasks, SmartList.TODAY, now).filter { it !in overdue } }
-    val doneToday = remember(snap, today) {
-        top.filter { it.done && it.doneAt != null && java.time.Instant.ofEpochMilli(it.doneAt!!).atZone(java.time.ZoneId.systemDefault()).toLocalDate() == today }
-    }
+    val doneToday =
+        remember(snap, today) {
+            top.filter {
+                it.done && it.doneAt != null && java.time.Instant
+                    .ofEpochMilli(it.doneAt!!)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toLocalDate() == today
+            }
+        }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -142,6 +148,7 @@ fun TodoScreen() {
                         items(doneToday, key = { "d-" + it.id }) { TodoCard(it, snap, now) }
                     }
                 }
+
                 filter == F_PLANNED -> {
                     val planned = TaskLogic.filter(snap.tasks, SmartList.PLANNED, now)
                     if (planned.isEmpty()) item { Text(stringResource(R.string.todo_planned_empty), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp)) }
@@ -150,15 +157,18 @@ fun TodoScreen() {
                         items(ts, key = { "p-" + it.id }) { TodoCard(it, snap, now) }
                     }
                 }
+
                 filter == F_ALL -> {
                     val all = TaskLogic.filter(snap.tasks, SmartList.ALL, now)
                     if (all.isEmpty()) item { Text(stringResource(R.string.todo_all_empty), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp)) }
                     items(all, key = { "a-" + it.id }) { TodoCard(it, snap, now) }
                 }
+
                 filter == F_DONE -> {
                     val done = TaskLogic.filter(snap.tasks, SmartList.DONE, now).sortedByDescending { it.doneAt ?: 0L }
                     items(done, key = { "x-" + it.id }) { TodoCard(it, snap, now) }
                 }
+
                 listFilter != null -> {
                     val inList = top.filter { it.listId == listFilter }.sortedWith(compareBy({ it.done }, { it.due == null }, { it.due }, { it.sortOrder }))
                     if (inList.isEmpty()) item { Text(stringResource(R.string.todo_all_empty), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp)) }
@@ -169,26 +179,39 @@ fun TodoScreen() {
         FloatingActionButton(
             onClick = { quickAdd = true },
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 108.dp),
-            containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary, shape = RoundedCornerShape(22.dp),
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            shape = RoundedCornerShape(22.dp),
         ) { Icon(Icons.Rounded.Add, stringResource(R.string.new_task)) }
     }
     if (quickAdd) QuickAddSheet(snap, now, listFilter, onDismiss = { quickAdd = false })
 }
 
 @Composable
-private fun FilterPill(text: String, selected: Boolean, onClick: () -> Unit) {
+private fun FilterPill(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
     Text(
         text,
-        modifier = Modifier.clip(CircleShape)
-            .background(if (selected) MaterialTheme.colorScheme.primary else MintTheme.card)
-            .clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 8.dp),
+        modifier =
+            Modifier
+                .clip(CircleShape)
+                .background(if (selected) MaterialTheme.colorScheme.primary else MintTheme.card)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 18.dp, vertical = 8.dp),
         style = MaterialTheme.typography.labelLarge,
         color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
 @Composable
-fun TodoCard(task: Task, snap: Snapshot, now: LocalDateTime) {
+fun TodoCard(
+    task: Task,
+    snap: Snapshot,
+    now: LocalDateTime,
+) {
     val ctx = LocalContext.current
     val nav = LocalNav.current
     val actions = LocalActions.current
@@ -204,16 +227,18 @@ fun TodoCard(task: Task, snap: Snapshot, now: LocalDateTime) {
             MintCheck(task.done, { d -> toggle(actions, snap, task, d, now, ctx.getString(R.string.done_toast, task.title)) })
             Column(Modifier.weight(1f).padding(top = 4.dp)) {
                 Text(
-                    task.title, style = MaterialTheme.typography.titleMedium,
+                    task.title,
+                    style = MaterialTheme.typography.titleMedium,
                     textDecoration = if (task.done) TextDecoration.LineThrough else null,
                     color = if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 )
-                val subtitle = when {
-                    due == null -> null
-                    task.dueBeforeNextClass && course != null -> stringResource(R.string.before_next_class, course.name, ctx.dueLabel(due, true, now.toLocalDate()))
-                    overdue -> stringResource(R.string.overdue_since_full, ctx.dueLabel(due, task.dueHasTime, now.toLocalDate()))
-                    else -> ctx.dueLabel(due, task.dueHasTime, now.toLocalDate())
-                }
+                val subtitle =
+                    when {
+                        due == null -> null
+                        task.dueBeforeNextClass && course != null -> stringResource(R.string.before_next_class, course.name, ctx.dueLabel(due, true, now.toLocalDate()))
+                        overdue -> stringResource(R.string.overdue_since_full, ctx.dueLabel(due, task.dueHasTime, now.toLocalDate()))
+                        else -> ctx.dueLabel(due, task.dueHasTime, now.toLocalDate())
+                    }
                 if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = if (overdue) colors.removed else MaterialTheme.colorScheme.onSurfaceVariant)
                 val bStart = task.blockStart
                 if (bStart != null) {
@@ -241,7 +266,12 @@ fun TodoCard(task: Task, snap: Snapshot, now: LocalDateTime) {
 
 /** 快速添加：一句话（如「明天下午3点交作业 #概率论 !高 @期末」）实时解析，可直接保存或进入详情。 */
 @Composable
-private fun QuickAddSheet(snap: Snapshot, now: LocalDateTime, defaultListId: String?, onDismiss: () -> Unit) {
+private fun QuickAddSheet(
+    snap: Snapshot,
+    now: LocalDateTime,
+    defaultListId: String?,
+    onDismiss: () -> Unit,
+) {
     val ctx = LocalContext.current
     val nav = LocalNav.current
     val actions = LocalActions.current
@@ -258,12 +288,23 @@ private fun QuickAddSheet(snap: Snapshot, now: LocalDateTime, defaultListId: Str
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp).imePadding().navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            Modifier
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
+                .imePadding()
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             Text(stringResource(R.string.quick_add_title), style = MaterialTheme.typography.titleLarge)
             OutlinedTextField(
-                text, { text = it }, Modifier.fillMaxWidth().focusRequester(focus),
-                placeholder = { Text(stringResource(R.string.quick_add_hint)) }, shape = RoundedCornerShape(20.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { save() }),
+                text,
+                { text = it },
+                Modifier.fillMaxWidth().focusRequester(focus),
+                placeholder = { Text(stringResource(R.string.quick_add_hint)) },
+                shape = RoundedCornerShape(20.dp),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { save() }),
             )
             if (parsed != null) {
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -275,7 +316,10 @@ private fun QuickAddSheet(snap: Snapshot, now: LocalDateTime, defaultListId: Str
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = { onDismiss(); nav.push(Route.TaskDetail(null)) }) { Text(stringResource(R.string.more_options)) }
+                TextButton(onClick = {
+                    onDismiss()
+                    nav.push(Route.TaskDetail(null))
+                }) { Text(stringResource(R.string.more_options)) }
                 Spacer(Modifier.weight(1f))
                 Button(onClick = { save() }, enabled = parsed != null) { Text(stringResource(R.string.add)) }
             }
@@ -283,15 +327,23 @@ private fun QuickAddSheet(snap: Snapshot, now: LocalDateTime, defaultListId: Str
     }
 }
 
-fun buildQuickTask(snap: Snapshot, p: app.mintcal.core.todo.QuickAddResult, defaultListId: String?, now: LocalDateTime, desc: String): ChangeSet {
+fun buildQuickTask(
+    snap: Snapshot,
+    p: app.mintcal.core.todo.QuickAddResult,
+    defaultListId: String?,
+    now: LocalDateTime,
+    desc: String,
+): ChangeSet {
     val changes = mutableListOf<Change>()
     var listId = defaultListId
     if (p.listName != null) {
         val existing = snap.lists.firstOrNull { it.name == p.listName }
-        if (existing != null) listId = existing.id
-        else {
+        if (existing != null) {
+            listId = existing.id
+        } else {
             val l = TaskList(Ids.next(), p.listName.orEmpty(), colorIndex = snap.lists.size % 8, sort = snap.lists.size)
-            changes += Change.Add(l); listId = l.id
+            changes += Change.Add(l)
+            listId = l.id
         }
     }
     val order = (snap.tasks.maxOfOrNull { it.sortOrder } ?: 0) + 1

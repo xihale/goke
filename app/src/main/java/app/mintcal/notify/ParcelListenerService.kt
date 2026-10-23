@@ -8,9 +8,9 @@ import app.mintcal.core.change.Edits
 import app.mintcal.core.model.Source
 import app.mintcal.core.parcel.ParcelParser
 import app.mintcal.mintApp
-import java.time.LocalDateTime
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.time.LocalDateTime
 
 /**
  * 快递取件通知识别（用户在设置里开启并授权「通知使用权」后才工作）。
@@ -22,15 +22,18 @@ class ParcelListenerService : NotificationListenerService() {
         if (!app.settings.value.parcelEnabled) return
         if (sbn.packageName == packageName) return
         val ex = sbn.notification.extras ?: return
-        val text = listOfNotNull(
-            ex.getCharSequence(Notification.EXTRA_TITLE),
-            ex.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: ex.getCharSequence(Notification.EXTRA_TEXT),
-        ).joinToString("，") { it.toString() }
+        val text =
+            listOfNotNull(
+                ex.getCharSequence(Notification.EXTRA_TITLE),
+                ex.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: ex.getCharSequence(Notification.EXTRA_TEXT),
+            ).joinToString("，") { it.toString() }
         if (text.isBlank()) return
         val info = ParcelParser.parse(text, LocalDateTime.now()) ?: return
         app.scope.launch {
             app.repo.ready.first { it }
-            val snap = app.repo.snapshot.value.live()
+            val snap =
+                app.repo.snapshot.value
+                    .live()
             val dup = snap.tasks.any { it.source == Source.PARCEL && it.extra["code"] == info.code && it.extra["place"] == info.place && !it.done }
             if (dup) return@launch
             val task = ParcelTasks.build(this@ParcelListenerService, info)

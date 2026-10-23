@@ -52,7 +52,11 @@ import app.mintcal.ui.screens.TodoScreen
 import app.mintcal.ui.screens.TrashScreen
 
 @Composable
-fun MintCalRoot(app: MintCalApp, incoming: Uri?, onIncomingHandled: () -> Unit) {
+fun MintCalRoot(
+    app: MintCalApp,
+    incoming: Uri?,
+    onIncomingHandled: () -> Unit,
+) {
     val nav = remember { Nav() }
     val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -111,8 +115,14 @@ private fun Tabs(nav: Nav) {
 }
 
 @Composable
-private fun RouteContent(route: Route, nav: Nav) {
-    val back = { nav.pop(); Unit }
+private fun RouteContent(
+    route: Route,
+    nav: Nav,
+) {
+    val back = {
+        nav.pop()
+        Unit
+    }
     when (route) {
         Route.EditTimetable -> EditTimetableScreen(back)
         Route.Appearance -> AppearanceScreen(back)

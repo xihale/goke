@@ -81,16 +81,18 @@ fun TodayScreen() {
     val items = remember(snap, today, settings.defaultBlockMinutes) { Agenda.forDay(snap, today, settings.defaultBlockMinutes) }
     val overdue = remember(snap, now) { TaskLogic.filter(snap.tasks, SmartList.OVERDUE, now) }
     val sem = snap.currentSemester
-    val weekLabel = remember(sem, today) {
-        sem?.let {
-            val w = SemesterCalendar(it).weekOf(today)
-            when {
-                w < 1 -> ctx.getString(R.string.semester_not_started)
-                w > it.totalWeeks -> ctx.getString(R.string.semester_ended)
-                else -> ctx.getString(R.string.week_n, w)
-            }
-        }.orEmpty()
-    }
+    val weekLabel =
+        remember(sem, today) {
+            sem
+                ?.let {
+                    val w = SemesterCalendar(it).weekOf(today)
+                    when {
+                        w < 1 -> ctx.getString(R.string.semester_not_started)
+                        w > it.totalWeeks -> ctx.getString(R.string.semester_ended)
+                        else -> ctx.getString(R.string.week_n, w)
+                    }
+                }.orEmpty()
+        }
     var menu by remember { mutableStateOf(false) }
 
     val courseCount = items.count { it is CourseItem }
@@ -113,9 +115,18 @@ fun TodayScreen() {
                 Box {
                     IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.Add, stringResource(R.string.add)) }
                     DropdownMenu(menu, { menu = false }) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.new_event)) }, onClick = { menu = false; nav.push(Route.EventEdit(null, today.toString())) })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.new_task)) }, onClick = { menu = false; nav.push(Route.TaskDetail(null)) })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.new_course)) }, onClick = { menu = false; nav.push(Route.CourseEdit(null)) })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.new_event)) }, onClick = {
+                            menu = false
+                            nav.push(Route.EventEdit(null, today.toString()))
+                        })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.new_task)) }, onClick = {
+                            menu = false
+                            nav.push(Route.TaskDetail(null))
+                        })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.new_course)) }, onClick = {
+                            menu = false
+                            nav.push(Route.CourseEdit(null))
+                        })
                     }
                 }
                 IconButton(onClick = { nav.push(Route.Settings) }) { Icon(Icons.Rounded.Settings, stringResource(R.string.settings)) }
@@ -129,12 +140,17 @@ fun TodayScreen() {
                     Column(Modifier.weight(1f)) {
                         Text(
                             if (items.isEmpty()) stringResource(R.string.today_empty_title) else stringResource(R.string.today_summary, courseCount, taskTotal),
-                            style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                         Text(
-                            if (next != null) stringResource(R.string.today_next_class, next.occ.start.hm(), next.occ.course.name, next.occ.room)
-                            else stringResource(R.string.today_no_more_class),
-                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                            if (next != null) {
+                                stringResource(R.string.today_next_class, next.occ.start.hm(), next.occ.course.name, next.occ.room)
+                            } else {
+                                stringResource(R.string.today_no_more_class)
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                         )
                     }
                 }
@@ -143,14 +159,20 @@ fun TodayScreen() {
         if (overdue.isNotEmpty()) {
             item { SectionLabel(stringResource(R.string.overdue_count, overdue.size), trailingColor = MintTheme.colors.removed) }
             items(overdue, key = { "od-" + it.id }) { t ->
-                TaskRow(t, { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) }, { nav.push(Route.TaskDetail(it)) },
-                    subtitle = t.due?.let { ctx.getString(R.string.overdue_since, it.toLocalDate().toString().substring(5)) })
+                TaskRow(
+                    t,
+                    { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) },
+                    { nav.push(Route.TaskDetail(it)) },
+                    subtitle = t.due?.let { ctx.getString(R.string.overdue_since, it.toLocalDate().toString().substring(5)) },
+                )
             }
         }
         if (items.isNotEmpty()) item { SectionLabel(stringResource(R.string.timeline)) }
         items(items, key = { itemKey(it) }) { item ->
             AgendaRow(
-                item, now, settings.showTeacher,
+                item,
+                now,
+                settings.showTeacher,
                 onOpenCourse = { nav.push(Route.CourseEdit(it)) },
                 onOpenEvent = { nav.push(Route.EventEdit(it)) },
                 onOpenTask = { nav.push(Route.TaskDetail(it)) },
@@ -169,20 +191,31 @@ fun TodayScreen() {
     }
 }
 
-private fun itemKey(i: app.mintcal.core.agenda.AgendaItem): String = when (i) {
-    is CourseItem -> "c-${i.occ.course.id}-${i.occ.date}-${i.occ.startPeriod}"
-    is EventItem -> "e-${i.event.id}-${i.start}"
-    is TaskItem -> "t-${i.task.id}"
-    is BlockItem -> "b-${i.task.id}"
-}
+private fun itemKey(i: app.mintcal.core.agenda.AgendaItem): String =
+    when (i) {
+        is CourseItem -> "c-${i.occ.course.id}-${i.occ.date}-${i.occ.startPeriod}"
+        is EventItem -> "e-${i.event.id}-${i.start}"
+        is TaskItem -> "t-${i.task.id}"
+        is BlockItem -> "b-${i.task.id}"
+    }
 
-fun toggle(actions: app.mintcal.ui.Actions, snap: app.mintcal.core.model.Snapshot, task: app.mintcal.core.model.Task, done: Boolean, now: LocalDateTime, msg: String) {
+fun toggle(
+    actions: app.mintcal.ui.Actions,
+    snap: app.mintcal.core.model.Snapshot,
+    task: app.mintcal.core.model.Task,
+    done: Boolean,
+    now: LocalDateTime,
+    msg: String,
+) {
     val cs = Edits.toggleTask(snap, task, done, System.currentTimeMillis(), now, if (done) msg else task.title)
     actions.commit(cs, if (done) msg else null)
 }
 
 @Composable
-fun ProgressRing(progress: Float, modifier: Modifier = Modifier) {
+fun ProgressRing(
+    progress: Float,
+    modifier: Modifier = Modifier,
+) {
     val p by animateFloatAsState(progress, MintTheme.spec(), label = "ring")
     val track = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f)
     val bar = MaterialTheme.colorScheme.primary

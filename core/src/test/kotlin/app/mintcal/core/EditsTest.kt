@@ -49,7 +49,13 @@ class EditsTest {
 
     @Test fun deleteTaskRemovesSubtasks() {
         val cs = Edits.delete(snap, parent, "删除", 5, ids)
-        assertTrue(snap.apply(cs, 5).live().tasks.isEmpty())
+        assertTrue(
+            snap
+                .apply(cs, 5)
+                .live()
+                .tasks
+                .isEmpty(),
+        )
     }
 
     @Test fun deleteListKeepsTasks() {

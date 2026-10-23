@@ -19,23 +19,28 @@ import kotlin.test.assertTrue
 
 class AgendaTest {
     private val sem = Semester("s", "学期", LocalDate.of(2026, 8, 31))
+
     // 周一 1-2 节 (8:30)，第 1-3 周
     private val c = Course("c1", "s", "高数", dayOfWeek = 1, startPeriod = 1, endPeriod = 2, weeks = setOf(1, 2, 3))
     private val mon = LocalDate.of(2026, 8, 31)
 
     @Test fun mixedDayIsOrdered() {
-        val snap = Snapshot(
-            semesters = listOf(sem), courses = listOf(c),
-            events = listOf(
-                Event("e1", "社团例会", LocalDateTime.of(2026, 8, 31, 20, 0), LocalDateTime.of(2026, 8, 31, 21, 0)),
-                Event("e2", "校庆", mon.atStartOfDay(), mon.atStartOfDay(), allDay = true),
-            ),
-            tasks = listOf(
-                Task("t1", "交作业", due = LocalDateTime.of(2026, 8, 31, 23, 59)),
-                Task("t2", "写报告", blockStart = LocalDateTime.of(2026, 8, 31, 16, 30), blockMinutes = 60),
-                Task("t3", "已完成", due = LocalDateTime.of(2026, 8, 31, 0, 0), done = true),
-            ),
-        )
+        val snap =
+            Snapshot(
+                semesters = listOf(sem),
+                courses = listOf(c),
+                events =
+                    listOf(
+                        Event("e1", "社团例会", LocalDateTime.of(2026, 8, 31, 20, 0), LocalDateTime.of(2026, 8, 31, 21, 0)),
+                        Event("e2", "校庆", mon.atStartOfDay(), mon.atStartOfDay(), allDay = true),
+                    ),
+                tasks =
+                    listOf(
+                        Task("t1", "交作业", due = LocalDateTime.of(2026, 8, 31, 23, 59)),
+                        Task("t2", "写报告", blockStart = LocalDateTime.of(2026, 8, 31, 16, 30), blockMinutes = 60),
+                        Task("t3", "已完成", due = LocalDateTime.of(2026, 8, 31, 0, 0), done = true),
+                    ),
+            )
         val items = Agenda.forDay(snap, mon)
         assertIs<EventItem>(items[0]) // 全天排最前
         assertTrue((items[0] as EventItem).allDay)
@@ -53,10 +58,12 @@ class AgendaTest {
     }
 
     @Test fun marksCountOpenTasksOnly() {
-        val snap = Snapshot(
-            semesters = listOf(sem), courses = listOf(c),
-            tasks = listOf(Task("a", "a", due = mon.atTime(9, 0), dueHasTime = true), Task("b", "b", due = mon.atTime(9, 0), done = true)),
-        )
+        val snap =
+            Snapshot(
+                semesters = listOf(sem),
+                courses = listOf(c),
+                tasks = listOf(Task("a", "a", due = mon.atTime(9, 0), dueHasTime = true), Task("b", "b", due = mon.atTime(9, 0), done = true)),
+            )
         val mk = Agenda.marks(snap, mon, mon)[mon]!!
         assertEquals(1, mk.courses)
         assertEquals(1, mk.tasks)

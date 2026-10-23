@@ -80,10 +80,17 @@ class TimeAndRecurrenceTest {
         assertNull(RecurrenceEngine.next(Recurrence(Freq.DAILY, until = LocalDate.of(2026, 9, 2)), LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 2)))
     }
 
-    private val course = Course(
-        id = "c1", semesterId = "sem1", name = "数据结构", room = "教2-321", dayOfWeek = 2,
-        startPeriod = 1, endPeriod = 2, weeks = setOf(1, 2, 3),
-    )
+    private val course =
+        Course(
+            id = "c1",
+            semesterId = "sem1",
+            name = "数据结构",
+            room = "教2-321",
+            dayOfWeek = 2,
+            startPeriod = 1,
+            endPeriod = 2,
+            weeks = setOf(1, 2, 3),
+        )
 
     @Test fun `course expands by week`() {
         val occ = CourseExpander.occurrencesInWeek(TestUtil.semester, listOf(course), emptyList(), 2)
@@ -94,10 +101,11 @@ class TimeAndRecurrenceTest {
     }
 
     @Test fun `cancel and reschedule exceptions`() {
-        val ex = listOf(
-            CourseException("e1", "c1", week = 1, type = ExceptionType.CANCEL),
-            CourseException("e2", "c1", week = 2, type = ExceptionType.RESCHEDULE, newDayOfWeek = 4, newStartPeriod = 5, newEndPeriod = 6, newRoom = "教1-101"),
-        )
+        val ex =
+            listOf(
+                CourseException("e1", "c1", week = 1, type = ExceptionType.CANCEL),
+                CourseException("e2", "c1", week = 2, type = ExceptionType.RESCHEDULE, newDayOfWeek = 4, newStartPeriod = 5, newEndPeriod = 6, newRoom = "教1-101"),
+            )
         assertTrue(CourseExpander.occurrencesInWeek(TestUtil.semester, listOf(course), ex, 1).isEmpty())
         val w2 = CourseExpander.occurrencesInWeek(TestUtil.semester, listOf(course), ex, 2)
         assertEquals(1, w2.size)
@@ -107,10 +115,14 @@ class TimeAndRecurrenceTest {
     }
 
     @Test fun `event expansion across range`() {
-        val e = Event(
-            "ev1", "社团例会", LocalDateTime.of(2026, 9, 2, 20, 0), LocalDateTime.of(2026, 9, 2, 21, 0),
-            recurrence = Recurrence(Freq.WEEKLY, count = 3),
-        )
+        val e =
+            Event(
+                "ev1",
+                "社团例会",
+                LocalDateTime.of(2026, 9, 2, 20, 0),
+                LocalDateTime.of(2026, 9, 2, 21, 0),
+                recurrence = Recurrence(Freq.WEEKLY, count = 3),
+            )
         val occ = EventExpander.occurrences(e, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30))
         assertEquals(3, occ.size)
         assertEquals(LocalDate.of(2026, 9, 16), occ.last().date)

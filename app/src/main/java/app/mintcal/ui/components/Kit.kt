@@ -30,8 +30,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.AlertDialog
@@ -80,7 +80,9 @@ fun MintScreen(
         Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
-            } else Spacer(Modifier.width(12.dp))
+            } else {
+                Spacer(Modifier.width(12.dp))
+            }
             Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             actions()
         }
@@ -98,12 +100,20 @@ fun MintCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val inner: @Composable () -> Unit = { Column(Modifier.fillMaxWidth().padding(16.dp), content = content) }
-    if (onClick != null) Surface(onClick = onClick, modifier = modifier, shape = shape, color = color, border = border, content = inner)
-    else Surface(modifier = modifier, shape = shape, color = color, border = border, content = inner)
+    if (onClick != null) {
+        Surface(onClick = onClick, modifier = modifier, shape = shape, color = color, border = border, content = inner)
+    } else {
+        Surface(modifier = modifier, shape = shape, color = color, border = border, content = inner)
+    }
 }
 
 @Composable
-fun SectionLabel(text: String, modifier: Modifier = Modifier, trailing: String? = null, trailingColor: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
+fun SectionLabel(
+    text: String,
+    modifier: Modifier = Modifier,
+    trailing: String? = null,
+    trailingColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
     Row(modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
         if (trailing != null) Text(trailing, style = MaterialTheme.typography.labelMedium, color = trailingColor)
@@ -111,28 +121,47 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier, trailing: String? 
 }
 
 @Composable
-fun Tag(text: String, bg: Color, fg: Color, modifier: Modifier = Modifier) {
+fun Tag(
+    text: String,
+    bg: Color,
+    fg: Color,
+    modifier: Modifier = Modifier,
+) {
     Text(
-        text, modifier = modifier.clip(CircleShape).background(bg).padding(horizontal = 10.dp, vertical = 3.dp),
-        style = MaterialTheme.typography.labelMedium, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        text,
+        modifier = modifier.clip(CircleShape).background(bg).padding(horizontal = 10.dp, vertical = 3.dp),
+        style = MaterialTheme.typography.labelMedium,
+        color = fg,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 
 /** 勾选框：未选中是圆角方块，选中时形变为圆形（弹簧动效）。 */
 @Composable
-fun MintCheck(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier, size: Dp = 26.dp) {
+fun MintCheck(
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 26.dp,
+) {
     val radius by animateDpAsState(if (checked) size / 2 else 8.dp, MintTheme.spec(), label = "check-radius")
     val fill by animateColorAsState(if (checked) MaterialTheme.colorScheme.primary else Color.Transparent, label = "check-fill")
     val stroke by animateColorAsState(if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, label = "check-stroke")
     val tick by animateFloatAsState(if (checked) 1f else 0f, MintTheme.spec(), label = "check-tick")
     Box(
         modifier.size(size + 12.dp).clip(CircleShape).clickable(
-            interactionSource = MutableInteractionSource(), indication = null,
+            interactionSource = MutableInteractionSource(),
+            indication = null,
         ) { onChange(!checked) },
         contentAlignment = Alignment.Center,
     ) {
         Box(
-            Modifier.size(size).clip(RoundedCornerShape(radius)).background(fill).border(2.dp, stroke, RoundedCornerShape(radius)),
+            Modifier
+                .size(size)
+                .clip(RoundedCornerShape(radius))
+                .background(fill)
+                .border(2.dp, stroke, RoundedCornerShape(radius)),
             contentAlignment = Alignment.Center,
         ) {
             if (tick > 0.01f) Icon(Icons.Rounded.Check, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(size * 0.7f * tick.coerceIn(0f, 1f)))
@@ -141,7 +170,13 @@ fun MintCheck(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier 
 }
 
 @Composable
-fun SwitchRow(title: String, subtitle: String? = null, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+fun SwitchRow(
+    title: String,
+    subtitle: String? = null,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onChange: (Boolean) -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }.padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -155,7 +190,13 @@ fun SwitchRow(title: String, subtitle: String? = null, checked: Boolean, enabled
 }
 
 @Composable
-fun NavRow(title: String, subtitle: String? = null, icon: ImageVector? = null, trailing: String? = null, onClick: () -> Unit) {
+fun NavRow(
+    title: String,
+    subtitle: String? = null,
+    icon: ImageVector? = null,
+    trailing: String? = null,
+    onClick: () -> Unit,
+) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         if (icon != null) {
             Box(Modifier.size(40.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
@@ -174,17 +215,29 @@ fun NavRow(title: String, subtitle: String? = null, icon: ImageVector? = null, t
 
 /** 浮动胶囊底栏：今日 · 课表 · 日历 · 待办，选中项以主容器色底。 */
 @Composable
-fun FloatingNavBar(tab: Tab, onTab: (Tab) -> Unit, modifier: Modifier = Modifier) {
-    data class Item(val tab: Tab, val icon: ImageVector, val label: Int)
-    val items = listOf(
-        Item(Tab.TODAY, Icons.Rounded.WbSunny, R.string.tab_today),
-        Item(Tab.TIMETABLE, Icons.Rounded.GridView, R.string.tab_timetable),
-        Item(Tab.CALENDAR, Icons.Rounded.CalendarMonth, R.string.tab_calendar),
-        Item(Tab.TODO, Icons.Rounded.CheckCircle, R.string.tab_todo),
+fun FloatingNavBar(
+    tab: Tab,
+    onTab: (Tab) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    data class Item(
+        val tab: Tab,
+        val icon: ImageVector,
+        val label: Int,
     )
+    val items =
+        listOf(
+            Item(Tab.TODAY, Icons.Rounded.WbSunny, R.string.tab_today),
+            Item(Tab.TIMETABLE, Icons.Rounded.GridView, R.string.tab_timetable),
+            Item(Tab.CALENDAR, Icons.Rounded.CalendarMonth, R.string.tab_calendar),
+            Item(Tab.TODO, Icons.Rounded.CheckCircle, R.string.tab_todo),
+        )
     Surface(
         modifier = modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth(),
-        shape = RoundedCornerShape(32.dp), color = MintTheme.card, shadowElevation = 8.dp, tonalElevation = 2.dp,
+        shape = RoundedCornerShape(32.dp),
+        color = MintTheme.card,
+        shadowElevation = 8.dp,
+        tonalElevation = 2.dp,
     ) {
         Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             items.forEach { it ->
@@ -192,8 +245,12 @@ fun FloatingNavBar(tab: Tab, onTab: (Tab) -> Unit, modifier: Modifier = Modifier
                 val bg by animateColorAsState(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, label = "nav-bg")
                 val fg by animateColorAsState(if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, label = "nav-fg")
                 Column(
-                    Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(bg)
-                        .clickable { onTab(it.tab) }.padding(vertical = 8.dp),
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(bg)
+                        .clickable { onTab(it.tab) }
+                        .padding(vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Icon(it.icon, null, tint = fg, modifier = Modifier.size(24.dp))
@@ -205,12 +262,23 @@ fun FloatingNavBar(tab: Tab, onTab: (Tab) -> Unit, modifier: Modifier = Modifier
 }
 
 @Composable
-fun ConfirmDialog(title: String, text: String, confirm: String, onConfirm: () -> Unit, onDismiss: () -> Unit, danger: Boolean = false) {
+fun ConfirmDialog(
+    title: String,
+    text: String,
+    confirm: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    danger: Boolean = false,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) }, text = { Text(text) },
+        title = { Text(title) },
+        text = { Text(text) },
         confirmButton = {
-            TextButton(onClick = { onConfirm(); onDismiss() }) {
+            TextButton(onClick = {
+                onConfirm()
+                onDismiss()
+            }) {
                 Text(confirm, color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
             }
         },
@@ -220,10 +288,15 @@ fun ConfirmDialog(title: String, text: String, confirm: String, onConfirm: () ->
 }
 
 @Composable
-fun DatePickerDlg(initial: LocalDate?, onDismiss: () -> Unit, onPick: (LocalDate) -> Unit) {
-    val state = rememberDatePickerState(
-        initialSelectedDateMillis = (initial ?: LocalDate.now()).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
-    )
+fun DatePickerDlg(
+    initial: LocalDate?,
+    onDismiss: () -> Unit,
+    onPick: (LocalDate) -> Unit,
+) {
+    val state =
+        rememberDatePickerState(
+            initialSelectedDateMillis = (initial ?: LocalDate.now()).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+        )
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -237,11 +310,20 @@ fun DatePickerDlg(initial: LocalDate?, onDismiss: () -> Unit, onPick: (LocalDate
 }
 
 @Composable
-fun TimePickerDlg(initial: LocalTime, onDismiss: () -> Unit, onPick: (LocalTime) -> Unit) {
+fun TimePickerDlg(
+    initial: LocalTime,
+    onDismiss: () -> Unit,
+    onPick: (LocalTime) -> Unit,
+) {
     val state = rememberTimePickerState(initial.hour, initial.minute, is24Hour = true)
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = { onPick(LocalTime.of(state.hour, state.minute)); onDismiss() }) { Text(stringResource(R.string.ok)) } },
+        confirmButton = {
+            TextButton(onClick = {
+                onPick(LocalTime.of(state.hour, state.minute))
+                onDismiss()
+            }) { Text(stringResource(R.string.ok)) }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
         text = { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { TimePicker(state = state) } },
         shape = RoundedCornerShape(28.dp),

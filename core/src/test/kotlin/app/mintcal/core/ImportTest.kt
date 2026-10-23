@@ -39,8 +39,10 @@ class ImportTest {
         assertEquals(2, prob.size) // 周一 + 周五
         val mon = prob.first { it.dayOfWeek == 1 }
         assertEquals((1..14).toSet(), mon.weeks)
-        assertEquals(1, mon.startPeriod); assertEquals(2, mon.endPeriod)
-        assertEquals("教3-204", mon.room); assertEquals("涂钰青", mon.teacher)
+        assertEquals(1, mon.startPeriod)
+        assertEquals(2, mon.endPeriod)
+        assertEquals("教3-204", mon.room)
+        assertEquals("涂钰青", mon.teacher)
         assertEquals(18, mon.remindMinutes)
         // 同一门课的多个周次段按「星期 + 节次」分组合并
         val clinicMon = courses.single { it.name == "校医院助理" && it.dayOfWeek == 1 && it.startPeriod == 3 }
@@ -58,9 +60,17 @@ class ImportTest {
         val aesthetics = courses.single { it.name == "大学美育(2)" }
         assertEquals("刘乐舟、彭凯、唐靓", aesthetics.teacher)
         val photo = courses.single { it.name == "讲座拍照" }
-        assertEquals("文化活动中心 演艺厅", photo.room); assertEquals("", photo.teacher)
+        assertEquals("文化活动中心 演艺厅", photo.room)
+        assertEquals("", photo.teacher)
         // 同名同色
-        assertEquals(1, courses.filter { it.name == "数据结构" }.map { it.colorIndex }.toSet().size)
+        assertEquals(
+            1,
+            courses
+                .filter { it.name == "数据结构" }
+                .map { it.colorIndex }
+                .toSet()
+                .size,
+        )
     }
 
     @Test fun `xlsx timetable import aggregates 20 sheets`() {
@@ -70,11 +80,13 @@ class ImportTest {
         assertEquals(28, courses.size)
         val mon = courses.single { it.name == "概率论与数理统计" && it.dayOfWeek == 1 }
         assertEquals((1..14).toSet(), mon.weeks)
-        assertEquals(1, mon.startPeriod); assertEquals(2, mon.endPeriod)
+        assertEquals(1, mon.startPeriod)
+        assertEquals(2, mon.endPeriod)
         assertEquals("教3-204", mon.room)
         assertEquals(setOf(1, 5, 9, 13), courses.single { it.name == "劳动教育" }.weeks)
         val print3d = courses.single { it.name == "3D打印综合训练" }
-        assertEquals(10, print3d.startPeriod); assertEquals(12, print3d.endPeriod)
+        assertEquals(10, print3d.startPeriod)
+        assertEquals(12, print3d.endPeriod)
         assertEquals(8, courses.count { it.name == "大学物理实验" })
         assertEquals(18, res.value!!.maxWeek)
     }
@@ -84,14 +96,22 @@ class ImportTest {
         val xlsx = XlsxTimetableImporter.import(TestUtil.resource("/samples/timetable.xlsx"), sem, 1L).value!!.courses
         val a = ics.single { it.name == "3D打印综合训练" }
         val b = xlsx.single { it.name == "3D打印综合训练" }
-        assertEquals(a.weeks, b.weeks); assertEquals(a.dayOfWeek, b.dayOfWeek); assertEquals(a.room, b.room)
+        assertEquals(a.weeks, b.weeks)
+        assertEquals(a.dayOfWeek, b.dayOfWeek)
+        assertEquals(a.room, b.room)
     }
 
     @Test fun `writer output can be parsed back`() {
-        val ev = Event(
-            "e1", "组会, 讨论;进度", LocalDateTime.of(2026, 9, 2, 14, 0), LocalDateTime.of(2026, 9, 2, 15, 30),
-            location = "实验室", note = "第一行\n第二行", remindMinutes = 10,
-        )
+        val ev =
+            Event(
+                "e1",
+                "组会, 讨论;进度",
+                LocalDateTime.of(2026, 9, 2, 14, 0),
+                LocalDateTime.of(2026, 9, 2, 15, 30),
+                location = "实验室",
+                note = "第一行\n第二行",
+                remindMinutes = 10,
+            )
         val allDay = Event("e2", "考试周", LocalDateTime.of(2026, 12, 28, 0, 0), LocalDateTime.of(2026, 12, 30, 0, 0), allDay = true)
         val task = Task("t1", "交作业", due = LocalDateTime.of(2026, 9, 5, 18, 0), dueHasTime = true, priority = 3)
         val snap = Snapshot(semesters = listOf(sem), courses = gdutCourses().take(3), events = listOf(ev, allDay), tasks = listOf(task))

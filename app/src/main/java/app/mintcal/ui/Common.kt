@@ -9,8 +9,8 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import app.mintcal.core.model.Snapshot
 import app.mintcal.data.Settings
-import java.time.LocalDateTime
 import kotlinx.coroutines.delay
+import java.time.LocalDateTime
 
 /** 过滤掉已删除记录的当前快照。 */
 @Composable
@@ -29,9 +29,10 @@ fun settingsState(): Settings {
 
 /** 每 30 秒刷新一次的「现在」。 */
 @Composable
-fun rememberNow(): State<LocalDateTime> = produceState(LocalDateTime.now()) {
-    while (true) {
-        delay(30_000)
-        value = LocalDateTime.now()
+fun rememberNow(): State<LocalDateTime> =
+    produceState(LocalDateTime.now()) {
+        while (true) {
+            delay(30_000)
+            value = LocalDateTime.now()
+        }
     }
-}

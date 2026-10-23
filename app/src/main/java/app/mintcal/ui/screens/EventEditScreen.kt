@@ -1,10 +1,9 @@
 package app.mintcal.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.background
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -60,12 +60,19 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 
 @Composable
-fun EventEditScreen(id: String?, dateArg: String?, onBack: () -> Unit) {
+fun EventEditScreen(
+    id: String?,
+    dateArg: String?,
+    onBack: () -> Unit,
+) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
     val snap = liveSnapshot()
     val existing = remember(id) { id?.let { i -> snap.events.firstOrNull { it.id == i } } }
-    if (id != null && existing == null) { onBack(); return }
+    if (id != null && existing == null) {
+        onBack()
+        return
+    }
     val initDate = remember { dateArg?.let { LocalDate.parse(it) } ?: LocalDate.now() }
 
     var title by remember { mutableStateOf(existing?.title.orEmpty()) }
@@ -91,17 +98,28 @@ fun EventEditScreen(id: String?, dateArg: String?, onBack: () -> Unit) {
         if (e.isBefore(s)) e = s
         val base = existing ?: Event(Ids.next(), "", s, e)
         return base.copy(
-            title = title.trim(), start = s, end = e, allDay = allDay, location = location.trim(), note = note,
-            category = category.trim(), colorIndex = color, kind = kind, remindMinutes = remind,
+            title = title.trim(),
+            start = s,
+            end = e,
+            allDay = allDay,
+            location = location.trim(),
+            note = note,
+            category = category.trim(),
+            colorIndex = color,
+            kind = kind,
+            remindMinutes = remind,
             recurrence = freq?.let { f -> (base.recurrence ?: Recurrence(f)).copy(freq = f, until = until) },
         )
     }
-    val preview = remember(title, allDay, startDate, startTime, endDate, endTime, freq) {
-        if (title.isBlank() || allDay) emptyList() else {
-            val e = build()
-            Conflicts.detect(snap.apply(Edits.save(snap, e, "", 0), 0), setOf(e.id))
+    val preview =
+        remember(title, allDay, startDate, startTime, endDate, endTime, freq) {
+            if (title.isBlank() || allDay) {
+                emptyList()
+            } else {
+                val e = build()
+                Conflicts.detect(snap.apply(Edits.save(snap, e, "", 0), 0), setOf(e.id))
+            }
         }
-    }
 
     MintScreen(
         title = stringResource(if (existing == null) R.string.new_event else R.string.edit_event),
@@ -113,11 +131,21 @@ fun EventEditScreen(id: String?, dateArg: String?, onBack: () -> Unit) {
                     val e = build()
                     actions.commit(Edits.save(snap, e, ctx.getString(if (existing == null) R.string.add_event_desc else R.string.edit_event_desc, e.title), System.currentTimeMillis()), ctx.getString(R.string.saved_toast))
                     onBack()
-                }, enabled = title.isNotBlank(), modifier = Modifier.padding(end = 8.dp),
+                },
+                enabled = title.isNotBlank(),
+                modifier = Modifier.padding(end = 8.dp),
             ) { Text(stringResource(R.string.save)) }
         },
     ) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).imePadding().navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .imePadding()
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             FieldText(stringResource(R.string.label_title), title, { title = it })
             Text(stringResource(R.string.label_kind), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             ChipChoice(listOf(EventKind.NORMAL to stringResource(R.string.kind_normal), EventKind.EXAM to stringResource(R.string.kind_exam), EventKind.COUNTDOWN to stringResource(R.string.kind_countdown)), kind, { kind = it })
@@ -134,14 +162,16 @@ fun EventEditScreen(id: String?, dateArg: String?, onBack: () -> Unit) {
                 Text(stringResource(R.string.label_repeat), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 ChipChoice(
                     listOf<Pair<Freq?, String>>(null to stringResource(R.string.repeat_none), Freq.DAILY to stringResource(R.string.repeat_daily), Freq.WEEKLY to stringResource(R.string.repeat_weekly), Freq.MONTHLY to stringResource(R.string.repeat_monthly), Freq.YEARLY to stringResource(R.string.repeat_yearly)),
-                    freq, { freq = it },
+                    freq,
+                    { freq = it },
                 )
                 if (freq != null) ValueRow(stringResource(R.string.label_until), until?.let { ctx.monthDayWeekday(it) } ?: stringResource(R.string.never), { pick = "until" })
                 Spacer(Modifier.height(8.dp))
                 Text(stringResource(R.string.label_remind), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 ChipChoice(
                     listOf<Pair<Int?, String>>(null to stringResource(R.string.remind_none), 0 to stringResource(R.string.remind_at_start), 10 to stringResource(R.string.remind_10m), 60 to stringResource(R.string.remind_1h), 1440 to stringResource(R.string.remind_1d)),
-                    remind, { remind = it },
+                    remind,
+                    { remind = it },
                 )
             }
             FormSection(stringResource(R.string.section_more)) {
@@ -156,8 +186,11 @@ fun EventEditScreen(id: String?, dateArg: String?, onBack: () -> Unit) {
             }
             if (preview.isNotEmpty()) {
                 Column(
-                    Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                        .androidxClipBg(MintTheme.colors.conflictBg).padding(14.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .androidxClipBg(MintTheme.colors.conflictBg)
+                        .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(stringResource(R.string.conflict_title), color = MintTheme.colors.removed, style = MaterialTheme.typography.labelLarge)
@@ -169,23 +202,52 @@ fun EventEditScreen(id: String?, dateArg: String?, onBack: () -> Unit) {
     }
 
     when (pick) {
-        "sd" -> DatePickerDlg(startDate, { pick = null }) { startDate = it; if (endDate.isBefore(it)) endDate = it }
-        "ed" -> DatePickerDlg(endDate, { pick = null }) { endDate = it }
-        "st" -> TimePickerDlg(startTime, { pick = null }) { startTime = it; if (startDate == endDate && endTime.isBefore(it)) endTime = it.plusHours(1) }
-        "et" -> TimePickerDlg(endTime, { pick = null }) { endTime = it }
-        "until" -> DatePickerDlg(until ?: startDate.plusMonths(3), { pick = null }) { until = it }
+        "sd" -> {
+            DatePickerDlg(startDate, { pick = null }) {
+                startDate = it
+                if (endDate.isBefore(it)) endDate = it
+            }
+        }
+
+        "ed" -> {
+            DatePickerDlg(endDate, { pick = null }) { endDate = it }
+        }
+
+        "st" -> {
+            TimePickerDlg(startTime, { pick = null }) {
+                startTime = it
+                if (startDate == endDate && endTime.isBefore(it)) endTime = it.plusHours(1)
+            }
+        }
+
+        "et" -> {
+            TimePickerDlg(endTime, { pick = null }) { endTime = it }
+        }
+
+        "until" -> {
+            DatePickerDlg(until ?: startDate.plusMonths(3), { pick = null }) { until = it }
+        }
     }
     if (confirmDelete && existing != null) {
         ConfirmDialog(
-            stringResource(R.string.delete_event_title), stringResource(R.string.delete_to_trash_hint), stringResource(R.string.delete),
+            stringResource(R.string.delete_event_title),
+            stringResource(R.string.delete_to_trash_hint),
+            stringResource(R.string.delete),
             onConfirm = {
                 actions.commit(Edits.delete(snap, existing, ctx.getString(R.string.delete_desc, existing.title), System.currentTimeMillis()), ctx.getString(R.string.deleted_toast))
                 onBack()
             },
-            onDismiss = { confirmDelete = false }, danger = true,
+            onDismiss = { confirmDelete = false },
+            danger = true,
         )
     }
 }
 
 private fun Modifier.androidxClipBg(color: androidx.compose.ui.graphics.Color): Modifier =
-    this.then(Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp)).background(color))
+    this.then(
+        Modifier
+            .clip(
+                androidx.compose.foundation.shape
+                    .RoundedCornerShape(20.dp),
+            ).background(color),
+    )

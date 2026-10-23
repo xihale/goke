@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.provider.Settings as AndroidSettings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -73,6 +72,7 @@ import app.mintcal.ui.components.NavRow
 import app.mintcal.ui.components.SwitchRow
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.Preset
+import android.provider.Settings as AndroidSettings
 
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
@@ -81,15 +81,22 @@ fun SettingsScreen(onBack: () -> Unit) {
     val nav = LocalNav.current
     val st = settingsState()
     val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     fun ensureNotifPermission() {
         if (Build.VERSION.SDK_INT >= 33 && !Notifications.canPost(ctx)) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
-    val needExact = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-        !(ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
+    val needExact =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            !(ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
 
     MintScreen(title = stringResource(R.string.settings), onBack = onBack) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding().padding(bottom = 24.dp),
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             FormSection {
@@ -103,13 +110,20 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
             FormSection(stringResource(R.string.section_reminders)) {
                 SwitchRow(stringResource(R.string.remind_courses), stringResource(R.string.remind_courses_desc), st.remindCourse) { v ->
-                    if (v) ensureNotifPermission(); app.settings.update { it.copy(remindCourse = v) }
+                    if (v) ensureNotifPermission()
+                    app.settings.update { it.copy(remindCourse = v) }
                 }
                 if (st.remindCourse) {
                     ChipChoice(listOf(5, 10, 15, 30, 60).map { it to ctx.getString(R.string.remind_before, it) }, st.courseRemindMinutes, { v -> app.settings.update { it.copy(courseRemindMinutes = v) } })
                 }
-                SwitchRow(stringResource(R.string.remind_tasks), null, st.remindTask) { v -> if (v) ensureNotifPermission(); app.settings.update { it.copy(remindTask = v) } }
-                SwitchRow(stringResource(R.string.remind_events), null, st.remindEvent) { v -> if (v) ensureNotifPermission(); app.settings.update { it.copy(remindEvent = v) } }
+                SwitchRow(stringResource(R.string.remind_tasks), null, st.remindTask) { v ->
+                    if (v) ensureNotifPermission()
+                    app.settings.update { it.copy(remindTask = v) }
+                }
+                SwitchRow(stringResource(R.string.remind_events), null, st.remindEvent) { v ->
+                    if (v) ensureNotifPermission()
+                    app.settings.update { it.copy(remindEvent = v) }
+                }
                 if (needExact) {
                     Text(stringResource(R.string.exact_alarm_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
                     TextButton(onClick = {
@@ -135,16 +149,22 @@ fun AppearanceScreen(onBack: () -> Unit) {
     val app = LocalApp.current
     val st = settingsState()
     val dynamicOk = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val sources = buildList {
-        if (dynamicOk) add(ThemeSource.DYNAMIC to ctx.getString(R.string.theme_dynamic))
-        add(ThemeSource.PRESET to ctx.getString(R.string.theme_preset))
-        add(ThemeSource.CUSTOM to ctx.getString(R.string.theme_custom))
-    }
+    val sources =
+        buildList {
+            if (dynamicOk) add(ThemeSource.DYNAMIC to ctx.getString(R.string.theme_dynamic))
+            add(ThemeSource.PRESET to ctx.getString(R.string.theme_preset))
+            add(ThemeSource.CUSTOM to ctx.getString(R.string.theme_custom))
+        }
     val source = if (!dynamicOk && st.themeSource == ThemeSource.DYNAMIC) ThemeSource.PRESET else st.themeSource
 
     MintScreen(title = stringResource(R.string.appearance), onBack = onBack) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding().padding(bottom = 24.dp),
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             MintCard(color = MaterialTheme.colorScheme.primaryContainer) {
@@ -162,17 +182,26 @@ fun AppearanceScreen(onBack: () -> Unit) {
                 if (!dynamicOk) Text(stringResource(R.string.theme_dynamic_unavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
                 Spacer(Modifier.height(10.dp))
                 when (source) {
-                    ThemeSource.DYNAMIC -> Text(stringResource(R.string.theme_dynamic_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    ThemeSource.PRESET -> Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Preset.entries.forEach { p ->
-                            val sel = st.preset == p.key
-                            Box(
-                                Modifier.size(44.dp).clip(CircleShape).background(p.seed)
-                                    .then(if (sel) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
-                                    .clickable { app.settings.update { it.copy(preset = p.key) } },
-                            )
+                    ThemeSource.DYNAMIC -> {
+                        Text(stringResource(R.string.theme_dynamic_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+
+                    ThemeSource.PRESET -> {
+                        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Preset.entries.forEach { p ->
+                                val sel = st.preset == p.key
+                                Box(
+                                    Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(p.seed)
+                                        .then(if (sel) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
+                                        .clickable { app.settings.update { it.copy(preset = p.key) } },
+                                )
+                            }
                         }
                     }
+
                     ThemeSource.CUSTOM -> {
                         val hsv = remember(st.seedColor) { FloatArray(3).also { android.graphics.Color.colorToHSV(st.seedColor, it) } }
                         var hue by remember { mutableStateOf(hsv[0]) }
@@ -181,14 +210,21 @@ fun AppearanceScreen(onBack: () -> Unit) {
                             val c = android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.55f, 0.75f))
                             app.settings.update { it.copy(seedColor = c) }
                         })
-                        Box(Modifier.fillMaxWidth().height(28.dp).clip(RoundedCornerShape(14.dp)).background(Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.55f, 0.75f)))))
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(28.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.55f, 0.75f)))),
+                        )
                     }
                 }
             }
             FormSection(stringResource(R.string.dark_mode)) {
                 ChipChoice(
                     listOf(DarkMode.SYSTEM to ctx.getString(R.string.dark_system), DarkMode.LIGHT to ctx.getString(R.string.dark_light), DarkMode.DARK to ctx.getString(R.string.dark_dark)),
-                    st.darkMode, { v -> app.settings.update { it.copy(darkMode = v) } },
+                    st.darkMode,
+                    { v -> app.settings.update { it.copy(darkMode = v) } },
                 )
             }
         }
@@ -208,26 +244,44 @@ fun AiSettingsScreen(onBack: () -> Unit) {
 
     MintScreen(title = stringResource(R.string.ai_settings), onBack = onBack) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding().padding(bottom = 24.dp),
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(stringResource(R.string.ai_settings_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FieldText(stringResource(R.string.ai_base_url), baseUrl, { baseUrl = it })
             FieldText(stringResource(R.string.ai_model), model, { model = it })
             androidx.compose.material3.OutlinedTextField(
-                value = key, onValueChange = { key = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                value = key,
+                onValueChange = { key = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
                 label = { Text(stringResource(R.string.ai_key)) },
                 placeholder = { Text(if (hasKey) stringResource(R.string.ai_key_saved) else stringResource(R.string.ai_key_none)) },
-                visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(18.dp),
+                visualTransformation = PasswordVisualTransformation(),
+                shape = RoundedCornerShape(18.dp),
             )
             Text(stringResource(R.string.ai_key_storage_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = {
                     app.settings.update { it.copy(aiBaseUrl = baseUrl.trim().trimEnd('/'), aiModel = model.trim()) }
-                    if (key.isNotBlank()) { app.secrets.setAiKey(key.trim()); key = ""; hasKey = true }
+                    if (key.isNotBlank()) {
+                        app.secrets.setAiKey(key.trim())
+                        key = ""
+                        hasKey = true
+                    }
                     actions.toast(ctx.getString(R.string.saved_toast))
                 }) { Text(stringResource(R.string.save)) }
-                if (hasKey) OutlinedButton(onClick = { app.secrets.setAiKey(""); hasKey = false }) { Text(stringResource(R.string.ai_key_clear)) }
+                if (hasKey) {
+                    OutlinedButton(onClick = {
+                        app.secrets.setAiKey("")
+                        hasKey = false
+                    }) { Text(stringResource(R.string.ai_key_clear)) }
+                }
             }
         }
     }
@@ -237,7 +291,12 @@ fun AiSettingsScreen(onBack: () -> Unit) {
 fun AboutScreen(onBack: () -> Unit) {
     MintScreen(title = stringResource(R.string.about_title), onBack = onBack) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding().padding(bottom = 24.dp),
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             MintCard {

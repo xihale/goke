@@ -29,12 +29,18 @@ object ImportPlanner {
                 pool.remove(match)
                 val merged = c.copy(id = match.id, colorIndex = match.colorIndex)
                 if (merged.withMeta(0, null) != match.withMeta(0, null)) changes += Change.Modify(match, merged)
-            } else changes += Change.Add(c)
+            } else {
+                changes += Change.Add(c)
+            }
         }
         for (left in pool) changes += Change.Remove(left)
         return ChangeSet(id = ids.next(), description = description, source = Source.IMPORT, createdAt = now, changes = changes)
     }
 
-    fun planAdds(records: List<app.mintcal.core.model.Record>, now: Long, description: String, ids: IdGenerator = Ids): ChangeSet =
-        ChangeSet(ids.next(), description, Source.IMPORT, now, records.map { Change.Add(it) })
+    fun planAdds(
+        records: List<app.mintcal.core.model.Record>,
+        now: Long,
+        description: String,
+        ids: IdGenerator = Ids,
+    ): ChangeSet = ChangeSet(ids.next(), description, Source.IMPORT, now, records.map { Change.Add(it) })
 }

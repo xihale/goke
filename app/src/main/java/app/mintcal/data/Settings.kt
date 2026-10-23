@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 enum class ThemeSource { DYNAMIC, PRESET, CUSTOM }
+
 enum class DarkMode { SYSTEM, LIGHT, DARK }
 
 data class Settings(
@@ -28,7 +29,9 @@ data class Settings(
 )
 
 /** 轻量设置存储（SharedPreferences + StateFlow）。AI Key 另存于 [SecretStore]，不进此处。 */
-class SettingsStore(context: Context) {
+class SettingsStore(
+    context: Context,
+) {
     private val sp: SharedPreferences = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
     private val _flow = MutableStateFlow(read())
     val flow: StateFlow<Settings> = _flow.asStateFlow()
@@ -57,14 +60,23 @@ class SettingsStore(context: Context) {
 
     fun update(block: (Settings) -> Settings) {
         val n = block(_flow.value)
-        sp.edit()
-            .putString("themeSource", n.themeSource.name).putString("preset", n.preset).putInt("seedColor", n.seedColor)
-            .putString("darkMode", n.darkMode.name).putBoolean("showTeacher", n.showTeacher)
-            .putInt("defaultBlockMinutes", n.defaultBlockMinutes).putBoolean("remindCourse", n.remindCourse)
-            .putInt("courseRemindMinutes", n.courseRemindMinutes).putBoolean("remindTask", n.remindTask)
-            .putBoolean("remindEvent", n.remindEvent).putBoolean("parcelEnabled", n.parcelEnabled)
-            .putBoolean("parcelAiFallback", n.parcelAiFallback).putString("aiBaseUrl", n.aiBaseUrl)
-            .putString("aiModel", n.aiModel).putBoolean("weekStartsMonday", n.weekStartsMonday)
+        sp
+            .edit()
+            .putString("themeSource", n.themeSource.name)
+            .putString("preset", n.preset)
+            .putInt("seedColor", n.seedColor)
+            .putString("darkMode", n.darkMode.name)
+            .putBoolean("showTeacher", n.showTeacher)
+            .putInt("defaultBlockMinutes", n.defaultBlockMinutes)
+            .putBoolean("remindCourse", n.remindCourse)
+            .putInt("courseRemindMinutes", n.courseRemindMinutes)
+            .putBoolean("remindTask", n.remindTask)
+            .putBoolean("remindEvent", n.remindEvent)
+            .putBoolean("parcelEnabled", n.parcelEnabled)
+            .putBoolean("parcelAiFallback", n.parcelAiFallback)
+            .putString("aiBaseUrl", n.aiBaseUrl)
+            .putString("aiModel", n.aiModel)
+            .putBoolean("weekStartsMonday", n.weekStartsMonday)
             .apply()
         _flow.value = n
     }

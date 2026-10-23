@@ -24,10 +24,10 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.UploadFile
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -75,7 +75,11 @@ fun EditTimetableScreen(onBack: () -> Unit) {
     val nav = LocalNav.current
     val actions = LocalActions.current
     val snap = liveSnapshot()
-    val sem = snap.currentSemester ?: run { onBack(); return }
+    val sem =
+        snap.currentSemester ?: run {
+            onBack()
+            return
+        }
 
     var name by remember(sem.id) { mutableStateOf(sem.name) }
     var week1 by remember(sem.id) { mutableStateOf(sem.week1Monday) }
@@ -99,13 +103,19 @@ fun EditTimetableScreen(onBack: () -> Unit) {
         }
     }
 
-    val courses = remember(snap, sem) {
-        snap.courses.filter { it.semesterId == sem.id }.sortedWith(compareBy({ it.dayOfWeek }, { it.startPeriod }, { it.name }))
-    }
+    val courses =
+        remember(snap, sem) {
+            snap.courses.filter { it.semesterId == sem.id }.sortedWith(compareBy({ it.dayOfWeek }, { it.startPeriod }, { it.name }))
+        }
 
     MintScreen(title = stringResource(R.string.edit_timetable), onBack = onBack) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding().padding(bottom = 24.dp),
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             FormSection(stringResource(R.string.section_semester)) {
@@ -115,7 +125,8 @@ fun EditTimetableScreen(onBack: () -> Unit) {
                 val weeksNow = ChronoUnit.WEEKS.between(week1.with(java.time.DayOfWeek.MONDAY), LocalDate.now()) + 1
                 Text(
                     ctx.getString(R.string.semester_progress_hint, weeksNow.coerceIn(0, 99).toInt()),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -123,8 +134,12 @@ fun EditTimetableScreen(onBack: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 courses.forEach { c ->
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(MintTheme.card)
-                            .clickable { nav.push(Route.CourseEdit(c.id)) }.padding(horizontal = 14.dp, vertical = 12.dp),
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(MintTheme.card)
+                            .clickable { nav.push(Route.CourseEdit(c.id)) }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(Modifier.size(12.dp).clip(CircleShape).background(MintTheme.colors.fg(c.colorIndex)))
@@ -133,14 +148,20 @@ fun EditTimetableScreen(onBack: () -> Unit) {
                             Text(c.name, style = MaterialTheme.typography.bodyLarge)
                             Text(
                                 ctx.getString(R.string.course_line, ctx.weekdayShort(c.dayOfWeek), c.startPeriod, c.endPeriod, WeekSets.format(c.weeks)) +
-                                    c.room.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty(),
-                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    c.room
+                                        .takeIf { it.isNotBlank() }
+                                        ?.let { " · $it" }
+                                        .orEmpty(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
                 }
                 OutlinedButton(onClick = { nav.push(Route.CourseEdit(null)) }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Rounded.Add, null); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.new_course))
+                    Icon(Icons.Rounded.Add, null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.new_course))
                 }
             }
 
@@ -163,10 +184,14 @@ fun EditTimetableScreen(onBack: () -> Unit) {
 
             val dashColor = MaterialTheme.colorScheme.primary
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).clickable { showAdvanced = true }
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .clickable { showAdvanced = true }
                     .drawBehind {
                         drawRoundRect(
-                            dashColor, cornerRadius = CornerRadius(24.dp.toPx()),
+                            dashColor,
+                            cornerRadius = CornerRadius(24.dp.toPx()),
                             style = Stroke(width = 1.6.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))),
                         )
                     }.padding(16.dp),
@@ -218,12 +243,17 @@ fun PeriodsScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
     val snap = liveSnapshot()
-    val sem = snap.currentSemester ?: run { onBack(); return }
+    val sem =
+        snap.currentSemester ?: run {
+            onBack()
+            return
+        }
     var periods by remember(sem.id) { mutableStateOf(sem.periods.sortedBy { it.index }) }
     var editing by remember { mutableStateOf<Pair<Int, Boolean>?>(null) } // (index, isStart)
 
     MintScreen(
-        title = stringResource(R.string.edit_periods), onBack = onBack,
+        title = stringResource(R.string.edit_periods),
+        onBack = onBack,
         actions = {
             TextButton(onClick = { periods = app.mintcal.core.model.GdutPeriods.default }) { Text(stringResource(R.string.reset_default)) }
             TextButton(onClick = {
@@ -232,7 +262,15 @@ fun PeriodsScreen(onBack: () -> Unit) {
             }) { Text(stringResource(R.string.save)) }
         },
     ) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding().padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Text(stringResource(R.string.periods_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FormSection {
                 periods.forEachIndexed { i, p ->
@@ -246,7 +284,9 @@ fun PeriodsScreen(onBack: () -> Unit) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
                         val last = periods.last()
-                        periods = periods + app.mintcal.core.model.PeriodTime(last.index + 1, last.end.plusMinutes(5), last.end.plusMinutes(50))
+                        periods = periods +
+                            app.mintcal.core.model
+                                .PeriodTime(last.index + 1, last.end.plusMinutes(5), last.end.plusMinutes(50))
                     }, enabled = periods.size < 16) { Text(stringResource(R.string.add_period)) }
                     OutlinedButton(onClick = { periods = periods.dropLast(1) }, enabled = periods.size > 1) { Text(stringResource(R.string.remove_last_period)) }
                 }

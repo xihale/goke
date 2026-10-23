@@ -1,6 +1,7 @@
 package app.mintcal.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
@@ -60,13 +60,23 @@ import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.weekdayFull
 
 @Composable
-fun CourseEditScreen(id: String?, onBack: () -> Unit) {
+fun CourseEditScreen(
+    id: String?,
+    onBack: () -> Unit,
+) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
     val snap = liveSnapshot()
-    val sem = snap.currentSemester ?: run { onBack(); return }
+    val sem =
+        snap.currentSemester ?: run {
+            onBack()
+            return
+        }
     val existing = remember(id) { id?.let { i -> snap.courses.firstOrNull { it.id == i } } }
-    if (id != null && existing == null) { onBack(); return }
+    if (id != null && existing == null) {
+        onBack()
+        return
+    }
     val periodCount = sem.periods.size
 
     var name by remember { mutableStateOf(existing?.name.orEmpty()) }
@@ -83,16 +93,29 @@ fun CourseEditScreen(id: String?, onBack: () -> Unit) {
 
     val weeks = remember(weeksText) { WeekSets.parse(weeksText, sem.totalWeeks).filter { it >= 1 }.toSet() }
     val valid = name.isNotBlank() && weeks.isNotEmpty() && ep >= sp
-    fun build(): Course = (existing ?: Course(Ids.next(), sem.id, "", dayOfWeek = 1, startPeriod = 1, endPeriod = 2, weeks = emptySet(), source = Source.MANUAL)).copy(
-        name = name.trim(), teacher = teacher.trim(), room = room.trim(), dayOfWeek = dow, startPeriod = sp, endPeriod = ep,
-        weeks = weeks, colorIndex = color, remindMinutes = remind, note = note,
-    )
-    val preview = remember(name, teacher, room, dow, sp, ep, weeks, color, remind, note) {
-        if (!valid) null else {
-            val c = build()
-            Conflicts.detect(snap.apply(Edits.save(snap, c, "", 0), 0), setOf(c.id))
+
+    fun build(): Course =
+        (existing ?: Course(Ids.next(), sem.id, "", dayOfWeek = 1, startPeriod = 1, endPeriod = 2, weeks = emptySet(), source = Source.MANUAL)).copy(
+            name = name.trim(),
+            teacher = teacher.trim(),
+            room = room.trim(),
+            dayOfWeek = dow,
+            startPeriod = sp,
+            endPeriod = ep,
+            weeks = weeks,
+            colorIndex = color,
+            remindMinutes = remind,
+            note = note,
+        )
+    val preview =
+        remember(name, teacher, room, dow, sp, ep, weeks, color, remind, note) {
+            if (!valid) {
+                null
+            } else {
+                val c = build()
+                Conflicts.detect(snap.apply(Edits.save(snap, c, "", 0), 0), setOf(c.id))
+            }
         }
-    }
 
     MintScreen(
         title = stringResource(if (existing == null) R.string.new_course else R.string.edit_course),
@@ -104,11 +127,21 @@ fun CourseEditScreen(id: String?, onBack: () -> Unit) {
                     val c = build()
                     actions.commit(Edits.save(snap, c, ctx.getString(if (existing == null) R.string.add_course_desc else R.string.edit_course_desc, c.name), System.currentTimeMillis()), ctx.getString(R.string.saved_toast))
                     onBack()
-                }, enabled = valid, modifier = Modifier.padding(end = 8.dp),
+                },
+                enabled = valid,
+                modifier = Modifier.padding(end = 8.dp),
             ) { Text(stringResource(R.string.save)) }
         },
     ) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).imePadding().navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .imePadding()
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             FieldText(stringResource(R.string.label_course_name), name, { name = it })
             FieldText(stringResource(R.string.label_room), room, { room = it })
             FieldText(stringResource(R.string.label_teacher), teacher, { teacher = it })
@@ -117,22 +150,36 @@ fun CourseEditScreen(id: String?, onBack: () -> Unit) {
                 Text(stringResource(R.string.weekday_label), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 ChipChoice((1..7).map { it to ctx.weekdayFull(it) }, dow, { dow = it })
                 Spacer(Modifier.height(8.dp))
-                Stepper(stringResource(R.string.start_period), sp, 1, periodCount) { sp = it; if (ep < sp) ep = sp }
+                Stepper(stringResource(R.string.start_period), sp, 1, periodCount) {
+                    sp = it
+                    if (ep < sp) ep = sp
+                }
                 Stepper(stringResource(R.string.end_period), ep, sp, periodCount) { ep = it }
                 val cal = remember(sem) { SemesterCalendar(sem) }
                 Text(
                     "${cal.startTime(sp)?.toString().orEmpty()}–${cal.endTime(ep)?.toString().orEmpty()}",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             FormSection(stringResource(R.string.section_weeks)) {
                 FieldText(stringResource(R.string.label_weeks), weeksText, { weeksText = it }, placeholder = stringResource(R.string.weeks_hint))
                 ChipChoice(
                     listOf(
-                        "all" to stringResource(R.string.weeks_all), "odd" to stringResource(R.string.weeks_odd), "even" to stringResource(R.string.weeks_even),
+                        "all" to stringResource(R.string.weeks_all),
+                        "odd" to stringResource(R.string.weeks_odd),
+                        "even" to stringResource(R.string.weeks_even),
                     ),
-                    "", {
-                        weeksText = WeekSets.format(when (it) { "odd" -> WeekSets.odd(sem.totalWeeks); "even" -> WeekSets.even(sem.totalWeeks); else -> WeekSets.all(sem.totalWeeks) })
+                    "",
+                    {
+                        weeksText =
+                            WeekSets.format(
+                                when (it) {
+                                    "odd" -> WeekSets.odd(sem.totalWeeks)
+                                    "even" -> WeekSets.even(sem.totalWeeks)
+                                    else -> WeekSets.all(sem.totalWeeks)
+                                },
+                            )
                     },
                 )
                 Text(
@@ -148,14 +195,21 @@ fun CourseEditScreen(id: String?, onBack: () -> Unit) {
                 Text(stringResource(R.string.label_remind), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 ChipChoice(
                     listOf<Pair<Int?, String>>(null to stringResource(R.string.remind_default), 5 to stringResource(R.string.remind_5m), 10 to stringResource(R.string.remind_10m), 15 to stringResource(R.string.remind_15m), 30 to stringResource(R.string.remind_30m)),
-                    remind, { remind = it },
+                    remind,
+                    { remind = it },
                 )
                 Spacer(Modifier.height(8.dp))
                 FieldText(stringResource(R.string.label_note), note, { note = it }, singleLine = false, minLines = 2)
             }
             if (!preview.isNullOrEmpty()) {
                 Column(
-                    Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp)).background(MintTheme.colors.conflictBg).padding(14.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(
+                            androidx.compose.foundation.shape
+                                .RoundedCornerShape(20.dp),
+                        ).background(MintTheme.colors.conflictBg)
+                        .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(stringResource(R.string.conflict_title), color = MintTheme.colors.removed, style = MaterialTheme.typography.labelLarge)
@@ -167,24 +221,33 @@ fun CourseEditScreen(id: String?, onBack: () -> Unit) {
     }
     if (confirmDelete && existing != null) {
         ConfirmDialog(
-            stringResource(R.string.delete_course_title, existing.name), stringResource(R.string.delete_to_trash_hint), stringResource(R.string.delete),
+            stringResource(R.string.delete_course_title, existing.name),
+            stringResource(R.string.delete_to_trash_hint),
+            stringResource(R.string.delete),
             onConfirm = {
                 actions.commit(Edits.delete(snap, existing, ctx.getString(R.string.delete_desc, existing.name), System.currentTimeMillis()), ctx.getString(R.string.deleted_toast))
                 onBack()
             },
-            onDismiss = { confirmDelete = false }, danger = true,
+            onDismiss = { confirmDelete = false },
+            danger = true,
         )
     }
 }
 
 @Composable
-fun ColorPicker(selected: Int, onSelect: (Int) -> Unit) {
+fun ColorPicker(
+    selected: Int,
+    onSelect: (Int) -> Unit,
+) {
     val colors = MintTheme.colors
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
         for (i in 0 until 8) {
             val sel = i == selected
             Box(
-                Modifier.size(32.dp).clip(CircleShape).background(colors.bg(i))
+                Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(colors.bg(i))
                     .border(if (sel) 2.5.dp else 1.dp, if (sel) colors.fg(i) else MaterialTheme.colorScheme.outlineVariant, CircleShape)
                     .clickable { onSelect(i) },
                 contentAlignment = Alignment.Center,

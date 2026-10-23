@@ -29,7 +29,9 @@ data class AdvancedState(
 }
 
 /** 高级修改的状态机：描述 → （AI 生成）代码 → Dry Run 预览 → 应用 / 放弃。抽屉与全屏页共用。 */
-class AdvancedController(private val app: MintCalApp) {
+class AdvancedController(
+    private val app: MintCalApp,
+) {
     private val _state = MutableStateFlow(AdvancedState())
     val state: StateFlow<AdvancedState> = _state.asStateFlow()
     private val runner = ScriptRunner()
@@ -59,14 +61,18 @@ class AdvancedController(private val app: MintCalApp) {
         val code = _state.value.code
         if (code.isBlank()) return
         job?.cancel()
-        job = app.scope.launch {
-            _state.update { it.copy(running = true, outcome = null, message = null) }
-            val outcome = runScript(code, _state.value.codeSource)
-            _state.update { it.copy(running = false, outcome = outcome) }
-        }
+        job =
+            app.scope.launch {
+                _state.update { it.copy(running = true, outcome = null, message = null) }
+                val outcome = runScript(code, _state.value.codeSource)
+                _state.update { it.copy(running = false, outcome = outcome) }
+            }
     }
 
-    private suspend fun runScript(code: String, source: Source): ScriptOutcome {
+    private suspend fun runScript(
+        code: String,
+        source: Source,
+    ): ScriptOutcome {
         val desc = _state.value.description.ifBlank { "高级修改" }
         return runner.dryRun(code, app.repo.snapshot.value, ScriptOptions(source = source), desc.take(60))
     }
@@ -82,24 +88,25 @@ class AdvancedController(private val app: MintCalApp) {
             return
         }
         job?.cancel()
-        job = app.scope.launch {
-            _state.update { it.copy(generating = true, outcome = null, message = null) }
-            try {
-                var code = ai.generateCode(settings.aiBaseUrl, key, settings.aiModel, st.description, app.repo.snapshot.value)
-                _state.update { it.copy(code = code, codeSource = Source.AI) }
-                var outcome = runScript(code, Source.AI)
-                if (outcome is ScriptOutcome.Failure) {
-                    code = ai.generateCode(settings.aiBaseUrl, key, settings.aiModel, st.description, app.repo.snapshot.value, code, outcome.message)
-                    _state.update { it.copy(code = code) }
-                    outcome = runScript(code, Source.AI)
+        job =
+            app.scope.launch {
+                _state.update { it.copy(generating = true, outcome = null, message = null) }
+                try {
+                    var code = ai.generateCode(settings.aiBaseUrl, key, settings.aiModel, st.description, app.repo.snapshot.value)
+                    _state.update { it.copy(code = code, codeSource = Source.AI) }
+                    var outcome = runScript(code, Source.AI)
+                    if (outcome is ScriptOutcome.Failure) {
+                        code = ai.generateCode(settings.aiBaseUrl, key, settings.aiModel, st.description, app.repo.snapshot.value, code, outcome.message)
+                        _state.update { it.copy(code = code) }
+                        outcome = runScript(code, Source.AI)
+                    }
+                    _state.update { it.copy(generating = false, outcome = outcome) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    _state.update { it.copy(generating = false, message = "AI：${e.message ?: e.javaClass.simpleName}") }
                 }
-                _state.update { it.copy(generating = false, outcome = outcome) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(generating = false, message = "AI：${e.message ?: e.javaClass.simpleName}") }
             }
-        }
     }
 
     /** 应用当前预览的变更集（与预览完全一致），并保留在操作历史里以便撤销。 */
@@ -113,5 +120,7 @@ class AdvancedController(private val app: MintCalApp) {
         }
     }
 
-    companion object { const val MSG_NO_KEY = "NO_KEY" }
+    companion object {
+        const val MSG_NO_KEY = "NO_KEY"
+    }
 }

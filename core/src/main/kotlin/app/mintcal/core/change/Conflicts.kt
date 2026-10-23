@@ -18,9 +18,18 @@ data class Conflict(
 
 /** 冲突检测：同时考虑课程、日程（不含全天）。只报告涉及 [focusIds] 的冲突。 */
 object Conflicts {
-    private data class Slot(val ownerId: String, val title: String, val start: LocalDateTime, val end: LocalDateTime)
+    private data class Slot(
+        val ownerId: String,
+        val title: String,
+        val start: LocalDateTime,
+        val end: LocalDateTime,
+    )
 
-    fun detect(snapshot: Snapshot, focusIds: Set<String>, limit: Int = 30): List<Conflict> {
+    fun detect(
+        snapshot: Snapshot,
+        focusIds: Set<String>,
+        limit: Int = 30,
+    ): List<Conflict> {
         val live = snapshot.live()
         val semester = live.currentSemester ?: return emptyList()
         val cal = SemesterCalendar(semester)
@@ -52,6 +61,10 @@ object Conflicts {
     }
 
     fun focusIds(cs: ChangeSet): Set<String> =
-        cs.changes.filter { it !is Change.Remove }.map { it.record }
-            .filter { it is Course || it is Event }.map { it.id }.toSet()
+        cs.changes
+            .filter { it !is Change.Remove }
+            .map { it.record }
+            .filter { it is Course || it is Event }
+            .map { it.id }
+            .toSet()
 }

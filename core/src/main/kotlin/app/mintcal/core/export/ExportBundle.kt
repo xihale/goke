@@ -12,8 +12,7 @@ data class ExportBundle(
     val exportedAt: Long,
     val snapshot: Snapshot,
 ) {
-    fun toJson(pretty: Boolean = true): String =
-        (if (pretty) PRETTY else MintJson).encodeToString(serializer(), this)
+    fun toJson(pretty: Boolean = true): String = (if (pretty) PRETTY else MintJson).encodeToString(serializer(), this)
 
     companion object {
         private val PRETTY = kotlinx.serialization.json.Json(MintJson) { prettyPrint = true }

@@ -46,12 +46,18 @@ object CourseExpander {
                 if (date.isBefore(from) || date.isAfter(to)) continue
                 val s = cal.courseStart(c, week, dow, sp) ?: continue
                 val e = cal.courseEnd(c, week, dow, ep) ?: continue
-                out += CourseOccurrence(
-                    course = c, week = week, date = date, startPeriod = sp, endPeriod = ep,
-                    start = s, end = e,
-                    room = (if (ex?.type == ExceptionType.RESCHEDULE) ex.newRoom else null) ?: c.room,
-                    rescheduled = ex?.type == ExceptionType.RESCHEDULE,
-                )
+                out +=
+                    CourseOccurrence(
+                        course = c,
+                        week = week,
+                        date = date,
+                        startPeriod = sp,
+                        endPeriod = ep,
+                        start = s,
+                        end = e,
+                        room = (if (ex?.type == ExceptionType.RESCHEDULE) ex.newRoom else null) ?: c.room,
+                        rescheduled = ex?.type == ExceptionType.RESCHEDULE,
+                    )
             }
         }
         return out.sortedWith(compareBy({ it.start }, { it.course.name }))
@@ -76,10 +82,14 @@ object CourseExpander {
         after: LocalDateTime,
     ): CourseOccurrence? {
         val cal = SemesterCalendar(semester)
-        val list = occurrences(
-            semester, courses.filter { it.id == courseId }, exceptions,
-            after.toLocalDate(), cal.weekEnd(cal.totalWeeks),
-        )
+        val list =
+            occurrences(
+                semester,
+                courses.filter { it.id == courseId },
+                exceptions,
+                after.toLocalDate(),
+                cal.weekEnd(cal.totalWeeks),
+            )
         return list.firstOrNull { it.start.isAfter(after) }
     }
 }

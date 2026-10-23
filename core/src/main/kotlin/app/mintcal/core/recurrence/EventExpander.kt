@@ -24,11 +24,17 @@ object RecurrenceEngine {
      * 生成以 [anchor] 为首次出现日期的规则，在 [from, to]（含）内的所有日期。
      * count 从首次出现起算；exDates 中的日期被排除（不占 count）。
      */
-    fun dates(rule: Recurrence, anchor: LocalDate, from: LocalDate, to: LocalDate): List<LocalDate> {
+    fun dates(
+        rule: Recurrence,
+        anchor: LocalDate,
+        from: LocalDate,
+        to: LocalDate,
+    ): List<LocalDate> {
         val interval = rule.interval.coerceAtLeast(1)
         val result = mutableListOf<LocalDate>()
         var produced = 0
         val limit = rule.until?.let { minOf(it, to) } ?: to
+
         fun accept(d: LocalDate): Boolean {
             // 返回 false 表示应停止
             if (d.isBefore(anchor)) return true
@@ -48,6 +54,7 @@ object RecurrenceEngine {
                     k++
                 }
             }
+
             Freq.WEEKLY -> {
                 val days = (rule.byDays.ifEmpty { setOf(anchor.dayOfWeek.value) }).sorted()
                 val firstWeek = anchor.with(DayOfWeek.MONDAY)
@@ -62,16 +69,20 @@ object RecurrenceEngine {
                     k++
                 }
             }
+
             Freq.MONTHLY -> {
                 var k = 0L
                 while (iter++ < MAX_ITER) {
                     val m = anchor.withDayOfMonth(1).plusMonths(k * interval)
                     if (anchor.dayOfMonth <= m.lengthOfMonth()) {
                         if (!accept(m.withDayOfMonth(anchor.dayOfMonth))) break
-                    } else if (m.isAfter(limit)) break
+                    } else if (m.isAfter(limit)) {
+                        break
+                    }
                     k++
                 }
             }
+
             Freq.YEARLY -> {
                 var k = 0L
                 while (iter++ < MAX_ITER) {
@@ -79,7 +90,9 @@ object RecurrenceEngine {
                     val md = y.withMonth(anchor.monthValue)
                     if (anchor.dayOfMonth <= md.lengthOfMonth()) {
                         if (!accept(md.withDayOfMonth(anchor.dayOfMonth))) break
-                    } else if (md.isAfter(limit)) break
+                    } else if (md.isAfter(limit)) {
+                        break
+                    }
                     k++
                 }
             }
@@ -88,30 +101,43 @@ object RecurrenceEngine {
     }
 
     /** 严格晚于 [after] 的下一次出现日期。 */
-    fun next(rule: Recurrence, anchor: LocalDate, after: LocalDate): LocalDate? =
-        dates(rule, anchor, after.plusDays(1), after.plusYears(8)).firstOrNull()
+    fun next(
+        rule: Recurrence,
+        anchor: LocalDate,
+        after: LocalDate,
+    ): LocalDate? = dates(rule, anchor, after.plusDays(1), after.plusYears(8)).firstOrNull()
 }
 
 object EventExpander {
-    fun occurrences(event: Event, from: LocalDate, to: LocalDate): List<EventOccurrence> {
+    fun occurrences(
+        event: Event,
+        from: LocalDate,
+        to: LocalDate,
+    ): List<EventOccurrence> {
         if (event.deletedAt != null) return emptyList()
         val duration = Duration.between(event.start, event.end).let { if (it.isNegative) Duration.ZERO else it }
         val rule = event.recurrence
-        val starts: List<LocalDateTime> = if (rule == null) {
-            listOf(event.start)
-        } else {
-            // 多日事件向前多取一些，使跨入区间的出现也能命中
-            val back = duration.toDays() + 1
-            RecurrenceEngine.dates(rule, event.start.toLocalDate(), from.minusDays(back), to)
-                .map { LocalDateTime.of(it, event.start.toLocalTime()) }
-        }
-        return starts.map { EventOccurrence(event, it, it.plus(duration)) }
+        val starts: List<LocalDateTime> =
+            if (rule == null) {
+                listOf(event.start)
+            } else {
+                // 多日事件向前多取一些，使跨入区间的出现也能命中
+                val back = duration.toDays() + 1
+                RecurrenceEngine
+                    .dates(rule, event.start.toLocalDate(), from.minusDays(back), to)
+                    .map { LocalDateTime.of(it, event.start.toLocalTime()) }
+            }
+        return starts
+            .map { EventOccurrence(event, it, it.plus(duration)) }
             .filter { !it.end.toLocalDate().isBefore(from) && !it.start.toLocalDate().isAfter(to) }
             // 结束于 00:00 的非全天事件不占用次日
             .filter { it.end.toLocalDate() != from || it.end.toLocalTime() != java.time.LocalTime.MIDNIGHT || it.start.toLocalDate() == from || event.allDay }
             .sortedBy { it.start }
     }
 
-    fun occurrences(events: List<Event>, from: LocalDate, to: LocalDate): List<EventOccurrence> =
-        events.flatMap { occurrences(it, from, to) }.sortedWith(compareBy({ it.start }, { it.event.title }))
+    fun occurrences(
+        events: List<Event>,
+        from: LocalDate,
+        to: LocalDate,
+    ): List<EventOccurrence> = events.flatMap { occurrences(it, from, to) }.sortedWith(compareBy({ it.start }, { it.event.title }))
 }

@@ -3,11 +3,11 @@ package app.mintcal.core.model
 import app.mintcal.core.util.LocalDateSerializer
 import app.mintcal.core.util.LocalDateTimeSerializer
 import app.mintcal.core.util.LocalTimeSerializer
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 
 /** 数据来源，用于标记与审计。 */
 @Serializable
@@ -29,7 +29,11 @@ sealed interface Record {
     val updatedAt: Long
     val deletedAt: Long?
     val userId: String?
-    fun withMeta(updatedAt: Long, deletedAt: Long?): Record
+
+    fun withMeta(
+        updatedAt: Long,
+        deletedAt: Long?,
+    ): Record
 }
 
 @Serializable
@@ -52,7 +56,10 @@ data class Semester(
     override val deletedAt: Long? = null,
     override val userId: String? = null,
 ) : Record {
-    override fun withMeta(updatedAt: Long, deletedAt: Long?) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
+    override fun withMeta(
+        updatedAt: Long,
+        deletedAt: Long?,
+    ) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
 }
 
 @Serializable
@@ -76,7 +83,10 @@ data class Course(
     override val deletedAt: Long? = null,
     override val userId: String? = null,
 ) : Record {
-    override fun withMeta(updatedAt: Long, deletedAt: Long?) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
+    override fun withMeta(
+        updatedAt: Long,
+        deletedAt: Long?,
+    ) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
 }
 
 @Serializable
@@ -95,7 +105,10 @@ data class CourseException(
     override val deletedAt: Long? = null,
     override val userId: String? = null,
 ) : Record {
-    override fun withMeta(updatedAt: Long, deletedAt: Long?) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
+    override fun withMeta(
+        updatedAt: Long,
+        deletedAt: Long?,
+    ) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
 }
 
 @Serializable
@@ -106,7 +119,10 @@ data class Recurrence(
     val byDays: Set<Int> = emptySet(),
     @Serializable(with = LocalDateSerializer::class) val until: LocalDate? = null,
     val count: Int? = null,
-    val exDates: Set<@Serializable(with = LocalDateSerializer::class) LocalDate> = emptySet(),
+    val exDates: Set<
+        @Serializable(with = LocalDateSerializer::class)
+        LocalDate,
+    > = emptySet(),
 )
 
 @Serializable
@@ -129,7 +145,10 @@ data class Event(
     override val deletedAt: Long? = null,
     override val userId: String? = null,
 ) : Record {
-    override fun withMeta(updatedAt: Long, deletedAt: Long?) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
+    override fun withMeta(
+        updatedAt: Long,
+        deletedAt: Long?,
+    ) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
 }
 
 @Serializable
@@ -143,7 +162,10 @@ data class TaskList(
     override val deletedAt: Long? = null,
     override val userId: String? = null,
 ) : Record {
-    override fun withMeta(updatedAt: Long, deletedAt: Long?) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
+    override fun withMeta(
+        updatedAt: Long,
+        deletedAt: Long?,
+    ) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
 }
 
 @Serializable
@@ -180,16 +202,29 @@ data class Task(
     override val deletedAt: Long? = null,
     override val userId: String? = null,
 ) : Record {
-    override fun withMeta(updatedAt: Long, deletedAt: Long?) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
+    override fun withMeta(
+        updatedAt: Long,
+        deletedAt: Long?,
+    ) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
 }
 
 /** 广工节次时间（来自 WakeUp 导出的 ICS，见需求文档 6.2）。 */
 object GdutPeriods {
-    val default: List<PeriodTime> = listOf(
-        "08:30" to "09:15", "09:20" to "10:05", "10:25" to "11:10", "11:15" to "12:00",
-        "13:50" to "14:35", "14:40" to "15:25", "15:30" to "16:15", "16:30" to "17:15",
-        "17:20" to "18:05", "18:30" to "19:15", "19:20" to "20:05", "20:10" to "20:55",
-    ).mapIndexed { i, (s, e) -> PeriodTime(i + 1, LocalTime.parse(s), LocalTime.parse(e)) }
+    val default: List<PeriodTime> =
+        listOf(
+            "08:30" to "09:15",
+            "09:20" to "10:05",
+            "10:25" to "11:10",
+            "11:15" to "12:00",
+            "13:50" to "14:35",
+            "14:40" to "15:25",
+            "15:30" to "16:15",
+            "16:30" to "17:15",
+            "17:20" to "18:05",
+            "18:30" to "19:15",
+            "19:20" to "20:05",
+            "20:10" to "20:55",
+        ).mapIndexed { i, (s, e) -> PeriodTime(i + 1, LocalTime.parse(s), LocalTime.parse(e)) }
 
     /** 第 1 周周一（需求文档 6.2）。 */
     val week1Monday: LocalDate = LocalDate.of(2026, 8, 31)

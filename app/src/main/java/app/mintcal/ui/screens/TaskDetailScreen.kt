@@ -58,13 +58,19 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 
 @Composable
-fun TaskDetailScreen(id: String?, onBack: () -> Unit) {
+fun TaskDetailScreen(
+    id: String?,
+    onBack: () -> Unit,
+) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
     val snap = liveSnapshot()
     val settings = settingsState()
     val existing = remember(id) { id?.let { i -> snap.tasks.firstOrNull { it.id == i } } }
-    if (id != null && existing == null) { onBack(); return }
+    if (id != null && existing == null) {
+        onBack()
+        return
+    }
 
     var title by remember { mutableStateOf(existing?.title.orEmpty()) }
     var note by remember { mutableStateOf(existing?.note.orEmpty()) }
@@ -90,11 +96,19 @@ fun TaskDetailScreen(id: String?, onBack: () -> Unit) {
         val base = existing ?: Task(Ids.next(), "", sortOrder = (snap.tasks.maxOfOrNull { it.sortOrder } ?: 0) + 1)
         val due = dueDate?.let { d -> LocalDateTime.of(d, dueTime ?: LocalTime.of(23, 59)) }
         return base.copy(
-            title = title.trim(), note = note, listId = listId, priority = priority,
-            due = due, dueHasTime = dueDate != null && dueTime != null,
-            estimateMinutes = estimate.toIntOrNull(), repeat = repeat?.let { Recurrence(it) },
-            remindMinutes = remind, courseId = courseId, dueBeforeNextClass = beforeClass && courseId != null,
-            blockStart = blockDate?.let { LocalDateTime.of(it, blockTime) }, blockMinutes = if (blockDate != null) blockMinutes else null,
+            title = title.trim(),
+            note = note,
+            listId = listId,
+            priority = priority,
+            due = due,
+            dueHasTime = dueDate != null && dueTime != null,
+            estimateMinutes = estimate.toIntOrNull(),
+            repeat = repeat?.let { Recurrence(it) },
+            remindMinutes = remind,
+            courseId = courseId,
+            dueBeforeNextClass = beforeClass && courseId != null,
+            blockStart = blockDate?.let { LocalDateTime.of(it, blockTime) },
+            blockMinutes = if (blockDate != null) blockMinutes else null,
             tags = tags.split(' ', ',', '，', '#').map { it.trim() }.filter { it.isNotEmpty() },
         )
     }
@@ -110,11 +124,20 @@ fun TaskDetailScreen(id: String?, onBack: () -> Unit) {
                     actions.commit(Edits.save(snap, t, ctx.getString(if (existing == null) R.string.add_task_desc else R.string.edit_task_desc, t.title), System.currentTimeMillis()), ctx.getString(R.string.saved_toast))
                     onBack()
                 },
-                enabled = title.isNotBlank(), modifier = Modifier.padding(end = 8.dp),
+                enabled = title.isNotBlank(),
+                modifier = Modifier.padding(end = 8.dp),
             ) { Text(stringResource(R.string.save)) }
         },
     ) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).imePadding().navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .imePadding()
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             FieldText(stringResource(R.string.label_title), title, { title = it })
             FieldText(stringResource(R.string.label_note), note, { note = it }, singleLine = false, minLines = 2)
 
@@ -122,18 +145,23 @@ fun TaskDetailScreen(id: String?, onBack: () -> Unit) {
                 ValueRow(stringResource(R.string.label_due_date), dueDate?.let { ctx.monthDayWeekday(it) } ?: stringResource(R.string.none), { pick = "due" })
                 if (dueDate != null) {
                     ValueRow(stringResource(R.string.label_due_time), dueTime?.hm() ?: stringResource(R.string.none), { pick = "dueTime" })
-                    TextButton(onClick = { dueDate = null; dueTime = null }) { Text(stringResource(R.string.clear_due)) }
+                    TextButton(onClick = {
+                        dueDate = null
+                        dueTime = null
+                    }) { Text(stringResource(R.string.clear_due)) }
                 }
                 Text(stringResource(R.string.label_repeat), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 ChipChoice(
                     listOf<Pair<Freq?, String>>(null to stringResource(R.string.repeat_none), Freq.DAILY to stringResource(R.string.repeat_daily), Freq.WEEKLY to stringResource(R.string.repeat_weekly), Freq.MONTHLY to stringResource(R.string.repeat_monthly)),
-                    repeat, { repeat = it },
+                    repeat,
+                    { repeat = it },
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(stringResource(R.string.label_remind), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 ChipChoice(
                     listOf<Pair<Int?, String>>(null to stringResource(R.string.remind_none), 0 to stringResource(R.string.remind_at_due), 10 to stringResource(R.string.remind_10m), 60 to stringResource(R.string.remind_1h), 1440 to stringResource(R.string.remind_1d)),
-                    remind, { remind = it },
+                    remind,
+                    { remind = it },
                 )
             }
 
@@ -143,9 +171,16 @@ fun TaskDetailScreen(id: String?, onBack: () -> Unit) {
                     androidx.compose.foundation.layout.Box {
                         TextButton(onClick = { courseMenu = true }) { Text(snap.courses.firstOrNull { it.id == courseId }?.name ?: stringResource(R.string.none)) }
                         DropdownMenu(courseMenu, { courseMenu = false }) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.none)) }, onClick = { courseId = null; beforeClass = false; courseMenu = false })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.none)) }, onClick = {
+                                courseId = null
+                                beforeClass = false
+                                courseMenu = false
+                            })
                             snap.courses.distinctBy { it.name }.forEach { c ->
-                                DropdownMenuItem(text = { Text(c.name) }, onClick = { courseId = c.id; courseMenu = false })
+                                DropdownMenuItem(text = { Text(c.name) }, onClick = {
+                                    courseId = c.id
+                                    courseMenu = false
+                                })
                             }
                         }
                     }
@@ -212,12 +247,15 @@ fun TaskDetailScreen(id: String?, onBack: () -> Unit) {
     }
     if (confirmDelete && existing != null) {
         ConfirmDialog(
-            stringResource(R.string.delete_task_title), stringResource(R.string.delete_to_trash_hint), stringResource(R.string.delete),
+            stringResource(R.string.delete_task_title),
+            stringResource(R.string.delete_to_trash_hint),
+            stringResource(R.string.delete),
             onConfirm = {
                 actions.commit(Edits.delete(snap, existing, ctx.getString(R.string.delete_desc, existing.title), System.currentTimeMillis()), ctx.getString(R.string.deleted_toast))
                 onBack()
             },
-            onDismiss = { confirmDelete = false }, danger = true,
+            onDismiss = { confirmDelete = false },
+            danger = true,
         )
     }
 }

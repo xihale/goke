@@ -66,10 +66,10 @@ import app.mintcal.ui.components.NavRow
 import app.mintcal.ui.fullDate
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.settingsState
-import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 
 @Composable
 fun DataScreen(onBack: () -> Unit) {
@@ -82,18 +82,34 @@ fun DataScreen(onBack: () -> Unit) {
     val st = settingsState()
     var restoreBundle by remember { mutableStateOf<ExportBundle?>(null) }
 
-    val pickBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launch {
-            val parsed = withContext(Dispatchers.IO) {
-                runCatching { ExportBundle.fromJson(ctx.contentResolver.openInputStream(uri)!!.use { it.readBytes() }.toString(Charsets.UTF_8)) }
+    val pickBackup =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) {
+                scope.launch {
+                    val parsed =
+                        withContext(Dispatchers.IO) {
+                            runCatching {
+                                ExportBundle.fromJson(
+                                    ctx.contentResolver
+                                        .openInputStream(uri)!!
+                                        .use { it.readBytes() }
+                                        .toString(Charsets.UTF_8),
+                                )
+                            }
+                        }
+                    parsed.onSuccess { restoreBundle = it }.onFailure { actions.toast(ctx.getString(R.string.restore_failed)) }
+                }
             }
-            parsed.onSuccess { restoreBundle = it }.onFailure { actions.toast(ctx.getString(R.string.restore_failed)) }
         }
-    }
 
     MintScreen(title = stringResource(R.string.data_title), onBack = onBack) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding().padding(bottom = 24.dp),
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             FormSection(stringResource(R.string.section_import)) {
@@ -130,10 +146,17 @@ fun DataScreen(onBack: () -> Unit) {
     }
     restoreBundle?.let { b ->
         ConfirmDialog(
-            stringResource(R.string.restore_json), stringResource(R.string.restore_confirm, b.snapshot.courses.size, b.snapshot.events.size, b.snapshot.tasks.size),
+            stringResource(R.string.restore_json),
+            stringResource(R.string.restore_confirm, b.snapshot.courses.size, b.snapshot.events.size, b.snapshot.tasks.size),
             stringResource(R.string.restore_action),
-            { scope.launch { app.repo.replaceAll(b.snapshot); actions.toast(ctx.getString(R.string.restored_toast)) } },
-            { restoreBundle = null }, danger = true,
+            {
+                scope.launch {
+                    app.repo.replaceAll(b.snapshot)
+                    actions.toast(ctx.getString(R.string.restored_toast))
+                }
+            },
+            { restoreBundle = null },
+            danger = true,
         )
     }
 }
@@ -142,19 +165,35 @@ private enum class IcsMode { COURSES, EVENTS }
 
 private sealed interface ImportState {
     data object Pick : ImportState
+
     data object Loading : ImportState
-    data class Failed(val message: String) : ImportState
-    data class Ready(val kind: Kind, val bytes: ByteArray, val text: String?) : ImportState
+
+    data class Failed(
+        val message: String,
+    ) : ImportState
+
+    data class Ready(
+        val kind: Kind,
+        val bytes: ByteArray,
+        val text: String?,
+    ) : ImportState
+
     enum class Kind { XLSX, ICS }
 }
 
-private fun readName(ctx: Context, uri: Uri): String =
+private fun readName(
+    ctx: Context,
+    uri: Uri,
+): String =
     runCatching {
         ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null }
     }.getOrNull() ?: uri.lastPathSegment.orEmpty()
 
 @Composable
-fun ImportScreen(uri: String?, onBack: () -> Unit) {
+fun ImportScreen(
+    uri: String?,
+    onBack: () -> Unit,
+) {
     val ctx = LocalContext.current
     val nav = LocalNav.current
     val actions = LocalActions.current
@@ -170,14 +209,18 @@ fun ImportScreen(uri: String?, onBack: () -> Unit) {
         state = ImportState.Loading
         scope.launch {
             fileName = readName(ctx, u)
-            val res = withContext(Dispatchers.IO) {
-                runCatching {
-                    val bytes = ctx.contentResolver.openInputStream(u)!!.use { it.readBytes() }
-                    val isZip = bytes.size > 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte()
-                    if (isZip) ImportState.Ready(ImportState.Kind.XLSX, bytes, null)
-                    else ImportState.Ready(ImportState.Kind.ICS, bytes, bytes.toString(Charsets.UTF_8))
+            val res =
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        val bytes = ctx.contentResolver.openInputStream(u)!!.use { it.readBytes() }
+                        val isZip = bytes.size > 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte()
+                        if (isZip) {
+                            ImportState.Ready(ImportState.Kind.XLSX, bytes, null)
+                        } else {
+                            ImportState.Ready(ImportState.Kind.ICS, bytes, bytes.toString(Charsets.UTF_8))
+                        }
+                    }
                 }
-            }
             state = res.getOrElse { ImportState.Failed(it.message.orEmpty()) }
         }
     }
@@ -186,10 +229,18 @@ fun ImportScreen(uri: String?, onBack: () -> Unit) {
 
     MintScreen(title = stringResource(R.string.import_file), onBack = onBack) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding().padding(bottom = 24.dp),
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (sem == null) { Text(stringResource(R.string.import_no_semester)); return@Column }
+            if (sem == null) {
+                Text(stringResource(R.string.import_no_semester))
+                return@Column
+            }
             when (val s = state) {
                 ImportState.Pick -> {
                     Text(stringResource(R.string.import_pick_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -197,17 +248,23 @@ fun ImportScreen(uri: String?, onBack: () -> Unit) {
                         Text(stringResource(R.string.import_pick))
                     }
                 }
-                ImportState.Loading -> Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() }
+
+                ImportState.Loading -> {
+                    Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() }
+                }
+
                 is ImportState.Failed -> {
                     Text(stringResource(R.string.import_failed), style = MaterialTheme.typography.titleMedium)
                     Text(s.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     OutlinedButton(onClick = { state = ImportState.Pick }) { Text(stringResource(R.string.import_pick_again)) }
                 }
+
                 is ImportState.Ready -> {
                     val now = System.currentTimeMillis()
-                    val cal: IcsCalendar? = remember(s) {
-                        if (s.kind == ImportState.Kind.ICS) IcsParser.parse(s.text.orEmpty()).value else null
-                    }
+                    val cal: IcsCalendar? =
+                        remember(s) {
+                            if (s.kind == ImportState.Kind.ICS) IcsParser.parse(s.text.orEmpty()).value else null
+                        }
                     val suggested: LocalDate? = remember(cal) { cal?.let { IcsImporter.suggestWeek1Monday(it) } }
                     LaunchedEffect(cal) {
                         if (cal != null) mode = if (IcsImporter.looksLikeTimetable(cal)) IcsMode.COURSES else IcsMode.EVENTS
@@ -215,31 +272,41 @@ fun ImportScreen(uri: String?, onBack: () -> Unit) {
                     val usedSem: Semester = if (useSuggestedWeek1 && suggested != null) sem.copy(week1Monday = suggested) else sem
                     val desc = ctx.getString(R.string.import_op_desc, fileName)
                     // 计算变更集（预览与最终应用用同一个）
-                    val plan = remember(s, mode, usedSem, snap) {
-                        runCatching {
-                            when {
-                                s.kind == ImportState.Kind.XLSX -> {
-                                    val r = XlsxTimetableImporter.import(s.bytes, usedSem, now)
-                                    PlanResult(r.value?.let { ImportPlanner.planCourses(snap, usedSem, it.courses, now, desc) }, r.warnings, r.errors, r.value?.skipped.orEmpty(), r.value?.maxWeek ?: 0)
+                    val plan =
+                        remember(s, mode, usedSem, snap) {
+                            runCatching {
+                                when {
+                                    s.kind == ImportState.Kind.XLSX -> {
+                                        val r = XlsxTimetableImporter.import(s.bytes, usedSem, now)
+                                        PlanResult(r.value?.let { ImportPlanner.planCourses(snap, usedSem, it.courses, now, desc) }, r.warnings, r.errors, r.value?.skipped.orEmpty(), r.value?.maxWeek ?: 0)
+                                    }
+
+                                    cal == null -> {
+                                        PlanResult(null, emptyList(), listOf(ctx.getString(R.string.import_parse_ics_failed)), emptyList(), 0)
+                                    }
+
+                                    mode == IcsMode.COURSES -> {
+                                        val r = IcsImporter.toCourses(cal, usedSem, now)
+                                        PlanResult(r.value?.let { ImportPlanner.planCourses(snap, usedSem, it.courses, now, desc) }, r.warnings, r.errors, r.value?.skipped.orEmpty(), r.value?.maxWeek ?: 0)
+                                    }
+
+                                    else -> {
+                                        val ev = IcsImporter.toEvents(cal, now)
+                                        val tk = IcsImporter.toTasks(cal, now)
+                                        val recs = ev.value.orEmpty() + tk.value.orEmpty()
+                                        PlanResult(ImportPlanner.planAdds(recs, now, desc), ev.warnings + tk.warnings, ev.errors + tk.errors, emptyList(), 0)
+                                    }
                                 }
-                                cal == null -> PlanResult(null, emptyList(), listOf(ctx.getString(R.string.import_parse_ics_failed)), emptyList(), 0)
-                                mode == IcsMode.COURSES -> {
-                                    val r = IcsImporter.toCourses(cal, usedSem, now)
-                                    PlanResult(r.value?.let { ImportPlanner.planCourses(snap, usedSem, it.courses, now, desc) }, r.warnings, r.errors, r.value?.skipped.orEmpty(), r.value?.maxWeek ?: 0)
-                                }
-                                else -> {
-                                    val ev = IcsImporter.toEvents(cal, now)
-                                    val tk = IcsImporter.toTasks(cal, now)
-                                    val recs = ev.value.orEmpty() + tk.value.orEmpty()
-                                    PlanResult(ImportPlanner.planAdds(recs, now, desc), ev.warnings + tk.warnings, ev.errors + tk.errors, emptyList(), 0)
-                                }
+                            }.getOrElse { PlanResult(null, emptyList(), listOf(it.message.orEmpty()), emptyList(), 0) }
+                        }
+                    val finalCs: ChangeSet? =
+                        plan.cs?.let { cs ->
+                            if (usedSem != sem && (s.kind == ImportState.Kind.XLSX || mode == IcsMode.COURSES)) {
+                                cs.copy(changes = listOf<Change>(Change.Modify(sem, usedSem)) + cs.changes)
+                            } else {
+                                cs
                             }
-                        }.getOrElse { PlanResult(null, emptyList(), listOf(it.message.orEmpty()), emptyList(), 0) }
-                    }
-                    val finalCs: ChangeSet? = plan.cs?.let { cs ->
-                        if (usedSem != sem && (s.kind == ImportState.Kind.XLSX || mode == IcsMode.COURSES))
-                            cs.copy(changes = listOf<Change>(Change.Modify(sem, usedSem)) + cs.changes) else cs
-                    }
+                        }
 
                     MintCard {
                         Text(fileName.ifBlank { stringResource(R.string.import_file) }, style = MaterialTheme.typography.titleMedium)
@@ -249,12 +316,14 @@ fun ImportScreen(uri: String?, onBack: () -> Unit) {
                         ChipChoice(listOf(IcsMode.COURSES to ctx.getString(R.string.import_as_courses), IcsMode.EVENTS to ctx.getString(R.string.import_as_events)), mode, { mode = it })
                     }
                     if (suggested != null && suggested != sem.week1Monday && (s.kind == ImportState.Kind.XLSX || mode == IcsMode.COURSES)) {
-                        if (s.kind == ImportState.Kind.ICS) Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(stringResource(R.string.import_use_week1, ctx.fullDate(suggested)), style = MaterialTheme.typography.bodyMedium)
-                                Text(stringResource(R.string.import_current_week1, ctx.fullDate(sem.week1Monday)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (s.kind == ImportState.Kind.ICS) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(stringResource(R.string.import_use_week1, ctx.fullDate(suggested)), style = MaterialTheme.typography.bodyMedium)
+                                    Text(stringResource(R.string.import_current_week1, ctx.fullDate(sem.week1Monday)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Switch(useSuggestedWeek1, { useSuggestedWeek1 = it })
                             }
-                            Switch(useSuggestedWeek1, { useSuggestedWeek1 = it })
                         }
                     }
                     if (plan.errors.isNotEmpty()) {
@@ -268,8 +337,9 @@ fun ImportScreen(uri: String?, onBack: () -> Unit) {
 
                     val cs = finalCs
                     if (cs != null) {
-                        if (cs.isEmpty) Text(stringResource(R.string.import_nothing_new), style = MaterialTheme.typography.bodyMedium)
-                        else {
+                        if (cs.isEmpty) {
+                            Text(stringResource(R.string.import_nothing_new), style = MaterialTheme.typography.bodyMedium)
+                        } else {
                             Text(stringResource(R.string.changes_breakdown, cs.addCount, cs.modifyCount, cs.removeCount), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             ChangeList(cs, snap)
                             Spacer(Modifier.height(4.dp))
@@ -280,7 +350,10 @@ fun ImportScreen(uri: String?, onBack: () -> Unit) {
                             }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.apply_changes)) }
                         }
                     }
-                    OutlinedButton(onClick = { state = ImportState.Pick; useSuggestedWeek1 = false }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.import_pick_again)) }
+                    OutlinedButton(onClick = {
+                        state = ImportState.Pick
+                        useSuggestedWeek1 = false
+                    }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.import_pick_again)) }
                 }
             }
         }
@@ -288,5 +361,9 @@ fun ImportScreen(uri: String?, onBack: () -> Unit) {
 }
 
 private data class PlanResult(
-    val cs: ChangeSet?, val warnings: List<String>, val errors: List<String>, val skipped: List<String>, val maxWeek: Int,
+    val cs: ChangeSet?,
+    val warnings: List<String>,
+    val errors: List<String>,
+    val skipped: List<String>,
+    val maxWeek: Int,
 )

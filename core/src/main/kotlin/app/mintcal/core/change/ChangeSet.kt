@@ -10,17 +10,33 @@ import kotlinx.serialization.Serializable
 /** 单条变更：新增 / 修改（前后值）/ 删除。 */
 @Serializable
 sealed interface Change {
-    @Serializable @SerialName("add") data class Add(val after: Record) : Change
-    @Serializable @SerialName("modify") data class Modify(val before: Record, val after: Record) : Change
-    @Serializable @SerialName("remove") data class Remove(val before: Record) : Change
+    @Serializable
+    @SerialName("add")
+    data class Add(
+        val after: Record,
+    ) : Change
+
+    @Serializable
+    @SerialName("modify")
+    data class Modify(
+        val before: Record,
+        val after: Record,
+    ) : Change
+
+    @Serializable
+    @SerialName("remove")
+    data class Remove(
+        val before: Record,
+    ) : Change
 }
 
 val Change.record: Record
-    get() = when (this) {
-        is Change.Add -> after
-        is Change.Modify -> after
-        is Change.Remove -> before
-    }
+    get() =
+        when (this) {
+            is Change.Add -> after
+            is Change.Modify -> after
+            is Change.Remove -> before
+        }
 
 /**
  * 变更集：所有写操作（手动、导入、代码、AI）统一产出它。
@@ -50,27 +66,35 @@ data class ChangeSet(
 }
 
 /** 应用变更集：按序 upsert / 软删除，并统一 updatedAt。幂等。 */
-fun Snapshot.apply(cs: ChangeSet, at: Long = cs.createdAt): Snapshot {
+fun Snapshot.apply(
+    cs: ChangeSet,
+    at: Long = cs.createdAt,
+): Snapshot {
     var s = this
     for (c in cs.changes) {
-        s = when (c) {
-            is Change.Add -> s.put(c.after.withMeta(at, null))
-            is Change.Modify -> s.put(c.after.withMeta(at, c.after.deletedAt))
-            is Change.Remove -> s.put(c.before.withMeta(at, at))
-        }
+        s =
+            when (c) {
+                is Change.Add -> s.put(c.after.withMeta(at, null))
+                is Change.Modify -> s.put(c.after.withMeta(at, c.after.deletedAt))
+                is Change.Remove -> s.put(c.before.withMeta(at, at))
+            }
     }
     return s
 }
 
 /** 撤销变更集（反向应用）：新增被物理移除，修改还原为之前的值，删除被恢复。 */
-fun Snapshot.undo(cs: ChangeSet, at: Long): Snapshot {
+fun Snapshot.undo(
+    cs: ChangeSet,
+    at: Long,
+): Snapshot {
     var s = this
     for (c in cs.changes.asReversed()) {
-        s = when (c) {
-            is Change.Add -> s.purge(c.after)
-            is Change.Modify -> s.put(c.before.withMeta(at, c.before.deletedAt))
-            is Change.Remove -> s.put(c.before.withMeta(at, null))
-        }
+        s =
+            when (c) {
+                is Change.Add -> s.purge(c.after)
+                is Change.Modify -> s.put(c.before.withMeta(at, c.before.deletedAt))
+                is Change.Remove -> s.put(c.before.withMeta(at, null))
+            }
     }
     return s
 }
@@ -108,15 +132,25 @@ fun Snapshot.canRedo(cs: ChangeSet): Boolean {
 
 /** 把「脚本 / AI 产出的新快照」与旧快照对比，得到变更列表（只对比未删除的记录）。 */
 object SnapshotDiff {
-    fun diff(before: Snapshot, after: Snapshot): List<Change> {
+    fun diff(
+        before: Snapshot,
+        after: Snapshot,
+    ): List<Change> {
         val out = mutableListOf<Change>()
-        fun <T : Record> cmp(b: List<T>, a: List<T>) {
+
+        fun <T : Record> cmp(
+            b: List<T>,
+            a: List<T>,
+        ) {
             val bm = b.filter { it.deletedAt == null }.associateBy { it.id }
             val am = a.filter { it.deletedAt == null }.associateBy { it.id }
             for ((id, rec) in am) {
                 val old = bm[id]
-                if (old == null) out += Change.Add(rec)
-                else if (old.withMeta(0, null) != rec.withMeta(0, null)) out += Change.Modify(old, rec)
+                if (old == null) {
+                    out += Change.Add(rec)
+                } else if (old.withMeta(0, null) != rec.withMeta(0, null)) {
+                    out += Change.Modify(old, rec)
+                }
             }
             for ((id, old) in bm) if (id !in am) out += Change.Remove(old)
         }

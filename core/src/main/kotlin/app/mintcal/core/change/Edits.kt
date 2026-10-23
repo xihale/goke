@@ -15,36 +15,72 @@ import java.time.LocalDateTime
 
 /** 手动编辑也走变更集：保存 / 删除（带级联）/ 完成待办 / 复制学期，统一可撤销、可记录。 */
 object Edits {
-    fun save(s: Snapshot, r: Record, description: String, now: Long, ids: IdGenerator = Ids): ChangeSet {
+    fun save(
+        s: Snapshot,
+        r: Record,
+        description: String,
+        now: Long,
+        ids: IdGenerator = Ids,
+    ): ChangeSet {
         val before = s.find(r.id)?.takeIf { it.deletedAt == null }
         val change = if (before == null) Change.Add(r) else Change.Modify(before, r)
         return ChangeSet(ids.next(), description, Source.MANUAL, now, listOf(change))
     }
 
-    fun saveAll(s: Snapshot, records: List<Record>, description: String, now: Long, ids: IdGenerator = Ids): ChangeSet {
-        val changes = records.map { r ->
-            val before = s.find(r.id)?.takeIf { it.deletedAt == null }
-            if (before == null) Change.Add(r) else Change.Modify(before, r)
-        }
+    fun saveAll(
+        s: Snapshot,
+        records: List<Record>,
+        description: String,
+        now: Long,
+        ids: IdGenerator = Ids,
+    ): ChangeSet {
+        val changes =
+            records.map { r ->
+                val before = s.find(r.id)?.takeIf { it.deletedAt == null }
+                if (before == null) Change.Add(r) else Change.Modify(before, r)
+            }
         return ChangeSet(ids.next(), description, Source.MANUAL, now, changes)
     }
 
     /** 删除并级联：课程 → 其调课记录；待办 → 子任务；清单 → 其下待办改为无清单。 */
-    fun delete(s: Snapshot, r: Record, description: String, now: Long, ids: IdGenerator = Ids): ChangeSet {
+    fun delete(
+        s: Snapshot,
+        r: Record,
+        description: String,
+        now: Long,
+        ids: IdGenerator = Ids,
+    ): ChangeSet {
         val live = s.live()
         val changes = mutableListOf<Change>()
         changes += Change.Remove(live.find(r.id) ?: r)
         when (r) {
-            is Course -> live.exceptions.filter { it.courseId == r.id }.forEach { changes += Change.Remove(it) }
-            is Task -> live.tasks.filter { it.parentId == r.id }.forEach { changes += Change.Remove(it) }
-            is TaskList -> live.tasks.filter { it.listId == r.id }.forEach { changes += Change.Modify(it, it.copy(listId = null)) }
+            is Course -> {
+                live.exceptions.filter { it.courseId == r.id }.forEach { changes += Change.Remove(it) }
+            }
+
+            is Task -> {
+                live.tasks.filter { it.parentId == r.id }.forEach { changes += Change.Remove(it) }
+            }
+
+            is TaskList -> {
+                live.tasks.filter { it.listId == r.id }.forEach { changes += Change.Modify(it, it.copy(listId = null)) }
+            }
+
             else -> {}
         }
         return ChangeSet(ids.next(), description, Source.MANUAL, now, changes)
     }
 
     /** 完成 / 取消完成待办；重复任务完成后生成下一次实例。 */
-    fun toggleTask(s: Snapshot, task: Task, done: Boolean, now: Long, nowDt: LocalDateTime, description: String, ids: IdGenerator = Ids): ChangeSet {
+    fun toggleTask(
+        s: Snapshot,
+        task: Task,
+        done: Boolean,
+        now: Long,
+        nowDt: LocalDateTime,
+        description: String,
+        ids: IdGenerator = Ids,
+    ): ChangeSet {
         val changes = mutableListOf<Change>()
         if (done) {
             val (finished, next) = TaskLogic.complete(task, now, nowDt, ids)
@@ -58,7 +94,13 @@ object Edits {
 
     /** 把当前学期的课程复制到新学期（不复制调课记录），新学期成为当前学期。 */
     fun copyToNextSemester(
-        s: Snapshot, from: Semester, name: String, week1Monday: LocalDate, now: Long, description: String, ids: IdGenerator = Ids,
+        s: Snapshot,
+        from: Semester,
+        name: String,
+        week1Monday: LocalDate,
+        now: Long,
+        description: String,
+        ids: IdGenerator = Ids,
     ): ChangeSet {
         val live = s.live()
         val newSem = from.copy(id = ids.next(), name = name, week1Monday = week1Monday, isCurrent = true, updatedAt = now)

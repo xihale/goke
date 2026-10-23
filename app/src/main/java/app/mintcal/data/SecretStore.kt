@@ -11,7 +11,9 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /** 用 Android Keystore 里的 AES-GCM 密钥加密保存 AI Key；明文永远不落盘、不进备份与日志。 */
-class SecretStore(context: Context) {
+class SecretStore(
+    context: Context,
+) {
     private val sp = context.getSharedPreferences("secrets", Context.MODE_PRIVATE)
 
     private fun key(): SecretKey {
@@ -19,7 +21,8 @@ class SecretStore(context: Context) {
         (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }
         val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         gen.init(
-            KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            KeyGenParameterSpec
+                .Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256)
@@ -29,7 +32,10 @@ class SecretStore(context: Context) {
     }
 
     fun setAiKey(plain: String) {
-        if (plain.isBlank()) { sp.edit().remove("ai").apply(); return }
+        if (plain.isBlank()) {
+            sp.edit().remove("ai").apply()
+            return
+        }
         val c = Cipher.getInstance("AES/GCM/NoPadding")
         c.init(Cipher.ENCRYPT_MODE, key())
         val enc = c.doFinal(plain.toByteArray(Charsets.UTF_8))
@@ -49,5 +55,7 @@ class SecretStore(context: Context) {
         }.getOrNull()
     }
 
-    companion object { private const val ALIAS = "mintcal_ai_key" }
+    companion object {
+        private const val ALIAS = "mintcal_ai_key"
+    }
 }

@@ -36,11 +36,12 @@ class MainActivity : ComponentActivity() {
     @Suppress("DEPRECATION")
     private fun handleIntent(intent: android.content.Intent?) {
         intent ?: return
-        val uri: Uri? = when (intent.action) {
-            android.content.Intent.ACTION_VIEW -> intent.data
-            android.content.Intent.ACTION_SEND -> intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM)
-            else -> null
-        }
+        val uri: Uri? =
+            when (intent.action) {
+                android.content.Intent.ACTION_VIEW -> intent.data
+                android.content.Intent.ACTION_SEND -> intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM)
+                else -> null
+            }
         if (uri != null) incoming.value = uri
     }
 }

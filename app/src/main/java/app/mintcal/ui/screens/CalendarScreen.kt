@@ -1,6 +1,5 @@
 package app.mintcal.ui.screens
 
-import app.mintcal.ui.theme.MintTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +58,7 @@ import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDayWeekday
 import app.mintcal.ui.rememberNow
 import app.mintcal.ui.settingsState
+import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.weekdayShort
 import app.mintcal.ui.yearMonth
 import java.time.DayOfWeek
@@ -81,25 +81,28 @@ fun CalendarScreen() {
     val selected = LocalDate.parse(selectedStr)
     val first = if (settings.weekStartsMonday) DayOfWeek.MONDAY else DayOfWeek.SUNDAY
 
-    val gridStart = when (mode) {
-        CalMode.MONTH -> selected.withDayOfMonth(1).with(TemporalAdjusters.previousOrSame(first))
-        CalMode.WEEK -> selected.with(TemporalAdjusters.previousOrSame(first))
-        CalMode.DAY -> selected
-    }
-    val gridEnd = when (mode) {
-        CalMode.MONTH -> gridStart.plusDays(41)
-        CalMode.WEEK -> gridStart.plusDays(6)
-        CalMode.DAY -> selected
-    }
+    val gridStart =
+        when (mode) {
+            CalMode.MONTH -> selected.withDayOfMonth(1).with(TemporalAdjusters.previousOrSame(first))
+            CalMode.WEEK -> selected.with(TemporalAdjusters.previousOrSame(first))
+            CalMode.DAY -> selected
+        }
+    val gridEnd =
+        when (mode) {
+            CalMode.MONTH -> gridStart.plusDays(41)
+            CalMode.WEEK -> gridStart.plusDays(6)
+            CalMode.DAY -> selected
+        }
     val marks = remember(snap, gridStart, gridEnd) { Agenda.marks(snap, gridStart, gridEnd) }
     val items = remember(snap, selected, settings.defaultBlockMinutes) { Agenda.forDay(snap, selected, settings.defaultBlockMinutes) }
 
     fun shift(dir: Int) {
-        selectedStr = when (mode) {
-            CalMode.MONTH -> selected.plusMonths(dir.toLong()).toString()
-            CalMode.WEEK -> selected.plusWeeks(dir.toLong()).toString()
-            CalMode.DAY -> selected.plusDays(dir.toLong()).toString()
-        }
+        selectedStr =
+            when (mode) {
+                CalMode.MONTH -> selected.plusMonths(dir.toLong()).toString()
+                CalMode.WEEK -> selected.plusWeeks(dir.toLong()).toString()
+                CalMode.DAY -> selected.plusDays(dir.toLong()).toString()
+            }
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -121,9 +124,19 @@ fun CalendarScreen() {
                         CalMode.entries.forEach { m ->
                             val sel = m == mode
                             Text(
-                                stringResource(when (m) { CalMode.MONTH -> R.string.mode_month; CalMode.WEEK -> R.string.mode_week; CalMode.DAY -> R.string.mode_day }),
-                                modifier = Modifier.clip(CircleShape).background(if (sel) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                                    .clickable { mode = m }.padding(horizontal = 16.dp, vertical = 6.dp),
+                                stringResource(
+                                    when (m) {
+                                        CalMode.MONTH -> R.string.mode_month
+                                        CalMode.WEEK -> R.string.mode_week
+                                        CalMode.DAY -> R.string.mode_day
+                                    },
+                                ),
+                                modifier =
+                                    Modifier
+                                        .clip(CircleShape)
+                                        .background(if (sel) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                                        .clickable { mode = m }
+                                        .padding(horizontal = 16.dp, vertical = 6.dp),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = if (sel) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -133,7 +146,13 @@ fun CalendarScreen() {
             }
             if (mode != CalMode.DAY) {
                 item {
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(MintTheme.card).padding(8.dp)) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(MintTheme.card)
+                            .padding(8.dp),
+                    ) {
                         Row(Modifier.fillMaxWidth()) {
                             for (i in 0..6) {
                                 val d = first.plus(i.toLong())
@@ -147,9 +166,12 @@ fun CalendarScreen() {
                                 for (c in 0..6) {
                                     val d = gridStart.plusDays((r * 7 + c).toLong())
                                     DayCell(
-                                        d, selected = d == selected, today = d == today,
+                                        d,
+                                        selected = d == selected,
+                                        today = d == today,
                                         inMonth = mode != CalMode.MONTH || d.month == selected.month,
-                                        marks = marks[d], modifier = Modifier.weight(1f),
+                                        marks = marks[d],
+                                        modifier = Modifier.weight(1f),
                                     ) { selectedStr = d.toString() }
                                 }
                             }
@@ -162,7 +184,8 @@ fun CalendarScreen() {
                     Text(ctx.monthDayWeekday(selected), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                     Text(
                         stringResource(R.string.day_counts, items.count { it is CourseItem }, items.count { it is EventItem }, items.count { it is TaskItem || it is BlockItem }),
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -171,7 +194,9 @@ fun CalendarScreen() {
             }
             items(items, key = { agendaKey(it) }) { item ->
                 AgendaRow(
-                    item, now, settings.showTeacher,
+                    item,
+                    now,
+                    settings.showTeacher,
                     onOpenCourse = { nav.push(Route.CourseEdit(it)) },
                     onOpenEvent = { nav.push(Route.EventEdit(it)) },
                     onOpenTask = { nav.push(Route.TaskDetail(it)) },
@@ -182,32 +207,44 @@ fun CalendarScreen() {
         FloatingActionButton(
             onClick = { nav.push(Route.EventEdit(null, selected.toString())) },
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 108.dp),
-            containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary,
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
             shape = RoundedCornerShape(22.dp),
         ) { Icon(Icons.Rounded.Add, stringResource(R.string.new_event)) }
     }
 }
 
-private fun agendaKey(i: app.mintcal.core.agenda.AgendaItem): String = when (i) {
-    is CourseItem -> "c-${i.occ.course.id}-${i.occ.date}-${i.occ.startPeriod}"
-    is EventItem -> "e-${i.event.id}-${i.start}"
-    is TaskItem -> "t-${i.task.id}"
-    is BlockItem -> "b-${i.task.id}"
-}
+private fun agendaKey(i: app.mintcal.core.agenda.AgendaItem): String =
+    when (i) {
+        is CourseItem -> "c-${i.occ.course.id}-${i.occ.date}-${i.occ.startPeriod}"
+        is EventItem -> "e-${i.event.id}-${i.start}"
+        is TaskItem -> "t-${i.task.id}"
+        is BlockItem -> "b-${i.task.id}"
+    }
 
 @Composable
 private fun DayCell(
-    d: LocalDate, selected: Boolean, today: Boolean, inMonth: Boolean, marks: app.mintcal.core.agenda.DayMarks?,
-    modifier: Modifier, onClick: () -> Unit,
+    d: LocalDate,
+    selected: Boolean,
+    today: Boolean,
+    inMonth: Boolean,
+    marks: app.mintcal.core.agenda.DayMarks?,
+    modifier: Modifier,
+    onClick: () -> Unit,
 ) {
     Column(modifier.height(50.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        val bg = when { selected -> MaterialTheme.colorScheme.primary; else -> Color.Transparent }
-        val fg = when {
-            selected -> MaterialTheme.colorScheme.onPrimary
-            today -> MaterialTheme.colorScheme.primary
-            !inMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-            else -> MaterialTheme.colorScheme.onSurface
-        }
+        val bg =
+            when {
+                selected -> MaterialTheme.colorScheme.primary
+                else -> Color.Transparent
+            }
+        val fg =
+            when {
+                selected -> MaterialTheme.colorScheme.onPrimary
+                today -> MaterialTheme.colorScheme.primary
+                !inMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                else -> MaterialTheme.colorScheme.onSurface
+            }
         Box(Modifier.size(32.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
             Text("${d.dayOfMonth}", color = fg, fontWeight = if (today || selected) FontWeight.Bold else FontWeight.Normal, style = MaterialTheme.typography.bodyMedium)
         }

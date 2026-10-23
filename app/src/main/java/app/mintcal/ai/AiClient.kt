@@ -3,8 +3,6 @@ package app.mintcal.ai
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.time.WeekSets
 import app.mintcal.script.ScriptSdk
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -18,8 +16,12 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import java.net.HttpURLConnection
+import java.net.URL
 
-class AiException(message: String) : Exception(message)
+class AiException(
+    message: String,
+) : Exception(message)
 
 /**
  * OpenAI 兼容的 chat/completions 客户端。
@@ -30,49 +32,84 @@ class AiClient {
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun generateCode(
-        baseUrl: String, apiKey: String, model: String,
-        description: String, snapshot: Snapshot,
-        previousCode: String? = null, previousError: String? = null,
-    ): String = withContext(Dispatchers.IO) {
-        val messages = buildJsonArray {
-            add(msg("system", systemPrompt()))
-            add(msg("user", userPrompt(description, snapshot)))
-            if (previousCode != null && previousError != null) {
-                add(msg("assistant", "```js\n$previousCode\n```"))
-                add(msg("user", "上面的代码在预览时出错：$previousError\n请修正后只输出完整的新代码。"))
-            }
+        baseUrl: String,
+        apiKey: String,
+        model: String,
+        description: String,
+        snapshot: Snapshot,
+        previousCode: String? = null,
+        previousError: String? = null,
+    ): String =
+        withContext(Dispatchers.IO) {
+            val messages =
+                buildJsonArray {
+                    add(msg("system", systemPrompt()))
+                    add(msg("user", userPrompt(description, snapshot)))
+                    if (previousCode != null && previousError != null) {
+                        add(msg("assistant", "```js\n$previousCode\n```"))
+                        add(msg("user", "上面的代码在预览时出错：$previousError\n请修正后只输出完整的新代码。"))
+                    }
+                }
+            val body =
+                buildJsonObject {
+                    put("model", model)
+                    put("temperature", 0.2)
+                    put("messages", messages)
+                }
+            val content = post(baseUrl, apiKey, body.toString())
+            extractCode(content)
         }
-        val body = buildJsonObject {
-            put("model", model)
-            put("temperature", 0.2)
-            put("messages", messages)
-        }
-        val content = post(baseUrl, apiKey, body.toString())
-        extractCode(content)
+
+    private fun msg(
+        role: String,
+        content: String,
+    ) = buildJsonObject {
+        put("role", role)
+        put("content", content)
     }
 
-    private fun msg(role: String, content: String) = buildJsonObject { put("role", role); put("content", content) }
-
-    private fun post(baseUrl: String, apiKey: String, body: String): String {
+    private fun post(
+        baseUrl: String,
+        apiKey: String,
+        body: String,
+    ): String {
         val url = URL(baseUrl.trim().trimEnd('/') + "/chat/completions")
-        val conn = (url.openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = 15_000
-            readTimeout = 90_000
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Authorization", "Bearer $apiKey")
-        }
+        val conn =
+            (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 15_000
+                readTimeout = 90_000
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("Authorization", "Bearer $apiKey")
+            }
         try {
             conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             val code = conn.responseCode
             val text = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
             if (code !in 200..299) {
-                val detail = runCatching { json.parseToJsonElement(text).jsonObject["error"]?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull }.getOrNull()
+                val detail =
+                    runCatching {
+                        json
+                            .parseToJsonElement(text)
+                            .jsonObject["error"]
+                            ?.jsonObject
+                            ?.get("message")
+                            ?.jsonPrimitive
+                            ?.contentOrNull
+                    }.getOrNull()
                 throw AiException("HTTP $code ${detail ?: text.take(200)}")
             }
             val root = json.parseToJsonElement(text).jsonObject
-            return root["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.get("message")?.jsonObject?.get("content")?.jsonPrimitive?.contentOrNull
+            return root["choices"]
+                ?.jsonArray
+                ?.firstOrNull()
+                ?.jsonObject
+                ?.get("message")
+                ?.jsonObject
+                ?.get("content")
+                ?.jsonPrimitive
+                ?.contentOrNull
                 ?: throw AiException("响应里没有内容")
         } finally {
             conn.disconnect()
@@ -83,9 +120,14 @@ class AiClient {
         private val FENCE = Regex("```(?:js|javascript|JS|typescript|ts)?\\s*\\n([\\s\\S]*?)```")
 
         fun extractCode(content: String): String =
-            FENCE.find(content)?.groupValues?.get(1)?.trim() ?: content.trim()
+            FENCE
+                .find(content)
+                ?.groupValues
+                ?.get(1)
+                ?.trim() ?: content.trim()
 
-        fun systemPrompt(): String = """
+        fun systemPrompt(): String =
+            """
             你是「薄荷日程」的代码助手。用户用自然语言描述想对课表 / 日程 / 待办做的批量修改，你要写一段 JavaScript 完成它。
             规则：
             1. 只输出一个 ```js 代码块，不要任何解释文字。
@@ -101,9 +143,12 @@ class AiClient {
             ```ts
             ${ScriptSdk.declarations}
             ```
-        """.trimIndent()
+            """.trimIndent()
 
-        fun userPrompt(description: String, s: Snapshot): String {
+        fun userPrompt(
+            description: String,
+            s: Snapshot,
+        ): String {
             val live = s.live()
             val sem = live.currentSemester
             val sb = StringBuilder()

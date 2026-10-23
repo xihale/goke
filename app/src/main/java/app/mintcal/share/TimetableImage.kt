@@ -29,7 +29,12 @@ object TimetableImage {
     private const val ROW = 118
     private const val PAD = 36
 
-    fun render(ctx: Context, snap: Snapshot, st: Settings, week: Int): Bitmap? {
+    fun render(
+        ctx: Context,
+        snap: Snapshot,
+        st: Settings,
+        week: Int,
+    ): Bitmap? {
         val sem = snap.currentSemester ?: return null
         val cal = SemesterCalendar(sem)
         val periods = sem.periods.sortedBy { it.index }
@@ -43,7 +48,9 @@ object TimetableImage {
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
         val tp = TextPaint(Paint.ANTI_ALIAS_FLAG)
 
-        tp.color = 0xFF24312D.toInt(); tp.textSize = 44f; tp.typeface = Typeface.DEFAULT_BOLD
+        tp.color = 0xFF24312D.toInt()
+        tp.textSize = 44f
+        tp.typeface = Typeface.DEFAULT_BOLD
         c.drawText(title, PAD.toFloat(), 74f, tp)
 
         val colW = (W - LEFT - PAD) / 7f
@@ -51,20 +58,31 @@ object TimetableImage {
         // 星期头
         for (d in 1..7) {
             val x = LEFT + (d - 1) * colW
-            tp.typeface = Typeface.DEFAULT_BOLD; tp.textSize = 30f; tp.color = 0xFF24312D.toInt(); tp.textAlign = Paint.Align.CENTER
+            tp.typeface = Typeface.DEFAULT_BOLD
+            tp.textSize = 30f
+            tp.color = 0xFF24312D.toInt()
+            tp.textAlign = Paint.Align.CENTER
             c.drawText(ctx.weekdayShort(d), x + colW / 2, top + 50f, tp)
-            tp.typeface = Typeface.DEFAULT; tp.textSize = 22f; tp.color = 0xFF7B8B86.toInt()
+            tp.typeface = Typeface.DEFAULT
+            tp.textSize = 22f
+            tp.color = 0xFF7B8B86.toInt()
             c.drawText(ctx.monthDay(cal.dateOf(week, d)), x + colW / 2, top + 88f, tp)
         }
         tp.textAlign = Paint.Align.LEFT
         // 节次与分隔线
-        p.color = 0xFFDDE7E3.toInt(); p.strokeWidth = 2f
+        p.color = 0xFFDDE7E3.toInt()
+        p.strokeWidth = 2f
         for ((i, pt) in periods.withIndex()) {
             val y = top + HEADER + i * ROW
             c.drawLine(PAD.toFloat(), y, (W - PAD).toFloat(), y, p)
-            tp.textAlign = Paint.Align.CENTER; tp.typeface = Typeface.DEFAULT_BOLD; tp.textSize = 28f; tp.color = 0xFF24312D.toInt()
+            tp.textAlign = Paint.Align.CENTER
+            tp.typeface = Typeface.DEFAULT_BOLD
+            tp.textSize = 28f
+            tp.color = 0xFF24312D.toInt()
             c.drawText("${pt.index}", PAD + (LEFT - PAD) / 2f, y + 46f, tp)
-            tp.typeface = Typeface.DEFAULT; tp.textSize = 17f; tp.color = 0xFF7B8B86.toInt()
+            tp.typeface = Typeface.DEFAULT
+            tp.textSize = 17f
+            tp.color = 0xFF7B8B86.toInt()
             c.drawText(pt.start.hm(), PAD + (LEFT - PAD) / 2f, y + 72f, tp)
             c.drawText(pt.end.hm(), PAD + (LEFT - PAD) / 2f, y + 94f, tp)
         }
@@ -81,16 +99,26 @@ object TimetableImage {
             p.color = colors.bg(o.course.colorIndex).toArgb()
             c.drawRoundRect(r, 14f, 14f, p)
             val fg = colors.fg(o.course.colorIndex).toArgb()
-            val text = buildString {
-                append(o.course.name)
-                if (o.room.isNotBlank()) append("\n@").append(o.room)
-                if (st.showTeacher && o.course.teacher.isNotBlank()) append("\n").append(o.course.teacher)
-            }
-            tp.color = fg; tp.textSize = 21f; tp.typeface = Typeface.DEFAULT_BOLD
-            val sl = StaticLayout.Builder.obtain(text, 0, text.length, tp, (r.width() - 16).toInt())
-                .setEllipsize(TextUtils.TruncateAt.END).setMaxLines(((r.height() - 16) / 26).toInt().coerceAtLeast(1))
-                .setAlignment(Layout.Alignment.ALIGN_NORMAL).build()
-            c.save(); c.translate(r.left + 8, r.top + 8); sl.draw(c); c.restore()
+            val text =
+                buildString {
+                    append(o.course.name)
+                    if (o.room.isNotBlank()) append("\n@").append(o.room)
+                    if (st.showTeacher && o.course.teacher.isNotBlank()) append("\n").append(o.course.teacher)
+                }
+            tp.color = fg
+            tp.textSize = 21f
+            tp.typeface = Typeface.DEFAULT_BOLD
+            val sl =
+                StaticLayout.Builder
+                    .obtain(text, 0, text.length, tp, (r.width() - 16).toInt())
+                    .setEllipsize(TextUtils.TruncateAt.END)
+                    .setMaxLines(((r.height() - 16) / 26).toInt().coerceAtLeast(1))
+                    .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                    .build()
+            c.save()
+            c.translate(r.left + 8, r.top + 8)
+            sl.draw(c)
+            c.restore()
         }
         return bmp
     }

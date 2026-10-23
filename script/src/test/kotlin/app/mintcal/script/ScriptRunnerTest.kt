@@ -9,30 +9,44 @@ import app.mintcal.core.model.Semester
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Source
 import app.mintcal.core.util.SequentialIds
+import kotlinx.coroutines.runBlocking
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import kotlinx.coroutines.runBlocking
 
 class ScriptRunnerTest {
     private val sem = Semester("sem", "2026-2027 第一学期", LocalDate.of(2026, 8, 31))
-    private fun course(id: String, name: String, day: Int, s: Int, e: Int, weeks: Set<Int> = (1..16).toSet()) =
-        Course(id, "sem", name, "老师", "A101", day, s, e, weeks)
 
-    private val base = Snapshot(
-        semesters = listOf(sem),
-        courses = listOf(course("c1", "高等数学", 1, 1, 2), course("c2", "大学英语", 2, 3, 4), course("c3", "线性代数", 3, 5, 6)),
-    )
+    private fun course(
+        id: String,
+        name: String,
+        day: Int,
+        s: Int,
+        e: Int,
+        weeks: Set<Int> = (1..16).toSet(),
+    ) = Course(id, "sem", name, "老师", "A101", day, s, e, weeks)
+
+    private val base =
+        Snapshot(
+            semesters = listOf(sem),
+            courses = listOf(course("c1", "高等数学", 1, 1, 2), course("c2", "大学英语", 2, 3, 4), course("c3", "线性代数", 3, 5, 6)),
+        )
     private val opts = ScriptOptions(today = LocalDate.of(2026, 9, 2), nowMillis = 1000)
     private val runner = ScriptRunner(SequentialIds("cs"))
 
-    private fun run(code: String, snap: Snapshot = base, o: ScriptOptions = opts): ScriptOutcome =
-        runBlocking { runner.dryRun(code, snap, o, "测试") }
+    private fun run(
+        code: String,
+        snap: Snapshot = base,
+        o: ScriptOptions = opts,
+    ): ScriptOutcome = runBlocking { runner.dryRun(code, snap, o, "测试") }
 
-    private fun ok(code: String, snap: Snapshot = base): app.mintcal.core.change.ChangeSet {
+    private fun ok(
+        code: String,
+        snap: Snapshot = base,
+    ): app.mintcal.core.change.ChangeSet {
         val r = run(code, snap)
         if (r is ScriptOutcome.Failure) error("script failed: ${r.message} line=${r.line}")
         return (r as ScriptOutcome.Success).changeSet
@@ -67,41 +81,64 @@ class ScriptRunnerTest {
     }
 
     @Test fun removeCascadesExceptions() {
-        val cs = ok("""
-            const c = mc.courses.query({ name: '英语' })[0];
-            mc.courses.cancel(c, 3);
-            mc.courses.remove(c);
-        """.trimIndent())
+        val cs =
+            ok(
+                """
+                const c = mc.courses.query({ name: '英语' })[0];
+                mc.courses.cancel(c, 3);
+                mc.courses.remove(c);
+                """.trimIndent(),
+            )
         // 先加停课再删课程：停课记录与课程一并消失，只剩一条删除
         assertEquals(1, cs.changes.size)
         assertIs<Change.Remove>(cs.changes[0])
     }
 
     @Test fun cancelAndRescheduleCreateExceptions() {
-        val cs = ok("""
-            mc.courses.cancel('c1', 3);
-            mc.courses.reschedule('c2', 5, { day: 4, startPeriod: 7, room: '临时教室' });
-            return mc.courses.query().length;
-        """.trimIndent())
+        val cs =
+            ok(
+                """
+                mc.courses.cancel('c1', 3);
+                mc.courses.reschedule('c2', 5, { day: 4, startPeriod: 7, room: '临时教室' });
+                return mc.courses.query().length;
+                """.trimIndent(),
+            )
         assertEquals(2, cs.addCount)
         assertEquals("3", cs.returnValue)
     }
 
     @Test fun applyAndUndoRestoreExactly() {
-        val cs = ok("""
-            mc.courses.update('c1', { name: '高数A' });
-            mc.courses.remove('c3');
-            mc.events.create({ title: '期中考试', start: '2026-10-20 09:00', kind: 'EXAM' });
-        """.trimIndent())
+        val cs =
+            ok(
+                """
+                mc.courses.update('c1', { name: '高数A' });
+                mc.courses.remove('c3');
+                mc.events.create({ title: '期中考试', start: '2026-10-20 09:00', kind: 'EXAM' });
+                """.trimIndent(),
+            )
         assertEquals(3, cs.changes.size)
         val applied = base.apply(cs, 2000)
-        assertEquals("高数A", applied.live().courses.first { it.id == "c1" }.name)
+        assertEquals(
+            "高数A",
+            applied
+                .live()
+                .courses
+                .first { it.id == "c1" }
+                .name,
+        )
         assertEquals(2, applied.live().courses.size)
         assertEquals(1, applied.live().events.size)
         val ev: Event = applied.live().events.single()
         assertEquals("2026-10-20T10:00", ev.end.toString())
         val back = applied.undo(cs, 3000).live()
-        assertEquals(base.live().courses.map { it.copy(updatedAt = 0) }.sortedBy { it.id }, back.courses.map { it.copy(updatedAt = 0) }.sortedBy { it.id })
+        assertEquals(
+            base
+                .live()
+                .courses
+                .map { it.copy(updatedAt = 0) }
+                .sortedBy { it.id },
+            back.courses.map { it.copy(updatedAt = 0) }.sortedBy { it.id },
+        )
         assertTrue(back.events.isEmpty())
     }
 
@@ -112,12 +149,15 @@ class ScriptRunnerTest {
     }
 
     @Test fun tasksAndLists() {
-        val cs = ok("""
-            const l = mc.lists.create({ name: '期末复习' });
-            mc.tasks.create({ title: '复习高数', listId: l.id, due: '2026-12-20', priority: 3 });
-            const t = mc.tasks.create({ title: '交作业', dueHasTime: true, due: '2027-01-02 23:00' });
-            mc.tasks.complete(t);
-        """.trimIndent())
+        val cs =
+            ok(
+                """
+                const l = mc.lists.create({ name: '期末复习' });
+                mc.tasks.create({ title: '复习高数', listId: l.id, due: '2026-12-20', priority: 3 });
+                const t = mc.tasks.create({ title: '交作业', dueHasTime: true, due: '2027-01-02 23:00' });
+                mc.tasks.complete(t);
+                """.trimIndent(),
+            )
         assertEquals(3, cs.addCount)
     }
 
