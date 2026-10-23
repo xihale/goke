@@ -70,7 +70,7 @@ private val DarkCourse = listOf(
     0xFF503629 to 0xFFF5D2BF, 0xFF33442F to 0xFFCFE5C8, 0xFF56323E to 0xFFF4CBD7, 0xFF303A5E to 0xFFC9D3F5,
 )
 
-private fun mintColors(dark: Boolean): MintColors {
+fun mintColors(dark: Boolean): MintColors {
     val c = if (dark) DarkCourse else LightCourse
     return MintColors(
         courseBg = c.map { Color(it.first) }, courseFg = c.map { Color(it.second) },
