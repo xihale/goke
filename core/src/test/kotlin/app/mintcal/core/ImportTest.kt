@@ -42,10 +42,11 @@ class ImportTest {
         assertEquals(1, mon.startPeriod); assertEquals(2, mon.endPeriod)
         assertEquals("教3-204", mon.room); assertEquals("涂钰青", mon.teacher)
         assertEquals(18, mon.remindMinutes)
-        // 同一门课多个周次段合并：校医院助理周三 3-4 节
-        val clinic = courses.filter { it.name == "校医院助理" && it.dayOfWeek == 3 && it.startPeriod == 3 }
-        assertEquals(1, clinic.size)
-        assertEquals(setOf(1, 4, 5, 6, 7, 8, 9, 10), clinic[0].weeks.filter { it <= 10 }.toSet())
+        // 同一门课的多个周次段按「星期 + 节次」分组合并
+        val clinicMon = courses.single { it.name == "校医院助理" && it.dayOfWeek == 1 && it.startPeriod == 3 }
+        assertEquals(setOf(1), clinicMon.weeks)
+        val clinicFri = courses.single { it.name == "校医院助理" && it.dayOfWeek == 5 }
+        assertEquals((3..9).toSet(), clinicFri.weeks)
         // 劳动教育：1、5、9、13 周
         val labor = courses.single { it.name == "劳动教育" }
         assertEquals(setOf(1, 5, 9, 13), labor.weeks)
