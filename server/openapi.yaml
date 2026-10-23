@@ -1,0 +1,215 @@
+openapi: 3.0.3
+info:
+  title: 薄荷日程 MintCal 同步服务
+  version: 0.1.0
+  description: 自建服务。管理员创建用户；客户端登录后按记录同步。所有接口（除 login、healthz）都需要 `Authorization: Bearer <token>`。
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz:
+    get:
+      summary: 健康检查
+      responses: { "200": { description: ok } }
+  /api/v1/login:
+    post:
+      summary: 登录并获取本设备的令牌
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+                deviceName: { type: string, description: 设备名，便于管理员识别 }
+      responses:
+        "200":
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user: { $ref: "#/components/schemas/UserBrief" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { description: 账号已停用, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { description: 失败次数过多, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /api/v1/logout:
+    post:
+      summary: 注销当前设备的令牌
+      security: [{ bearer: [] }]
+      responses: { "204": { description: 已注销 } }
+  /api/v1/me:
+    get:
+      summary: 当前用户与同步游标
+      security: [{ bearer: [] }]
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/UserBrief"
+                  - type: object
+                    properties: { cursor: { type: integer, format: int64 } }
+  /api/v1/me/password:
+    post:
+      summary: 修改自己的密码
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [oldPassword, newPassword]
+              properties:
+                oldPassword: { type: string }
+                newPassword: { type: string, minLength: 8 }
+      responses:
+        "204": { description: 已修改 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/sync/pull:
+    get:
+      summary: 拉取服务器序号大于 since 的记录
+      security: [{ bearer: [] }]
+      parameters:
+        - { name: since, in: query, schema: { type: integer, format: int64, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, default: 500, maximum: 1000 } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  records: { type: array, items: { $ref: "#/components/schemas/Record" } }
+                  cursor: { type: integer, format: int64, description: 下次拉取的 since }
+                  more: { type: boolean, description: 还有后续，继续拉取 }
+  /api/v1/sync/push:
+    post:
+      summary: 推送本地变化（每次最多 1000 条）
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                records: { type: array, items: { $ref: "#/components/schemas/Record" } }
+      responses:
+        "200":
+          description: 逐条结果。rejected 里是服务器上更新的版本，客户端应覆盖本地。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: { type: array, items: { type: string } }
+                  rejected: { type: array, items: { $ref: "#/components/schemas/Record" } }
+                  cursor: { type: integer, format: int64 }
+        "400": { $ref: "#/components/responses/Error" }
+  /api/v1/admin/users:
+    get:
+      summary: 用户列表（管理员）
+      security: [{ bearer: [] }]
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users: { type: array, items: { $ref: "#/components/schemas/User" } }
+                  me: { type: integer }
+    post:
+      summary: 创建用户（管理员）
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, pattern: "^[A-Za-z0-9_.-]{3,32}$" }
+                password: { type: string, minLength: 8 }
+                role: { type: string, enum: [user, admin], default: user }
+      responses:
+        "201": { description: 已创建, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/admin/users/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+    patch:
+      summary: 修改用户：重置密码 / 停用或启用 / 改角色（管理员）。重置密码与停用会让该用户所有设备退出。
+      security: [{ bearer: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password: { type: string, minLength: 8 }
+                disabled: { type: boolean }
+                role: { type: string, enum: [user, admin] }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+        "400": { description: 不能停用 / 降级自己，或至少要保留一个可用管理员 }
+    delete:
+      summary: 删除用户及其全部同步数据（管理员）
+      security: [{ bearer: [] }]
+      responses:
+        "204": { description: 已删除 }
+        "400": { description: 不能删除自己或最后一个管理员 }
+  /api/v1/admin/users/{id}/signout:
+    parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+    post:
+      summary: 让该用户所有设备退出登录（管理员）
+      security: [{ bearer: [] }]
+      responses: { "204": { description: ok } }
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer }
+  responses:
+    Error:
+      description: 错误
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  schemas:
+    Error:
+      type: object
+      properties: { error: { type: string }, message: { type: string } }
+    UserBrief:
+      type: object
+      properties:
+        id: { type: integer }
+        username: { type: string }
+        role: { type: string, enum: [user, admin] }
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        username: { type: string }
+        role: { type: string, enum: [user, admin] }
+        disabled: { type: boolean }
+        createdAt: { type: integer, format: int64, description: 毫秒时间戳 }
+        devices: { type: integer }
+        records: { type: integer }
+    Record:
+      type: object
+      required: [id, kind, data, updatedAt]
+      properties:
+        id: { type: string, maxLength: 64 }
+        kind: { type: string, description: "Semester / TaskList / Course / CourseException / Event / Task" }
+        data: { type: object, description: 客户端的记录 JSON，服务端不解析内容 }
+        updatedAt: { type: integer, format: int64, description: 毫秒时间戳，冲突时较大者胜 }
+        deletedAt: { type: integer, format: int64, nullable: true, description: 非空表示已删除（墓碑） }
+        seq: { type: integer, format: int64, description: 服务器序号，仅响应中出现 }
