@@ -82,7 +82,7 @@ class ChangeAndTodoTest {
     @Test fun `import planner updates instead of stacking`() {
         val existing = course("old", "高数").copy(source = Source.IMPORT, room = "A")
         val snap = base.copy(courses = listOf(existing, course("keep", "手动课", dow = 4)))
-        val imported = listOf(course("n1", "高数").copy(source = Source.IMPORT, room = "B"), course("n2", "新").copy(source = Source.IMPORT, dow = 2))
+        val imported = listOf(course("n1", "高数").copy(source = Source.IMPORT, room = "B"), course("n2", "新").copy(source = Source.IMPORT, dayOfWeek = 2))
         val cs = ImportPlanner.planCourses(snap, sem, imported, 1L, "导入", ids = SequentialIds())
         assertEquals(1, cs.modifyCount); assertEquals(1, cs.addCount); assertEquals(0, cs.removeCount)
         val m = cs.changes.filterIsInstance<Change.Modify>().single()
