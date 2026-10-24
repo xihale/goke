@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -43,6 +42,7 @@ import androidx.navigation.toRoute
 import app.mintcal.MintCalApp
 import app.mintcal.R
 import app.mintcal.ui.components.FloatingNavBar
+import app.mintcal.ui.components.MintSnackbarHost
 import app.mintcal.ui.screens.AboutScreen
 import app.mintcal.ui.screens.AdvancedFullScreen
 import app.mintcal.ui.screens.AiSettingsScreen
@@ -59,6 +59,7 @@ import app.mintcal.ui.screens.PeriodsScreen
 import app.mintcal.ui.screens.SettingsScreen
 import app.mintcal.ui.screens.SyncScreen
 import app.mintcal.ui.screens.TaskDetailScreen
+import app.mintcal.ui.screens.TaskDraft
 import app.mintcal.ui.screens.TimetableScreen
 import app.mintcal.ui.screens.TodayScreen
 import app.mintcal.ui.screens.TodoScreen
@@ -66,6 +67,7 @@ import app.mintcal.ui.screens.TrashScreen
 import app.mintcal.ui.theme.LocalReduceMotion
 import app.mintcal.ui.theme.MintTheme
 import kotlinx.coroutines.launch
+import java.time.LocalDateTime
 
 @Composable
 fun MintCalRoot(
@@ -119,9 +121,13 @@ fun MintCalRoot(
                     mintDestinations(nav, back)
                 }
             }
-            SnackbarHost(
+            MintSnackbarHost(
                 snack,
-                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = if (!onRoute) 92.dp else 8.dp),
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = if (!onRoute) 152.dp else 88.dp),
             )
         }
     }
@@ -150,7 +156,25 @@ fun NavGraphBuilder.mintDestinations(
         val r = e.toRoute<Route.EventEdit>()
         EventEditScreen(r.id, r.date, back)
     }
-    composable<Route.TaskDetail> { e -> TaskDetailScreen(e.toRoute<Route.TaskDetail>().id, back) }
+    composable<Route.TaskDetail> { e ->
+        val r = e.toRoute<Route.TaskDetail>()
+        TaskDetailScreen(
+            id = r.id,
+            draft =
+                r.title?.let {
+                    TaskDraft(
+                        title = it,
+                        due = r.due?.let { iso -> runCatching { LocalDateTime.parse(iso) }.getOrNull() },
+                        dueHasTime = r.dueHasTime,
+                        priority = r.priority,
+                        listId = r.listId,
+                        tags = r.tags.orEmpty(),
+                        startDate = r.startDate?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
+                    )
+                },
+            onBack = back,
+        )
+    }
 }
 
 @Composable

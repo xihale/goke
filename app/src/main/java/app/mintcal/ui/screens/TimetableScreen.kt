@@ -8,15 +8,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -35,7 +32,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -54,7 +50,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -79,10 +74,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.mintcal.R
+import app.mintcal.core.agenda.Agenda
 import app.mintcal.core.agenda.CellKind
 import app.mintcal.core.agenda.TimetableCell
 import app.mintcal.core.agenda.TimetableDiff
-import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
 import app.mintcal.core.change.Edits
 import app.mintcal.core.change.apply
@@ -91,9 +86,10 @@ import app.mintcal.core.model.CourseException
 import app.mintcal.core.model.ExceptionType
 import app.mintcal.core.model.Semester
 import app.mintcal.core.model.Snapshot
-import app.mintcal.core.model.Source
+import app.mintcal.core.model.Task
 import app.mintcal.core.time.SemesterCalendar
 import app.mintcal.core.time.WeekSets
+import app.mintcal.core.todo.TaskLogic
 import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
@@ -110,6 +106,7 @@ import app.mintcal.ui.weekdayFull
 import app.mintcal.ui.weekdayShort
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 private val TimeColW = 34.dp
 private val RowH = 60.dp
@@ -222,12 +219,26 @@ fun TimetableScreen() {
         HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), beyondViewportPageCount = 1, key = { it }) { page ->
             val week = page + 1
             val cells = remember(snap, afterSnap, week) { TimetableDiff.week(snap, afterSnap, week) }
+            val weekStart = cal.weekStart(week)
+            val weekEnd = cal.weekEnd(week)
+            // 待办块:blockStart ?: due 落在本周的就画上格子(子任务除外),颜色取所属清单色,和课程块同构
+            val listColor = remember(snap) { snap.lists.associate { it.id to it.colorIndex } }
+            val blocks =
+                remember(snap, week, listColor) {
+                    snap.tasks
+                        .filter { t ->
+                            t.parentId == null &&
+                                (t.blockStart ?: t.due)?.toLocalDate()?.let { d -> !d.isBefore(weekStart) && !d.isAfter(weekEnd) } == true
+                        }.map { it to (listColor[it.listId] ?: 1) }
+                }
             WeekGrid(
                 sem,
                 cal,
                 week,
                 today,
                 cells,
+                blocks,
+                settings.defaultBlockMinutes,
                 settings.showTeacher,
                 scroll,
                 modifier =
@@ -238,6 +249,7 @@ fun TimetableScreen() {
                         translationX = off * 16.dp.toPx()
                     },
                 onClick = { selected = it },
+                onOpenTask = { nav.push(Route.TaskDetail(it)) },
             )
         }
         Spacer(Modifier.height(86.dp))
@@ -284,10 +296,13 @@ private fun WeekGrid(
     week: Int,
     today: LocalDate,
     cells: List<TimetableCell>,
+    blocks: List<Pair<Task, Int>>,
+    defaultBlockMinutes: Int,
     showTeacher: Boolean,
     scroll: androidx.compose.foundation.ScrollState,
     modifier: Modifier = Modifier,
     onClick: (TimetableCell) -> Unit,
+    onOpenTask: (String) -> Unit,
 ) {
     val ctx = LocalContext.current
     val periods = sem.periods.sortedBy { it.index }
@@ -328,17 +343,6 @@ private fun WeekGrid(
                         Text(p.start.hm(), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                // 今日列高亮
-                val todayDow = if (cal.weekOf(today) == week) today.dayOfWeek.value else null
-                if (todayDow != null) {
-                    Box(
-                        Modifier
-                            .absoluteOffset(TimeColW + colW * (todayDow - 1), 0.dp)
-                            .width(colW)
-                            .height(totalH)
-                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f)),
-                    )
-                }
                 // 组间分隔（上午 / 下午 / 晚上之间的留白）
                 groupBoundaries(n).forEach { b ->
                     Box(
@@ -364,8 +368,61 @@ private fun WeekGrid(
                         onClick = { onClick(cell) },
                     )
                 }
+                // 待办时间块:排入日历的按时长,普通待办画在截止时刻所在的节次;整列宽,压住课程格正好就是冲突
+                blocks.forEach { (t, ci) ->
+                    val s = t.blockStart ?: t.due ?: return@forEach
+                    val e = if (t.blockStart != null) TaskLogic.blockEnd(t, defaultBlockMinutes) ?: s else s.plusMinutes(1)
+                    val rows = Agenda.blockRows(periods, s.toLocalTime(), e.toLocalTime()) ?: return@forEach
+                    val top = periodTop(rows.first, n) + 2.dp
+                    val bottom = periodTop(rows.last, n) + RowH - 2.dp
+                    TaskBlock(
+                        t,
+                        ci,
+                        s,
+                        Modifier
+                            .absoluteOffset(TimeColW + colW * (s.dayOfWeek.value - 1) + 1.5.dp, top)
+                            .width(colW - 3.dp)
+                            .height(bottom - top),
+                        onClick = { onOpenTask(t.id) },
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun TaskBlock(
+    task: Task,
+    colorIndex: Int,
+    start: LocalDateTime,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
+    // 与 CourseBlock 同构:同样的圆角、填色、字号,颜色取所属清单色
+    val colors = MintTheme.colors
+    val bg = colors.bg(colorIndex)
+    val fg = colors.fg(colorIndex)
+    val shape = RoundedCornerShape(14.dp)
+    Column(
+        modifier
+            .mintPressable(pressedScale = 0.97f, ripple = false) { onClick() }
+            .alpha(if (task.done) 0.5f else 1f)
+            .clip(shape)
+            .background(bg)
+            .padding(horizontal = 5.dp, vertical = 5.dp),
+    ) {
+        Text(
+            task.title,
+            color = fg,
+            fontSize = 11.sp,
+            lineHeight = 13.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 4,
+            overflow = TextOverflow.Ellipsis,
+            textDecoration = if (task.done) TextDecoration.LineThrough else null,
+        )
+        Text(start.hm(), color = fg.copy(alpha = 0.85f), fontSize = 9.sp, lineHeight = 11.sp, maxLines = 1)
     }
 }
 

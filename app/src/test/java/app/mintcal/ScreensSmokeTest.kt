@@ -1,22 +1,39 @@
 package app.mintcal
 
 import android.graphics.Bitmap
+import android.util.Base64
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.test.core.app.ApplicationProvider
@@ -26,12 +43,14 @@ import app.mintcal.core.change.Edits
 import app.mintcal.core.importer.IcsImporter
 import app.mintcal.core.importer.IcsParser
 import app.mintcal.core.importer.ImportPlanner
+import app.mintcal.core.model.Attachment
 import app.mintcal.core.model.Event
 import app.mintcal.core.model.EventKind
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
 import app.mintcal.core.model.TaskList
 import app.mintcal.core.util.Ids
+import app.mintcal.data.Attachments
 import app.mintcal.data.DarkMode
 import app.mintcal.data.ThemeSource
 import app.mintcal.ui.Actions
@@ -39,6 +58,8 @@ import app.mintcal.ui.HOME
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
+import app.mintcal.ui.components.AttachmentEditor
+import app.mintcal.ui.components.MintSnackbarHost
 import app.mintcal.ui.mintDestinations
 import app.mintcal.ui.rememberNav
 import app.mintcal.ui.screens.AboutScreen
@@ -58,12 +79,14 @@ import app.mintcal.ui.screens.PeriodsScreen
 import app.mintcal.ui.screens.SettingsScreen
 import app.mintcal.ui.screens.SyncScreen
 import app.mintcal.ui.screens.TaskDetailScreen
+import app.mintcal.ui.screens.TaskDraft
 import app.mintcal.ui.screens.TimetableScreen
 import app.mintcal.ui.screens.TodayScreen
 import app.mintcal.ui.screens.TodoScreen
 import app.mintcal.ui.screens.TrashScreen
 import app.mintcal.ui.theme.MintCalTheme
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -115,7 +138,7 @@ class ScreensSmokeTest {
 
     @Composable
     private fun Host(content: @Composable () -> Unit) {
-        val st = app.settings.value
+        val st by app.settings.flow.collectAsState()
         val nav = rememberNav()
         val snack = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
@@ -193,6 +216,102 @@ class ScreensSmokeTest {
             }
         }
         assertTrue("渲染失败的页面：\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    /** 快速添加：回车即入库并清空输入，可直接接着录下一条。 */
+    @Test
+    fun quickAddAddsAndKeepsTyping() {
+        rule.setContent { Host { TodoScreen() } }
+        rule.onNode(hasSetTextAction()).performTextInput("交实验报告 !高 #学习")
+        rule.waitForIdle()
+        shot("todo_typing")
+        rule.onNode(hasSetTextAction()).performImeAction()
+        rule.waitUntil(5_000) {
+            app.repo.snapshot.value.tasks
+                .any { it.title == "交实验报告" }
+        }
+        val task =
+            app.repo.snapshot.value.tasks
+                .first { it.title == "交实验报告" }
+        assertEquals(3, task.priority)
+        rule.waitForIdle()
+        // 输入框已清空：标题只剩列表卡片这一处
+        rule.onAllNodesWithText("交实验报告").assertCountEquals(1)
+        rule.onNode(hasSetTextAction()).performTextInput("买牛奶")
+        rule.onNode(hasSetTextAction()).performImeAction()
+        rule.waitUntil(5_000) {
+            app.repo.snapshot.value.tasks
+                .any { it.title == "买牛奶" }
+        }
+    }
+
+    /** 「更多选项」把快速添加解析出来的内容带进详情页。 */
+    @Test
+    fun quickAddDraftPrefillsDetail() {
+        rule.setContent {
+            Host {
+                TaskDetailScreen(
+                    null,
+                    TaskDraft(
+                        title = "交实验报告",
+                        due = LocalDateTime.of(2026, 10, 25, 18, 0),
+                        dueHasTime = true,
+                        priority = 3,
+                    ),
+                ) {}
+            }
+        }
+        rule.onNodeWithText("交实验报告").assertExists()
+        rule.onNodeWithText("18:00").assertExists()
+        rule.onNodeWithText("高").assertIsSelected()
+        rule.onNodeWithText("附件").performScrollTo().assertExists()
+        rule.onNodeWithText("图片").assertExists()
+        shot("task_attachments")
+    }
+
+    @Test
+    fun attachmentsEditorRenders() {
+        val file = File(Attachments.dir(app), "probe.png")
+        file.writeBytes(
+            Base64.decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                Base64.NO_WRAP,
+            ),
+        )
+        val items = listOf(Attachment("实验图.png", "image/png", "probe.png"), Attachment("报告.pdf", "application/pdf", "gone.pdf"))
+        rule.setContent {
+            Host {
+                Column(Modifier.fillMaxSize().padding(16.dp)) {
+                    AttachmentEditor(items, onChange = {}, onPasteText = {})
+                }
+            }
+        }
+        rule.onNodeWithText("实验图.png").assertExists()
+        rule.onNodeWithText("报告.pdf").assertExists()
+        shot("attachments")
+    }
+
+    @Test
+    fun snackbarIsCompact() {
+        val state = SnackbarHostState()
+        rule.setContent {
+            Host {
+                Box(Modifier.fillMaxSize()) {
+                    TodoScreen()
+                    LaunchedEffect(Unit) {
+                        state.showSnackbar("已删除「交高数作业」", actionLabel = "撤销", withDismissAction = true, duration = SnackbarDuration.Indefinite)
+                    }
+                    MintSnackbarHost(state, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp).padding(bottom = 152.dp))
+                }
+            }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithText("已删除「交高数作业」").assertExists()
+        rule.onNodeWithText("撤销").assertExists()
+        shot("snackbar")
+        app.settings.update { it.copy(darkMode = DarkMode.DARK, themeSource = ThemeSource.PRESET) }
+        rule.waitForIdle()
+        shot("snackbar_dark")
     }
 
     @Test

@@ -168,6 +168,15 @@ data class TaskList(
     ) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
 }
 
+/** 待办附件：文件本体复制进应用私有目录，这里只记文件名与显示名。 */
+@Serializable
+data class Attachment(
+    val name: String,
+    val mime: String,
+    /** 私有 attachments 目录下的文件名（不含路径）；换设备同步时文件本体不会跟过来。 */
+    val file: String,
+)
+
 @Serializable
 @SerialName("task")
 data class Task(
@@ -198,6 +207,7 @@ data class Task(
     val source: Source = Source.MANUAL,
     /** 扩展字段，如快递取件码、地点：pickupCode / pickupPlace / pickupDeadline */
     val extra: Map<String, String> = emptyMap(),
+    val attachments: List<Attachment> = emptyList(),
     override val updatedAt: Long = 0,
     override val deletedAt: Long? = null,
     override val userId: String? = null,

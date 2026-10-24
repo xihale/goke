@@ -1,5 +1,6 @@
 package app.mintcal.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -49,6 +49,7 @@ import app.mintcal.core.model.Task
 import app.mintcal.core.todo.TaskLogic
 import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
+import app.mintcal.ui.components.AttachmentEditor
 import app.mintcal.ui.components.ChipChoice
 import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.DatePickerDlg
@@ -67,16 +68,29 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 
+/** 「快速添加」带进详情页的草稿：已输入/已解析的字段不重输。 */
+data class TaskDraft(
+    val title: String = "",
+    val due: LocalDateTime? = null,
+    val dueHasTime: Boolean = false,
+    val priority: Int = 0,
+    val listId: String? = null,
+    val tags: String = "",
+    val startDate: LocalDate? = null,
+)
+
 @Composable
 fun TaskDetailScreen(
     id: String?,
+    draft: TaskDraft? = null,
     onBack: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
     val snap = liveSnapshot()
     val settings = settingsState()
-    val existing = remember(id) { id?.let { i -> snap.tasks.firstOrNull { it.id == i } } }
+    // 不 remember：勾完成/撤销后要跟着快照刷新，而不是停在进场时的旧值
+    val existing = id?.let { i -> snap.tasks.firstOrNull { it.id == i } }
     if (id != null && existing == null) {
         // 记录已被删除：composition 期间不能改导航状态，延后到 effect 里返回
         LaunchedEffect(Unit) { onBack() }
@@ -85,14 +99,20 @@ fun TaskDetailScreen(
 
     // 新建时自动聚焦标题
     val titleFocus = remember { FocusRequester() }
-    LaunchedEffect(existing == null) { if (existing == null) titleFocus.requestFocus() }
 
-    var title by remember { mutableStateOf(existing?.title.orEmpty()) }
+    var title by remember { mutableStateOf(existing?.title ?: draft?.title.orEmpty()) }
+    // 标题已由草稿预填时不抢焦点弹键盘
+    LaunchedEffect(existing == null) { if (existing == null && title.isBlank()) titleFocus.requestFocus() }
     var note by remember { mutableStateOf(existing?.note.orEmpty()) }
-    var listId by remember { mutableStateOf(existing?.listId) }
-    var priority by remember { mutableIntStateOf(existing?.priority ?: 0) }
-    var dueDate by remember { mutableStateOf(existing?.due?.toLocalDate()) }
-    var dueTime by remember { mutableStateOf(existing?.takeIf { it.dueHasTime }?.due?.toLocalTime()) }
+    var listId by remember { mutableStateOf(existing?.listId ?: draft?.listId) }
+    var priority by remember { mutableIntStateOf(existing?.priority ?: draft?.priority ?: 0) }
+    var dueDate by remember { mutableStateOf(existing?.due?.toLocalDate() ?: draft?.due?.toLocalDate()) }
+    var dueTime by remember {
+        mutableStateOf(
+            existing?.due?.toLocalTime().takeIf { existing?.dueHasTime == true }
+                ?: draft?.due?.toLocalTime().takeIf { draft?.dueHasTime == true },
+        )
+    }
     var estimate by remember { mutableStateOf(existing?.estimateMinutes?.toString().orEmpty()) }
     var repeat by remember { mutableStateOf(existing?.repeat?.freq) }
     var remind by remember { mutableStateOf(existing?.remindMinutes) }
@@ -101,7 +121,17 @@ fun TaskDetailScreen(
     var blockDate by remember { mutableStateOf(existing?.blockStart?.toLocalDate()) }
     var blockTime by remember { mutableStateOf(existing?.blockStart?.toLocalTime() ?: LocalTime.of(16, 30)) }
     var blockMinutes by remember { mutableIntStateOf(existing?.blockMinutes ?: settings.defaultBlockMinutes) }
-    var tags by remember { mutableStateOf(existing?.tags?.joinToString(" ").orEmpty()) }
+    var startDate by remember { mutableStateOf(existing?.startDate ?: draft?.startDate) }
+    var tags by remember {
+        mutableStateOf(
+            existing
+                ?.tags
+                ?.joinToString(" ")
+                .orEmpty()
+                .ifEmpty { draft?.tags.orEmpty() },
+        )
+    }
+    var attachments by remember { mutableStateOf(existing?.attachments.orEmpty()) }
     var pick by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
     var courseMenu by remember { mutableStateOf(false) }
@@ -125,14 +155,34 @@ fun TaskDetailScreen(
             blockStart = blockDate?.let { LocalDateTime.of(it, blockTime) },
             blockMinutes = if (blockDate != null) blockMinutes else null,
             tags = tags.split(' ', ',', '，', '#').map { it.trim() }.filter { it.isNotEmpty() },
+            attachments = attachments,
+            startDate = startDate,
         )
     }
 
+    // 有未保存修改时拦截返回（含系统返回手势），先确认再放弃；保存按钮直接走 onBack 不经此路
+    var confirmDiscard by remember { mutableStateOf(false) }
+
+    fun isDirty(): Boolean =
+        if (existing == null) {
+            title.isNotBlank() || note.isNotBlank() || dueDate != null || blockDate != null || tags.isNotBlank() || priority != 0 || estimate.isNotBlank()
+        } else {
+            buildTask() != existing
+        }
+
+    fun goBack() {
+        if (isDirty()) confirmDiscard = true else onBack()
+    }
+    BackHandler { goBack() }
+
     MintScreen(
         title = stringResource(if (existing == null) R.string.new_task else R.string.task_detail),
-        onBack = onBack,
+        onBack = { goBack() },
         actions = {
-            if (existing != null) IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Rounded.Delete, stringResource(R.string.delete)) }
+            if (existing != null) {
+                MintCheck(existing.done, { d -> toggle(actions, snap, existing, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, existing.title)) })
+                IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Rounded.Delete, stringResource(R.string.delete)) }
+            }
             Button(
                 onClick = {
                     val t = buildTask()
@@ -243,6 +293,14 @@ fun TaskDetailScreen(
                 FieldText(stringResource(R.string.label_tags), tags, { tags = it }, placeholder = stringResource(R.string.tags_hint))
             }
 
+            FormSection(stringResource(R.string.section_attachments)) {
+                AttachmentEditor(
+                    attachments,
+                    onChange = { attachments = it },
+                    onPasteText = { note = if (note.isBlank()) it else "$note\n$it" },
+                )
+            }
+
             if (existing != null) {
                 val subs = TaskLogic.subtasks(snap.tasks, existing.id)
                 FormSection(stringResource(R.string.section_subtasks)) {
@@ -260,7 +318,7 @@ fun TaskDetailScreen(
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         FieldText(stringResource(R.string.add_subtask), newSub, { newSub = it }, Modifier.weight(1f))
                         TextButton(onClick = {
-                            val sub = Task(Ids.next(), newSub.trim(), parentId = existing.id, sortOrder = subs.size + 1)
+                            val sub = Task(Ids.next(), newSub.trim(), parentId = existing.id, sortOrder = (subs.maxOfOrNull { it.sortOrder } ?: 0) + 1)
                             actions.commit(Edits.save(snap, sub, ctx.getString(R.string.add_task_desc, sub.title), System.currentTimeMillis()))
                             newSub = ""
                         }, enabled = newSub.isNotBlank()) { Text(stringResource(R.string.add)) }
@@ -276,6 +334,18 @@ fun TaskDetailScreen(
         "dueTime" -> TimePickerDlg(dueTime ?: LocalTime.of(18, 0), { pick = null }) { dueTime = it }
         "block" -> DatePickerDlg(blockDate ?: dueDate ?: LocalDate.now(), { pick = null }) { blockDate = it }
         "blockTime" -> TimePickerDlg(blockTime, { pick = null }) { blockTime = it }
+    }
+    if (confirmDiscard) {
+        ConfirmDialog(
+            stringResource(R.string.discard_title),
+            stringResource(R.string.discard_text),
+            stringResource(R.string.discard),
+            {
+                confirmDiscard = false
+                onBack()
+            },
+            { confirmDiscard = false },
+        )
     }
     if (confirmDelete && existing != null) {
         ConfirmDialog(

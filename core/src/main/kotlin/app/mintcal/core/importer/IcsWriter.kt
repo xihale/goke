@@ -10,7 +10,6 @@ import app.mintcal.core.model.Semester
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Task
 import app.mintcal.core.time.SemesterCalendar
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset

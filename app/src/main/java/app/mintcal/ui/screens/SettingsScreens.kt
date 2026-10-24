@@ -51,15 +51,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import app.mintcal.BuildConfig
 import app.mintcal.R
 import app.mintcal.data.DarkMode
@@ -92,9 +92,14 @@ fun SettingsScreen(onBack: () -> Unit) {
     fun ensureNotifPermission() {
         if (Build.VERSION.SDK_INT >= 33 && !Notifications.canPost(ctx)) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
-    val needExact =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            !(ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
+    // 从系统设置回来后重算权限/闹钟状态，避免提示挂着不消失
+    var notifOk by remember { mutableStateOf(Build.VERSION.SDK_INT < 33 || Notifications.canPost(ctx)) }
+    var exactOk by remember { mutableStateOf(!(ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        notifOk = Build.VERSION.SDK_INT < 33 || Notifications.canPost(ctx)
+        exactOk = !(ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
+    }
+    val needExact = !exactOk
 
     MintScreen(title = stringResource(R.string.settings), onBack = onBack) {
         Column(
@@ -116,6 +121,12 @@ fun SettingsScreen(onBack: () -> Unit) {
                 ChipChoice(listOf(30, 45, 60, 90, 120).map { it to ctx.getString(R.string.minutes_n, it) }, st.defaultBlockMinutes, { v -> app.settings.update { it.copy(defaultBlockMinutes = v) } })
             }
             FormSection(stringResource(R.string.section_reminders)) {
+                if (!notifOk) {
+                    Text(stringResource(R.string.notif_blocked_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
+                    TextButton(onClick = {
+                        runCatching { ctx.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    }) { Text(stringResource(R.string.notif_grant)) }
+                }
                 SwitchRow(stringResource(R.string.remind_courses), stringResource(R.string.remind_courses_desc), st.remindCourse) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(remindCourse = v) }
@@ -195,11 +206,6 @@ fun AppearanceScreen(onBack: () -> Unit) {
                 Text(stringResource(R.string.appearance_preview), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                 Spacer(Modifier.height(4.dp))
                 Text(stringResource(R.string.appearance_preview_desc), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {}) { Text(stringResource(R.string.save)) }
-                    OutlinedButton(onClick = {}) { Text(stringResource(R.string.cancel)) }
-                }
             }
             FormSection(stringResource(R.string.theme_color)) {
                 ChipChoice(sources, source, { v -> app.settings.update { it.copy(themeSource = v) } })

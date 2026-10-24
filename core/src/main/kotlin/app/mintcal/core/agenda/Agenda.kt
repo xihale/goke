@@ -1,6 +1,7 @@
 package app.mintcal.core.agenda
 
 import app.mintcal.core.model.Event
+import app.mintcal.core.model.PeriodTime
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Task
 import app.mintcal.core.recurrence.CourseExpander
@@ -69,7 +70,7 @@ object Agenda {
         snapshot: Snapshot,
         from: LocalDate,
         to: LocalDate,
-        defaultBlockMinutes: Int = 60,
+        defaultBlockMinutes: Int = 30,
         includeDoneTasks: Boolean = true,
     ): Map<LocalDate, List<AgendaItem>> {
         val s = snapshot.live()
@@ -118,8 +119,24 @@ object Agenda {
     fun forDay(
         snapshot: Snapshot,
         date: LocalDate,
-        defaultBlockMinutes: Int = 60,
+        defaultBlockMinutes: Int = 30,
     ): List<AgendaItem> = range(snapshot, date, date, defaultBlockMinutes)[date].orEmpty()
+
+    /**
+     * 待办时间块落到课表的哪几行（返回节次编号）。时间落在作息之外时吸附到最近一节，
+     * 让「排进日历的任务」在课表上始终看得见。
+     */
+    fun blockRows(
+        periods: List<PeriodTime>,
+        start: LocalTime,
+        end: LocalTime,
+    ): IntRange? {
+        if (periods.isEmpty()) return null
+        val sorted = periods.sortedBy { it.index }
+        val first = sorted.indexOfFirst { start < it.end }.let { if (it >= 0) it else sorted.lastIndex }
+        val last = sorted.indexOfLast { end > it.start }.coerceIn(first, sorted.lastIndex)
+        return sorted[first].index..sorted[last].index
+    }
 
     fun marks(
         snapshot: Snapshot,

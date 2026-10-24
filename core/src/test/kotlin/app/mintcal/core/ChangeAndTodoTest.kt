@@ -1,5 +1,6 @@
 package app.mintcal.core
 
+import app.mintcal.core.agenda.Agenda
 import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeOp
 import app.mintcal.core.change.ChangeSet
@@ -12,8 +13,10 @@ import app.mintcal.core.change.canUndo
 import app.mintcal.core.change.undo
 import app.mintcal.core.export.ExportBundle
 import app.mintcal.core.importer.ImportPlanner
+import app.mintcal.core.model.Attachment
 import app.mintcal.core.model.Course
 import app.mintcal.core.model.Freq
+import app.mintcal.core.model.PeriodTime
 import app.mintcal.core.model.Recurrence
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Source
@@ -22,9 +25,11 @@ import app.mintcal.core.parcel.ParcelParser
 import app.mintcal.core.todo.QuickAdd
 import app.mintcal.core.todo.SmartList
 import app.mintcal.core.todo.TaskLogic
+import app.mintcal.core.util.MintJson
 import app.mintcal.core.util.SequentialIds
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -158,6 +163,35 @@ class ChangeAndTodoTest {
         assertEquals(base, ExportBundle.fromJson(bundle.toJson()).snapshot)
     }
 
+    @Test fun `attachments survive json and old records still decode`() {
+        // 老记录没有 attachments 字段，必须还能读
+        val old = MintJson.decodeFromString(Task.serializer(), """{"id":"t1","title":"旧记录"}""")
+        assertTrue(old.attachments.isEmpty())
+        val a = Attachment("实验图.png", "image/png", "abc.png")
+        val back = MintJson.decodeFromString(Task.serializer(), MintJson.encodeToString(Task.serializer(), old.copy(attachments = listOf(a))))
+        assertEquals(listOf(a), back.attachments)
+    }
+
+    @Test fun `block rows snap a time window onto periods`() {
+        val periods =
+            listOf(
+                PeriodTime(1, LocalTime.of(8, 30), LocalTime.of(9, 15)),
+                PeriodTime(2, LocalTime.of(9, 20), LocalTime.of(10, 5)),
+                PeriodTime(3, LocalTime.of(10, 25), LocalTime.of(11, 10)),
+            )
+        assertEquals(2..2, Agenda.blockRows(periods, LocalTime.of(9, 30), LocalTime.of(10, 0)))
+        assertEquals(1..3, Agenda.blockRows(periods, LocalTime.of(8, 40), LocalTime.of(11, 0)))
+        // 作息之外吸附到最近一节，课表上仍然看得见
+        assertEquals(1..1, Agenda.blockRows(periods, LocalTime.of(7, 0), LocalTime.of(7, 30)))
+        assertEquals(3..3, Agenda.blockRows(periods, LocalTime.of(22, 0), LocalTime.of(22, 30)))
+    }
+
+    @Test fun `block without duration defaults to 30 minutes`() {
+        val t = Task("t", "写报告", blockStart = LocalDateTime.of(2026, 10, 23, 14, 0))
+        assertEquals(LocalDateTime.of(2026, 10, 23, 14, 30), TaskLogic.blockEnd(t))
+        assertEquals(LocalDateTime.of(2026, 10, 23, 15, 0), TaskLogic.blockEnd(t.copy(estimateMinutes = 60)))
+    }
+
     @Test fun `conflict detection`() {
         val snap = base.copy(courses = base.courses + course("c", "冲突课", dow = 1, sp = 2, ep = 3, weeks = setOf(1)))
         val conflicts = Conflicts.detect(snap, setOf("c"))
@@ -203,6 +237,24 @@ class ChangeAndTodoTest {
         assertEquals(LocalDateTime.of(2026, 10, 23, 20, 0), QuickAdd.parse("晚上八点开会", now).due)
     }
 
+    @Test fun `quick add understands more date forms`() {
+        fun due(s: String) = QuickAdd.parse(s, now).due
+
+        assertEquals("买菜", QuickAdd.parse("周末 买菜", now).title)
+        assertEquals(LocalDate.of(2026, 10, 24), due("周末 买菜")!!.toLocalDate())
+        assertEquals(LocalDate.of(2026, 10, 31), due("下周末 买菜")!!.toLocalDate())
+        assertEquals(LocalDate.of(2026, 10, 26), due("下周 交表")!!.toLocalDate())
+        assertEquals(LocalDate.of(2026, 10, 26), due("3天后 交表")!!.toLocalDate())
+        assertEquals(LocalDate.of(2026, 10, 31), due("月底 结账")!!.toLocalDate())
+        assertEquals(LocalDate.of(2026, 10, 26), due("10/26 交表")!!.toLocalDate())
+        // 「今晚8点」不能当成早上八点；显式时刻仍以写出来的为准
+        assertEquals(LocalDateTime.of(2026, 10, 23, 20, 0), due("今晚8点 跑步"))
+        assertEquals(LocalDateTime.of(2026, 10, 24, 9, 45), due("明早九点三刻 跑步"))
+        // 清单名后面的中文标点不算进名字
+        assertEquals("课程", QuickAdd.parse("#课程，复习", now).listName)
+        assertEquals("复习", QuickAdd.parse("#课程，复习", now).title)
+    }
+
     @Test fun `smart lists and recurring completion`() {
         val tasks =
             listOf(
@@ -211,10 +263,11 @@ class ChangeAndTodoTest {
                 Task("t3", "下周", due = LocalDateTime.of(2026, 10, 27, 0, 0)),
                 Task("t4", "做完", done = true),
                 Task("t5", "子", parentId = "t1"),
+                Task("t6", "今天已完成", due = LocalDateTime.of(2026, 10, 23, 9, 0), dueHasTime = true, done = true),
             )
-        assertEquals(listOf("t2", "t1"), TaskLogic.filter(tasks, SmartList.TODAY, now).map { it.id })
+        assertEquals(listOf("t2", "t1", "t6"), TaskLogic.filter(tasks, SmartList.TODAY, now).map { it.id })
         assertEquals(listOf("t3"), TaskLogic.filter(tasks, SmartList.PLANNED, now).map { it.id })
-        assertEquals(listOf("t4"), TaskLogic.filter(tasks, SmartList.DONE, now).map { it.id })
+        assertEquals(listOf("t6", "t4"), TaskLogic.filter(tasks, SmartList.DONE, now).map { it.id })
         assertEquals(listOf("t2"), TaskLogic.filter(tasks, SmartList.OVERDUE, now).map { it.id })
         val rec = Task("r", "每周日报", due = LocalDateTime.of(2026, 10, 23, 18, 0), dueHasTime = true, repeat = Recurrence(Freq.WEEKLY))
         val (done, next) = TaskLogic.complete(rec, 1L, now, SequentialIds())

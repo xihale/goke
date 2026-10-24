@@ -65,6 +65,14 @@ sealed interface Route {
 
     @Serializable data class TaskDetail(
         val id: String?,
+        // 从「快速添加」带过来的草稿（id 为 null 时生效），免得进详情还要重输
+        val title: String? = null,
+        val due: String? = null,
+        val dueHasTime: Boolean = false,
+        val priority: Int = 0,
+        val listId: String? = null,
+        val tags: String? = null,
+        val startDate: String? = null,
     ) : Route
 }
 
@@ -119,7 +127,7 @@ class Actions(
             app.repo.commit(cs)
             if (message != null && !cs.isEmpty) {
                 snack.currentSnackbarData?.dismiss()
-                val r = snack.showSnackbar(message, actionLabel = undoLabel, duration = SnackbarDuration.Short)
+                val r = snack.showSnackbar(message, actionLabel = undoLabel, duration = SnackbarDuration.Long, withDismissAction = true)
                 if (r == SnackbarResult.ActionPerformed) app.repo.undo(cs.id)
             }
         }

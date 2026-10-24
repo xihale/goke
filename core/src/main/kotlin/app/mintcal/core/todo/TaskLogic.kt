@@ -52,10 +52,15 @@ object TaskLogic {
         val top = topLevel(tasks)
         val list =
             when (which) {
-                SmartList.TODAY -> top.filter { !it.done && (isOverdue(it, now) || dueDate(it) == today || it.startDate == today || it.blockStart?.toLocalDate() == today) }
+                // 已完成的今天任务保留在区内（排序沉底、划线），与「今日」页行为一致，勾选不消失
+                SmartList.TODAY -> top.filter { (!it.done && isOverdue(it, now)) || dueDate(it) == today || it.startDate == today || it.blockStart?.toLocalDate() == today }
+
                 SmartList.PLANNED -> top.filter { !it.done && dueDate(it)?.let { d -> d.isAfter(today) && !d.isAfter(today.plusDays(7)) } == true }
+
                 SmartList.ALL -> top.filter { !it.done }
+
                 SmartList.DONE -> top.filter { it.done }
+
                 SmartList.OVERDUE -> top.filter { isOverdue(it, now) }
             }
         return list.sortedWith(compareBy<Task>({ it.done }, { it.due == null }, { it.due }, { -it.priority }, { it.sortOrder }))
@@ -114,6 +119,6 @@ object TaskLogic {
     /** 时间块：结束时间 = 开始 + 预计耗时（未填则用默认分钟数）。 */
     fun blockEnd(
         task: Task,
-        defaultMinutes: Int = 60,
+        defaultMinutes: Int = 30,
     ): LocalDateTime? = task.blockStart?.plusMinutes((task.blockMinutes ?: task.estimateMinutes ?: defaultMinutes).toLong())
 }

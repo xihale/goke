@@ -16,7 +16,7 @@ data class Settings(
     val seedColor: Int = 0xFF4FA796.toInt(),
     val darkMode: DarkMode = DarkMode.SYSTEM,
     val showTeacher: Boolean = false,
-    val defaultBlockMinutes: Int = 60,
+    val defaultBlockMinutes: Int = 30,
     val remindCourse: Boolean = false,
     val courseRemindMinutes: Int = 15,
     val remindTask: Boolean = true,

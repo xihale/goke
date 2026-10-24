@@ -13,7 +13,6 @@ import app.mintcal.core.agenda.EventItem
 import app.mintcal.core.agenda.TaskItem
 import app.mintcal.core.model.Snapshot
 import app.mintcal.data.Settings
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId

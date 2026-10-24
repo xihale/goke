@@ -2,29 +2,29 @@ package app.mintcal.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -36,17 +36,20 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.Button
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,19 +62,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
+import app.mintcal.core.change.Edits
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
@@ -80,7 +83,6 @@ import app.mintcal.core.todo.QuickAdd
 import app.mintcal.core.todo.SmartList
 import app.mintcal.core.todo.TaskLogic
 import app.mintcal.core.util.Ids
-import app.mintcal.ui.Actions
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
@@ -94,6 +96,7 @@ import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
+import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -112,7 +115,6 @@ fun TodoScreen() {
     val now by rememberNow()
     val today = now.toLocalDate()
     var filter by rememberSaveable { mutableStateOf(F_TODAY) }
-    var quickAdd by remember { mutableStateOf(false) }
     val sem = snap.currentSemester
     val colors = MintTheme.colors
 
@@ -120,16 +122,8 @@ fun TodoScreen() {
     val top = TaskLogic.topLevel(snap.tasks)
 
     val overdue = remember(snap, now) { TaskLogic.filter(snap.tasks, SmartList.OVERDUE, now) }
+    // 已完成的任务保留在「今日」区末尾（划线沉底），勾选后不消失
     val todayList = remember(snap, now) { TaskLogic.filter(snap.tasks, SmartList.TODAY, now).filter { it !in overdue } }
-    val doneToday =
-        remember(snap, today) {
-            top.filter {
-                it.done && it.doneAt != null && java.time.Instant
-                    .ofEpochMilli(it.doneAt!!)
-                    .atZone(java.time.ZoneId.systemDefault())
-                    .toLocalDate() == today
-            }
-        }
 
     Box(Modifier.fillMaxSize()) {
         val reduce = reduceMotion()
@@ -140,7 +134,7 @@ fun TodoScreen() {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 160.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 240.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
@@ -161,19 +155,13 @@ fun TodoScreen() {
                     if (overdue.isNotEmpty()) {
                         item(key = "h-overdue") { SectionLabel(stringResource(R.string.overdue_count, overdue.size), trailingColor = colors.removed) }
                         items(overdue, key = { it.id }) { t ->
-                            TodoCard(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
+                            TodoRow(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
                         }
                     }
                     item(key = "h-today") { SectionLabel(stringResource(R.string.today_count, todayList.size)) }
                     if (todayList.isEmpty()) item(key = "empty-today") { EmptyState(stringResource(R.string.todo_today_empty)) }
                     items(todayList, key = { it.id }) { t ->
-                        TodoCard(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
-                    }
-                    if (doneToday.isNotEmpty()) {
-                        item(key = "h-done") { SectionLabel(stringResource(R.string.done_count, doneToday.size)) }
-                        items(doneToday, key = { it.id }) { t ->
-                            TodoCard(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
-                        }
+                        TodoRow(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
                     }
                 }
 
@@ -185,7 +173,7 @@ fun TodoScreen() {
                     planned.groupBy { it.due!!.toLocalDate() }.forEach { (d, ts) ->
                         item(key = "h-p$d") { SectionLabel(ctx.dueLabel(d.atStartOfDay(), false, today)) }
                         items(ts, key = { it.id }) { t ->
-                            TodoCard(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
+                            TodoRow(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
                         }
                     }
                 }
@@ -194,7 +182,7 @@ fun TodoScreen() {
                     val all = TaskLogic.filter(snap.tasks, SmartList.ALL, now)
                     if (all.isEmpty()) item(key = "empty-all") { EmptyState(stringResource(R.string.todo_all_empty)) }
                     items(all, key = { it.id }) { t ->
-                        TodoCard(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
+                        TodoRow(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
                     }
                 }
 
@@ -202,7 +190,7 @@ fun TodoScreen() {
                     val done = TaskLogic.filter(snap.tasks, SmartList.DONE, now).sortedByDescending { it.doneAt ?: 0L }
                     if (done.isEmpty()) item(key = "empty-done") { EmptyState(stringResource(R.string.todo_done_empty)) }
                     items(done, key = { it.id }) { t ->
-                        TodoCard(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
+                        TodoRow(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
                     }
                 }
 
@@ -210,20 +198,19 @@ fun TodoScreen() {
                     val inList = top.filter { it.listId == listFilter }.sortedWith(compareBy({ it.done }, { it.due == null }, { it.due }, { it.sortOrder }))
                     if (inList.isEmpty()) item(key = "empty-list") { EmptyState(stringResource(R.string.todo_all_empty)) }
                     items(inList, key = { it.id }) { t ->
-                        TodoCard(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
+                        TodoRow(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
                     }
                 }
             }
         }
-        FloatingActionButton(
-            onClick = { quickAdd = true },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 108.dp),
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            shape = RoundedCornerShape(22.dp),
-        ) { Icon(Icons.Rounded.Add, stringResource(R.string.new_task)) }
+        QuickAddBar(
+            snap,
+            now,
+            filter,
+            listFilter,
+            Modifier.align(Alignment.BottomCenter),
+        )
     }
-    if (quickAdd) QuickAddSheet(snap, now, listFilter, onDismiss = { quickAdd = false })
 }
 
 @Composable
@@ -262,6 +249,7 @@ fun TodoCard(
     val ctx = LocalContext.current
     val nav = LocalNav.current
     val actions = LocalActions.current
+    val settings = settingsState()
     val colors = MintTheme.colors
     val sem = snap.currentSemester
     val due = TaskLogic.effectiveDue(task, sem, snap.courses, snap.exceptions, now)
@@ -291,7 +279,7 @@ fun TodoCard(
                 if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = if (overdue) colors.removed else MaterialTheme.colorScheme.onSurfaceVariant)
                 val bStart = task.blockStart
                 if (bStart != null) {
-                    val end = TaskLogic.blockEnd(task, 60)!!
+                    val end = TaskLogic.blockEnd(task, settings.defaultBlockMinutes)!!
                     Text(stringResource(R.string.block_in_calendar, bStart.hm(), end.hm()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
                 if (total > 0) {
@@ -313,48 +301,145 @@ fun TodoCard(
     }
 }
 
-/** 快速添加：一句话（如「明天下午3点交作业 #概率论 !高 @期末」）实时解析，可直接保存或进入详情。 */
+/** TickTick 式手势：右滑完成/恢复，左滑删除（都走变更集，可撤销）；行不滑走，靠列表状态反馈。 */
 @Composable
-private fun QuickAddSheet(
+private fun TodoRow(
+    task: Task,
     snap: Snapshot,
     now: LocalDateTime,
-    defaultListId: String?,
-    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val ctx = LocalContext.current
+    val actions = LocalActions.current
+    val colors = MintTheme.colors
+    val haptics = LocalHapticFeedback.current
+    val state =
+        rememberSwipeToDismissBoxState(
+            confirmValueChange = { v ->
+                when (v) {
+                    SwipeToDismissBoxValue.StartToEnd -> {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        toggle(actions, snap, task, !task.done, now, ctx.getString(R.string.done_toast, task.title))
+                    }
+
+                    SwipeToDismissBoxValue.EndToStart -> {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        actions.commit(
+                            Edits.delete(snap, task, ctx.getString(R.string.delete_desc, task.title), System.currentTimeMillis()),
+                            ctx.getString(R.string.deleted_toast),
+                        )
+                    }
+
+                    SwipeToDismissBoxValue.Settled -> {}
+                }
+                false
+            },
+        )
+    SwipeToDismissBox(
+        state = state,
+        modifier = modifier,
+        backgroundContent = {
+            val done = state.targetValue == SwipeToDismissBoxValue.StartToEnd
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background((if (done) colors.added else colors.removed).copy(alpha = 0.18f))
+                    .padding(horizontal = 22.dp),
+                contentAlignment = if (done) Alignment.CenterStart else Alignment.CenterEnd,
+            ) {
+                Icon(
+                    if (done) Icons.Rounded.Check else Icons.Rounded.Delete,
+                    null,
+                    tint = if (done) colors.added else colors.removed,
+                )
+            }
+        },
+    ) {
+        TodoCard(task, snap, now)
+    }
+}
+
+/**
+ * 常驻的一行添加（如「明天下午3点交作业 #概率论 !高 @期末」）：输入即解析，
+ * 添加后保留焦点与当前清单，可连续录入；「更多选项」把已解析的内容带进详情页，不用重输。
+ */
+@Composable
+private fun QuickAddBar(
+    snap: Snapshot,
+    now: LocalDateTime,
+    filter: String,
+    listFilter: String?,
+    modifier: Modifier = Modifier,
 ) {
     val ctx = LocalContext.current
     val nav = LocalNav.current
     val actions = LocalActions.current
-    var text by remember { mutableStateOf("") }
+    val haptics = LocalHapticFeedback.current
+    var text by rememberSaveable { mutableStateOf("") }
     val parsed = remember(text, now) { if (text.isBlank()) null else QuickAdd.parse(text, now) }
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    // 键盘弹起时贴着键盘，收起时悬在底栏之上
+    val ime = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
 
     fun save() {
         val p = parsed ?: return
-        val cs = buildQuickTask(snap, p, defaultListId, now, ctx.getString(R.string.add_task_desc, p.title))
-        actions.commit(cs, ctx.getString(R.string.task_added_toast))
-        onDismiss()
+        // shortcut: 「今天」页无日期时用 startDate 落在今天，避免次日变成红色伪逾期
+        val start = if (filter == F_TODAY && p.due == null) now.toLocalDate() else null
+        val where = p.due?.let { " · " + ctx.dueLabel(it, p.dueHasTime, now.toLocalDate()) }
+        actions.commit(
+            buildQuickTask(snap, p, listFilter, now, ctx.getString(R.string.add_task_desc, p.title), start),
+            ctx.getString(R.string.task_added_toast, p.title) + (where ?: ""),
+        )
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        text = ""
+        focus.requestFocus()
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
-        Column(
-            Modifier
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp)
+    fun openDetail() {
+        val p = parsed ?: return
+        nav.push(
+            Route.TaskDetail(
+                id = null,
+                title = p.title,
+                due = p.due?.toString(),
+                dueHasTime = p.dueHasTime,
+                priority = p.priority,
+                listId = p.listName?.let { name -> snap.lists.firstOrNull { it.name == name }?.id },
+                tags = p.tags.joinToString(" "),
+                startDate = if (filter == F_TODAY && p.due == null) now.toLocalDate().toString() else null,
+            ),
+        )
+    }
+
+    Surface(
+        modifier =
+            modifier
+                .fillMaxWidth()
                 .imePadding()
-                .navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(stringResource(R.string.quick_add_title), style = MaterialTheme.typography.titleLarge)
-            OutlinedTextField(
-                text,
-                { text = it },
-                Modifier.fillMaxWidth().focusRequester(focus),
-                placeholder = { Text(stringResource(R.string.quick_add_hint)) },
-                shape = RoundedCornerShape(20.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { save() }),
-            )
+                .navigationBarsPadding()
+                .padding(start = 16.dp, end = 16.dp, bottom = if (ime > 0.dp) 8.dp else 96.dp),
+        shape = RoundedCornerShape(26.dp),
+        color = MintTheme.card,
+        shadowElevation = 8.dp,
+        tonalElevation = 2.dp,
+    ) {
+        Column(Modifier.padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    text,
+                    { text = it },
+                    Modifier.weight(1f).focusRequester(focus),
+                    placeholder = { Text(stringResource(R.string.quick_add_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(20.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { save() }),
+                )
+                IconButton(onClick = { save() }, enabled = parsed != null) {
+                    Icon(Icons.Rounded.Add, stringResource(R.string.add))
+                }
+            }
             AnimatedVisibility(
                 visible = parsed != null,
                 enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
@@ -362,22 +447,33 @@ private fun QuickAddSheet(
             ) {
                 val p = parsed
                 if (p != null) {
-                    androidx.compose.foundation.layout.FlowRow(Modifier.animateContentSize(MintTheme.spec()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Tag(p.title, MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurface)
-                        p.due?.let { Tag(ctx.dueLabel(it, p.dueHasTime, now.toLocalDate()), MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer) }
-                        if (p.priority > 0) Tag(stringResource(R.string.priority_n, p.priority), MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
-                        p.listName?.let { Tag("@$it", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer) }
-                        p.tags.forEach { Tag("#$it", MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant) }
+                    Row(Modifier.padding(end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.foundation.layout.FlowRow(
+                            Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Tag(p.title, MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurface)
+                            p.due?.let { Tag(ctx.dueLabel(it, p.dueHasTime, now.toLocalDate()), MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer) }
+                            if (p.priority > 0) {
+                                Tag(
+                                    stringResource(
+                                        when (p.priority) {
+                                            3 -> R.string.priority_3
+                                            2 -> R.string.priority_2
+                                            else -> R.string.priority_1
+                                        },
+                                    ),
+                                    MaterialTheme.colorScheme.secondaryContainer,
+                                    MaterialTheme.colorScheme.onSecondaryContainer,
+                                )
+                            }
+                            p.listName?.let { Tag("#$it", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer) }
+                            p.tags.forEach { Tag("@$it", MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant) }
+                        }
+                        TextButton(onClick = { openDetail() }) { Text(stringResource(R.string.more_options)) }
                     }
                 }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = {
-                    onDismiss()
-                    nav.push(Route.TaskDetail(null))
-                }) { Text(stringResource(R.string.more_options)) }
-                Spacer(Modifier.weight(1f))
-                Button(onClick = { save() }, enabled = parsed != null) { Text(stringResource(R.string.add)) }
             }
         }
     }
@@ -389,6 +485,7 @@ fun buildQuickTask(
     defaultListId: String?,
     now: LocalDateTime,
     desc: String,
+    startDate: LocalDate? = null,
 ): ChangeSet {
     val changes = mutableListOf<Change>()
     var listId = defaultListId
@@ -403,6 +500,6 @@ fun buildQuickTask(
         }
     }
     val order = (snap.tasks.maxOfOrNull { it.sortOrder } ?: 0) + 1
-    changes += Change.Add(Task(Ids.next(), p.title, listId = listId, tags = p.tags, priority = p.priority, due = p.due, dueHasTime = p.dueHasTime, sortOrder = order, source = Source.MANUAL))
+    changes += Change.Add(Task(Ids.next(), p.title, listId = listId, tags = p.tags, priority = p.priority, due = p.due, dueHasTime = p.dueHasTime, startDate = startDate, sortOrder = order, source = Source.MANUAL))
     return ChangeSet(Ids.next(), desc, Source.MANUAL, System.currentTimeMillis(), changes)
 }

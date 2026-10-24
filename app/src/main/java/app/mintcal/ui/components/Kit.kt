@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -51,6 +50,8 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -385,7 +386,19 @@ fun DatePickerDlg(
             }) { Text(stringResource(R.string.ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-    ) { DatePicker(state = state) }
+    ) {
+        Row(Modifier.padding(start = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = {
+                onPick(LocalDate.now())
+                onDismiss()
+            }) { Text(stringResource(R.string.today)) }
+            TextButton(onClick = {
+                onPick(LocalDate.now().plusDays(1))
+                onDismiss()
+            }) { Text(stringResource(R.string.tomorrow)) }
+        }
+        DatePicker(state = state)
+    }
 }
 
 @Composable
@@ -408,8 +421,6 @@ fun TimePickerDlg(
         shape = RoundedCornerShape(28.dp),
     )
 }
-
-val ScreenPadding = PaddingValues(horizontal = 16.dp)
 
 /** 统一按压反馈：按下轻微缩放 + 长按触觉；可选系统水波纹。用于自绘可点击块（课程格、格子等）。 */
 @Composable
@@ -435,6 +446,17 @@ fun Modifier.mintPressable(
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             onClick()
         }
+}
+
+/**
+ * 浮起提示:直接用 Material 3 官方 Snackbar(自带撤销/关闭按钮),这里只负责摆放位置。
+ */
+@Composable
+fun MintSnackbarHost(
+    state: SnackbarHostState,
+    modifier: Modifier = Modifier,
+) {
+    SnackbarHost(state, modifier)
 }
 
 /** 空状态：图标圆底 + 标题 +（可选）说明与操作按钮；出现/消失由调用方用 AnimatedVisibility 包裹。 */

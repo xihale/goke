@@ -1,0 +1,205 @@
+package app.mintcal.ui.components
+
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.UploadFile
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import app.mintcal.R
+import app.mintcal.core.model.Attachment
+import app.mintcal.data.Attachments
+import app.mintcal.ui.Actions
+import app.mintcal.ui.LocalActions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+
+/**
+ * 待办附件：相册图片、任意文件、剪贴板粘贴。文件在选中时就复制进私有目录，记录里只留文件名；
+ * 剪贴板是纯文字时交给 [onPasteText] 写进备注。
+ */
+@Composable
+fun AttachmentEditor(
+    items: List<Attachment>,
+    onChange: (List<Attachment>) -> Unit,
+    onPasteText: (String) -> Unit,
+) {
+    val ctx = LocalContext.current
+    val actions = LocalActions.current
+
+    fun add(uri: Uri) {
+        val a = Attachments.import(ctx, uri)
+        if (a == null) actions.toast(ctx.getString(R.string.attachment_failed)) else onChange(items + a)
+    }
+
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(::add) }
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(::add) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AssistChip(
+                onClick = { imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                label = { Text(stringResource(R.string.attach_image)) },
+                leadingIcon = { Icon(Icons.Rounded.Image, null, Modifier.size(18.dp)) },
+            )
+            AssistChip(
+                onClick = { filePicker.launch(arrayOf("*/*")) },
+                label = { Text(stringResource(R.string.attach_file)) },
+                leadingIcon = { Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)) },
+            )
+            AssistChip(
+                onClick = {
+                    val clip = (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip
+                    val item = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
+                    val uri = item?.uri
+                    if (uri != null) {
+                        add(uri)
+                    } else {
+                        item
+                            ?.text
+                            ?.toString()
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let(onPasteText)
+                    }
+                },
+                label = { Text(stringResource(R.string.attach_paste)) },
+                leadingIcon = { Icon(Icons.Rounded.ContentCopy, null, Modifier.size(18.dp)) },
+            )
+        }
+        if (items.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items.forEach { a ->
+                    AttachmentChip(
+                        a,
+                        onOpen = { open(ctx, a, actions) },
+                        onRemove = {
+                            Attachments.delete(ctx, a)
+                            onChange(items - a)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentChip(
+    a: Attachment,
+    onOpen: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val ctx = LocalContext.current
+    val file = remember(a.file) { Attachments.path(ctx, a) }
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.widthIn(max = 240.dp),
+    ) {
+        Row(Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (a.mime.startsWith("image/")) {
+                Thumb(file, Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)))
+            } else {
+                Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(
+                a.name,
+                Modifier
+                    .padding(horizontal = 8.dp)
+                    .widthIn(max = 130.dp)
+                    .clickable(onClick = onOpen),
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Rounded.Close, stringResource(R.string.remove_attachment), Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun Thumb(
+    file: File,
+    modifier: Modifier,
+) {
+    val bmp by produceState<ImageBitmap?>(null, file) {
+        value = withContext(Dispatchers.IO) { decodeSampled(file, 240)?.asImageBitmap() }
+    }
+    Box(modifier.background(MaterialTheme.colorScheme.surface), contentAlignment = Alignment.Center) {
+        bmp?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+    }
+}
+
+/** 两趟解码，先读尺寸再按需降采样，避免整张照片进内存。 */
+private fun decodeSampled(
+    file: File,
+    req: Int,
+): android.graphics.Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.path, bounds)
+    if (bounds.outWidth <= 0) return null
+    var sample = 1
+    while (bounds.outWidth / sample > req * 2) sample *= 2
+    return BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inSampleSize = sample })
+}
+
+/** 用系统查看器打开（图片、PDF 都能选到合适的应用）；文件不在本机时只提示。 */
+private fun open(
+    ctx: Context,
+    a: Attachment,
+    actions: Actions,
+) {
+    val f = Attachments.path(ctx, a)
+    if (!f.exists()) {
+        actions.toast(ctx.getString(R.string.attachment_missing))
+        return
+    }
+    runCatching {
+        val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", f)
+        ctx.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, a.mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+    }.onFailure { actions.toast(ctx.getString(R.string.attachment_failed)) }
+}
