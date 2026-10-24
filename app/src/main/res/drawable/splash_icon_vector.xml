@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动屏专用：把 launcher 前景包进可命名 group，供 animated-vector 做进场动画（仅 API 31+ 经 values-v31 引用） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <group
+        android:name="icon_root"
+        android:pivotX="54"
+        android:pivotY="54">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M54,27 C71,33 82,48 78,67 C74,81 60,86 54,86 C48,86 34,81 30,67 C26,48 37,33 54,27 Z" />
+        <path
+            android:strokeColor="#4FA796"
+            android:strokeWidth="3.2"
+            android:strokeLineCap="round"
+            android:pathData="M54,40 L54,78 M54,56 L44,48 M54,66 L64,58" />
+    </group>
+</vector>

@@ -20,6 +20,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -58,19 +59,26 @@ private fun syncStamp(ms: Long): String = LocalDateTime.ofInstant(Instant.ofEpoc
 @Composable
 fun SyncScreen(onBack: () -> Unit) {
     val app = LocalApp.current
+    val scope = rememberCoroutineScope()
     val state by app.sync.state.collectAsState()
     MintScreen(title = stringResource(R.string.sync_title), onBack = onBack) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .navigationBarsPadding()
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        // 下拉刷新：仅登录后有效（未登录 requestSync 不做任何事）
+        PullToRefreshBox(
+            isRefreshing = state.syncing,
+            onRefresh = { scope.launch { runCatching { app.sync.syncNow() } } },
         ) {
-            val account = state.account
-            if (account == null) LoginPanel() else AccountPanel(account, state.syncing, state.lastSyncAt, state.lastError)
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val account = state.account
+                if (account == null) LoginPanel() else AccountPanel(account, state.syncing, state.lastSyncAt, state.lastError)
+            }
         }
     }
 }

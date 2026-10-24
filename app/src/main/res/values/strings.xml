@@ -112,6 +112,7 @@
     <string name="todo_today_empty">今天没有待办</string>
     <string name="todo_planned_empty">没有计划中的待办</string>
     <string name="todo_all_empty">这里还没有待办</string>
+    <string name="todo_done_empty">还没有已完成的待办</string>
     <string name="quick_add_title">快速添加</string>
     <string name="quick_add_hint">例如：明天 18:00 交实验报告 !高 #课程</string>
     <string name="before_next_class">%1$s 下次课前 · %2$s</string>

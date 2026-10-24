@@ -1,7 +1,24 @@
 package app.mintcal.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,10 +61,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.mintcal.R
@@ -132,7 +152,7 @@ fun AdvancedSheet(onDismiss: () -> Unit) {
                 placeholder = { Text(stringResource(R.string.advanced_hint)) },
                 shape = RoundedCornerShape(22.dp),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().horizontalScrollRow()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                 EXAMPLES.forEach { ex ->
                     Text(
                         stringResource(ex.label),
@@ -164,7 +184,13 @@ fun AdvancedSheet(onDismiss: () -> Unit) {
                     onDismiss()
                     nav.push(Route.AdvancedFull)
                 }) { Text(stringResource(R.string.write_code)) }
-                if (st.generating || st.running) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.5.dp)
+                AnimatedVisibility(
+                    visible = st.generating || st.running,
+                    enter = scaleIn(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = scaleOut(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.5.dp)
+                }
             }
             AdvancedMessage(st.message)
 
@@ -193,7 +219,7 @@ fun AdvancedSheet(onDismiss: () -> Unit) {
                         FilledTonalButton(onClick = {
                             app.advanced.setPreviewOnTimetable(true)
                             nav.tab = Tab.TIMETABLE
-                            nav.stack.clear()
+                            nav.clearToRoot()
                             onDismiss()
                         }, Modifier.weight(1f), enabled = !set.isEmpty) { Text(stringResource(R.string.preview_on_timetable)) }
                         Button(onClick = {
@@ -218,13 +244,16 @@ fun AdvancedSheet(onDismiss: () -> Unit) {
     }
 }
 
-private fun Modifier.horizontalScrollRow(): Modifier = this.then(Modifier)
-
 @Composable
 private fun AdvancedMessage(message: String?) {
-    if (message == null) return
-    val text = if (message == AdvancedController.MSG_NO_KEY) stringResource(R.string.ai_no_key) else message
-    Text(text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+    AnimatedVisibility(
+        visible = message != null,
+        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+    ) {
+        val text = if (message == AdvancedController.MSG_NO_KEY) stringResource(R.string.ai_no_key) else message
+        if (text != null) Text(text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+    }
 }
 
 @Composable
@@ -289,13 +318,15 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
     var showApi by remember { mutableStateOf(false) }
     val hasKey = remember(st.generating) { app.secrets.hasAiKey() }
     val cs = st.changeSet
+    val haptics = LocalHapticFeedback.current
+    val slideSpec = MintTheme.spec<IntOffset>()
+    val fadeSpec = MintTheme.spec<Float>()
 
     MintScreen(stringResource(R.string.advanced_title), onBack) {
         Column(
             Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
-                .imePadding()
                 .navigationBarsPadding(),
         ) {
             Row(
@@ -306,110 +337,147 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                     .padding(4.dp),
             ) {
                 listOf(R.string.seg_describe, R.string.seg_code, R.string.seg_preview).forEachIndexed { i, label ->
+                    val pillBg by animateColorAsState(if (seg == i) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, MintTheme.spec(), label = "seg-bg")
+                    val pillFg by animateColorAsState(if (seg == i) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, MintTheme.spec(), label = "seg-fg")
                     Text(
                         stringResource(label),
                         Modifier
                             .weight(1f)
                             .clip(CircleShape)
-                            .background(if (seg == i) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                            .clickable { seg = i }
-                            .padding(vertical = 9.dp),
+                            .background(pillBg)
+                            .clickable {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                seg = i
+                            }.padding(vertical = 9.dp),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         style = MaterialTheme.typography.labelLarge,
-                        color = if (seg == i) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = pillFg,
                     )
                 }
             }
             Spacer(Modifier.height(10.dp))
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                when (seg) {
-                    0 -> {
-                        OutlinedTextField(st.description, app.advanced::setDescription, Modifier.fillMaxWidth(), minLines = 5, placeholder = { Text(stringResource(R.string.advanced_hint)) }, shape = RoundedCornerShape(22.dp))
-                        Text(stringResource(R.string.examples), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        EXAMPLES.forEach { ex ->
-                            Text(
-                                stringResource(ex.desc),
-                                Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(MintTheme.card)
-                                    .clickable {
-                                        app.advanced.setDescription(ctx.getString(ex.desc))
-                                        app.advanced.setCode(ex.code)
+            // 每个 segment 独立滚动位置；切换时带方向滑动
+            val bodyScroll = remember(seg) { ScrollState(0) }
+            Column(Modifier.weight(1f).verticalScroll(bodyScroll), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                AnimatedContent(
+                    targetState = seg,
+                    transitionSpec = {
+                        val sign = if (targetState > initialState) 1 else -1
+                        (
+                            (slideInHorizontally(slideSpec) { sign * it / 4 } + fadeIn(fadeSpec)) togetherWith
+                                (slideOutHorizontally(slideSpec) { -sign * it / 4 } + fadeOut(fadeSpec))
+                        ).using(SizeTransform(clip = false))
+                    },
+                    label = "adv-seg",
+                ) { s ->
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        when (s) {
+                            0 -> {
+                                OutlinedTextField(st.description, app.advanced::setDescription, Modifier.fillMaxWidth(), minLines = 5, placeholder = { Text(stringResource(R.string.advanced_hint)) }, shape = RoundedCornerShape(22.dp))
+                                Text(stringResource(R.string.examples), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                EXAMPLES.forEach { ex ->
+                                    Text(
+                                        stringResource(ex.desc),
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(MintTheme.card)
+                                            .clickable {
+                                                app.advanced.setDescription(ctx.getString(ex.desc))
+                                                app.advanced.setCode(ex.code)
+                                                seg = 1
+                                            }.padding(14.dp),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
+                                Button(onClick = {
+                                    if (hasKey) {
+                                        app.advanced.generate()
                                         seg = 1
-                                    }.padding(14.dp),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                        Button(onClick = {
-                            if (hasKey) {
-                                app.advanced.generate()
-                                seg = 1
-                            } else {
-                                nav.push(Route.AiSettings)
-                            }
-                        }, enabled = !st.generating) {
-                            Text(stringResource(if (hasKey) R.string.ai_generate else R.string.ai_setup))
-                        }
-                        Text(stringResource(R.string.ai_privacy_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-
-                    1 -> {
-                        OutlinedTextField(
-                            st.code,
-                            app.advanced::setCode,
-                            Modifier.fillMaxWidth(),
-                            minLines = 12,
-                            textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp),
-                            placeholder = { Text("// mc.courses.query(...)") },
-                            shape = RoundedCornerShape(18.dp),
-                        )
-                        if (st.codeSource == Source.AI && st.code.isNotBlank()) Text(stringResource(R.string.code_from_ai), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Button(onClick = {
-                                app.advanced.dryRun()
-                                seg = 2
-                            }, enabled = st.code.isNotBlank() && !st.running) { Text(stringResource(R.string.dry_run)) }
-                            OutlinedButton(onClick = { showApi = true }) { Text(stringResource(R.string.api_reference)) }
-                            if (st.running || st.generating) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.5.dp)
-                        }
-                        AdvancedMessage(st.message)
-                    }
-
-                    else -> {
-                        AdvancedMessage(st.message)
-                        if (st.running || st.generating) CircularProgressIndicator()
-                        when (val o = st.outcome) {
-                            null -> {
-                                if (!st.running && !st.generating) Text(stringResource(R.string.preview_empty_hint), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    } else {
+                                        nav.push(Route.AiSettings)
+                                    }
+                                }, enabled = !st.generating) {
+                                    Text(stringResource(if (hasKey) R.string.ai_generate else R.string.ai_setup))
+                                }
+                                Text(stringResource(R.string.ai_privacy_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
 
-                            is ScriptOutcome.Failure -> {
-                                FailureCard(o)
+                            1 -> {
+                                OutlinedTextField(
+                                    st.code,
+                                    app.advanced::setCode,
+                                    Modifier.fillMaxWidth(),
+                                    minLines = 12,
+                                    textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp),
+                                    placeholder = { Text("// mc.courses.query(...)") },
+                                    shape = RoundedCornerShape(18.dp),
+                                )
+                                if (st.codeSource == Source.AI && st.code.isNotBlank()) Text(stringResource(R.string.code_from_ai), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Button(onClick = {
+                                        app.advanced.dryRun()
+                                        seg = 2
+                                    }, enabled = st.code.isNotBlank() && !st.running) { Text(stringResource(R.string.dry_run)) }
+                                    OutlinedButton(onClick = { showApi = true }) { Text(stringResource(R.string.api_reference)) }
+                                    AnimatedVisibility(
+                                        visible = st.running || st.generating,
+                                        enter = scaleIn(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                                        exit = scaleOut(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                                    ) {
+                                        CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.5.dp)
+                                    }
+                                }
+                                AdvancedMessage(st.message)
                             }
 
-                            is ScriptOutcome.Success -> {
-                                val set = o.changeSet
-                                Text(if (set.isEmpty) stringResource(R.string.no_changes) else stringResource(R.string.changes_count, set.changes.size), style = MaterialTheme.typography.titleMedium)
-                                if (!set.isEmpty) ChangeList(set, snap)
-                                WarningsAndLogs(set.warnings, set.logs)
-                                if (set.returnValue != null) Text(stringResource(R.string.return_value, set.returnValue!!), style = MaterialTheme.typography.bodySmall)
+                            else -> {
+                                AdvancedMessage(st.message)
+                                AnimatedVisibility(
+                                    visible = st.running || st.generating,
+                                    enter = scaleIn(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                                    exit = scaleOut(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                                ) {
+                                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                                }
+                                when (val o = st.outcome) {
+                                    null -> {
+                                        if (!st.running && !st.generating) Text(stringResource(R.string.preview_empty_hint), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+
+                                    is ScriptOutcome.Failure -> {
+                                        FailureCard(o)
+                                    }
+
+                                    is ScriptOutcome.Success -> {
+                                        val set = o.changeSet
+                                        Text(if (set.isEmpty) stringResource(R.string.no_changes) else stringResource(R.string.changes_count, set.changes.size), style = MaterialTheme.typography.titleMedium)
+                                        if (!set.isEmpty) ChangeList(set, snap)
+                                        WarningsAndLogs(set.warnings, set.logs)
+                                        if (set.returnValue != null) Text(stringResource(R.string.return_value, set.returnValue!!), style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
-            if (cs != null) {
+            AnimatedVisibility(
+                visible = cs != null,
+                enter = slideInVertically(slideSpec) { it } + fadeIn(fadeSpec),
+                exit = slideOutVertically(slideSpec) { it } + fadeOut(fadeSpec),
+            ) {
+                val bar = cs
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     FilledTonalButton(onClick = {
                         app.advanced.setPreviewOnTimetable(true)
                         nav.tab = Tab.TIMETABLE
-                        nav.stack.clear()
-                    }, Modifier.weight(1f), enabled = !cs.isEmpty) { Text(stringResource(R.string.preview_on_timetable)) }
+                        nav.clearToRoot()
+                    }, Modifier.weight(1f), enabled = bar?.isEmpty == false) { Text(stringResource(R.string.preview_on_timetable)) }
                     Button(onClick = {
                         app.advanced.apply { actions.toast(ctx.getString(R.string.applied_toast, it.changes.size)) }
                         onBack()
-                    }, Modifier.weight(1f), enabled = !cs.isEmpty) { Text(stringResource(R.string.apply_changes)) }
+                    }, Modifier.weight(1f), enabled = bar?.isEmpty == false) { Text(stringResource(R.string.apply_changes)) }
                 }
             }
         }

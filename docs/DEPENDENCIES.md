@@ -5,8 +5,10 @@
 | 依赖 | 用于 | 许可证 | 说明 |
 |---|---|---|---|
 | Kotlin / kotlinx-serialization / kotlinx-coroutines | 全部模块 | Apache-2.0 | 语言与基础库 |
-| AndroidX（core-ktx、lifecycle、activity-compose） | :app | Apache-2.0 | Android 基础 |
-| Jetpack Compose（BOM、ui、material3、material-icons-extended） | :app | Apache-2.0 | UI；Material 3 Expressive 需 material3 alpha 版 |
+| AndroidX（core-ktx、lifecycle、activity-compose） | :app | Apache-2.0 | Android 基础；activity-compose 1.13+ 提供 PredictiveBackHandler（预测性返回手势） |
+| Jetpack Compose（BOM、ui、material3、material-icons-extended） | :app | Apache-2.0 | UI；动画（AnimatedContent / AnimatedVisibility / animateItem）用官方 androidx.compose.animation；material3 1.5.0-beta02 起为 Expressive 预览版 |
+| navigation-compose | :app | Apache-2.0 | 官方导航：压栈页转场按 enter/exit（推入）与 popEnter/popExit（返回）分方向声明，预测性返回手势由库逐帧 seek；路由为 `@Serializable` 类型安全定义 |
+| core-splashscreen | :app | Apache-2.0 | Android 12+ 规范启动画面（`Theme.SplashScreen`），冷启动 Room 加载期间不再白屏 |
 | material-kolor | :app | MIT | 用种子色生成预设 / 自定义主题的 M3 配色（动态取色之外的主题选项） |
 | quickjs-kt（io.github.dokar3） | :script、:app | MIT | 内嵌 QuickJS 引擎，运行「高级修改」脚本；支持超时、内存与栈限制，沙箱内无 IO |
 | JUnit 5（jupiter） | :core、:script 测试 | EPL-2.0 | 纯 JVM 单元测试 |

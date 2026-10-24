@@ -1,6 +1,12 @@
 package app.mintcal.ui.screens
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +23,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -28,6 +35,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import app.mintcal.core.agenda.Agenda
@@ -64,6 +73,7 @@ import app.mintcal.ui.components.TaskRow
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDayWeekday
+import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
@@ -101,8 +111,16 @@ fun TodayScreen() {
     val progress = if (items.isEmpty()) 0f else doneCount.toFloat() / items.size
     val next = items.firstOrNull { it is CourseItem && it.occ.end.isAfter(now) } as? CourseItem
 
+    val reduce = reduceMotion()
+    val listState = rememberLazyListState()
+    LaunchedEffect(nav.reselect, reduce) {
+        if (reduce) listState.scrollToItem(0) else listState.animateScrollToItem(0)
+    }
+    val slideSpec = MintTheme.spec<IntOffset>()
+    val fadeSpec = MintTheme.spec<Float>()
     LazyColumn(
-        Modifier.fillMaxSize().statusBarsPadding(),
+        state = listState,
+        modifier = Modifier.fillMaxSize().statusBarsPadding(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 132.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -138,37 +156,52 @@ fun TodayScreen() {
                     ProgressRing(progress, Modifier.size(64.dp))
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(
+                        AnimatedContent(
                             if (items.isEmpty()) stringResource(R.string.today_empty_title) else stringResource(R.string.today_summary, courseCount, taskTotal),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                        Text(
-                            if (next != null) {
-                                stringResource(R.string.today_next_class, next.occ.start.hm(), next.occ.course.name, next.occ.room)
-                            } else {
-                                stringResource(R.string.today_no_more_class)
+                            transitionSpec = {
+                                (fadeIn(fadeSpec) + slideInVertically(slideSpec) { it / 3 }) togetherWith
+                                    (fadeOut(fadeSpec) + slideOutVertically(slideSpec) { -it / 3 })
                             },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                        )
+                            label = "today-summary",
+                        ) { t ->
+                            Text(t, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                        AnimatedContent(
+                            next,
+                            transitionSpec = {
+                                (fadeIn(fadeSpec) + slideInVertically(slideSpec) { it / 3 }) togetherWith
+                                    (fadeOut(fadeSpec) + slideOutVertically(slideSpec) { -it / 3 })
+                            },
+                            label = "today-next",
+                        ) { n ->
+                            Text(
+                                if (n != null) {
+                                    stringResource(R.string.today_next_class, n.occ.start.hm(), n.occ.course.name, n.occ.room)
+                                } else {
+                                    stringResource(R.string.today_no_more_class)
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                            )
+                        }
                     }
                 }
             }
         }
         if (overdue.isNotEmpty()) {
-            item { SectionLabel(stringResource(R.string.overdue_count, overdue.size), trailingColor = MintTheme.colors.removed) }
+            item(key = "h-overdue") { SectionLabel(stringResource(R.string.overdue_count, overdue.size), trailingColor = MintTheme.colors.removed) }
             items(overdue, key = { "od-" + it.id }) { t ->
                 TaskRow(
                     t,
                     { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) },
                     { nav.push(Route.TaskDetail(it)) },
                     subtitle = t.due?.let { ctx.getString(R.string.overdue_since, it.toLocalDate().toString().substring(5)) },
+                    modifier = Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()),
                 )
             }
         }
-        if (items.isNotEmpty()) item { SectionLabel(stringResource(R.string.timeline)) }
-        items(items, key = { itemKey(it) }) { item ->
+        if (items.isNotEmpty()) item(key = "h-timeline") { SectionLabel(stringResource(R.string.timeline)) }
+        items(items, key = { itemKey(it) }, contentType = { agendaType(it) }) { item ->
             AgendaRow(
                 item,
                 now,
@@ -177,10 +210,11 @@ fun TodayScreen() {
                 onOpenEvent = { nav.push(Route.EventEdit(it)) },
                 onOpenTask = { nav.push(Route.TaskDetail(it)) },
                 onToggleTask = { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) },
+                modifier = Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()),
             )
         }
         if (items.isEmpty() && overdue.isEmpty()) {
-            item {
+            item(key = "empty") {
                 Column(Modifier.fillMaxWidth().padding(top = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(stringResource(R.string.today_empty_hint), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(12.dp))
@@ -197,6 +231,15 @@ private fun itemKey(i: app.mintcal.core.agenda.AgendaItem): String =
         is EventItem -> "e-${i.event.id}-${i.start}"
         is TaskItem -> "t-${i.task.id}"
         is BlockItem -> "b-${i.task.id}"
+    }
+
+/** 异构行的复用类型：滚动时同类型行直接复用组合，不跨类型重建。 */
+private fun agendaType(i: app.mintcal.core.agenda.AgendaItem): String =
+    when (i) {
+        is CourseItem -> "course"
+        is EventItem -> "event"
+        is TaskItem -> "task"
+        is BlockItem -> "block"
     }
 
 fun toggle(
@@ -217,6 +260,8 @@ fun ProgressRing(
     modifier: Modifier = Modifier,
 ) {
     val p by animateFloatAsState(progress, MintTheme.spec(), label = "ring")
+    val slideSpec = MintTheme.spec<IntOffset>()
+    val fadeSpec = MintTheme.spec<Float>()
     val track = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f)
     val bar = MaterialTheme.colorScheme.primary
     Box(modifier, contentAlignment = Alignment.Center) {
@@ -227,6 +272,15 @@ fun ProgressRing(
             drawArc(track, 0f, 360f, false, Offset(inset, inset), sz, style = Stroke(stroke))
             drawArc(bar, -90f, 360f * p, false, Offset(inset, inset), sz, style = Stroke(stroke, cap = StrokeCap.Round))
         }
-        Text("${(p * 100).toInt()}%", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        AnimatedContent(
+            targetState = (p * 100).toInt(),
+            transitionSpec = {
+                (slideInVertically(slideSpec) { it / 2 } + fadeIn(fadeSpec)) togetherWith
+                    (slideOutVertically(slideSpec) { -it / 2 } + fadeOut(fadeSpec))
+            },
+            label = "ring-pct",
+        ) { pct ->
+            Text("$pct%", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        }
     }
 }

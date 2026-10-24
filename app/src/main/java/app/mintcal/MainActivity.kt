@@ -1,13 +1,19 @@
 package app.mintcal
 
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import app.mintcal.data.DarkMode
 import app.mintcal.ui.MintCalRoot
 import app.mintcal.ui.theme.MintCalTheme
 
@@ -16,12 +22,29 @@ class MainActivity : ComponentActivity() {
     private val incoming = mutableStateOf<Uri?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        splash.setKeepOnScreenCondition { !mintApp.repo.ready.value }
         handleIntent(intent)
         val app = mintApp
         setContent {
             val settings by app.settings.flow.collectAsState()
+            // 系统栏图标明暗跟随应用内深色模式设置（而非系统 uiMode），否则强制深色时图标不可见
+            val dark =
+                when (settings.darkMode) {
+                    DarkMode.SYSTEM -> isSystemInDarkTheme()
+                    DarkMode.LIGHT -> false
+                    DarkMode.DARK -> true
+                }
+            SideEffect {
+                val style =
+                    if (dark) {
+                        SystemBarStyle.dark(Color.TRANSPARENT)
+                    } else {
+                        SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                    }
+                enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+            }
             MintCalTheme(settings) {
                 MintCalRoot(app, incoming.value) { incoming.value = null }
             }

@@ -8,6 +8,11 @@ import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -72,6 +77,7 @@ import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.NavRow
 import app.mintcal.ui.components.SwitchRow
 import app.mintcal.ui.settingsState
+import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.theme.Preset
 import android.provider.Settings as AndroidSettings
 
@@ -114,8 +120,14 @@ fun SettingsScreen(onBack: () -> Unit) {
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(remindCourse = v) }
                 }
-                if (st.remindCourse) {
-                    ChipChoice(listOf(5, 10, 15, 30, 60).map { it to ctx.getString(R.string.remind_before, it) }, st.courseRemindMinutes, { v -> app.settings.update { it.copy(courseRemindMinutes = v) } })
+                AnimatedVisibility(
+                    visible = st.remindCourse,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    Column {
+                        ChipChoice(listOf(5, 10, 15, 30, 60).map { it to ctx.getString(R.string.remind_before, it) }, st.courseRemindMinutes, { v -> app.settings.update { it.copy(courseRemindMinutes = v) } })
+                    }
                 }
                 SwitchRow(stringResource(R.string.remind_tasks), null, st.remindTask) { v ->
                     if (v) ensureNotifPermission()
@@ -125,11 +137,17 @@ fun SettingsScreen(onBack: () -> Unit) {
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(remindEvent = v) }
                 }
-                if (needExact) {
-                    Text(stringResource(R.string.exact_alarm_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
-                    TextButton(onClick = {
-                        runCatching { ctx.startActivity(Intent(AndroidSettings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                    }) { Text(stringResource(R.string.exact_alarm_grant)) }
+                AnimatedVisibility(
+                    visible = needExact,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    Column {
+                        Text(stringResource(R.string.exact_alarm_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                        TextButton(onClick = {
+                            runCatching { ctx.startActivity(Intent(AndroidSettings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        }) { Text(stringResource(R.string.exact_alarm_grant)) }
+                    }
                 }
             }
             FormSection(stringResource(R.string.section_more)) {

@@ -1,4 +1,13 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.io.FileInputStream
+import java.util.Properties
+
+// release 签名（keystore.properties 不入库；缺文件时 assembleRelease 会明确失败）
+val releaseProps =
+    Properties().apply {
+        val f = rootProject.file("keystore.properties")
+        if (f.exists()) FileInputStream(f).use { load(it) }
+    }
 
 plugins {
     alias(libs.plugins.android.application)
@@ -18,9 +27,27 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file(releaseProps.getProperty("storeFile", "keystore/mintcal-release.jks"))
+            storePassword = releaseProps.getProperty("storePassword")
+            keyAlias = releaseProps.getProperty("keyAlias", "mintcal")
+            keyPassword = releaseProps.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 全量收缩 + 资源收缩：release 才是真实流畅度（无 JIT / 无调试开销）
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
+        }
+        debug {
+            // 包名后缀区分：debug 装在 app.mintcal.debug，与 release 并存
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
         }
     }
     compileOptions {
@@ -60,6 +87,7 @@ dependencies {
     implementation(project(":script"))
     implementation(libs.quickjs.kt)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
@@ -68,6 +96,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.materialkolor)
     implementation(libs.kotlinx.coroutines.android)

@@ -1,5 +1,13 @@
 package app.mintcal.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -19,6 +28,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -49,8 +60,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
@@ -70,6 +84,7 @@ import app.mintcal.ui.Actions
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
+import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintCheck
 import app.mintcal.ui.components.SectionLabel
@@ -77,6 +92,7 @@ import app.mintcal.ui.components.Tag
 import app.mintcal.ui.dueLabel
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
+import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
 import app.mintcal.ui.theme.MintTheme
 import java.time.LocalDate
@@ -116,8 +132,14 @@ fun TodoScreen() {
         }
 
     Box(Modifier.fillMaxSize()) {
+        val reduce = reduceMotion()
+        val listState = rememberLazyListState()
+        LaunchedEffect(filter, listFilter, nav.reselect, reduce) {
+            if (reduce) listState.scrollToItem(0) else listState.animateScrollToItem(0)
+        }
         LazyColumn(
-            Modifier.fillMaxSize().statusBarsPadding(),
+            state = listState,
+            modifier = Modifier.fillMaxSize().statusBarsPadding(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 160.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -137,42 +159,59 @@ fun TodoScreen() {
             when {
                 filter == F_TODAY -> {
                     if (overdue.isNotEmpty()) {
-                        item { SectionLabel(stringResource(R.string.overdue_count, overdue.size), trailingColor = colors.removed) }
-                        items(overdue, key = { "o-" + it.id }) { TodoCard(it, snap, now) }
+                        item(key = "h-overdue") { SectionLabel(stringResource(R.string.overdue_count, overdue.size), trailingColor = colors.removed) }
+                        items(overdue, key = { it.id }) { t ->
+                            TodoCard(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
+                        }
                     }
-                    item { SectionLabel(stringResource(R.string.today_count, todayList.size)) }
-                    if (todayList.isEmpty()) item { Text(stringResource(R.string.todo_today_empty), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp)) }
-                    items(todayList, key = { "t-" + it.id }) { TodoCard(it, snap, now) }
+                    item(key = "h-today") { SectionLabel(stringResource(R.string.today_count, todayList.size)) }
+                    if (todayList.isEmpty()) item(key = "empty-today") { EmptyState(stringResource(R.string.todo_today_empty)) }
+                    items(todayList, key = { it.id }) { t ->
+                        TodoCard(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
+                    }
                     if (doneToday.isNotEmpty()) {
-                        item { SectionLabel(stringResource(R.string.done_count, doneToday.size)) }
-                        items(doneToday, key = { "d-" + it.id }) { TodoCard(it, snap, now) }
+                        item(key = "h-done") { SectionLabel(stringResource(R.string.done_count, doneToday.size)) }
+                        items(doneToday, key = { it.id }) { t ->
+                            TodoCard(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
+                        }
                     }
                 }
 
                 filter == F_PLANNED -> {
                     val planned = TaskLogic.filter(snap.tasks, SmartList.PLANNED, now)
-                    if (planned.isEmpty()) item { Text(stringResource(R.string.todo_planned_empty), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp)) }
+                    if (planned.isEmpty()) {
+                        item(key = "empty-planned") { EmptyState(stringResource(R.string.todo_planned_empty)) }
+                    }
                     planned.groupBy { it.due!!.toLocalDate() }.forEach { (d, ts) ->
-                        item { SectionLabel(ctx.dueLabel(d.atStartOfDay(), false, today)) }
-                        items(ts, key = { "p-" + it.id }) { TodoCard(it, snap, now) }
+                        item(key = "h-p$d") { SectionLabel(ctx.dueLabel(d.atStartOfDay(), false, today)) }
+                        items(ts, key = { it.id }) { t ->
+                            TodoCard(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
+                        }
                     }
                 }
 
                 filter == F_ALL -> {
                     val all = TaskLogic.filter(snap.tasks, SmartList.ALL, now)
-                    if (all.isEmpty()) item { Text(stringResource(R.string.todo_all_empty), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp)) }
-                    items(all, key = { "a-" + it.id }) { TodoCard(it, snap, now) }
+                    if (all.isEmpty()) item(key = "empty-all") { EmptyState(stringResource(R.string.todo_all_empty)) }
+                    items(all, key = { it.id }) { t ->
+                        TodoCard(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
+                    }
                 }
 
                 filter == F_DONE -> {
                     val done = TaskLogic.filter(snap.tasks, SmartList.DONE, now).sortedByDescending { it.doneAt ?: 0L }
-                    items(done, key = { "x-" + it.id }) { TodoCard(it, snap, now) }
+                    if (done.isEmpty()) item(key = "empty-done") { EmptyState(stringResource(R.string.todo_done_empty)) }
+                    items(done, key = { it.id }) { t ->
+                        TodoCard(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
+                    }
                 }
 
                 listFilter != null -> {
                     val inList = top.filter { it.listId == listFilter }.sortedWith(compareBy({ it.done }, { it.due == null }, { it.due }, { it.sortOrder }))
-                    if (inList.isEmpty()) item { Text(stringResource(R.string.todo_all_empty), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(8.dp)) }
-                    items(inList, key = { "l-" + it.id }) { TodoCard(it, snap, now) }
+                    if (inList.isEmpty()) item(key = "empty-list") { EmptyState(stringResource(R.string.todo_all_empty)) }
+                    items(inList, key = { it.id }) { t ->
+                        TodoCard(t, snap, now, Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()))
+                    }
                 }
             }
         }
@@ -193,17 +232,24 @@ private fun FilterPill(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    Text(
-        text,
+    val haptics = LocalHapticFeedback.current
+    val bg by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary else MintTheme.card, MintTheme.spec(), label = "pill-bg")
+    val fg by animateColorAsState(if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, MintTheme.spec(), label = "pill-fg")
+    Box(
         modifier =
             Modifier
+                .heightIn(min = 48.dp)
                 .clip(CircleShape)
-                .background(if (selected) MaterialTheme.colorScheme.primary else MintTheme.card)
-                .clickable(onClick = onClick)
+                .background(bg)
+                .selectable(selected = selected, role = Role.Tab, onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onClick()
+                })
                 .padding(horizontal = 18.dp, vertical = 8.dp),
-        style = MaterialTheme.typography.labelLarge,
-        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, style = MaterialTheme.typography.labelLarge, color = fg)
+    }
 }
 
 @Composable
@@ -211,6 +257,7 @@ fun TodoCard(
     task: Task,
     snap: Snapshot,
     now: LocalDateTime,
+    modifier: Modifier = Modifier,
 ) {
     val ctx = LocalContext.current
     val nav = LocalNav.current
@@ -222,7 +269,9 @@ fun TodoCard(
     val (done, total) = TaskLogic.progress(snap.tasks, task.id)
     val list = snap.lists.firstOrNull { it.id == task.listId }
     val course = snap.courses.firstOrNull { it.id == task.courseId }
-    MintCard(onClick = { nav.push(Route.TaskDetail(task.id)) }, shape = RoundedCornerShape(24.dp)) {
+    val titleColor by animateColorAsState(if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface, MintTheme.spec(), label = "todo-title")
+    val subProgress by animateFloatAsState(done.toFloat() / total, MintTheme.spec(), label = "todo-sub-progress")
+    MintCard(modifier = modifier, onClick = { nav.push(Route.TaskDetail(task.id)) }, shape = RoundedCornerShape(24.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             MintCheck(task.done, { d -> toggle(actions, snap, task, d, now, ctx.getString(R.string.done_toast, task.title)) })
             Column(Modifier.weight(1f).padding(top = 4.dp)) {
@@ -230,7 +279,7 @@ fun TodoCard(
                     task.title,
                     style = MaterialTheme.typography.titleMedium,
                     textDecoration = if (task.done) TextDecoration.LineThrough else null,
-                    color = if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                    color = titleColor,
                 )
                 val subtitle =
                     when {
@@ -247,7 +296,7 @@ fun TodoCard(
                 }
                 if (total > 0) {
                     Spacer(Modifier.height(6.dp))
-                    LinearProgressIndicator(progress = { done.toFloat() / total }, Modifier.fillMaxWidth().height(5.dp).clip(CircleShape), trackColor = MaterialTheme.colorScheme.surfaceVariant)
+                    LinearProgressIndicator(progress = { subProgress }, Modifier.fillMaxWidth().height(5.dp).clip(CircleShape), trackColor = MaterialTheme.colorScheme.surfaceVariant)
                 }
                 val hasTags = list != null || task.priority >= 2 || total > 0 || task.tags.isNotEmpty()
                 if (hasTags) {
@@ -306,13 +355,20 @@ private fun QuickAddSheet(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { save() }),
             )
-            if (parsed != null) {
-                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Tag(parsed.title, MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurface)
-                    parsed.due?.let { Tag(ctx.dueLabel(it, parsed.dueHasTime, now.toLocalDate()), MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer) }
-                    if (parsed.priority > 0) Tag(stringResource(R.string.priority_n, parsed.priority), MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
-                    parsed.listName?.let { Tag("@$it", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer) }
-                    parsed.tags.forEach { Tag("#$it", MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant) }
+            AnimatedVisibility(
+                visible = parsed != null,
+                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+            ) {
+                val p = parsed
+                if (p != null) {
+                    androidx.compose.foundation.layout.FlowRow(Modifier.animateContentSize(MintTheme.spec()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Tag(p.title, MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurface)
+                        p.due?.let { Tag(ctx.dueLabel(it, p.dueHasTime, now.toLocalDate()), MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer) }
+                        if (p.priority > 0) Tag(stringResource(R.string.priority_n, p.priority), MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+                        p.listName?.let { Tag("@$it", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer) }
+                        p.tags.forEach { Tag("#$it", MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {

@@ -27,6 +27,10 @@ fun settingsState(): Settings {
     return s
 }
 
+/** 系统开启「移除动画」时为 true（配合 MintTheme.spec 使过渡直接切换）。 */
+@Composable
+fun reduceMotion(): Boolean = app.mintcal.ui.theme.LocalReduceMotion.current
+
 /** 每 30 秒刷新一次的「现在」。 */
 @Composable
 fun rememberNow(): State<LocalDateTime> =

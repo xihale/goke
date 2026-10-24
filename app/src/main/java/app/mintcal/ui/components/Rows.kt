@@ -1,5 +1,7 @@
 package app.mintcal.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -16,6 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -53,6 +58,7 @@ fun AgendaRow(
     onOpenTask: (String) -> Unit,
     onToggleTask: (Task, Boolean) -> Unit,
     day: LocalDate? = null,
+    modifier: Modifier = Modifier,
 ) {
     val colors = MintTheme.colors
     when (item) {
@@ -60,6 +66,7 @@ fun AgendaRow(
             val o = item.occ
             val past = o.end.isBefore(now)
             RowShell(
+                modifier = modifier,
                 time = o.start.hm(),
                 bg = colors.bg(o.course.colorIndex),
                 fg = colors.fg(o.course.colorIndex),
@@ -82,6 +89,7 @@ fun AgendaRow(
                     else -> null
                 }
             RowShell(
+                modifier = modifier,
                 time = timeLabel,
                 bg = colors.bg(e.colorIndex),
                 fg = colors.fg(e.colorIndex),
@@ -94,11 +102,11 @@ fun AgendaRow(
         }
 
         is TaskItem -> {
-            TaskRow(item.task, onToggleTask, onOpenTask, subtitle = if (item.hasTime) item.due.hm() else null)
+            TaskRow(item.task, onToggleTask, onOpenTask, subtitle = if (item.hasTime) item.due.hm() else null, modifier = modifier)
         }
 
         is BlockItem -> {
-            BlockRow(item, onToggleTask, onOpenTask)
+            BlockRow(item, onToggleTask, onOpenTask, modifier = modifier)
         }
     }
 }
@@ -113,11 +121,14 @@ private fun RowShell(
     dim: Boolean,
     onClick: () -> Unit,
     tag: String? = null,
+    modifier: Modifier = Modifier,
 ) {
+    // 过期置灰随时间平滑过渡（30s 心跳）
+    val alpha by animateFloatAsState(if (dim) 0.55f else 1f, MintTheme.spec(), label = "row-dim")
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
-            .alpha(if (dim) 0.55f else 1f)
+            .alpha(alpha)
             .clip(RoundedCornerShape(20.dp))
             .background(bg)
             .clickable(onClick = onClick)
@@ -140,10 +151,13 @@ fun TaskRow(
     onToggle: (Task, Boolean) -> Unit,
     onOpen: (String) -> Unit,
     subtitle: String? = null,
+    modifier: Modifier = Modifier,
 ) {
+    val titleColor by animateColorAsState(if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface, MintTheme.spec(), label = "task-title")
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
+            .heightIn(min = 56.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(MintTheme.card)
             .clickable { onOpen(task.id) }
@@ -159,7 +173,7 @@ fun TaskRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 textDecoration = if (task.done) TextDecoration.LineThrough else null,
-                color = if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                color = titleColor,
             )
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -171,10 +185,11 @@ private fun BlockRow(
     item: BlockItem,
     onToggle: (Task, Boolean) -> Unit,
     onOpen: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val line = MaterialTheme.colorScheme.primary
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .clickable { onOpen(item.task.id) }

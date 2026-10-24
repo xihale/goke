@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
 import androidx.test.core.app.ApplicationProvider
 import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
@@ -33,10 +35,12 @@ import app.mintcal.core.util.Ids
 import app.mintcal.data.DarkMode
 import app.mintcal.data.ThemeSource
 import app.mintcal.ui.Actions
+import app.mintcal.ui.HOME
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
-import app.mintcal.ui.Nav
+import app.mintcal.ui.mintDestinations
+import app.mintcal.ui.rememberNav
 import app.mintcal.ui.screens.AboutScreen
 import app.mintcal.ui.screens.AdvancedFullScreen
 import app.mintcal.ui.screens.AdvancedSheet
@@ -112,13 +116,21 @@ class ScreensSmokeTest {
     @Composable
     private fun Host(content: @Composable () -> Unit) {
         val st = app.settings.value
-        val nav = remember { Nav() }
+        val nav = rememberNav()
         val snack = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
         val actions = remember { Actions(app, snack, scope, nav) }
         MintCalTheme(st) {
             CompositionLocalProvider(LocalApp provides app, LocalActions provides actions, LocalNav provides nav) {
-                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    NavHost(nav.controller, startDestination = HOME, modifier = Modifier.fillMaxSize()) {
+                        composable(HOME) { content() }
+                        mintDestinations(nav) {
+                            nav.pop()
+                            Unit
+                        }
+                    }
+                }
             }
         }
     }

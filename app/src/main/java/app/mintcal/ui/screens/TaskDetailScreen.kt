@@ -1,5 +1,11 @@
 package app.mintcal.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,12 +29,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -53,6 +62,7 @@ import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDayWeekday
 import app.mintcal.ui.settingsState
+import app.mintcal.ui.theme.MintTheme
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -68,9 +78,14 @@ fun TaskDetailScreen(
     val settings = settingsState()
     val existing = remember(id) { id?.let { i -> snap.tasks.firstOrNull { it.id == i } } }
     if (id != null && existing == null) {
-        onBack()
+        // 记录已被删除：composition 期间不能改导航状态，延后到 effect 里返回
+        LaunchedEffect(Unit) { onBack() }
         return
     }
+
+    // 新建时自动聚焦标题
+    val titleFocus = remember { FocusRequester() }
+    LaunchedEffect(existing == null) { if (existing == null) titleFocus.requestFocus() }
 
     var title by remember { mutableStateOf(existing?.title.orEmpty()) }
     var note by remember { mutableStateOf(existing?.note.orEmpty()) }
@@ -134,21 +149,26 @@ fun TaskDetailScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
-                .imePadding()
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            FieldText(stringResource(R.string.label_title), title, { title = it })
+            FieldText(stringResource(R.string.label_title), title, { title = it }, modifier = Modifier.focusRequester(titleFocus))
             FieldText(stringResource(R.string.label_note), note, { note = it }, singleLine = false, minLines = 2)
 
             FormSection(stringResource(R.string.section_when)) {
                 ValueRow(stringResource(R.string.label_due_date), dueDate?.let { ctx.monthDayWeekday(it) } ?: stringResource(R.string.none), { pick = "due" })
-                if (dueDate != null) {
-                    ValueRow(stringResource(R.string.label_due_time), dueTime?.hm() ?: stringResource(R.string.none), { pick = "dueTime" })
-                    TextButton(onClick = {
-                        dueDate = null
-                        dueTime = null
-                    }) { Text(stringResource(R.string.clear_due)) }
+                AnimatedVisibility(
+                    visible = dueDate != null,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    Column {
+                        ValueRow(stringResource(R.string.label_due_time), dueTime?.hm() ?: stringResource(R.string.none), { pick = "dueTime" })
+                        TextButton(onClick = {
+                            dueDate = null
+                            dueTime = null
+                        }) { Text(stringResource(R.string.clear_due)) }
+                    }
                 }
                 Text(stringResource(R.string.label_repeat), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 ChipChoice(
@@ -185,7 +205,11 @@ fun TaskDetailScreen(
                         }
                     }
                 }
-                if (courseId != null) {
+                AnimatedVisibility(
+                    visible = courseId != null,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         Text(stringResource(R.string.due_before_next_class), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                         androidx.compose.material3.Switch(beforeClass, { beforeClass = it })
@@ -195,10 +219,16 @@ fun TaskDetailScreen(
 
             FormSection(stringResource(R.string.section_block)) {
                 ValueRow(stringResource(R.string.label_block_date), blockDate?.let { ctx.monthDayWeekday(it) } ?: stringResource(R.string.not_scheduled), { pick = "block" })
-                if (blockDate != null) {
-                    ValueRow(stringResource(R.string.label_block_time), blockTime.hm(), { pick = "blockTime" })
-                    ChipChoice(listOf(30, 60, 90, 120, 180).map { it to stringResource(R.string.minutes_n, it) }, blockMinutes, { blockMinutes = it })
-                    TextButton(onClick = { blockDate = null }) { Text(stringResource(R.string.remove_block)) }
+                AnimatedVisibility(
+                    visible = blockDate != null,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    Column {
+                        ValueRow(stringResource(R.string.label_block_time), blockTime.hm(), { pick = "blockTime" })
+                        ChipChoice(listOf(30, 60, 90, 120, 180).map { it to stringResource(R.string.minutes_n, it) }, blockMinutes, { blockMinutes = it })
+                        TextButton(onClick = { blockDate = null }) { Text(stringResource(R.string.remove_block)) }
+                    }
                 }
                 FieldText(stringResource(R.string.label_estimate), estimate, { estimate = it.filter(Char::isDigit) }, number = true)
             }
@@ -216,12 +246,14 @@ fun TaskDetailScreen(
             if (existing != null) {
                 val subs = TaskLogic.subtasks(snap.tasks, existing.id)
                 FormSection(stringResource(R.string.section_subtasks)) {
-                    subs.forEach { s ->
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            MintCheck(s.done, { d -> toggle(actions, snap, s, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, s.title)) }, size = 22.dp)
-                            Text(s.title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                            IconButton(onClick = { actions.commit(Edits.delete(snap, s, ctx.getString(R.string.delete_desc, s.title), System.currentTimeMillis()), ctx.getString(R.string.deleted_toast)) }) {
-                                Icon(Icons.Rounded.Delete, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(Modifier.animateContentSize(MintTheme.spec()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        subs.forEach { s ->
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                MintCheck(s.done, { d -> toggle(actions, snap, s, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, s.title)) })
+                                Text(s.title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                                IconButton(onClick = { actions.commit(Edits.delete(snap, s, ctx.getString(R.string.delete_desc, s.title), System.currentTimeMillis()), ctx.getString(R.string.deleted_toast)) }) {
+                                    Icon(Icons.Rounded.Delete, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
                         }
                     }

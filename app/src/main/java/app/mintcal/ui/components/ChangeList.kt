@@ -1,5 +1,11 @@
 package app.mintcal.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -147,9 +153,9 @@ fun ChangeList(
     val views = remember(cs) { ChangeViews.of(cs) }
     var expanded by remember(cs.id) { mutableStateOf(false) }
     val shown = if (expanded) views else views.take(limit)
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier.fillMaxWidth().animateContentSize(MintTheme.spec()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         shown.forEach { ChangeCard(it, snap) }
-        if (views.size > limit && !expanded) {
+        AnimatedVisibility(visible = views.size > limit && !expanded, enter = fadeIn(MintTheme.spec()) + expandVertically(MintTheme.spec()), exit = fadeOut(MintTheme.spec()) + shrinkVertically(MintTheme.spec())) {
             TextButton(onClick = { expanded = true }) { Text(stringResource(R.string.show_more_changes, views.size - limit)) }
         }
     }

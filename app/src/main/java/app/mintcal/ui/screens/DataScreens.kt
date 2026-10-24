@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
@@ -81,6 +82,7 @@ fun DataScreen(onBack: () -> Unit) {
     val snap = liveSnapshot()
     val st = settingsState()
     var restoreBundle by remember { mutableStateOf<ExportBundle?>(null) }
+    var busy by remember { mutableStateOf(false) }
 
     val pickBackup =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -116,29 +118,44 @@ fun DataScreen(onBack: () -> Unit) {
                 NavRow(stringResource(R.string.import_file), stringResource(R.string.import_file_desc), Icons.Rounded.UploadFile) { nav.push(Route.Import(null)) }
             }
             FormSection(stringResource(R.string.section_export)) {
-                NavRow(stringResource(R.string.export_ics), stringResource(R.string.export_ics_desc), Icons.Rounded.IosShare) {
+                NavRow(stringResource(R.string.export_ics), stringResource(R.string.export_ics_desc), Icons.Rounded.IosShare, enabled = !busy) {
                     scope.launch {
-                        val f = withContext(Dispatchers.IO) { Sharing.exportIcs(ctx, snap) }
-                        Sharing.share(ctx, f, "text/calendar")
+                        busy = true
+                        try {
+                            val f = withContext(Dispatchers.IO) { Sharing.exportIcs(ctx, snap) }
+                            Sharing.share(ctx, f, "text/calendar")
+                        } finally {
+                            busy = false
+                        }
                     }
                 }
-                NavRow(stringResource(R.string.export_image), stringResource(R.string.export_image_desc), Icons.Rounded.Image) {
+                NavRow(stringResource(R.string.export_image), stringResource(R.string.export_image_desc), Icons.Rounded.Image, enabled = !busy) {
                     scope.launch {
-                        val sem = snap.currentSemester
-                        val week = sem?.let { SemesterCalendar(it).currentWeek(LocalDate.now()) } ?: 1
-                        val f = withContext(Dispatchers.Default) { Sharing.exportTimetableImage(ctx, snap, st, week) }
-                        if (f != null) Sharing.share(ctx, f, "image/png") else actions.toast(ctx.getString(R.string.export_failed))
+                        busy = true
+                        try {
+                            val sem = snap.currentSemester
+                            val week = sem?.let { SemesterCalendar(it).currentWeek(LocalDate.now()) } ?: 1
+                            val f = withContext(Dispatchers.Default) { Sharing.exportTimetableImage(ctx, snap, st, week) }
+                            if (f != null) Sharing.share(ctx, f, "image/png") else actions.toast(ctx.getString(R.string.export_failed))
+                        } finally {
+                            busy = false
+                        }
                     }
                 }
-                NavRow(stringResource(R.string.export_json), stringResource(R.string.export_json_desc), Icons.Rounded.IosShare) {
+                NavRow(stringResource(R.string.export_json), stringResource(R.string.export_json_desc), Icons.Rounded.IosShare, enabled = !busy) {
                     scope.launch {
-                        val f = withContext(Dispatchers.IO) { Sharing.exportJson(ctx, app.repo.snapshot.value) }
-                        Sharing.share(ctx, f, "application/json")
+                        busy = true
+                        try {
+                            val f = withContext(Dispatchers.IO) { Sharing.exportJson(ctx, app.repo.snapshot.value) }
+                            Sharing.share(ctx, f, "application/json")
+                        } finally {
+                            busy = false
+                        }
                     }
                 }
             }
             FormSection(stringResource(R.string.section_restore)) {
-                NavRow(stringResource(R.string.restore_json), stringResource(R.string.restore_json_desc), Icons.Rounded.Restore) {
+                NavRow(stringResource(R.string.restore_json), stringResource(R.string.restore_json_desc), Icons.Rounded.Restore, enabled = !busy) {
                     pickBackup.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*"))
                 }
             }
@@ -208,20 +225,25 @@ fun ImportScreen(
     fun load(u: Uri) {
         state = ImportState.Loading
         scope.launch {
-            fileName = readName(ctx, u)
             val res =
                 withContext(Dispatchers.IO) {
                     runCatching {
+                        val name = readName(ctx, u)
                         val bytes = ctx.contentResolver.openInputStream(u)!!.use { it.readBytes() }
                         val isZip = bytes.size > 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte()
-                        if (isZip) {
-                            ImportState.Ready(ImportState.Kind.XLSX, bytes, null)
-                        } else {
-                            ImportState.Ready(ImportState.Kind.ICS, bytes, bytes.toString(Charsets.UTF_8))
-                        }
+                        name to
+                            if (isZip) {
+                                ImportState.Ready(ImportState.Kind.XLSX, bytes, null)
+                            } else {
+                                ImportState.Ready(ImportState.Kind.ICS, bytes, bytes.toString(Charsets.UTF_8))
+                            }
                     }
                 }
-            state = res.getOrElse { ImportState.Failed(it.message.orEmpty()) }
+            res
+                .onSuccess { (name, s) ->
+                    fileName = name
+                    state = s
+                }.onFailure { state = ImportState.Failed(it.message.orEmpty()) }
         }
     }
     LaunchedEffect(uri) { if (uri != null) load(Uri.parse(uri)) }
@@ -271,36 +293,39 @@ fun ImportScreen(
                     }
                     val usedSem: Semester = if (useSuggestedWeek1 && suggested != null) sem.copy(week1Monday = suggested) else sem
                     val desc = ctx.getString(R.string.import_op_desc, fileName)
-                    // 计算变更集（预览与最终应用用同一个）
-                    val plan =
-                        remember(s, mode, usedSem, snap) {
-                            runCatching {
-                                when {
-                                    s.kind == ImportState.Kind.XLSX -> {
-                                        val r = XlsxTimetableImporter.import(s.bytes, usedSem, now)
-                                        PlanResult(r.value?.let { ImportPlanner.planCourses(snap, usedSem, it.courses, now, desc) }, r.warnings, r.errors, r.value?.skipped.orEmpty(), r.value?.maxWeek ?: 0)
-                                    }
+                    // 计算变更集（预览与最终应用用同一个）；XLSX/ICS 解析放在后台，避免大文件卡主线程
+                    var plan by remember { mutableStateOf<PlanResult?>(null) }
+                    LaunchedEffect(s, mode, usedSem, snap, desc) {
+                        plan =
+                            withContext(Dispatchers.Default) {
+                                runCatching {
+                                    when {
+                                        s.kind == ImportState.Kind.XLSX -> {
+                                            val r = XlsxTimetableImporter.import(s.bytes, usedSem, now)
+                                            PlanResult(r.value?.let { ImportPlanner.planCourses(snap, usedSem, it.courses, now, desc) }, r.warnings, r.errors, r.value?.skipped.orEmpty(), r.value?.maxWeek ?: 0)
+                                        }
 
-                                    cal == null -> {
-                                        PlanResult(null, emptyList(), listOf(ctx.getString(R.string.import_parse_ics_failed)), emptyList(), 0)
-                                    }
+                                        cal == null -> {
+                                            PlanResult(null, emptyList(), listOf(ctx.getString(R.string.import_parse_ics_failed)), emptyList(), 0)
+                                        }
 
-                                    mode == IcsMode.COURSES -> {
-                                        val r = IcsImporter.toCourses(cal, usedSem, now)
-                                        PlanResult(r.value?.let { ImportPlanner.planCourses(snap, usedSem, it.courses, now, desc) }, r.warnings, r.errors, r.value?.skipped.orEmpty(), r.value?.maxWeek ?: 0)
-                                    }
+                                        mode == IcsMode.COURSES -> {
+                                            val r = IcsImporter.toCourses(cal, usedSem, now)
+                                            PlanResult(r.value?.let { ImportPlanner.planCourses(snap, usedSem, it.courses, now, desc) }, r.warnings, r.errors, r.value?.skipped.orEmpty(), r.value?.maxWeek ?: 0)
+                                        }
 
-                                    else -> {
-                                        val ev = IcsImporter.toEvents(cal, now)
-                                        val tk = IcsImporter.toTasks(cal, now)
-                                        val recs = ev.value.orEmpty() + tk.value.orEmpty()
-                                        PlanResult(ImportPlanner.planAdds(recs, now, desc), ev.warnings + tk.warnings, ev.errors + tk.errors, emptyList(), 0)
+                                        else -> {
+                                            val ev = IcsImporter.toEvents(cal, now)
+                                            val tk = IcsImporter.toTasks(cal, now)
+                                            val recs = ev.value.orEmpty() + tk.value.orEmpty()
+                                            PlanResult(ImportPlanner.planAdds(recs, now, desc), ev.warnings + tk.warnings, ev.errors + tk.errors, emptyList(), 0)
+                                        }
                                     }
-                                }
-                            }.getOrElse { PlanResult(null, emptyList(), listOf(it.message.orEmpty()), emptyList(), 0) }
-                        }
+                                }.getOrElse { PlanResult(null, emptyList(), listOf(it.message.orEmpty()), emptyList(), 0) }
+                            }
+                    }
                     val finalCs: ChangeSet? =
-                        plan.cs?.let { cs ->
+                        plan?.cs?.let { cs ->
                             if (usedSem != sem && (s.kind == ImportState.Kind.XLSX || mode == IcsMode.COURSES)) {
                                 cs.copy(changes = listOf<Change>(Change.Modify(sem, usedSem)) + cs.changes)
                             } else {
@@ -326,28 +351,33 @@ fun ImportScreen(
                             }
                         }
                     }
-                    if (plan.errors.isNotEmpty()) {
-                        MintCard(color = MaterialTheme.colorScheme.errorContainer) {
-                            plan.errors.forEach { Text(it, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium) }
+                    val p = plan
+                    if (p == null) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    } else {
+                        if (p.errors.isNotEmpty()) {
+                            MintCard(color = MaterialTheme.colorScheme.errorContainer) {
+                                p.errors.forEach { Text(it, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium) }
+                            }
                         }
-                    }
-                    if (plan.maxWeek > usedSem.totalWeeks) Text(stringResource(R.string.import_weeks_exceed, plan.maxWeek, usedSem.totalWeeks), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                    if (plan.skipped.isNotEmpty()) Text(stringResource(R.string.import_skipped, plan.skipped.size, plan.skipped.take(3).joinToString("、")), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    plan.warnings.take(5).forEach { Text("· $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        if (p.maxWeek > usedSem.totalWeeks) Text(stringResource(R.string.import_weeks_exceed, p.maxWeek, usedSem.totalWeeks), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        if (p.skipped.isNotEmpty()) Text(stringResource(R.string.import_skipped, p.skipped.size, p.skipped.take(3).joinToString("、")), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        p.warnings.take(5).forEach { Text("· $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
 
-                    val cs = finalCs
-                    if (cs != null) {
-                        if (cs.isEmpty) {
-                            Text(stringResource(R.string.import_nothing_new), style = MaterialTheme.typography.bodyMedium)
-                        } else {
-                            Text(stringResource(R.string.changes_breakdown, cs.addCount, cs.modifyCount, cs.removeCount), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            ChangeList(cs, snap)
-                            Spacer(Modifier.height(4.dp))
-                            Button(onClick = {
-                                actions.commit(cs, ctx.getString(R.string.imported_toast))
-                                nav.tab = Tab.TIMETABLE
-                                onBack()
-                            }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.apply_changes)) }
+                        val cs = finalCs
+                        if (cs != null) {
+                            if (cs.isEmpty) {
+                                Text(stringResource(R.string.import_nothing_new), style = MaterialTheme.typography.bodyMedium)
+                            } else {
+                                Text(stringResource(R.string.changes_breakdown, cs.addCount, cs.modifyCount, cs.removeCount), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                ChangeList(cs, snap)
+                                Spacer(Modifier.height(4.dp))
+                                Button(onClick = {
+                                    actions.commit(cs, ctx.getString(R.string.imported_toast))
+                                    nav.tab = Tab.TIMETABLE
+                                    onBack()
+                                }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.apply_changes)) }
+                            }
                         }
                     }
                     OutlinedButton(onClick = {

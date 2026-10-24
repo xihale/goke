@@ -27,6 +27,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -67,16 +70,21 @@ fun CourseEditScreen(
     val ctx = LocalContext.current
     val actions = LocalActions.current
     val snap = liveSnapshot()
-    val sem =
-        snap.currentSemester ?: run {
-            onBack()
-            return
-        }
-    val existing = remember(id) { id?.let { i -> snap.courses.firstOrNull { it.id == i } } }
-    if (id != null && existing == null) {
-        onBack()
+    val sem = snap.currentSemester
+    if (sem == null) {
+        // 没有学期数据：composition 期间不能改导航状态，延后到 effect 里返回
+        LaunchedEffect(Unit) { onBack() }
         return
     }
+    val existing = remember(id) { id?.let { i -> snap.courses.firstOrNull { it.id == i } } }
+    if (id != null && existing == null) {
+        // 记录已被删除：延后返回
+        LaunchedEffect(Unit) { onBack() }
+        return
+    }
+    // 新建时自动聚焦名称
+    val nameFocus = remember { FocusRequester() }
+    LaunchedEffect(existing == null) { if (existing == null) nameFocus.requestFocus() }
     val periodCount = sem.periods.size
 
     var name by remember { mutableStateOf(existing?.name.orEmpty()) }
@@ -138,11 +146,10 @@ fun CourseEditScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
-                .imePadding()
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            FieldText(stringResource(R.string.label_course_name), name, { name = it })
+            FieldText(stringResource(R.string.label_course_name), name, { name = it }, modifier = Modifier.focusRequester(nameFocus))
             FieldText(stringResource(R.string.label_room), room, { room = it })
             FieldText(stringResource(R.string.label_teacher), teacher, { teacher = it })
 

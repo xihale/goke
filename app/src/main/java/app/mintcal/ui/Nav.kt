@@ -3,84 +3,106 @@ package app.mintcal.ui
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
 import app.mintcal.MintCalApp
 import app.mintcal.core.change.ChangeSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 
 enum class Tab { TODAY, TIMETABLE, CALENDAR, TODO }
 
+/** Tab 层目的地（四个 Tab 共用的常驻容器），不参与压栈转场。 */
+const val HOME = "home"
+
+@Serializable
 sealed interface Route {
-    data object EditTimetable : Route
+    @Serializable data object EditTimetable : Route
 
-    data object Appearance : Route
+    @Serializable data object Appearance : Route
 
-    data object Settings : Route
+    @Serializable data object Settings : Route
 
-    data object Trash : Route
+    @Serializable data object Trash : Route
 
-    data object History : Route
+    @Serializable data object History : Route
 
-    data object Parcel : Route
+    @Serializable data object Parcel : Route
 
-    data object AdvancedFull : Route
+    @Serializable data object AdvancedFull : Route
 
-    data object Periods : Route
+    @Serializable data object Periods : Route
 
-    data object About : Route
+    @Serializable data object About : Route
 
-    data object AiSettings : Route
+    @Serializable data object AiSettings : Route
 
-    data object Data : Route
+    @Serializable data object Data : Route
 
-    data object Sync : Route
+    @Serializable data object Sync : Route
 
     /** uri 为空表示先让用户选择文件。 */
-    data class Import(
+    @Serializable data class Import(
         val uri: String?,
     ) : Route
 
-    data class CourseEdit(
+    @Serializable data class CourseEdit(
         val id: String?,
     ) : Route
 
-    data class EventEdit(
+    @Serializable data class EventEdit(
         val id: String?,
         val date: String? = null,
     ) : Route
 
-    data class TaskDetail(
+    @Serializable data class TaskDetail(
         val id: String?,
     ) : Route
 }
 
-/** 极简导航：底部四个 Tab + 一个压栈页面。 */
-class Nav {
+/**
+ * 导航门面：转场与返回栈交给标准 navigation-compose（推入/返回各有转场，
+ * 预测性返回手势由库驱动逐帧 seek）。Tab 状态仍在此处（Tab 层常驻组合，切换零重组）。
+ */
+class Nav(
+    val controller: NavHostController,
+) {
     var tab by mutableStateOf(Tab.TODAY)
-    val stack = mutableStateListOf<Route>()
-    val top: Route? get() = stack.lastOrNull()
 
-    fun push(r: Route) {
-        if (top != r) stack.add(r)
+    /** 再次点按当前 Tab 时自增，供各 Tab 内滚动回顶部。 */
+    var reselect by mutableIntStateOf(0)
+
+    fun select(t: Tab) {
+        if (tab == t) reselect++ else tab = t
     }
 
-    fun pop(): Boolean =
-        if (stack.isNotEmpty()) {
-            stack.removeAt(stack.lastIndex)
-            true
-        } else {
-            false
-        }
+    fun push(r: Route) {
+        controller.navigate(r) { launchSingleTop = true }
+    }
+
+    fun pop(): Boolean = controller.popBackStack()
+
+    /** 关闭全部压栈页，回到 Tab 层（如「预览到课表」）。 */
+    fun clearToRoot(): Boolean = controller.popBackStack(HOME, inclusive = false)
 
     fun back(): Boolean = pop() || (tab != Tab.TODAY).also { if (it) tab = Tab.TODAY }
 }
 
-/** 页面里发起的写操作：统一走变更集，并给出「撤销」提示。 */
+@Composable
+fun rememberNav(): Nav {
+    val controller = rememberNavController()
+    return remember { Nav(controller) }
+}
+
+/** 页面里发起的写操作:统一走变更集,并给出「撤销」提示。 */
 class Actions(
     val app: MintCalApp,
     val snack: SnackbarHostState,

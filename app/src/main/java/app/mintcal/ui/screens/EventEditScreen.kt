@@ -1,5 +1,10 @@
 package app.mintcal.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -70,9 +78,13 @@ fun EventEditScreen(
     val snap = liveSnapshot()
     val existing = remember(id) { id?.let { i -> snap.events.firstOrNull { it.id == i } } }
     if (id != null && existing == null) {
-        onBack()
+        // 记录已被删除：composition 期间不能改导航状态，延后到 effect 里返回
+        LaunchedEffect(Unit) { onBack() }
         return
     }
+    // 新建时自动聚焦标题
+    val titleFocus = remember { FocusRequester() }
+    LaunchedEffect(existing == null) { if (existing == null) titleFocus.requestFocus() }
     val initDate = remember { dateArg?.let { LocalDate.parse(it) } ?: LocalDate.now() }
 
     var title by remember { mutableStateOf(existing?.title.orEmpty()) }
@@ -142,11 +154,10 @@ fun EventEditScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
-                .imePadding()
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            FieldText(stringResource(R.string.label_title), title, { title = it })
+            FieldText(stringResource(R.string.label_title), title, { title = it }, modifier = Modifier.focusRequester(titleFocus))
             Text(stringResource(R.string.label_kind), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             ChipChoice(listOf(EventKind.NORMAL to stringResource(R.string.kind_normal), EventKind.EXAM to stringResource(R.string.kind_exam), EventKind.COUNTDOWN to stringResource(R.string.kind_countdown)), kind, { kind = it })
 
@@ -156,16 +167,22 @@ fun EventEditScreen(
                     Switch(allDay, { allDay = it })
                 }
                 ValueRow(stringResource(R.string.label_start), if (allDay) ctx.monthDayWeekday(startDate) else "${ctx.monthDayWeekday(startDate)}  ${startTime.hm()}", { pick = "sd" })
-                if (!allDay) ValueRow(stringResource(R.string.label_start_time), startTime.hm(), { pick = "st" })
+                AnimatedVisibility(visible = !allDay, enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()), exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec())) {
+                    ValueRow(stringResource(R.string.label_start_time), startTime.hm(), { pick = "st" })
+                }
                 ValueRow(stringResource(R.string.label_end), if (allDay) ctx.monthDayWeekday(endDate) else "${ctx.monthDayWeekday(endDate)}  ${endTime.hm()}", { pick = "ed" })
-                if (!allDay) ValueRow(stringResource(R.string.label_end_time), endTime.hm(), { pick = "et" })
+                AnimatedVisibility(visible = !allDay, enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()), exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec())) {
+                    ValueRow(stringResource(R.string.label_end_time), endTime.hm(), { pick = "et" })
+                }
                 Text(stringResource(R.string.label_repeat), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 ChipChoice(
                     listOf<Pair<Freq?, String>>(null to stringResource(R.string.repeat_none), Freq.DAILY to stringResource(R.string.repeat_daily), Freq.WEEKLY to stringResource(R.string.repeat_weekly), Freq.MONTHLY to stringResource(R.string.repeat_monthly), Freq.YEARLY to stringResource(R.string.repeat_yearly)),
                     freq,
                     { freq = it },
                 )
-                if (freq != null) ValueRow(stringResource(R.string.label_until), until?.let { ctx.monthDayWeekday(it) } ?: stringResource(R.string.never), { pick = "until" })
+                AnimatedVisibility(visible = freq != null, enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()), exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec())) {
+                    ValueRow(stringResource(R.string.label_until), until?.let { ctx.monthDayWeekday(it) } ?: stringResource(R.string.never), { pick = "until" })
+                }
                 Spacer(Modifier.height(8.dp))
                 Text(stringResource(R.string.label_remind), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 ChipChoice(

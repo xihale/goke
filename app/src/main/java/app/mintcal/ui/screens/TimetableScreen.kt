@@ -1,5 +1,18 @@
 package app.mintcal.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -52,13 +65,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.mintcal.R
@@ -82,8 +99,10 @@ import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
+import app.mintcal.ui.components.mintPressable
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
+import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
@@ -133,43 +152,93 @@ fun TimetableScreen() {
     val afterSnap = remember(previewCs, snap) { previewCs?.let { snap.apply(it, 0).live() } }
 
     // 预览开启时跳到第一个有变化的周
-    LaunchedEffect(previewCs?.id) {
+    val reduce = reduceMotion()
+    LaunchedEffect(previewCs?.id, reduce) {
         if (afterSnap != null) {
             val firstWeek = (1..sem.totalWeeks).firstOrNull { w -> TimetableDiff.week(snap, afterSnap, w).any { it.kind != CellKind.NORMAL } }
-            if (firstWeek != null) pager.animateScrollToPage(firstWeek - 1)
+            if (firstWeek != null) {
+                if (reduce) pager.scrollToPage(firstWeek - 1) else pager.animateScrollToPage(firstWeek - 1)
+            }
         }
     }
+    // 再次点按「课表」Tab：跳回本周
+    LaunchedEffect(nav.reselect) { pager.scrollToPage(startPage) }
 
+    val slideSpec = MintTheme.spec<IntOffset>()
+    val fadeSpec = MintTheme.spec<Float>()
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(64.dp).padding(start = 20.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    ctx.getString(R.string.week_n, pager.currentPage + 1),
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                val w = pager.currentPage + 1
-                Text(
-                    "${ctx.getString(R.string.fmt_range_md, cal.weekStart(w).monthValue, cal.weekStart(w).dayOfMonth, cal.weekEnd(w).monthValue, cal.weekEnd(w).dayOfMonth)}" +
-                        if (w == currentWeek) " · ${stringResource(R.string.this_week)}" else "",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                AnimatedContent(
+                    targetState = pager.currentPage,
+                    transitionSpec = {
+                        val sign = if (targetState > initialState) 1 else -1
+                        (slideInVertically(slideSpec) { sign * it / 2 } + fadeIn(fadeSpec)) togetherWith
+                            (slideOutVertically(slideSpec) { -sign * it / 2 } + fadeOut(fadeSpec))
+                    },
+                    label = "week-title",
+                ) { p ->
+                    Column {
+                        Text(
+                            ctx.getString(R.string.week_n, p + 1),
+                            style = MaterialTheme.typography.titleLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            "${ctx.getString(R.string.fmt_range_md, cal.weekStart(p + 1).monthValue, cal.weekStart(p + 1).dayOfMonth, cal.weekEnd(p + 1).monthValue, cal.weekEnd(p + 1).dayOfMonth)}" +
+                                if (p + 1 == currentWeek) " · ${stringResource(R.string.this_week)}" else "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
-            if (pager.currentPage + 1 != currentWeek && currentWeek in 1..sem.totalWeeks) {
-                TextButton(onClick = { scope.launch { pager.animateScrollToPage(currentWeek - 1) } }) { Text(stringResource(R.string.back_to_this_week)) }
+            AnimatedVisibility(
+                visible = pager.currentPage + 1 != currentWeek && currentWeek in 1..sem.totalWeeks,
+                enter = fadeIn(MintTheme.spec()) + expandHorizontally(MintTheme.spec()),
+                exit = fadeOut(MintTheme.spec()) + shrinkHorizontally(MintTheme.spec()),
+            ) {
+                TextButton(onClick = { scope.launch { if (reduce) pager.scrollToPage(currentWeek - 1) else pager.animateScrollToPage(currentWeek - 1) } }) { Text(stringResource(R.string.back_to_this_week)) }
             }
             IconButton(onClick = { nav.push(Route.EditTimetable) }) { Icon(Icons.Rounded.Edit, stringResource(R.string.edit_timetable)) }
             IconButton(onClick = { nav.push(Route.Settings) }) { Icon(Icons.Rounded.Settings, stringResource(R.string.settings)) }
         }
 
-        if (previewCs != null) PreviewBanner(previewCs, onApply = { app.advanced.apply { actions.toast(ctx.getString(R.string.applied_toast, it.changes.size)) } }, onDiscard = { app.advanced.discard() })
+        AnimatedVisibility(
+            visible = previewCs != null,
+            enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+            exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+        ) {
+            previewCs?.let {
+                PreviewBanner(
+                    it,
+                    onApply = { app.advanced.apply { actions.toast(ctx.getString(R.string.applied_toast, it.changes.size)) } },
+                    onDiscard = { app.advanced.discard() },
+                )
+            }
+        }
 
         HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), beyondViewportPageCount = 1, key = { it }) { page ->
             val week = page + 1
             val cells = remember(snap, afterSnap, week) { TimetableDiff.week(snap, afterSnap, week) }
-            WeekGrid(sem, cal, week, today, cells, settings.showTeacher, scroll, onClick = { selected = it })
+            WeekGrid(
+                sem,
+                cal,
+                week,
+                today,
+                cells,
+                settings.showTeacher,
+                scroll,
+                modifier =
+                    Modifier.graphicsLayer {
+                        // 滑动视差：偏移符号与旧 calculateCurrentOffsetForPage 相反（相邻页反向平移并淡出）
+                        val off = (pager.currentPage - page) + pager.currentPageOffsetFraction
+                        alpha = 1f - (kotlin.math.abs(off) * 0.18f).coerceIn(0f, 0.18f)
+                        translationX = off * 16.dp.toPx()
+                    },
+                onClick = { selected = it },
+            )
         }
         Spacer(Modifier.height(86.dp))
     }
@@ -217,6 +286,7 @@ private fun WeekGrid(
     cells: List<TimetableCell>,
     showTeacher: Boolean,
     scroll: androidx.compose.foundation.ScrollState,
+    modifier: Modifier = Modifier,
     onClick: (TimetableCell) -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -224,7 +294,7 @@ private fun WeekGrid(
     val n = periods.size
     val totalH = periodTop(n, n) + RowH
     val outline = MaterialTheme.colorScheme.outlineVariant
-    Column(Modifier.fillMaxSize()) {
+    Column(modifier.fillMaxSize()) {
         // 星期头
         Row(Modifier.fillMaxWidth().height(HeaderH).padding(start = TimeColW)) {
             for (d in 1..7) {
@@ -320,11 +390,11 @@ private fun CourseBlock(
     val shape = RoundedCornerShape(14.dp)
     Column(
         modifier
+            .mintPressable(pressedScale = 0.97f, ripple = false) { onClick() }
             .alpha(if (cell.kind == CellKind.REMOVED) 0.6f else 1f)
             .clip(shape)
             .background(if (cell.kind == CellKind.REMOVED) colors.conflictBg else bg)
             .let { if (borderColor != null) it.border(2.dp, borderColor, shape) else it }
-            .clickable(onClick = onClick)
             .padding(horizontal = 5.dp, vertical = 5.dp),
     ) {
         val strike = if (cell.kind == CellKind.REMOVED) TextDecoration.LineThrough else null
@@ -469,10 +539,29 @@ fun Stepper(
     display: (Int) -> String = { it.toString() },
     onChange: (Int) -> Unit,
 ) {
+    val haptics = LocalHapticFeedback.current
+    val slideSpec = MintTheme.spec<IntOffset>()
+    val fadeSpec = MintTheme.spec<Float>()
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        TextButton(onClick = { if (value > min) onChange(value - 1) }, enabled = value > min) { Text("−") }
-        Text(display(value), Modifier.defaultMinSize(minWidth = 48.dp), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
-        TextButton(onClick = { if (value < max) onChange(value + 1) }, enabled = value < max) { Text("+") }
+        TextButton(onClick = {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            onChange(value - 1)
+        }, enabled = value > min) { Text("−") }
+        AnimatedContent(
+            value,
+            transitionSpec = {
+                val sign = if (targetState > initialState) 1 else -1
+                (slideInVertically(slideSpec) { sign * it / 2 } + fadeIn(fadeSpec)) togetherWith
+                    (slideOutVertically(slideSpec) { -sign * it / 2 } + fadeOut(fadeSpec))
+            },
+            label = "stepper",
+        ) { v ->
+            Text(display(v), Modifier.defaultMinSize(minWidth = 48.dp), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+        }
+        TextButton(onClick = {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            onChange(value + 1)
+        }, enabled = value < max) { Text("+") }
     }
 }

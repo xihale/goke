@@ -20,18 +20,22 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import app.mintcal.data.DarkMode
 import app.mintcal.data.Settings
 import app.mintcal.data.ThemeSource
 import com.materialkolor.dynamicColorScheme
-import android.provider.Settings as AndroidSettings
 
 /** 预设主题：薄荷为品牌主题（手写 Token），其余由种子色生成。 */
 enum class Preset(
@@ -250,11 +254,11 @@ fun MintCalTheme(
             DarkMode.LIGHT -> false
             DarkMode.DARK -> true
         }
-    val ctx = LocalContext.current
-    val reduce =
-        remember {
-            runCatching { AndroidSettings.Global.getFloat(ctx.contentResolver, AndroidSettings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }.getOrDefault(false)
-        }
+    // 每次回到前台时重读系统「移除动画」开关（ValueAnimator.areAnimatorsEnabled 覆盖缩放为 0 之外的情况）
+    var reduce by remember { mutableStateOf(false) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        reduce = runCatching { !android.animation.ValueAnimator.areAnimatorsEnabled() }.getOrDefault(false)
+    }
     val scheme = resolveColorScheme(settings, dark)
     CompositionLocalProvider(LocalMintColors provides mintColors(dark), LocalReduceMotion provides reduce) {
         MaterialTheme(colorScheme = scheme, shapes = MintShapes, typography = MintTypography) {
