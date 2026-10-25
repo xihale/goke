@@ -96,10 +96,10 @@ fun SettingsScreen(onBack: () -> Unit) {
     }
     // 从系统设置回来后重算权限/闹钟状态，避免提示挂着不消失
     var notifOk by remember { mutableStateOf(Build.VERSION.SDK_INT < 33 || Notifications.canPost(ctx)) }
-    var exactOk by remember { mutableStateOf(!(ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()) }
+    var exactOk by remember { mutableStateOf(Build.VERSION.SDK_INT < 31 || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         notifOk = Build.VERSION.SDK_INT < 33 || Notifications.canPost(ctx)
-        exactOk = !(ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
+        exactOk = Build.VERSION.SDK_INT < 31 || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
     }
     val needExact = !exactOk
 
@@ -153,6 +153,10 @@ fun SettingsScreen(onBack: () -> Unit) {
                 SwitchRow(stringResource(R.string.remind_digest), stringResource(R.string.remind_digest_desc), st.dailyDigest) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(dailyDigest = v) }
+                }
+                SwitchRow(stringResource(R.string.quick_notif_row), stringResource(R.string.quick_notif_desc), st.quickAddNotif) { v ->
+                    if (v) ensureNotifPermission()
+                    app.settings.update { it.copy(quickAddNotif = v) }
                 }
                 AnimatedVisibility(
                     visible = needExact,
