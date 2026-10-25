@@ -11,7 +11,11 @@ data class Gap(
     val start: LocalDateTime,
     val end: LocalDateTime,
 ) {
-    val minutes: Int get() = java.time.Duration.between(start, end).toMinutes().toInt()
+    val minutes: Int get() =
+        java.time.Duration
+            .between(start, end)
+            .toMinutes()
+            .toInt()
 }
 
 /** 建议把 [task] 排进 [gap] 开头的 [minutes] 分钟。 */

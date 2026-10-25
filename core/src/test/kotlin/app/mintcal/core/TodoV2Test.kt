@@ -1,8 +1,8 @@
 package app.mintcal.core
 
+import app.mintcal.core.agenda.Agenda
 import app.mintcal.core.agenda.FreeGaps
 import app.mintcal.core.agenda.NextUp
-import app.mintcal.core.agenda.Agenda
 import app.mintcal.core.change.Edits
 import app.mintcal.core.change.apply
 import app.mintcal.core.model.Course
@@ -52,8 +52,21 @@ class TodoV2Test {
             listOf(Bucket.OVERDUE, Bucket.TODAY, Bucket.TOMORROW, Bucket.THIS_WEEK, Bucket.LATER, Bucket.INBOX, Bucket.DONE),
             sections.map { it.bucket },
         )
-        assertEquals(setOf("late", "timedPast"), sections.first { it.bucket == Bucket.OVERDUE }.tasks.map { it.id }.toSet())
-        assertTrue(sections.first { it.bucket == Bucket.TODAY }.tasks.map { it.id }.containsAll(listOf("today", "startToday")))
+        assertEquals(
+            setOf("late", "timedPast"),
+            sections
+                .first { it.bucket == Bucket.OVERDUE }
+                .tasks
+                .map { it.id }
+                .toSet(),
+        )
+        assertTrue(
+            sections
+                .first { it.bucket == Bucket.TODAY }
+                .tasks
+                .map { it.id }
+                .containsAll(listOf("today", "startToday")),
+        )
         assertEquals(listOf("sun"), sections.first { it.bucket == Bucket.THIS_WEEK }.tasks.map { it.id })
     }
 
@@ -78,13 +91,25 @@ class TodoV2Test {
         assertEquals(LocalDateTime.of(2026, 10, 24, 23, 59), nb.due)
         assertFalse(nb.dueHasTime)
         val clear = Edits.reschedule(listOf(nb), null, "清除", 2L)
-        assertNull(Snapshot(tasks = listOf(nb)).apply(clear).live().tasks.single().due)
+        assertNull(
+            Snapshot(tasks = listOf(nb))
+                .apply(clear)
+                .live()
+                .tasks
+                .single()
+                .due,
+        )
     }
 
     @Test fun `drop task and reopen`() {
         val a = t("a", today.atTime(23, 59))
         val cs = Edits.dropTasks(listOf(a), "不做了", 5L)
-        val dropped = Snapshot(tasks = listOf(a)).apply(cs).live().tasks.single()
+        val dropped =
+            Snapshot(tasks = listOf(a))
+                .apply(cs)
+                .live()
+                .tasks
+                .single()
         assertTrue(dropped.done)
         assertTrue(dropped.dropped)
         val reopened = TaskLogic.reopen(dropped, 6L)
@@ -98,7 +123,15 @@ class TodoV2Test {
         val grand = Task("g", "g", parentId = "c")
         val snap = Snapshot(tasks = listOf(p, c, grand))
         val ok = Edits.makeSubtask(snap, p, c, "x", 1L)
-        assertEquals("c", snap.apply(ok).live().tasks.first { it.id == "p" }.parentId)
+        assertEquals(
+            "c",
+            snap
+                .apply(ok)
+                .live()
+                .tasks
+                .first { it.id == "p" }
+                .parentId,
+        )
         // 被拖的自带子任务 → 拒绝
         assertTrue(Edits.makeSubtask(snap, c, p, "x", 1L).isEmpty)
         // 目标本身是子任务 → 拒绝

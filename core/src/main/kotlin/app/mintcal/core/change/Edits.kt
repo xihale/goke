@@ -123,7 +123,14 @@ object Edits {
     ): ChangeSet {
         val ok = task.id != parent.id && parent.parentId == null && task.parentId != parent.id && s.live().tasks.none { it.parentId == task.id }
         if (!ok) return ChangeSet(ids.next(), description, Source.MANUAL, now, emptyList())
-        val order = (s.live().tasks.filter { it.parentId == parent.id }.maxOfOrNull { it.sortOrder } ?: 0) + 1
+        val order =
+            (
+                s
+                    .live()
+                    .tasks
+                    .filter { it.parentId == parent.id }
+                    .maxOfOrNull { it.sortOrder } ?: 0
+            ) + 1
         return updateTasks(listOf(task), description, now, ids) { it.copy(parentId = parent.id, listId = parent.listId, sortOrder = order) }
     }
 
