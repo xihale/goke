@@ -4,10 +4,10 @@ import android.app.Application
 import android.content.Context
 import app.mintcal.ai.AdvancedController
 import app.mintcal.data.MintDb
-import app.mintcal.jxfw.JxfwManager
 import app.mintcal.data.Repository
 import app.mintcal.data.SecretStore
 import app.mintcal.data.SettingsStore
+import app.mintcal.jxfw.JxfwManager
 import app.mintcal.notify.Notifications
 import app.mintcal.notify.ReminderScheduler
 import app.mintcal.sync.SyncManager
