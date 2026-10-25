@@ -118,6 +118,14 @@
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_today_info" />
         </receiver>
 
+        <receiver android:name=".widget.ScheduleWidgetProvider" android:exported="true" android:label="@string/widget_schedule_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="app.mintcal.widget.SCHEDULE_TICK" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_schedule_info" />
+        </receiver>
+
         <service
             android:name=".notify.ParcelListenerService"
             android:exported="true"

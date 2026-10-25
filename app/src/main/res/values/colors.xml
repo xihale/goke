@@ -7,4 +7,5 @@
     <color name="widget_muted">#7B8B86</color>
     <color name="widget_accent">#4FA796</color>
     <color name="widget_overdue">#C75450</color>
+    <color name="widget_now_bg">#DDF0EA</color>
 </resources>

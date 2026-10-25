@@ -587,4 +587,35 @@
     <string name="todo_batch_add_all">全部添加</string>
     <string name="todo_batch_desc">批量添加 %1$d 条待办</string>
     <string name="todo_batch_toast">已添加 %1$d 条待办</string>
+
+    <string name="widget_schedule_name">今日课表</string>
+    <string name="widget_schedule_desc">今天的课程，当前这节课高亮显示。</string>
+    <string name="widget_schedule_empty">(〃\'▽\'〃) 今天没有课啦</string>
+    <string name="widget_schedule_more">还有 %1$d 节</string>
+    <string name="widget_schedule_now">正在上</string>
+
+    <!-- 提醒可靠性自检 -->
+    <string name="reliability_title">提醒可靠性自检</string>
+    <string name="reliability_row_desc">检查通知、闹钟、省电限制，并发一条测试提醒</string>
+    <string name="reliability_intro">课程、待办、日程的提醒依赖系统的通知与闹钟。下面逐项检查会让提醒悄悄失效的设置。</string>
+    <string name="reliability_checks">逐项检查</string>
+    <string name="reliability_fix">去开启</string>
+    <string name="reliability_notif">通知权限</string>
+    <string name="reliability_notif_desc">关闭后所有提醒都不会弹出。</string>
+    <string name="reliability_channel">「提醒」通知渠道</string>
+    <string name="reliability_channel_desc">渠道被设为「无通知」时，提醒也不会弹出。</string>
+    <string name="reliability_exact">精确闹钟</string>
+    <string name="reliability_exact_desc">没有时，提醒可能晚几分钟才到。</string>
+    <string name="reliability_battery">不受电池优化限制</string>
+    <string name="reliability_battery_desc">省电策略可能在后台推迟或丢弃闹钟。建议把本应用设为「不限制」。</string>
+    <string name="reliability_vendor">小米 / MIUI 等国产系统</string>
+    <string name="reliability_vendor_desc">这类系统还有系统没法检测的限制，请手动确认：\n1. 设置 → 应用设置 → 应用管理 → 薄荷日程 → 开启「自启动」；\n2. 同一页「省电策略」选「无限制」；\n3. 在最近任务里长按本应用卡片，选择「锁定」，避免被一键清理。</string>
+    <string name="reliability_open_details">打开应用详情</string>
+    <string name="reliability_test">测试提醒</string>
+    <string name="reliability_test_desc">1 分钟后发一条测试通知。建议发出后立刻锁屏、划掉应用，看它能不能准时弹出。</string>
+    <string name="reliability_test_button">1 分钟后发测试提醒</string>
+    <string name="reliability_test_title">薄荷日程 · 测试提醒</string>
+    <string name="reliability_test_text">看到这条说明提醒可以正常送达</string>
+    <string name="reliability_test_scheduled">已安排，1 分钟后弹出</string>
+    <string name="reliability_test_failed">安排失败，请检查闹钟权限</string>
 </resources>

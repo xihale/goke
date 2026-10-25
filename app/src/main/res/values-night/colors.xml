@@ -6,4 +6,5 @@
     <color name="widget_muted">#93A39E</color>
     <color name="widget_accent">#7CCDBA</color>
     <color name="widget_overdue">#EF8A86</color>
+    <color name="widget_now_bg">#2B3D38</color>
 </resources>

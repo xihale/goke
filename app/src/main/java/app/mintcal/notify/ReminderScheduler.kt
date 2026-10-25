@@ -68,6 +68,25 @@ class ReminderScheduler(
         }
     }
 
+    /** 自检用：[delaySeconds] 秒后发一条测试提醒（走与真实提醒相同的闹钟 → 接收器 → 通知链路）。 */
+    fun scheduleTest(
+        title: String,
+        text: String,
+        delaySeconds: Int,
+    ): Boolean {
+        val intent =
+            Intent(ctx, ReminderReceiver::class.java)
+                .putExtra(ReminderReceiver.EXTRA_TITLE, title)
+                .putExtra(ReminderReceiver.EXTRA_TEXT, text)
+                .putExtra(ReminderReceiver.EXTRA_ID, TEST_ID)
+        val pi = PendingIntent.getBroadcast(ctx, TEST_ID, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val at = System.currentTimeMillis() + delaySeconds * 1000L
+        val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
+        return runCatching {
+            if (canExact) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi) else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+        }.isSuccess
+    }
+
     private fun cancelAll() {
         for (i in 0 until MAX) {
             val pi =
@@ -86,6 +105,9 @@ class ReminderScheduler(
 
     companion object {
         const val MAX = 40
+
+        /** 自检测试提醒的请求码，须落在 0 until MAX 之外，免得被重新调度时取消。 */
+        const val TEST_ID = 9001
         private val ALL_DAY_REMIND_AT = LocalTime.of(9, 0)
 
         /** 纯计算：未来 7 天内、晚于 now 的提醒，按触发时间排序。 */

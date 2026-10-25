@@ -12,6 +12,7 @@ import app.mintcal.notify.Notifications
 import app.mintcal.notify.ReminderScheduler
 import app.mintcal.sync.SyncManager
 import app.mintcal.sync.SyncStore
+import app.mintcal.widget.ScheduleWidgetProvider
 import app.mintcal.widget.TodayWidgetProvider
 import app.mintcal.widget.TodoWidgetProvider
 import kotlinx.coroutines.CoroutineScope
@@ -70,6 +71,7 @@ class MintCalApp : Application() {
                     reminders.reschedule(snap, st)
                     TodayWidgetProvider.refreshAll(this@MintCalApp, snap, st)
                     TodoWidgetProvider.refreshAll(this@MintCalApp)
+                    ScheduleWidgetProvider.refreshAll(this@MintCalApp, snap, st)
                 }
         }
     }

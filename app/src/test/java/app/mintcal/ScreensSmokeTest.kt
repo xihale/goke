@@ -82,6 +82,10 @@ import app.mintcal.ui.screens.SyncScreen
 import app.mintcal.ui.screens.TaskDetailScreen
 import app.mintcal.ui.screens.TaskDraft
 import app.mintcal.ui.screens.TaskSheet
+import app.mintcal.ui.screens.ReliabilityScreen
+import app.mintcal.ui.screens.RescheduleSheet
+import app.mintcal.ui.screens.MorningSheet
+import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.screens.TimetableScreen
 import app.mintcal.ui.screens.TodayScreen
 import app.mintcal.ui.screens.TodoScreen
@@ -198,6 +202,9 @@ class ScreensSmokeTest {
                 "sync" to { SyncScreen {} },
                 "jxfw" to { JxfwScreen {} },
                 "task_sheet" to { TaskSheet(task.id) {} },
+                "reliability" to { ReliabilityScreen {} },
+                "reschedule_sheet" to { RescheduleSheet(listOf(task), liveSnapshot()) {} },
+                "morning_sheet" to { MorningSheet(listOf(task), java.time.LocalDateTime.now()) {} },
                 "import" to { ImportScreen(null) {} },
                 "trash" to { TrashScreen {} },
                 "history" to { HistoryScreen {} },
