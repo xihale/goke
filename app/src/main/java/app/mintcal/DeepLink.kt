@@ -28,7 +28,13 @@ object DeepLinks {
     const val SCHEME = "mintcal"
     const val ACTION_ADD = "app.mintcal.action.ADD_TASK"
 
-    fun taskUri(id: String): Uri = Uri.Builder().scheme(SCHEME).authority("task").appendPath(id).build()
+    fun taskUri(id: String): Uri =
+        Uri
+            .Builder()
+            .scheme(SCHEME)
+            .authority("task")
+            .appendPath(id)
+            .build()
 
     fun addUri(text: String? = null): Uri =
         Uri
@@ -38,9 +44,19 @@ object DeepLinks {
             .apply { if (!text.isNullOrBlank()) appendQueryParameter("text", text) }
             .build()
 
-    fun todayUri(): Uri = Uri.Builder().scheme(SCHEME).authority("today").build()
+    fun todayUri(): Uri =
+        Uri
+            .Builder()
+            .scheme(SCHEME)
+            .authority("today")
+            .build()
 
-    fun todoUri(): Uri = Uri.Builder().scheme(SCHEME).authority("todo").build()
+    fun todoUri(): Uri =
+        Uri
+            .Builder()
+            .scheme(SCHEME)
+            .authority("todo")
+            .build()
 
     fun parseUri(uri: Uri): DeepLink? {
         if (uri.scheme != SCHEME) return null
@@ -57,17 +73,29 @@ object DeepLinks {
     @Suppress("DEPRECATION")
     fun parse(intent: Intent): DeepLink? =
         when (intent.action) {
-            Intent.ACTION_VIEW -> intent.data?.let(::parseUri)
-            ACTION_ADD -> DeepLink.Add(intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty())
-            Intent.ACTION_SEND ->
+            Intent.ACTION_VIEW -> {
+                intent.data?.let(::parseUri)
+            }
+
+            ACTION_ADD -> {
+                DeepLink.Add(intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty())
+            }
+
+            Intent.ACTION_SEND -> {
                 if (intent.type?.startsWith("text/plain") == true && !intent.hasExtra(Intent.EXTRA_STREAM)) {
                     DeepLink.Add(intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty())
                 } else {
                     null
                 }
+            }
 
-            Intent.ACTION_PROCESS_TEXT -> DeepLink.Add(intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString().orEmpty())
-            else -> null
+            Intent.ACTION_PROCESS_TEXT -> {
+                DeepLink.Add(intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString().orEmpty())
+            }
+
+            else -> {
+                null
+            }
         }
 
     /** 长按桌面图标出现的快捷方式（用动态快捷方式，避免静态 XML 写死调试包的包名）。 */

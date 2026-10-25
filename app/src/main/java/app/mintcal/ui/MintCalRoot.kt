@@ -39,8 +39,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.toRoute
+import app.mintcal.DeepLink
 import app.mintcal.MintCalApp
 import app.mintcal.R
+import app.mintcal.core.todo.QuickAdd
 import app.mintcal.ui.components.FloatingNavBar
 import app.mintcal.ui.components.MintSnackbarHost
 import app.mintcal.ui.screens.AboutScreen
@@ -68,8 +70,6 @@ import app.mintcal.ui.screens.TodoScreen
 import app.mintcal.ui.screens.TrashScreen
 import app.mintcal.ui.theme.LocalReduceMotion
 import app.mintcal.ui.theme.MintTheme
-import app.mintcal.DeepLink
-import app.mintcal.core.todo.QuickAdd
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 
@@ -106,7 +106,9 @@ fun MintCalRoot(
         if (l == null || !ready) return@LaunchedEffect
         app.links.value = null
         when (l) {
-            is DeepLink.Task -> nav.openTask(l.id)
+            is DeepLink.Task -> {
+                nav.openTask(l.id)
+            }
 
             DeepLink.Today -> {
                 nav.clearToRoot()
@@ -127,7 +129,12 @@ fun MintCalRoot(
                         due = p?.due?.toString(),
                         dueHasTime = p?.dueHasTime ?: false,
                         priority = p?.priority ?: 0,
-                        listId = p?.listName?.let { name -> app.repo.snapshot.value.lists.firstOrNull { it.name == name }?.id },
+                        listId =
+                            p?.listName?.let { name ->
+                                app.repo.snapshot.value.lists
+                                    .firstOrNull { it.name == name }
+                                    ?.id
+                            },
                         tags = p?.tags?.joinToString(" "),
                     ),
                 )

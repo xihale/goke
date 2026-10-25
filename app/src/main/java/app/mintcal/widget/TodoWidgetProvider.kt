@@ -58,7 +58,9 @@ class TodoWidgetProvider : AppWidgetProvider() {
         ): List<Row> {
             val app = ctx.mintApp
             if (!app.repo.ready.value) return emptyList()
-            val snap = app.repo.snapshot.value.live()
+            val snap =
+                app.repo.snapshot.value
+                    .live()
             val overdue = TaskLogic.filter(snap.tasks, SmartList.OVERDUE, now).filter { !it.done }
             val today = TaskLogic.filter(snap.tasks, SmartList.TODAY, now).filter { !it.done && it !in overdue }
             val date = now.toLocalDate()

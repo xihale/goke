@@ -49,7 +49,12 @@ class TodoWidgetService : RemoteViewsService() {
 
         override fun getViewTypeCount(): Int = 1
 
-        override fun getItemId(position: Int): Long = rows.getOrNull(position)?.id?.hashCode()?.toLong() ?: position.toLong()
+        override fun getItemId(position: Int): Long =
+            rows
+                .getOrNull(position)
+                ?.id
+                ?.hashCode()
+                ?.toLong() ?: position.toLong()
 
         override fun hasStableIds(): Boolean = true
     }
