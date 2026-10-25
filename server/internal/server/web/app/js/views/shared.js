@@ -67,6 +67,7 @@ export function taskRow(t, { today, nowMin, listName } = {}) {
   const subs = subtasks(store.view().tasks, t.id);
   const prio = { 1: '低', 2: '中', 3: '高' }[t.priority];
   const meta = [
+    t.dropped ? h('span', { class: 'meta-chip dropped-chip' }, '不做了') : null,
     due ? h('span', { class: `meta-chip${due.overdue ? ' overdue' : ''}` }, icon('clock', 14), due.text) : null,
     listName ? h('span', { class: 'meta-chip' }, listName) : null,
     subs.length ? h('span', { class: 'meta-chip' }, icon('list', 14), `${subs.filter((s) => s.done).length}/${subs.length}`) : null,
@@ -77,9 +78,9 @@ export function taskRow(t, { today, nowMin, listName } = {}) {
     class: `check${t.done ? ' on' : ''}`,
     role: 'checkbox',
     'aria-checked': String(t.done),
-    'aria-label': t.done ? `取消完成：${t.title}` : `完成：${t.title}`,
+    'aria-label': t.dropped ? '已放弃' : t.done ? `取消完成：${t.title}` : `完成：${t.title}`,
     onclick: (e) => { e.stopPropagation(); toggleTask(t, !t.done); },
-  }, t.done ? icon('check', 18) : null);
+  }, t.done ? icon(t.dropped ? 'block' : 'check', 18) : null);
   return h('div', { class: `card task${t.done ? ' done' : ''}`, role: 'listitem' },
     check,
     h('button', { type: 'button', class: 'task-main', onclick: () => openTaskForm({ task: t }) },

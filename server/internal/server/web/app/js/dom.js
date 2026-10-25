@@ -55,6 +55,7 @@ const ICONS = {
   coffee: 'M5 8h11v6a4 4 0 01-4 4H9a4 4 0 01-4-4zM16 9h2a2 2 0 010 4h-2M8 3v2M12 3v2',
   sparkle: 'M12 3l1.800 5.200L19 10l-5.200 1.800L12 17l-1.800-5.200L5 10l5.200-1.800z',
   more: 'M5 12h.010M12 12h.010M19 12h.010',
+  block: 'M5 12a7 7 0 1014 0 7 7 0 00-14 0zM7.5 7.5l9 9',
 };
 
 export function icon(name, size = 22) {

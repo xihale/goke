@@ -247,6 +247,8 @@ dialog.sheet::backdrop { background: rgba(14, 26, 22, .5); backdrop-filter: blur
 .task-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .task.done .task-title { text-decoration: line-through; color: var(--on-surface-variant); }
 .task.done { opacity: .75; }
+.task.dropped { opacity: .55; }
+.dropped-chip { color: var(--error, #c65b5b); font-weight: 700; }
 .prio { padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 800; background: var(--surface-variant); color: var(--on-surface-variant); flex: none; }
 .prio.p3 { background: var(--secondary-container); color: var(--on-secondary-container); }
 .prio.p2 { background: var(--tertiary-container); color: var(--on-tertiary-container); }
