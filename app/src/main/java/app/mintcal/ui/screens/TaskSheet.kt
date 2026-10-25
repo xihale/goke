@@ -296,12 +296,16 @@ fun TaskSheet(
     }
 
     when (pick) {
-        "date" -> DatePickerDlg(dueDate ?: today, { pick = null }) {
-            dueDate = it
-            beforeClass = false
+        "date" -> {
+            DatePickerDlg(dueDate ?: today, { pick = null }) {
+                dueDate = it
+                beforeClass = false
+            }
         }
 
-        "time" -> TimePickerDlg(dueTime ?: LocalTime.of(18, 0), { pick = null }) { dueTime = it }
+        "time" -> {
+            TimePickerDlg(dueTime ?: LocalTime.of(18, 0), { pick = null }) { dueTime = it }
+        }
     }
 }
 
