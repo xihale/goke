@@ -118,6 +118,14 @@
     <string name="quick_add_hint">明天 18:00 交作业 !高 #课程</string>
     <string name="quick_add_event_hint">日程:后天早上10点 3D打印</string>
     <string name="event_added_toast">已添加日程:%1$s</string>
+    <string name="date_weekend">本周末</string>
+    <string name="date_next_monday">下周一</string>
+    <string name="date_pick">选日期…</string>
+    <string name="date_set_time">设时间</string>
+    <string name="date_before_class">🎓 下节课前</string>
+    <string name="before_next_class_short">🎓 %1$s 课前</string>
+    <string name="date_none">无日期</string>
+    <string name="sheet_expand">展开全部</string>
     <string name="before_next_class">%1$s 下次课前 · %2$s</string>
     <string name="subtasks_progress">%1$d/%2$d</string>
     <string name="priority_high_tag">高优先</string>

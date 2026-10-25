@@ -8,6 +8,22 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
+import app.mintcal.core.todo.QuickToken
+import app.mintcal.core.todo.QuickTokenKind
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -135,7 +151,7 @@ fun TodoScreen() {
             state = listState,
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 240.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             item {
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -240,7 +256,7 @@ private fun FilterPill(
 }
 
 @Composable
-fun TodoCard(
+fun TodoLine(
     task: Task,
     snap: Snapshot,
     now: LocalDateTime,
@@ -249,53 +265,66 @@ fun TodoCard(
     val ctx = LocalContext.current
     val nav = LocalNav.current
     val actions = LocalActions.current
-    val settings = settingsState()
     val colors = MintTheme.colors
-    val sem = snap.currentSemester
-    val due = TaskLogic.effectiveDue(task, sem, snap.courses, snap.exceptions, now)
+    val due = TaskLogic.effectiveDue(task, snap.currentSemester, snap.courses, snap.exceptions, now)
     val overdue = TaskLogic.isOverdue(task, now)
     val (done, total) = TaskLogic.progress(snap.tasks, task.id)
     val list = snap.lists.firstOrNull { it.id == task.listId }
     val course = snap.courses.firstOrNull { it.id == task.courseId }
     val titleColor by animateColorAsState(if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface, MintTheme.spec(), label = "todo-title")
-    val subProgress by animateFloatAsState(done.toFloat() / total, MintTheme.spec(), label = "todo-sub-progress")
-    MintCard(modifier = modifier, onClick = { nav.push(Route.TaskDetail(task.id)) }, shape = RoundedCornerShape(24.dp)) {
-        Row(verticalAlignment = Alignment.Top) {
-            MintCheck(task.done, { d -> toggle(actions, snap, task, d, now, ctx.getString(R.string.done_toast, task.title)) })
-            Column(Modifier.weight(1f).padding(top = 4.dp)) {
+    // 圈色 = 清单色，圈粗 = 优先级：不占一整行也能一眼分辨
+    val ring =
+        when (task.priority) {
+            3 -> 3.5.dp
+            2 -> 2.75.dp
+            else -> 2.dp
+        }
+    val meta =
+        buildList {
+            list?.let { add(it.name) }
+            if (total > 0) add(ctx.getString(R.string.subtasks_progress, done, total))
+            task.tags.take(2).forEach { add("#$it") }
+        }
+    Surface(
+        onClick = { nav.openTask(task.id) },
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = MintTheme.card,
+    ) {
+        Row(Modifier.heightIn(min = 52.dp).padding(start = 4.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            MintCheck(
+                task.done,
+                { d -> toggle(actions, snap, task, d, now, ctx.getString(R.string.done_toast, task.title)) },
+                tint = list?.let { colors.fg(it.colorIndex) },
+                strokeWidth = ring,
+            )
+            Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
                 Text(
                     task.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     textDecoration = if (task.done) TextDecoration.LineThrough else null,
                     color = titleColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                val subtitle =
-                    when {
-                        due == null -> null
-                        task.dueBeforeNextClass && course != null -> stringResource(R.string.before_next_class, course.name, ctx.dueLabel(due, true, now.toLocalDate()))
-                        overdue -> stringResource(R.string.overdue_since_full, ctx.dueLabel(due, task.dueHasTime, now.toLocalDate()))
-                        else -> ctx.dueLabel(due, task.dueHasTime, now.toLocalDate())
+                if (meta.isNotEmpty()) {
+                    Text(meta.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (due != null) {
+                val label =
+                    if (task.dueBeforeNextClass && course != null) {
+                        stringResource(R.string.before_next_class_short, course.name)
+                    } else {
+                        ctx.dueLabel(due, task.dueHasTime, now.toLocalDate())
                     }
-                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = if (overdue) colors.removed else MaterialTheme.colorScheme.onSurfaceVariant)
-                val bStart = task.blockStart
-                if (bStart != null) {
-                    val end = TaskLogic.blockEnd(task, settings.defaultBlockMinutes)!!
-                    Text(stringResource(R.string.block_in_calendar, bStart.hm(), end.hm()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                }
-                if (total > 0) {
-                    Spacer(Modifier.height(6.dp))
-                    LinearProgressIndicator(progress = { subProgress }, Modifier.fillMaxWidth().height(5.dp).clip(CircleShape), trackColor = MaterialTheme.colorScheme.surfaceVariant)
-                }
-                val hasTags = list != null || task.priority >= 2 || total > 0 || task.tags.isNotEmpty()
-                if (hasTags) {
-                    Spacer(Modifier.height(8.dp))
-                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (list != null) Tag(list.name, colors.bg(list.colorIndex), colors.fg(list.colorIndex))
-                        task.tags.take(3).forEach { Tag(it, MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant) }
-                        if (task.priority >= 2) Tag(stringResource(if (task.priority == 3) R.string.priority_high_tag else R.string.priority_mid_tag), MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
-                        if (total > 0) Tag(stringResource(R.string.subtasks_progress, done, total), MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
-                    }
-                }
+                Text(
+                    label,
+                    Modifier.padding(start = 8.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (overdue && !task.done) colors.removed else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
             }
         }
     }
@@ -343,7 +372,7 @@ private fun TodoRow(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background((if (done) colors.added else colors.removed).copy(alpha = 0.18f))
                     .padding(horizontal = 22.dp),
                 contentAlignment = if (done) Alignment.CenterStart else Alignment.CenterEnd,
@@ -356,14 +385,16 @@ private fun TodoRow(
             }
         },
     ) {
-        TodoCard(task, snap, now)
+        TodoLine(task, snap, now)
     }
 }
 
 /**
- * 常驻的一行添加（如「明天下午3点交作业 #概率论 !高 @期末」）：输入即解析，
- * 添加后保留焦点与当前清单，可连续录入；「更多选项」把已解析的内容带进详情页，不用重输。
+ * 常驻的一行添加（如「明天下午3点交作业 #概率论 !高 @期末」）：输入即解析并在输入框内高亮识别到的片段，
+ * 下方标签点一下就去掉对应片段；输入框上方有日期 / 清单 / 优先级快捷条，不会打字也能录。
+ * 添加后保留焦点与当前清单，可连续录入；「更多」把已解析的内容带进详情页，不用重输。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun QuickAddBar(
     snap: Snapshot,
@@ -377,10 +408,37 @@ private fun QuickAddBar(
     val actions = LocalActions.current
     val haptics = LocalHapticFeedback.current
     var text by rememberSaveable { mutableStateOf("") }
+    var focused by remember { mutableStateOf(false) }
+    var listMenu by remember { mutableStateOf(false) }
+    var priorityMenu by remember { mutableStateOf(false) }
     val parsed = remember(text, now) { if (text.isBlank()) null else QuickAdd.parse(text, now) }
     val focus = remember { FocusRequester() }
     // 键盘弹起时贴着键盘，收起时悬在底栏之上
     val ime = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+    val scheme = MaterialTheme.colorScheme
+    val highlight =
+        remember(parsed, scheme) {
+            TokenHighlight(parsed?.tokens.orEmpty()) { kind ->
+                when (kind) {
+                    QuickTokenKind.DATE, QuickTokenKind.TIME -> scheme.primary
+                    QuickTokenKind.PRIORITY -> scheme.error
+                    QuickTokenKind.LIST -> scheme.tertiary
+                    QuickTokenKind.TAG -> scheme.secondary
+                }
+            }
+        }
+
+    /** 去掉某类片段后（可选）追加一个新片段，用于快捷条与标签点按。 */
+    fun rewrite(
+        kinds: Set<QuickTokenKind>,
+        add: String?,
+    ) {
+        var t = text
+        parsed?.tokens?.filter { it.kind in kinds }?.forEach { t = t.replace(it.text, " ") }
+        t = t.replace(Regex("\\s+"), " ").trim()
+        text = if (add == null) t else if (t.isEmpty()) "$add " else "$t $add"
+        focus.requestFocus()
+    }
 
     fun save() {
         val p = parsed ?: return
@@ -397,7 +455,11 @@ private fun QuickAddBar(
     }
 
     fun openDetail() {
-        val p = parsed ?: return
+        val p = parsed
+        if (p == null) {
+            nav.push(Route.TaskDetail(id = null))
+            return
+        }
         nav.push(
             Route.TaskDetail(
                 id = null,
@@ -425,14 +487,56 @@ private fun QuickAddBar(
         tonalElevation = 2.dp,
     ) {
         Column(Modifier.padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)) {
+            AnimatedVisibility(
+                visible = focused || text.isNotBlank(),
+                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+            ) {
+                LazyRow(Modifier.padding(bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    item { QuickChip(stringResource(R.string.today)) { rewrite(setOf(QuickTokenKind.DATE), "今天") } }
+                    item { QuickChip(stringResource(R.string.tomorrow)) { rewrite(setOf(QuickTokenKind.DATE), "明天") } }
+                    item { QuickChip(stringResource(R.string.date_weekend)) { rewrite(setOf(QuickTokenKind.DATE), "本周末") } }
+                    item { QuickChip(stringResource(R.string.date_next_monday)) { rewrite(setOf(QuickTokenKind.DATE), "下周一") } }
+                    if (snap.lists.isNotEmpty()) {
+                        item {
+                            Box {
+                                QuickChip("#" + stringResource(R.string.label_list)) { listMenu = true }
+                                DropdownMenu(listMenu, { listMenu = false }) {
+                                    snap.lists.sortedBy { it.sort }.forEach { l ->
+                                        DropdownMenuItem(text = { Text(l.name) }, onClick = {
+                                            listMenu = false
+                                            rewrite(setOf(QuickTokenKind.LIST), "#" + l.name)
+                                        })
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    item {
+                        Box {
+                            QuickChip("!" + stringResource(R.string.label_priority)) { priorityMenu = true }
+                            DropdownMenu(priorityMenu, { priorityMenu = false }) {
+                                listOf("高" to R.string.priority_3, "中" to R.string.priority_2, "低" to R.string.priority_1).forEach { (word, label) ->
+                                    DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = {
+                                        priorityMenu = false
+                                        rewrite(setOf(QuickTokenKind.PRIORITY), "!$word")
+                                    })
+                                }
+                            }
+                        }
+                    }
+                    item { QuickChip(stringResource(R.string.more_options)) { openDetail() } }
+                }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     text,
                     { text = it },
-                    Modifier.weight(1f).focusRequester(focus),
+                    Modifier.weight(1f).focusRequester(focus).onFocusChanged { focused = it.isFocused },
                     placeholder = { Text(stringResource(R.string.quick_add_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     singleLine = true,
                     shape = RoundedCornerShape(20.dp),
+                    visualTransformation = highlight,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { save() }),
                 )
@@ -441,41 +545,89 @@ private fun QuickAddBar(
                 }
             }
             AnimatedVisibility(
-                visible = parsed != null,
+                visible = parsed?.tokens?.isNotEmpty() == true,
                 enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
                 exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
             ) {
                 val p = parsed
                 if (p != null) {
-                    Row(Modifier.padding(end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.foundation.layout.FlowRow(
-                            Modifier.weight(1f),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Tag(p.title, MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurface)
-                            p.due?.let { Tag(ctx.dueLabel(it, p.dueHasTime, now.toLocalDate()), MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer) }
-                            if (p.priority > 0) {
-                                Tag(
-                                    stringResource(
-                                        when (p.priority) {
-                                            3 -> R.string.priority_3
-                                            2 -> R.string.priority_2
-                                            else -> R.string.priority_1
-                                        },
-                                    ),
-                                    MaterialTheme.colorScheme.secondaryContainer,
-                                    MaterialTheme.colorScheme.onSecondaryContainer,
-                                )
-                            }
-                            p.listName?.let { Tag("#$it", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer) }
-                            p.tags.forEach { Tag("@$it", MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant) }
+                    FlowRow(
+                        Modifier.padding(end = 6.dp, top = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        p.due?.let {
+                            Tag(
+                                ctx.dueLabel(it, p.dueHasTime, now.toLocalDate()) + " ×",
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.onPrimaryContainer,
+                                Modifier.clickable { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME), null) },
+                            )
                         }
-                        TextButton(onClick = { openDetail() }) { Text(stringResource(R.string.more_options)) }
+                        if (p.priority > 0) {
+                            val label =
+                                when (p.priority) {
+                                    3 -> R.string.priority_3
+                                    2 -> R.string.priority_2
+                                    else -> R.string.priority_1
+                                }
+                            Tag(
+                                "!" + stringResource(label) + " ×",
+                                MaterialTheme.colorScheme.secondaryContainer,
+                                MaterialTheme.colorScheme.onSecondaryContainer,
+                                Modifier.clickable { rewrite(setOf(QuickTokenKind.PRIORITY), null) },
+                            )
+                        }
+                        p.listName?.let {
+                            Tag(
+                                "#$it ×",
+                                MaterialTheme.colorScheme.tertiaryContainer,
+                                MaterialTheme.colorScheme.onTertiaryContainer,
+                                Modifier.clickable { rewrite(setOf(QuickTokenKind.LIST), null) },
+                            )
+                        }
+                        val tagTokens = p.tokens.filter { it.kind == QuickTokenKind.TAG }
+                        p.tags.forEachIndexed { i, tag ->
+                            Tag(
+                                "@$tag ×",
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                Modifier.clickable {
+                                    tagTokens.getOrNull(i)?.let { tok ->
+                                        text = text.replace(tok.text, " ").replace(Regex("\\s+"), " ").trim()
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun QuickChip(
+    label: String,
+    onClick: () -> Unit,
+) {
+    AssistChip(onClick = onClick, label = { Text(label, maxLines = 1) }, shape = CircleShape)
+}
+
+/** 把解析出的日期 / 清单 / 优先级 / 标签片段在输入框里着色（不改文字与光标位置）。 */
+private class TokenHighlight(
+    private val tokens: List<QuickToken>,
+    private val colorOf: (QuickTokenKind) -> Color,
+) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val b = AnnotatedString.Builder(text.text)
+        for (t in tokens) {
+            val i = text.text.indexOf(t.text)
+            if (i < 0 || t.text.isEmpty()) continue
+            val c = colorOf(t.kind)
+            b.addStyle(SpanStyle(color = c, fontWeight = FontWeight.Medium, background = c.copy(alpha = 0.12f)), i, i + t.text.length)
+        }
+        return TransformedText(b.toAnnotatedString(), OffsetMapping.Identity)
     }
 }
 

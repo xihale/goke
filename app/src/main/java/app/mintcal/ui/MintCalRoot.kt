@@ -61,6 +61,7 @@ import app.mintcal.ui.screens.SettingsScreen
 import app.mintcal.ui.screens.SyncScreen
 import app.mintcal.ui.screens.TaskDetailScreen
 import app.mintcal.ui.screens.TaskDraft
+import app.mintcal.ui.screens.TaskSheet
 import app.mintcal.ui.screens.TimetableScreen
 import app.mintcal.ui.screens.TodayScreen
 import app.mintcal.ui.screens.TodoScreen
@@ -122,6 +123,7 @@ fun MintCalRoot(
                     mintDestinations(nav, back)
                 }
             }
+            nav.sheetTaskId?.let { id -> TaskSheet(id) { nav.sheetTaskId = null } }
             MintSnackbarHost(
                 snack,
                 Modifier

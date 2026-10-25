@@ -192,7 +192,7 @@ fun TodayScreen() {
                 TaskRow(
                     t,
                     { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) },
-                    { nav.push(Route.TaskDetail(it)) },
+                    { nav.openTask(it) },
                     subtitle = t.due?.let { ctx.getString(R.string.overdue_since, it.toLocalDate().toString().substring(5)) },
                     modifier = Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()),
                 )
@@ -206,7 +206,7 @@ fun TodayScreen() {
                 settings.showTeacher,
                 onOpenCourse = { nav.push(Route.CourseEdit(it)) },
                 onOpenEvent = { nav.push(Route.EventEdit(it)) },
-                onOpenTask = { nav.push(Route.TaskDetail(it)) },
+                onOpenTask = { nav.openTask(it) },
                 onToggleTask = { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) },
                 modifier = Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()),
             )

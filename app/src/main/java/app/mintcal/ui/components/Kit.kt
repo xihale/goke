@@ -176,10 +176,14 @@ fun MintCheck(
     onChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 26.dp,
+    /** 圈的颜色（如清单色）；null 用主题默认。 */
+    tint: Color? = null,
+    /** 圈的粗细（如用粗细表示优先级）。 */
+    strokeWidth: Dp = 2.dp,
 ) {
     val radius by animateDpAsState(if (checked) size / 2 else 8.dp, MintTheme.spec(), label = "check-radius")
-    val fill by animateColorAsState(if (checked) MaterialTheme.colorScheme.primary else Color.Transparent, MintTheme.spec(), label = "check-fill")
-    val stroke by animateColorAsState(if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, MintTheme.spec(), label = "check-stroke")
+    val fill by animateColorAsState(if (checked) (tint ?: MaterialTheme.colorScheme.primary) else Color.Transparent, MintTheme.spec(), label = "check-fill")
+    val stroke by animateColorAsState(if (checked) (tint ?: MaterialTheme.colorScheme.primary) else (tint ?: MaterialTheme.colorScheme.outline), MintTheme.spec(), label = "check-stroke")
     val tick by animateFloatAsState(if (checked) 1f else 0f, MintTheme.spec(), label = "check-tick")
     val haptics = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
@@ -209,7 +213,7 @@ fun MintCheck(
                     scaleY = press
                 }.clip(RoundedCornerShape(radius))
                 .background(fill)
-                .border(2.dp, stroke, RoundedCornerShape(radius)),
+                .border(strokeWidth, stroke, RoundedCornerShape(radius)),
             contentAlignment = Alignment.Center,
         ) {
             if (tick > 0.01f) Icon(Icons.Rounded.Check, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(size * 0.7f * tick.coerceIn(0f, 1f)))

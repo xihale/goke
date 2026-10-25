@@ -12,6 +12,16 @@ data class QuickAddResult(
     val priority: Int,
     val listName: String?,
     val tags: List<String>,
+    /** 被识别并从标题里剔除的原文片段（供输入框高亮、点标签回写）。 */
+    val tokens: List<QuickToken> = emptyList(),
+)
+
+enum class QuickTokenKind { DATE, TIME, PRIORITY, LIST, TAG }
+
+/** 输入里被识别的一段原文。 */
+data class QuickToken(
+    val text: String,
+    val kind: QuickTokenKind,
 )
 
 /** 一行快速输入：识别日期 / 时间 / 清单（#）/ 标签（@）/ 优先级（!高 !中 !低）。 */
@@ -40,6 +50,16 @@ object QuickAdd {
         var priority = 0
         var listName: String? = null
         val tags = mutableListOf<String>()
+        val tokens = mutableListOf<QuickToken>()
+
+        fun eat(
+            src: String,
+            value: String,
+            kind: QuickTokenKind,
+        ): String {
+            tokens += QuickToken(value.trim(), kind)
+            return src.replace(value, " ")
+        }
 
         Regex("[!！](高|中|低|[123])").find(text)?.let {
             priority =
@@ -48,15 +68,15 @@ object QuickAdd {
                     "中", "2" -> 2
                     else -> 1
                 }
-            text = text.replace(it.value, " ")
+            text = eat(text, it.value, QuickTokenKind.PRIORITY)
         }
         Regex("#([^\\s#@!！，,。.？?]+)[，,。.？?]*").find(text)?.let {
             listName = it.groupValues[1]
-            text = text.replace(it.value, " ")
+            text = eat(text, it.value, QuickTokenKind.LIST)
         }
         Regex("@([^\\s#@!！，,。.？?]+)[，,。.？?]*").findAll(text).toList().forEach {
             tags += it.groupValues[1]
-            text = text.replace(it.value, " ")
+            text = eat(text, it.value, QuickTokenKind.TAG)
         }
 
         var date: LocalDate? = null
@@ -76,7 +96,7 @@ object QuickAdd {
                         else -> 0L
                     },
                 )
-            text = text.replace(m.value, " ")
+            text = eat(text, m.value, QuickTokenKind.DATE)
         }
         Regex("(下下|下|这|本)?(周|星期|礼拜)([一二三四五六日天1-7])").find(text)?.let { m ->
             val dow =
@@ -98,7 +118,7 @@ object QuickAdd {
             var d = today.with(DayOfWeek.MONDAY).plusWeeks(weekOffset).plusDays((dow - 1).toLong())
             if (weekOffset == 0L && d.isBefore(today)) d = d.plusWeeks(1)
             date = d
-            text = text.replace(m.value, " ")
+            text = eat(text, m.value, QuickTokenKind.DATE)
         }
         val relative = Regex("(大后天|后天|明天|明早|明晚|今天|今晚|今早|今日|明日)").find(text)
         if (relative != null) {
@@ -114,20 +134,20 @@ object QuickAdd {
                 impliedPm = true
             }
             if (relative.value.endsWith("早")) time = LocalTime.of(8, 0)
-            text = text.replace(relative.value, " ")
+            text = eat(text, relative.value, QuickTokenKind.DATE)
         }
         // 单说「下周」= 下周一（「下周三」这类已在上一步被吃掉）
         Regex("(下下|下)周(?!\\s*[一二三四五六日天])").find(text)?.let { m ->
             date = today.with(DayOfWeek.MONDAY).plusWeeks(if (m.groupValues[1] == "下下") 2L else 1L)
-            text = text.replace(m.value, " ")
+            text = eat(text, m.value, QuickTokenKind.DATE)
         }
         Regex("(\\d{1,3}|[一二两三四五六七八九十]{1,3})天后").find(text)?.let { m ->
             cnNumber(m.groupValues[1])?.let { date = today.plusDays(it.toLong()) }
-            text = text.replace(m.value, " ")
+            text = eat(text, m.value, QuickTokenKind.DATE)
         }
         Regex("(这|本)?月底").find(text)?.let { m ->
             date = today.withDayOfMonth(today.lengthOfMonth())
-            text = text.replace(m.value, " ")
+            text = eat(text, m.value, QuickTokenKind.DATE)
         }
         Regex("(\\d{1,2})月(\\d{1,2})[日号]?").find(text)?.let { m ->
             val mo = m.groupValues[1].toInt()
@@ -137,11 +157,11 @@ object QuickAdd {
                 if (d.isBefore(today)) d = d.plusYears(1)
                 date = d
             }
-            text = text.replace(m.value, " ")
+            text = eat(text, m.value, QuickTokenKind.DATE)
         }
         Regex("(\\d{4})-(\\d{1,2})-(\\d{1,2})").find(text)?.let { m ->
             runCatching { date = LocalDate.of(m.groupValues[1].toInt(), m.groupValues[2].toInt(), m.groupValues[3].toInt()) }
-            text = text.replace(m.value, " ")
+            text = eat(text, m.value, QuickTokenKind.DATE)
         }
         // M/D、M-D（放在 ISO 之后，否则 2026-10-24 会被切成 10-24）
         Regex("(\\d{1,2})[/-](\\d{1,2})").find(text)?.let { m ->
@@ -150,7 +170,7 @@ object QuickAdd {
                 if (d.isBefore(today)) d = d.plusYears(1)
                 date = d
             }
-            text = text.replace(m.value, " ")
+            text = eat(text, m.value, QuickTokenKind.DATE)
         }
         // 「N号」= 本月 N 日，已过则下个月（「27号」）
         Regex("(\\d{1,2})\\s*号").find(text)?.let { m ->
@@ -158,7 +178,7 @@ object QuickAdd {
                 var d = LocalDate.of(today.year, today.month, m.groupValues[1].toInt())
                 if (!d.isAfter(today)) d = d.plusMonths(1)
                 date = d
-                text = text.replace(m.value, " ")
+                text = eat(text, m.value, QuickTokenKind.DATE)
             }
         }
         // 时间
@@ -180,7 +200,7 @@ object QuickAdd {
                 if (period.isEmpty() && impliedPm && h in 1..11) h += 12
                 if (h == 24) h = 0
                 time = LocalTime.of(h, mm.coerceIn(0, 59))
-                text = text.replace(m.value, " ")
+                text = eat(text, m.value, QuickTokenKind.TIME)
             }
         }
         val hasTime = time != null
@@ -191,6 +211,6 @@ object QuickAdd {
             due = LocalDateTime.of(d, time ?: LocalTime.MIDNIGHT)
         }
         val title = text.replace(Regex("\\s+"), " ").trim().ifEmpty { input.trim() }
-        return QuickAddResult(title, due, hasTime, priority, listName, tags)
+        return QuickAddResult(title, due, hasTime, priority, listName, tags, tokens)
     }
 }

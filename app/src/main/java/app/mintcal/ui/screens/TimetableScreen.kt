@@ -259,7 +259,7 @@ fun TimetableScreen() {
                             translationX = off * 16.dp.toPx()
                         },
                     onClick = { selected = it },
-                    onOpenTask = { nav.push(Route.TaskDetail(it)) },
+                    onOpenTask = { nav.openTask(it) },
                     onBoxSelect = { day, s, e ->
                         val date = cal.dateOf(week, day)
                         val ps = sem.periods.sortedBy { it.index }

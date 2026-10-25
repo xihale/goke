@@ -23,6 +23,7 @@ import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
 import app.mintcal.core.parcel.ParcelParser
 import app.mintcal.core.todo.QuickAdd
+import app.mintcal.core.todo.QuickTokenKind
 import app.mintcal.core.todo.SmartList
 import app.mintcal.core.todo.TaskLogic
 import app.mintcal.core.util.MintJson
@@ -226,6 +227,12 @@ class ChangeAndTodoTest {
         assertEquals(3, r.priority)
         assertEquals("概率论", r.listName)
         assertEquals(listOf("作业"), r.tags)
+        // 被识别的原文片段按类别返回，供输入框高亮
+        assertEquals(
+            listOf("!高" to QuickTokenKind.PRIORITY, "#概率论" to QuickTokenKind.LIST, "@作业" to QuickTokenKind.TAG, "明天" to QuickTokenKind.DATE, "下午3点半" to QuickTokenKind.TIME),
+            r.tokens.map { it.text to it.kind },
+        )
+        assertTrue(QuickAdd.parse("买牛奶", now).tokens.isEmpty())
         val r2 = QuickAdd.parse("下周三 写实验报告", now)
         assertEquals(LocalDate.of(2026, 10, 28), r2.due!!.toLocalDate())
         assertEquals(false, r2.dueHasTime)

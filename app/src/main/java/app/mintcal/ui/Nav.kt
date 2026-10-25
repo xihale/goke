@@ -90,6 +90,13 @@ class Nav(
 ) {
     var tab by mutableStateOf(Tab.TODAY)
 
+    /** 当前打开的待办底部抽屉（全局一个，由 MintCalRoot 承载）。 */
+    var sheetTaskId by mutableStateOf<String?>(null)
+
+    fun openTask(id: String) {
+        sheetTaskId = id
+    }
+
     /** 再次点按当前 Tab 时自增，供各 Tab 内滚动回顶部。 */
     var reselect by mutableIntStateOf(0)
 
