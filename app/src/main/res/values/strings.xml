@@ -7,7 +7,6 @@
     <string name="widget_todo_desc">逾期与今天的待办，点圈直接完成，点＋新建</string>
     <string name="widget_todo_empty">(〃\'▽\'〃) 今天没有待办啦</string>
     <string name="widget_todo_title">待办 · %1$d</string>
-    <string name="widget_overdue_mark">逾期</string>
     <string name="notif_action_done">完成</string>
     <string name="notif_action_snooze">1 小时后再提醒</string>
     <string name="shortcut_add_task">新建待办</string>
@@ -106,7 +105,6 @@
     <string name="today_empty_hint">好好休息，或者去待办里挑一件小事做。</string>
     <string name="overdue_count">已逾期 · %1$d</string>
     <string name="overdue_since">%1$s 起逾期</string>
-    <string name="overdue_since_full">逾期 · %1$s</string>
     <string name="timeline">今日时间线</string>
     <string name="done_toast">已完成「%1$s」</string>
     <string name="go_todo">去待办看看</string>
@@ -116,15 +114,8 @@
     <string name="mode_month">月</string>
     <string name="day_counts">%1$d 门课 · %2$d 个日程 · %3$d 项待办</string>
     <string name="day_empty">这一天没有安排</string>
-    <string name="filter_today">今天</string>
-    <string name="filter_planned">计划</string>
-    <string name="filter_all">全部</string>
     <string name="filter_done">已完成</string>
-    <string name="today_count">今日 · %1$d</string>
-    <string name="todo_today_empty">今天没有待办</string>
-    <string name="todo_planned_empty">没有计划中的待办</string>
     <string name="todo_all_empty">这里还没有待办</string>
-    <string name="todo_done_empty">还没有已完成的待办</string>
     <string name="quick_add_hint">明天 18:00 交作业 !高 #课程</string>
     <string name="quick_add_event_hint">日程:后天早上10点 3D打印</string>
     <string name="event_added_toast">已添加日程:%1$s</string>
@@ -136,10 +127,7 @@
     <string name="before_next_class_short">🎓 %1$s 课前</string>
     <string name="date_none">无日期</string>
     <string name="sheet_expand">展开全部</string>
-    <string name="before_next_class">%1$s 下次课前 · %2$s</string>
     <string name="subtasks_progress">%1$d/%2$d</string>
-    <string name="priority_high_tag">高优先</string>
-    <string name="priority_mid_tag">中优先</string>
     <string name="add_task_desc">添加待办「%1$s」</string>
     <string name="edit_task_desc">修改待办「%1$s」</string>
     <string name="delete_task_title">删除这条待办？</string>
@@ -204,7 +192,6 @@
     <string name="weeks_invalid">请输入有效的周次</string>
     <string name="clear_due">清除截止</string>
     <string name="due_before_next_class">下次上课前完成</string>
-    <string name="block_in_calendar">已排入日历 %1$s–%2$s</string>
     <string name="add_subtask">添加子任务</string>
     <string name="tags_hint">用空格或逗号分隔</string>
     <string name="kind_normal">普通</string>
