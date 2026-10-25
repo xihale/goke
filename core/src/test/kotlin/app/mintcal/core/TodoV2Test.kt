@@ -3,6 +3,7 @@ package app.mintcal.core
 import app.mintcal.core.agenda.Agenda
 import app.mintcal.core.agenda.FreeGaps
 import app.mintcal.core.agenda.NextUp
+import app.mintcal.core.agenda.NextUps
 import app.mintcal.core.change.Edits
 import app.mintcal.core.change.apply
 import app.mintcal.core.model.Course
@@ -191,10 +192,10 @@ class TodoV2Test {
         val task = Task("t", "交作业", courseId = "c", dueBeforeNextClass = true)
         val other = Task("o", "无关")
         val snap = Snapshot(semesters = listOf(sem), courses = listOf(course), tasks = listOf(task, other))
-        val up = NextUp.find(snap, LocalDateTime.of(2026, 10, 25, 20, 0))
+        val up = NextUps.find(snap, LocalDateTime.of(2026, 10, 25, 20, 0))
         assertNotNull(up)
         assertEquals("高数", up.occurrence.course.name)
         assertEquals(listOf("t"), up.tasks.map { it.id })
-        assertNull(NextUp.find(snap, LocalDateTime.of(2026, 12, 30, 20, 0)))
+        assertNull(NextUps.find(snap, LocalDateTime.of(2026, 12, 30, 20, 0)))
     }
 }

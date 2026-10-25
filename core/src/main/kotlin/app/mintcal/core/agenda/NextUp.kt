@@ -13,7 +13,7 @@ data class NextUp(
     val tasks: List<Task>,
 )
 
-object NextUp {
+object NextUps {
     /** 接下来 [horizonDays] 天内第一节开始时间晚于 [now]（或正在上）的课；没有返回 null。 */
     fun find(
         snap: Snapshot,
