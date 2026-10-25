@@ -64,6 +64,7 @@ import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.NavRow
+import app.mintcal.ui.components.SwitchRow
 import app.mintcal.ui.fullDate
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.settingsState
@@ -116,6 +117,11 @@ fun DataScreen(onBack: () -> Unit) {
         ) {
             FormSection(stringResource(R.string.section_import)) {
                 NavRow(stringResource(R.string.import_file), stringResource(R.string.import_file_desc), Icons.Rounded.UploadFile) { nav.push(Route.Import(null)) }
+            }
+            FormSection(stringResource(R.string.section_backup)) {
+                SwitchRow(stringResource(R.string.auto_backup), stringResource(R.string.auto_backup_desc), st.autoBackup) { v ->
+                    app.settings.update { it.copy(autoBackup = v) }
+                }
             }
             FormSection(stringResource(R.string.section_export)) {
                 NavRow(stringResource(R.string.export_ics), stringResource(R.string.export_ics_desc), Icons.Rounded.IosShare, enabled = !busy) {

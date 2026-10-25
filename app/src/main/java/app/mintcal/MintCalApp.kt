@@ -3,6 +3,7 @@ package app.mintcal
 import android.app.Application
 import android.content.Context
 import app.mintcal.ai.AdvancedController
+import app.mintcal.data.AutoBackup
 import app.mintcal.data.MintDb
 import app.mintcal.data.Repository
 import app.mintcal.data.SecretStore
@@ -71,6 +72,8 @@ class MintCalApp : Application() {
                     reminders.reschedule(snap, st)
                     // 常驻快速添加通知跟随设置（重启 / 数据变化时自动恢复或撤掉）
                     if (st.quickAddNotif) Notifications.postQuickAdd(this@MintCalApp) else Notifications.cancelQuickAdd(this@MintCalApp)
+                    // 自动备份：节流为每天一次，失败静默
+                    launch(kotlinx.coroutines.Dispatchers.IO) { AutoBackup.maybeRun(this@MintCalApp, snap, st) }
                     TodayWidgetProvider.refreshAll(this@MintCalApp, snap, st)
                     TodoWidgetProvider.refreshAll(this@MintCalApp)
                     ScheduleWidgetProvider.refreshAll(this@MintCalApp, snap, st)
