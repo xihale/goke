@@ -13,12 +13,13 @@ class ReminderReceiver : BroadcastReceiver() {
         val text = intent.getStringExtra(EXTRA_TEXT).orEmpty()
         val id = intent.getIntExtra(EXTRA_ID, title.hashCode())
         Notifications.ensureChannels(context)
-        Notifications.post(context, id, Notifications.CHANNEL_REMINDER, title, text)
+        Notifications.post(context, id, Notifications.CHANNEL_REMINDER, title, text, intent.getStringExtra(EXTRA_TASK_ID))
     }
 
     companion object {
         const val EXTRA_TITLE = "title"
         const val EXTRA_TEXT = "text"
         const val EXTRA_ID = "id"
+        const val EXTRA_TASK_ID = "task_id"
     }
 }

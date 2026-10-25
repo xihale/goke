@@ -13,10 +13,12 @@ import app.mintcal.notify.ReminderScheduler
 import app.mintcal.sync.SyncManager
 import app.mintcal.sync.SyncStore
 import app.mintcal.widget.TodayWidgetProvider
+import app.mintcal.widget.TodoWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
@@ -39,6 +41,9 @@ class MintCalApp : Application() {
     lateinit var jxfw: JxfwManager
         private set
 
+    /** 外部入口（通知 / 小组件 / 快捷方式 / 分享）待处理的动作，由根组合消费后清空。 */
+    val links = MutableStateFlow<DeepLink?>(null)
+
     @OptIn(FlowPreview::class)
     override fun onCreate() {
         super.onCreate()
@@ -50,6 +55,7 @@ class MintCalApp : Application() {
         sync = SyncManager(repo, SyncStore(this, secrets), scope)
         jxfw = JxfwManager(this, repo, secrets)
         Notifications.ensureChannels(this)
+        DeepLinks.publishShortcuts(this)
         scope.launch {
             repo.load()
             sync.requestSync(1000)
@@ -63,6 +69,7 @@ class MintCalApp : Application() {
                 .collect { (snap, st) ->
                     reminders.reschedule(snap, st)
                     TodayWidgetProvider.refreshAll(this@MintCalApp, snap, st)
+                    TodoWidgetProvider.refreshAll(this@MintCalApp)
                 }
         }
     }

@@ -7,10 +7,12 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import app.mintcal.DeepLinks
 import app.mintcal.MainActivity
 import app.mintcal.R
 
@@ -40,13 +42,20 @@ object Notifications {
         channel: String,
         title: String,
         text: String,
+        taskId: String? = null,
     ) {
         if (!canPost(ctx)) return
         val open =
             PendingIntent.getActivity(
                 ctx,
-                0,
-                Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                id,
+                (
+                    if (taskId != null) {
+                        Intent(Intent.ACTION_VIEW, DeepLinks.taskUri(taskId), ctx, MainActivity::class.java)
+                    } else {
+                        Intent(ctx, MainActivity::class.java)
+                    }
+                ).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
         val n =
@@ -59,7 +68,26 @@ object Notifications {
                 .setContentIntent(open)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .build()
-        runCatching { NotificationManagerCompat.from(ctx).notify(id, n) }
+        if (taskId != null) {
+            fun action(
+                op: String,
+                label: Int,
+            ): NotificationCompat.Action {
+                val i =
+                    Intent(ctx, TaskActionReceiver::class.java)
+                        .setAction(op)
+                        .setData(Uri.parse("mintcal://notif/$id/$op"))
+                        .putExtra(TaskActionReceiver.EXTRA_TASK_ID, taskId)
+                        .putExtra(TaskActionReceiver.EXTRA_NOTIFICATION_ID, id)
+                        .putExtra(ReminderReceiver.EXTRA_TITLE, title)
+                        .putExtra(ReminderReceiver.EXTRA_TEXT, text)
+                val pi = PendingIntent.getBroadcast(ctx, id, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                return NotificationCompat.Action.Builder(0, ctx.getString(label), pi).build()
+            }
+            n.addAction(action(TaskActionReceiver.ACTION_DONE, R.string.notif_action_done))
+            n.addAction(action(TaskActionReceiver.ACTION_SNOOZE, R.string.notif_action_snooze))
+        }
+        val built = n.build()
+        runCatching { NotificationManagerCompat.from(ctx).notify(id, built) }
     }
 }

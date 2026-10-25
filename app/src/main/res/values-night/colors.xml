@@ -5,4 +5,5 @@
     <color name="widget_text">#E6EEEB</color>
     <color name="widget_muted">#93A39E</color>
     <color name="widget_accent">#7CCDBA</color>
+    <color name="widget_overdue">#EF8A86</color>
 </resources>

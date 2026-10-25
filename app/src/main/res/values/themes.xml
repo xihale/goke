@@ -6,6 +6,10 @@
         <item name="postSplashScreenTheme">@style/Theme.MintCal</item>
     </style>
 
+    <style name="Theme.MintCalTransparent" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
     <style name="Theme.MintCal" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/window_bg</item>
         <item name="android:statusBarColor">@android:color/transparent</item>

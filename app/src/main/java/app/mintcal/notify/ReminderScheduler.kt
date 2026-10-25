@@ -23,6 +23,8 @@ data class Reminder(
     val title: String,
     val text: String,
     val key: String,
+    /** 待办提醒才有：通知上显示「完成 / 稍后」按钮、点击直达该待办。 */
+    val taskId: String? = null,
 )
 
 /**
@@ -49,6 +51,7 @@ class ReminderScheduler(
                     .putExtra(ReminderReceiver.EXTRA_TITLE, r.title)
                     .putExtra(ReminderReceiver.EXTRA_TEXT, r.text)
                     .putExtra(ReminderReceiver.EXTRA_ID, r.key.hashCode())
+                    .putExtra(ReminderReceiver.EXTRA_TASK_ID, r.taskId)
             val pi = PendingIntent.getBroadcast(ctx, i, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             val at =
                 r.triggerAt
@@ -128,7 +131,7 @@ class ReminderScheduler(
                             val minutes = t.remindMinutes
                             if (minutes != null && st.remindTask && !t.done) {
                                 val base = if (item.hasTime) item.due else date.atTime(ALL_DAY_REMIND_AT)
-                                out += Reminder(base.minusMinutes(minutes.toLong()), t.title, ctx.getString(R.string.remind_task_text), "t${t.id}${item.due}")
+                                out += Reminder(base.minusMinutes(minutes.toLong()), t.title, ctx.getString(R.string.remind_task_text), "t${t.id}${item.due}", t.id)
                             }
                         }
 
@@ -136,7 +139,7 @@ class ReminderScheduler(
                             val t = item.task
                             val minutes = t.remindMinutes
                             if (minutes != null && st.remindTask && !t.done) {
-                                out += Reminder(item.start.minusMinutes(minutes.toLong()), t.title, ctx.getString(R.string.remind_task_text), "b${t.id}${item.start}")
+                                out += Reminder(item.start.minusMinutes(minutes.toLong()), t.title, ctx.getString(R.string.remind_task_text), "b${t.id}${item.start}", t.id)
                             }
                         }
                     }

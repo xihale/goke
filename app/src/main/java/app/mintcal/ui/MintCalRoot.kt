@@ -68,6 +68,8 @@ import app.mintcal.ui.screens.TodoScreen
 import app.mintcal.ui.screens.TrashScreen
 import app.mintcal.ui.theme.LocalReduceMotion
 import app.mintcal.ui.theme.MintTheme
+import app.mintcal.DeepLink
+import app.mintcal.core.todo.QuickAdd
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 
@@ -94,6 +96,42 @@ fun MintCalRoot(
         if (incoming != null && ready) {
             nav.push(Route.Import(incoming.toString()))
             onIncomingHandled()
+        }
+    }
+
+    // 外部入口：通知 / 小组件 / 桌面快捷方式 / 分享 / 划词
+    val link by app.links.collectAsState()
+    LaunchedEffect(link, ready) {
+        val l = link
+        if (l == null || !ready) return@LaunchedEffect
+        app.links.value = null
+        when (l) {
+            is DeepLink.Task -> nav.openTask(l.id)
+
+            DeepLink.Today -> {
+                nav.clearToRoot()
+                nav.tab = Tab.TODAY
+            }
+
+            DeepLink.Todo -> {
+                nav.clearToRoot()
+                nav.tab = Tab.TODO
+            }
+
+            is DeepLink.Add -> {
+                val p = if (l.text.isBlank()) null else QuickAdd.parse(l.text, LocalDateTime.now())
+                nav.push(
+                    Route.TaskDetail(
+                        id = null,
+                        title = p?.title ?: "",
+                        due = p?.due?.toString(),
+                        dueHasTime = p?.dueHasTime ?: false,
+                        priority = p?.priority ?: 0,
+                        listId = p?.listName?.let { name -> app.repo.snapshot.value.lists.firstOrNull { it.name == name }?.id },
+                        tags = p?.tags?.joinToString(" "),
+                    ),
+                )
+            }
         }
     }
 

@@ -71,6 +71,10 @@ class MainActivity : ComponentActivity() {
     @Suppress("DEPRECATION")
     private fun handleIntent(intent: android.content.Intent?) {
         intent ?: return
+        DeepLinks.parse(intent)?.let {
+            mintApp.links.value = it
+            return
+        }
         val uri: Uri? =
             when (intent.action) {
                 android.content.Intent.ACTION_VIEW -> intent.data
