@@ -78,6 +78,8 @@ sealed interface Route {
         val listId: String? = null,
         val tags: String? = null,
         val startDate: String? = null,
+        val courseId: String? = null,
+        val beforeClass: Boolean = false,
     ) : Route
 }
 
@@ -92,6 +94,9 @@ class Nav(
 
     /** 当前打开的待办底部抽屉（全局一个，由 MintCalRoot 承载）。 */
     var sheetTaskId by mutableStateOf<String?>(null)
+
+    /** 外部分享来的多行文字，待办页的快速添加接手并给出批量预览。 */
+    var pendingAddText by mutableStateOf<String?>(null)
 
     fun openTask(id: String) {
         sheetTaskId = id

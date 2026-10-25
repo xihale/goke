@@ -199,3 +199,26 @@ class TodoV2Test {
         assertNull(NextUps.find(snap, LocalDateTime.of(2026, 12, 30, 20, 0)))
     }
 }
+
+class TodoSearchTest {
+    private val t = app.mintcal.core.model.Task("1", "写概率论作业", tags = listOf("期末"), priority = 3)
+
+    @kotlin.test.Test
+    fun `parses operators and words`() {
+        val q = app.mintcal.core.todo.TodoSearch.parse("#学习 @期末 !高 作业")
+        kotlin.test.assertEquals(listOf("学习"), q.lists)
+        kotlin.test.assertEquals(listOf("期末"), q.tags)
+        kotlin.test.assertEquals(3, q.priority)
+        kotlin.test.assertEquals(listOf("作业"), q.words)
+    }
+
+    @kotlin.test.Test
+    fun `matches all conditions`() {
+        val s = app.mintcal.core.todo.TodoSearch
+        kotlin.test.assertTrue(s.matches(s.parse("#学习 @期末 !高 作业"), t, emptyList(), "学习"))
+        kotlin.test.assertFalse(s.matches(s.parse("#生活"), t, emptyList(), "学习"))
+        kotlin.test.assertFalse(s.matches(s.parse("!低"), t, emptyList(), null))
+        kotlin.test.assertTrue(s.matches(s.parse("买菜"), t, listOf(t.copy(id = "2", title = "买菜")), null))
+        kotlin.test.assertTrue(s.matches(s.parse("  "), t, emptyList(), null))
+    }
+}

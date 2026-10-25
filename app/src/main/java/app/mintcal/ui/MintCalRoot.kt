@@ -121,7 +121,15 @@ fun MintCalRoot(
             }
 
             is DeepLink.Add -> {
+                val lines = l.text.lines().count { it.isNotBlank() }
                 val p = if (l.text.isBlank()) null else QuickAdd.parse(l.text, LocalDateTime.now())
+                if (lines > 1) {
+                    // 多行：交给待办页快速添加做批量预览
+                    nav.clearToRoot()
+                    nav.tab = Tab.TODO
+                    nav.pendingAddText = l.text
+                    return@LaunchedEffect
+                }
                 nav.push(
                     Route.TaskDetail(
                         id = null,
@@ -219,6 +227,8 @@ fun NavGraphBuilder.mintDestinations(
                         listId = r.listId,
                         tags = r.tags.orEmpty(),
                         startDate = r.startDate?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
+                        courseId = r.courseId,
+                        beforeClass = r.beforeClass,
                     )
                 },
             onBack = back,

@@ -77,6 +77,8 @@ data class TaskDraft(
     val listId: String? = null,
     val tags: String = "",
     val startDate: LocalDate? = null,
+    val courseId: String? = null,
+    val beforeClass: Boolean = false,
 )
 
 @Composable
@@ -116,8 +118,8 @@ fun TaskDetailScreen(
     var estimate by remember { mutableStateOf(existing?.estimateMinutes?.toString().orEmpty()) }
     var repeat by remember { mutableStateOf(existing?.repeat?.freq) }
     var remind by remember { mutableStateOf(existing?.remindMinutes) }
-    var courseId by remember { mutableStateOf(existing?.courseId) }
-    var beforeClass by remember { mutableStateOf(existing?.dueBeforeNextClass ?: false) }
+    var courseId by remember { mutableStateOf(existing?.courseId ?: draft?.courseId) }
+    var beforeClass by remember { mutableStateOf(existing?.dueBeforeNextClass ?: draft?.beforeClass ?: false) }
     var startDate by remember { mutableStateOf(existing?.startDate ?: draft?.startDate) }
     var tags by remember {
         mutableStateOf(

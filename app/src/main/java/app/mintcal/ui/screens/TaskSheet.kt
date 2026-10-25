@@ -47,7 +47,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import app.mintcal.core.change.Edits
+import app.mintcal.core.model.Freq
+import app.mintcal.core.model.Recurrence
 import app.mintcal.core.model.Task
+import app.mintcal.ui.components.ChipChoice
 import app.mintcal.core.todo.TaskLogic
 import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
@@ -93,30 +96,42 @@ fun TaskSheet(
     var listId by remember { mutableStateOf(existing?.listId) }
     var courseId by remember { mutableStateOf(existing?.courseId) }
     var beforeClass by remember { mutableStateOf(existing?.dueBeforeNextClass ?: false) }
+    var tags by remember { mutableStateOf(existing?.tags?.joinToString(" ").orEmpty()) }
+    var estimate by remember { mutableStateOf(existing?.estimateMinutes) }
+    var repeat by remember { mutableStateOf(existing?.repeat?.freq) }
+    var remind by remember { mutableStateOf(existing?.remindMinutes) }
     var newSub by remember { mutableStateOf("") }
     var pick by remember { mutableStateOf<String?>(null) }
     var courseMenu by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf(false) }
 
-    // 保存：以「此刻最新的」任务为底做字段覆盖，期间别处的改动（如勾完成）不会被冲掉
+    // 以「此刻最新的」任务为底做字段覆盖，期间别处的改动（如勾完成）不会被冲掉
+    fun buildNext(cur: Task): Task {
+        val due = dueDate?.let { d -> LocalDateTime.of(d, dueTime ?: LocalTime.of(23, 59)) }
+        return cur.copy(
+            title = title.trim(),
+            note = note,
+            due = due,
+            dueHasTime = dueDate != null && dueTime != null,
+            priority = priority,
+            listId = listId,
+            courseId = courseId,
+            dueBeforeNextClass = beforeClass && courseId != null,
+            tags = tags.split(' ', ',', '，', '#').map { it.trim() }.filter { it.isNotEmpty() },
+            estimateMinutes = estimate,
+            // 重复规则没改就原样保留（间隔 / 星期 / 截止等细节在整页里改）
+            repeat = if (repeat == cur.repeat?.freq) cur.repeat else repeat?.let { Recurrence(it) },
+            remindMinutes = remind,
+        )
+    }
+
     fun saveOnce() {
         if (saved) return
         saved = true
         val s = snapNow.value
         val cur = s.tasks.firstOrNull { it.id == taskId && it.deletedAt == null } ?: return
         if (title.isBlank()) return
-        val due = dueDate?.let { d -> LocalDateTime.of(d, dueTime ?: LocalTime.of(23, 59)) }
-        val next =
-            cur.copy(
-                title = title.trim(),
-                note = note,
-                due = due,
-                dueHasTime = dueDate != null && dueTime != null,
-                priority = priority,
-                listId = listId,
-                courseId = courseId,
-                dueBeforeNextClass = beforeClass && courseId != null,
-            )
+        val next = buildNext(cur)
         if (next == cur) return
         actions.commit(
             Edits.save(s, next, ctx.getString(R.string.edit_task_desc, next.title), System.currentTimeMillis()),
@@ -237,6 +252,48 @@ fun TaskSheet(
                 }
             }
 
+            Text(stringResource(R.string.label_estimate), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val presets = listOf(15, 30, 60, 120)
+            ChipChoice(
+                (listOf<Int?>(null) + presets + listOfNotNull(estimate?.takeIf { it !in presets })).map { v ->
+                    v to (v?.let { ctx.getString(R.string.minutes_n, it) } ?: ctx.getString(R.string.none))
+                },
+                estimate,
+                { estimate = it },
+            )
+            Text(stringResource(R.string.label_repeat), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            ChipChoice(
+                listOf<Pair<Freq?, String>>(
+                    null to stringResource(R.string.repeat_none),
+                    Freq.DAILY to stringResource(R.string.repeat_daily),
+                    Freq.WEEKLY to stringResource(R.string.repeat_weekly),
+                    Freq.MONTHLY to stringResource(R.string.repeat_monthly),
+                ),
+                repeat,
+                { repeat = it },
+            )
+            Text(stringResource(R.string.label_remind), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            ChipChoice(
+                listOf<Pair<Int?, String>>(
+                    null to stringResource(R.string.remind_none),
+                    0 to stringResource(R.string.remind_at_due),
+                    10 to stringResource(R.string.remind_10m),
+                    60 to stringResource(R.string.remind_1h),
+                    1440 to stringResource(R.string.remind_1d),
+                ),
+                remind,
+                { remind = it },
+            )
+            TextField(
+                tags,
+                { tags = it },
+                Modifier.fillMaxWidth(),
+                placeholder = { Text(stringResource(R.string.label_tags) + " · " + stringResource(R.string.tags_hint)) },
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                colors = transparentFieldColors(),
+            )
+
             TextField(
                 note,
                 { note = it },
@@ -284,6 +341,18 @@ fun TaskSheet(
                     )
                     close()
                 }) { Icon(Icons.Rounded.Delete, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.error) }
+                if (!existing.done) {
+                    TextButton(onClick = {
+                        val ms = System.currentTimeMillis()
+                        val cur = snapNow.value.tasks.firstOrNull { it.id == taskId } ?: existing
+                        saved = true
+                        actions.commit(
+                            Edits.save(snap, buildNext(cur).copy(done = true, dropped = true, doneAt = ms), ctx.getString(R.string.todo_drop_desc, existing.title), ms),
+                            ctx.getString(R.string.todo_dropped_toast, 1),
+                        )
+                        close()
+                    }) { Text(stringResource(R.string.todo_drop)) }
+                }
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = {
                     close { nav.push(Route.TaskDetail(existing.id)) }
@@ -319,7 +388,7 @@ private fun DateChip(
 }
 
 @Composable
-private fun transparentFieldColors() =
+internal fun transparentFieldColors() =
     TextFieldDefaults.colors(
         focusedContainerColor = Color.Transparent,
         unfocusedContainerColor = Color.Transparent,
