@@ -4,6 +4,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -101,6 +102,7 @@
         </service>
 
         <receiver android:name=".notify.ReminderReceiver" android:exported="false" />
+        <receiver android:name=".notify.MuteReceiver" android:exported="false" />
         <receiver android:name=".jxfw.JxfwReceiver" android:exported="false" />
         <receiver android:name=".notify.BootReceiver" android:exported="true">
             <intent-filter>

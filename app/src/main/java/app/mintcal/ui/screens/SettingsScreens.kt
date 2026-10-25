@@ -2,6 +2,7 @@ package app.mintcal.ui.screens
 
 import android.Manifest
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -119,6 +120,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             FormSection(stringResource(R.string.section_display)) {
                 SwitchRow(stringResource(R.string.show_teacher), stringResource(R.string.show_teacher_desc), st.showTeacher) { v -> app.settings.update { it.copy(showTeacher = v) } }
                 SwitchRow(stringResource(R.string.week_starts_monday), null, st.weekStartsMonday) { v -> app.settings.update { it.copy(weekStartsMonday = v) } }
+                SwitchRow(stringResource(R.string.swap_swipe), stringResource(R.string.swap_swipe_desc), st.swapSwipe) { v -> app.settings.update { it.copy(swapSwipe = v) } }
                 Text(stringResource(R.string.default_block_minutes), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
                 ChipChoice(listOf(30, 45, 60, 90, 120).map { it to ctx.getString(R.string.minutes_n, it) }, st.defaultBlockMinutes, { v -> app.settings.update { it.copy(defaultBlockMinutes = v) } })
             }
@@ -157,6 +159,15 @@ fun SettingsScreen(onBack: () -> Unit) {
                 SwitchRow(stringResource(R.string.quick_notif_row), stringResource(R.string.quick_notif_desc), st.quickAddNotif) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(quickAddNotif = v) }
+                }
+                SwitchRow(stringResource(R.string.auto_mute), stringResource(R.string.auto_mute_desc), st.autoMute) { v ->
+                    val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    if (v && !nm.isNotificationPolicyAccessGranted) {
+                        runCatching {
+                            ctx.startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }
+                    }
+                    app.settings.update { it.copy(autoMute = v) }
                 }
                 AnimatedVisibility(
                     visible = needExact,

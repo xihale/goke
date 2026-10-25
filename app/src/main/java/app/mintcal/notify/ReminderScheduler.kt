@@ -17,6 +17,10 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 
+/** 静音闹钟挂在 [MuteReceiver]， EXTRA_MUTE_KEY 只是让相邻 PendingIntent 互不覆盖的区分位。 */
+private const val EXTRA_MUTE_KEY = "mute_key"
+private const val ACTION_PREFIX_MUTE = "mute"
+
 /** 一条待触发的提醒。 */
 data class Reminder(
     val triggerAt: LocalDateTime,
@@ -66,6 +70,82 @@ class ReminderScheduler(
                 }
             }
         }
+        scheduleMutes(snap, st, now, canExact)
+    }
+
+    /**
+     * 上课自动静音：每节课一对闹钟（上课切勿扰 / 下课恢复）。
+     * 请求码 [MUTE_BASE] 起与提醒区间隔离；最多 [MAX_MUTE_PAIRS] 对，只排未来时段。
+     */
+    private fun scheduleMutes(
+        snap: Snapshot,
+        st: Settings,
+        now: LocalDateTime,
+        canExact: Boolean,
+    ) {
+        cancelMutes()
+        if (!st.autoMute) return
+        val zone = ZoneId.systemDefault()
+        var i = 0
+        val from = now.toLocalDate()
+        outer@ for ((_, items) in Agenda.range(snap, from, from.plusDays(8), st.defaultBlockMinutes)) {
+            for (item in items) {
+                if (item !is CourseItem) continue
+                if (i >= MAX_MUTE_PAIRS) break@outer
+                val o = item.occ
+                if (o.end.isAfter(now)) {
+                    val startPi = mutePi(ACTION_PREFIX_MUTE + i, MuteReceiver.ACTION_MUTE, MUTE_BASE + 2 * i)
+                    val endPi = mutePi(ACTION_PREFIX_MUTE + i, MuteReceiver.ACTION_UNMUTE, MUTE_BASE + 2 * i + 1)
+                    runCatching {
+                        if (o.start.isAfter(now)) setAlarm(o.start, zone, canExact, startPi)
+                        setAlarm(o.end, zone, canExact, endPi)
+                    }
+                    i++
+                }
+            }
+        }
+    }
+
+    private fun mutePi(
+        action: String,
+        nested: String,
+        requestCode: Int,
+    ): PendingIntent =
+        PendingIntent.getBroadcast(
+            ctx,
+            requestCode,
+            Intent(ctx, MuteReceiver::class.java).setAction(nested).putExtra(EXTRA_MUTE_KEY, action),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+
+    private fun setAlarm(
+        at: LocalDateTime,
+        zone: ZoneId,
+        canExact: Boolean,
+        pi: PendingIntent,
+    ) {
+        val ms = at.atZone(zone).toInstant().toEpochMilli()
+        if (canExact) {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ms, pi)
+        } else {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, ms, pi)
+        }
+    }
+
+    private fun cancelMutes() {
+        for (i in 0 until MAX_MUTE_PAIRS * 2) {
+            val pi =
+                PendingIntent.getBroadcast(
+                    ctx,
+                    MUTE_BASE + i,
+                    Intent(ctx, MuteReceiver::class.java),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE,
+                )
+            if (pi != null) {
+                am.cancel(pi)
+                pi.cancel()
+            }
+        }
     }
 
     /** 自检用：[delaySeconds] 秒后发一条测试提醒（走与真实提醒相同的闹钟 → 接收器 → 通知链路）。 */
@@ -105,6 +185,10 @@ class ReminderScheduler(
 
     companion object {
         const val MAX = 40
+
+        /** 静音闹钟对的请求码基址：提醒占用 0 until MAX，这里错开。 */
+        const val MUTE_BASE = 100
+        const val MAX_MUTE_PAIRS = 80
 
         /** 自检测试提醒的请求码，须落在 0 until MAX 之外，免得被重新调度时取消。 */
         const val TEST_ID = 9001
