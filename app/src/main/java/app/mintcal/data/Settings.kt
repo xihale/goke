@@ -25,6 +25,13 @@ data class Settings(
     val dailyDigest: Boolean = false,
     /** 常驻通知栏的「快速添加待办」入口，默认关。 */
     val quickAddNotif: Boolean = false,
+    /** 交换待办滑动方向：左滑完成、右滑改期。 */
+    val swapSwipe: Boolean = false,
+    /** 上课期间自动静音（勿扰），下课恢复；需要勿扰权限。 */
+    val autoMute: Boolean = false,
+    /** 每天自动备份一次全量 JSON 到应用外部目录，默认关。 */
+    val autoBackup: Boolean = false,
+    val backupKeep: Int = 7,
     val parcelEnabled: Boolean = false,
     val parcelAiFallback: Boolean = false,
     val aiBaseUrl: String = "https://api.openai.com/v1",
@@ -56,6 +63,10 @@ class SettingsStore(
             remindEvent = sp.getBoolean("remindEvent", d.remindEvent),
             dailyDigest = sp.getBoolean("dailyDigest", d.dailyDigest),
             quickAddNotif = sp.getBoolean("quickAddNotif", d.quickAddNotif),
+            swapSwipe = sp.getBoolean("swapSwipe", d.swapSwipe),
+            autoMute = sp.getBoolean("autoMute", d.autoMute),
+            autoBackup = sp.getBoolean("autoBackup", d.autoBackup),
+            backupKeep = sp.getInt("backupKeep", d.backupKeep),
             parcelEnabled = sp.getBoolean("parcelEnabled", d.parcelEnabled),
             parcelAiFallback = sp.getBoolean("parcelAiFallback", d.parcelAiFallback),
             aiBaseUrl = sp.getString("aiBaseUrl", d.aiBaseUrl)!!,
@@ -80,6 +91,10 @@ class SettingsStore(
             .putBoolean("remindEvent", n.remindEvent)
             .putBoolean("dailyDigest", n.dailyDigest)
             .putBoolean("quickAddNotif", n.quickAddNotif)
+            .putBoolean("swapSwipe", n.swapSwipe)
+            .putBoolean("autoMute", n.autoMute)
+            .putBoolean("autoBackup", n.autoBackup)
+            .putInt("backupKeep", n.backupKeep)
             .putBoolean("parcelEnabled", n.parcelEnabled)
             .putBoolean("parcelAiFallback", n.parcelAiFallback)
             .putString("aiBaseUrl", n.aiBaseUrl)

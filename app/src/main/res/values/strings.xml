@@ -333,6 +333,8 @@
     <string name="show_teacher">课表里显示教师</string>
     <string name="show_teacher_desc">关闭时只显示课名和教室</string>
     <string name="week_starts_monday">周一作为一周的开始</string>
+    <string name="swap_swipe">交换滑动方向</string>
+    <string name="swap_swipe_desc">开启后：左滑完成，右滑改期</string>
     <string name="default_block_minutes">待办时间块默认时长</string>
     <string name="remind_courses">上课提醒</string>
     <string name="remind_courses_desc">给所有课程统一加提醒，单门课也可单独设置</string>
@@ -547,6 +549,7 @@
     <string name="todo_all_lists">全部清单</string>
     <string name="todo_reschedule">改期</string>
     <string name="todo_reschedule_desc">改期：%1$s</string>
+    <string name="todo_reorder_desc">排序：%1$s</string>
     <string name="todo_moved_toast">已改期 %1$d 项</string>
     <string name="todo_moved_to_toast">已移到「%1$s」</string>
     <string name="todo_no_date">无日期（收集箱）</string>
@@ -615,6 +618,11 @@
     <string name="quick_notif_title">快速添加待办</string>
     <string name="quick_notif_text">点按新建一条待办</string>
     <string name="channel_quick">快速添加入口</string>
+    <string name="auto_mute">上课自动静音</string>
+    <string name="auto_mute_desc">上课期间切入勿扰，下课恢复；首次开启需授予勿扰权限</string>
+    <string name="section_backup">自动备份</string>
+    <string name="auto_backup">每天备份一次</string>
+    <string name="auto_backup_desc">数据变化时自动导出完整备份（JSON）到应用目录 backup/，保留最近 7 份</string>
     <string name="today_gap_text">%1$s–%2$s 有 %3$d 分钟空档，要不要做「%4$s」（预计 %5$d 分钟）？</string>
     <string name="today_gap_schedule">排进去</string>
     <string name="today_gap_dismiss">不用了</string>

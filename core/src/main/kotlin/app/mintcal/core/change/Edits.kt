@@ -87,6 +87,30 @@ object Edits {
         return ChangeSet(ids.next(), description, Source.MANUAL, now, changes)
     }
 
+    /**
+     * 同区手动排序：把 [draggedId] 插到 [beforeId] 前面，整区重写 sortOrder（idx * 10）。
+     * 只对同区可见排序生效——分区仍先按截止 / 优先级排，手动序在相同截止 + 优先级内生效。
+     */
+    fun reorder(
+        bucketTasks: List<Task>,
+        draggedId: String,
+        beforeId: String,
+        description: String,
+        now: Long,
+        ids: IdGenerator = Ids,
+    ): ChangeSet {
+        val moved = bucketTasks.firstOrNull { it.id == draggedId } ?: return ChangeSet(ids.next(), description, Source.MANUAL, now)
+        val seq = bucketTasks.filter { it.id != draggedId }.toMutableList()
+        val at = seq.indexOfFirst { it.id == beforeId }.coerceAtLeast(0)
+        seq.add(at, moved)
+        val byId = seq.associateBy { it.id }
+        return updateTasks(bucketTasks, description, now, ids) { t ->
+            val idx = byId.entries.indexOfFirst { it.key == t.id }
+            val n = if (idx >= 0) idx * 10 else t.sortOrder
+            if (n != t.sortOrder) t.copy(sortOrder = n) else t
+        }
+    }
+
     /** 改期：[date] 为 null 清除日期（回收集箱）。带时间的保留原时刻，否则当天 23:59 的无时间截止。 */
     fun reschedule(
         tasks: List<Task>,

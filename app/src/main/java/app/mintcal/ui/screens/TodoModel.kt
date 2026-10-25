@@ -32,13 +32,16 @@ internal fun mergeChangeSets(
     sets: List<ChangeSet>,
 ): ChangeSet = ChangeSet(Ids.next(), description, Source.MANUAL, System.currentTimeMillis(), sets.flatMap { it.changes })
 
-/** 长按拖动状态：只有一条任务在拖，落点是某个分区（改期）或某条任务（变子任务）。 */
+/** 长按拖动状态：只有一条任务在拖，落点是某个分区（改期）、某条任务（变子任务 / 同区排序）。 */
 internal class TodoDrag {
     var active by mutableStateOf(false)
     var task by mutableStateOf<Task?>(null)
     var pointer by mutableStateOf(Offset.Zero)
     var overBucket by mutableStateOf<Bucket?>(null)
     var overTaskId by mutableStateOf<String?>(null)
+
+    /** 左半区命中的行：同区时用作手动排序的插入点。 */
+    var overRowId by mutableStateOf<String?>(null)
 
     fun start(
         t: Task,
@@ -48,6 +51,7 @@ internal class TodoDrag {
         pointer = at
         overBucket = null
         overTaskId = null
+        overRowId = null
         active = true
     }
 
@@ -56,5 +60,6 @@ internal class TodoDrag {
         task = null
         overBucket = null
         overTaskId = null
+        overRowId = null
     }
 }

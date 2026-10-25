@@ -74,6 +74,7 @@ import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
+import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import kotlinx.coroutines.delay
 import java.time.LocalDate
@@ -88,6 +89,7 @@ private class DragEnv(
     val bucketOfTask: Map<String, Bucket>,
     val today: LocalDate,
     val dropBuckets: List<Bucket>,
+    val sections: List<app.mintcal.core.todo.TimelineSection>,
 )
 
 /**
@@ -103,6 +105,7 @@ fun TodoScreen() {
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
     val snap = liveSnapshot()
+    val settings = settingsState()
     val now by rememberNow()
     val today = now.toLocalDate()
 
@@ -139,7 +142,7 @@ fun TodoScreen() {
     val nextUp = remember(snap, now) { NextUps.find(snap, now) }
     val urgent = overdueTasks.firstOrNull() ?: sections.firstOrNull { it.bucket == Bucket.TODAY }?.tasks?.firstOrNull()
     val dropBuckets = DROPPABLE.filter { TaskLogic.dropDate(it, today) != TaskLogic.NO_DROP }
-    val env by rememberUpdatedState(DragEnv(snap, taskById, bucketOfTask, today, dropBuckets))
+    val env by rememberUpdatedState(DragEnv(snap, taskById, bucketOfTask, today, dropBuckets, sections))
 
     val expanded = remember(expandedCsv) { csvToSet(expandedCsv) }
     val collapsed = remember(collapsedCsv) { csvToSet(collapsedCsv) }
@@ -185,6 +188,7 @@ fun TodoScreen() {
                 val target = e.taskById[key]
                 if (b != null && target != null) {
                     val rightHalf = drag.pointer.x > info.viewportSize.width * 0.6f
+                    drag.overRowId = if (rightHalf) null else key
                     if (rightHalf && target.id != dragged.id && !target.done && !Edits.makeSubtask(e.snap, dragged, target, "", 0).isEmpty) {
                         sub = target.id
                     } else {
@@ -211,11 +215,24 @@ fun TodoScreen() {
             val parent = e.taskById[sub] ?: return
             val cs = Edits.makeSubtask(e.snap, t, parent, ctx.getString(R.string.todo_subtask_desc, t.title), ms)
             if (!cs.isEmpty) actions.commit(cs, ctx.getString(R.string.todo_subtask_toast, t.title, parent.title))
-        } else if (bucket != null) {
-            val d = TaskLogic.dropDate(bucket, e.today)
-            if (d == TaskLogic.NO_DROP) return
-            val cs = Edits.reschedule(listOf(t), d, ctx.getString(R.string.todo_reschedule_desc, t.title), ms)
-            if (!cs.isEmpty) actions.commit(cs, ctx.getString(R.string.todo_moved_to_toast, ctx.getString(bucketRes(bucket))))
+        } else {
+            val row = drag.overRowId
+            val myBucket = e.bucketOfTask[t.id]
+            if (row != null && row != t.id && myBucket != null && e.bucketOfTask[row] == myBucket) {
+                // 同区落行 = 手动排序：插到该行前面（排序在相同截止 + 优先级内生效）
+                val bucketTasks =
+                    e.sections
+                        .firstOrNull { it.bucket == myBucket }
+                        ?.tasks
+                        .orEmpty()
+                val cs = Edits.reorder(bucketTasks, t.id, row, ctx.getString(R.string.todo_reorder_desc, t.title), ms)
+                if (!cs.isEmpty) actions.commit(cs, ctx.getString(R.string.todo_moved_to_toast, ctx.getString(bucketRes(myBucket))))
+            } else if (bucket != null) {
+                val d = TaskLogic.dropDate(bucket, e.today)
+                if (d == TaskLogic.NO_DROP) return
+                val cs = Edits.reschedule(listOf(t), d, ctx.getString(R.string.todo_reschedule_desc, t.title), ms)
+                if (!cs.isEmpty) actions.commit(cs, ctx.getString(R.string.todo_moved_to_toast, ctx.getString(bucketRes(bucket))))
+            }
         }
     }
 
@@ -258,6 +275,7 @@ fun TodoScreen() {
                     now = now,
                     swipeEnabled = !selecting && !drag.active,
                     selectMode = selecting,
+                    swapSwipe = settings.swapSwipe,
                     selected = t.id in selected,
                     dim = drag.task?.id == t.id,
                     subTarget = drag.overTaskId == t.id,

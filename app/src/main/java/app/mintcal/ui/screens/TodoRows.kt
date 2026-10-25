@@ -182,6 +182,7 @@ internal fun TodoRow(
     dim: Boolean,
     subTarget: Boolean,
     tint: Boolean,
+    swapSwipe: Boolean = false,
     expanded: Boolean?,
     onToggleExpand: (() -> Unit)?,
     onClick: () -> Unit,
@@ -196,19 +197,22 @@ internal fun TodoRow(
     val snapNow by rememberUpdatedState(snap)
     val clock by rememberUpdatedState(now)
     val leftNow by rememberUpdatedState(onSwipeLeft)
+    val toggleDone = {
+        val t = taskNow
+        toggle(actions, snapNow, t, !t.done, clock, ctx.getString(R.string.done_toast, t.title))
+    }
     val state =
         rememberSwipeToDismissBoxState(
             confirmValueChange = { v ->
                 when (v) {
                     SwipeToDismissBoxValue.StartToEnd -> {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        val t = taskNow
-                        toggle(actions, snapNow, t, !t.done, clock, ctx.getString(R.string.done_toast, t.title))
+                        if (swapSwipe) leftNow() else toggleDone()
                     }
 
                     SwipeToDismissBoxValue.EndToStart -> {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        leftNow()
+                        if (swapSwipe) toggleDone() else leftNow()
                     }
 
                     SwipeToDismissBoxValue.Settled -> {}
@@ -228,8 +232,10 @@ internal fun TodoRow(
         enableDismissFromStartToEnd = swipeEnabled,
         enableDismissFromEndToStart = swipeEnabled,
         backgroundContent = {
+            // 右滑（StartToEnd）默认显示完成；交换后显示改期
             val right = state.targetValue == SwipeToDismissBoxValue.StartToEnd
-            val bg = if (right) colors.added else MaterialTheme.colorScheme.tertiary
+            val doneSide = right != swapSwipe
+            val bg = if (doneSide) colors.added else MaterialTheme.colorScheme.tertiary
             Box(
                 Modifier
                     .fillMaxSize()
@@ -238,7 +244,7 @@ internal fun TodoRow(
                     .padding(horizontal = 22.dp),
                 contentAlignment = if (right) Alignment.CenterStart else Alignment.CenterEnd,
             ) {
-                Icon(if (right) Icons.Rounded.Check else Icons.Rounded.Event, null, tint = bg)
+                Icon(if (doneSide) Icons.Rounded.Check else Icons.Rounded.Event, null, tint = bg)
             }
         },
     ) {
