@@ -56,6 +56,13 @@ class MainActivity : ComponentActivity() {
         mintApp.sync.requestSync(500)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // MIUI/HyperOS 偶发:返回手势回桌面后热启动回来,进程存活、事件正常,但 surface 呈现旧空帧(整屏黑)。
+        // 回前台时强制标脏走一次绘制,推新 buffer 上屏,自愈该竞态。
+        window.decorView.post { window.decorView.invalidate() }
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)
