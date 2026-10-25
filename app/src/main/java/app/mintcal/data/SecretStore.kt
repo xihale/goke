@@ -74,6 +74,11 @@ class SecretStore(
 
     override fun syncToken(): String? = get("sync_token")
 
+    /** 教务系统（CAS）密码：仅为定时登录取课表保存，加密落盘，退出教务登录时清除。 */
+    fun setJxfwPassword(plain: String) = put("jxfw_password", plain)
+
+    fun jxfwPassword(): String? = get("jxfw_password")
+
     companion object {
         private const val ALIAS = "mintcal_ai_key"
     }

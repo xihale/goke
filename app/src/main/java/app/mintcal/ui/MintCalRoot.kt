@@ -57,6 +57,7 @@ import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.ParcelScreen
 import app.mintcal.ui.screens.PeriodsScreen
 import app.mintcal.ui.screens.SettingsScreen
+import app.mintcal.ui.screens.JxfwScreen
 import app.mintcal.ui.screens.SyncScreen
 import app.mintcal.ui.screens.TaskDetailScreen
 import app.mintcal.ui.screens.TaskDraft
@@ -150,6 +151,7 @@ fun NavGraphBuilder.mintDestinations(
     composable<Route.AiSettings> { AiSettingsScreen(back) }
     composable<Route.Data> { DataScreen(back) }
     composable<Route.Sync> { SyncScreen(back) }
+    composable<Route.Jxfw> { JxfwScreen(back) }
     composable<Route.Import> { e -> ImportScreen(e.toRoute<Route.Import>().uri, back) }
     composable<Route.CourseEdit> { e -> CourseEditScreen(e.toRoute<Route.CourseEdit>().id, back) }
     composable<Route.EventEdit> { e ->

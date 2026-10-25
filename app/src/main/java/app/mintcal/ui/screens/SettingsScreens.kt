@@ -36,6 +36,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LocalShipping
 import androidx.compose.material.icons.rounded.Palette
@@ -167,6 +168,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     stringResource(R.string.sync_row_desc),
                     Icons.Rounded.Cloud,
                 ) { nav.push(Route.Sync) }
+                NavRow(stringResource(R.string.jxfw_title), stringResource(R.string.jxfw_row_desc), Icons.Rounded.School) { nav.push(Route.Jxfw) }
                 NavRow(stringResource(R.string.ai_settings), stringResource(R.string.ai_settings_desc), Icons.Rounded.AutoAwesome) { nav.push(Route.AiSettings) }
                 NavRow(stringResource(R.string.data_title), stringResource(R.string.data_desc), Icons.Rounded.SwapVert) { nav.push(Route.Data) }
                 NavRow(stringResource(R.string.parcel_title), stringResource(R.string.parcel_row_desc), Icons.Rounded.LocalShipping) { nav.push(Route.Parcel) }

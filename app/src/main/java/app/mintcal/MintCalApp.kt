@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import app.mintcal.ai.AdvancedController
 import app.mintcal.data.MintDb
+import app.mintcal.jxfw.JxfwManager
 import app.mintcal.data.Repository
 import app.mintcal.data.SecretStore
 import app.mintcal.data.SettingsStore
@@ -35,6 +36,8 @@ class MintCalApp : Application() {
         private set
     lateinit var sync: SyncManager
         private set
+    lateinit var jxfw: JxfwManager
+        private set
 
     @OptIn(FlowPreview::class)
     override fun onCreate() {
@@ -45,10 +48,13 @@ class MintCalApp : Application() {
         reminders = ReminderScheduler(this)
         advanced = AdvancedController(this)
         sync = SyncManager(repo, SyncStore(this, secrets), scope)
+        jxfw = JxfwManager(this, repo, secrets)
         Notifications.ensureChannels(this)
         scope.launch {
             repo.load()
             sync.requestSync(1000)
+            jxfw.ensureAlarm()
+            launch { jxfw.catchUp() }
             // 本地数据有变化（含从服务器写入的）后，登录状态下稍后同步一次；未登录时 requestSync 什么都不做
             launch { repo.snapshot.collect { sync.requestSync() } }
             // 数据或设置变化后重新排提醒并刷新小组件（防抖，避免连续编辑时反复调度）
