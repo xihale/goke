@@ -203,7 +203,7 @@ class ScreensSmokeTest {
                 "jxfw" to { JxfwScreen {} },
                 "task_sheet" to { TaskSheet(task.id) {} },
                 "reliability" to { ReliabilityScreen {} },
-                "reschedule_sheet" to { RescheduleSheet(listOf(task), liveSnapshot()) {} },
+                "reschedule_sheet" to { RescheduleSheet(listOf(task), liveSnapshot(), onDismiss = {}) },
                 "morning_sheet" to { MorningSheet(listOf(task), java.time.LocalDateTime.now()) {} },
                 "import" to { ImportScreen(null) {} },
                 "trash" to { TrashScreen {} },
