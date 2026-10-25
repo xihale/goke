@@ -7,6 +7,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
 import app.mintcal.MainActivity
@@ -127,6 +128,14 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
             }
             // 已经结束的课不占位：优先展示正在上 / 之后的，最多 6 条
             val shown = courses.filter { it.occ.end.isAfter(now) }.ifEmpty { courses.takeLast(6) }.take(6)
+            val openToday =
+                PendingIntent.getActivity(
+                    ctx,
+                    0,
+                    Intent(Intent.ACTION_VIEW, Uri.parse("mintcal://today"), ctx, MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
             for (i in rows.indices) {
                 val c = shown.getOrNull(i)
                 if (c == null) {
@@ -146,6 +155,8 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
                         if (current) ctx.getString(R.string.widget_schedule_now) else null,
                     ).joinToString(" · ")
                 views.setTextViewText(metas[i], meta)
+                // 点课行打开 app 的今日视图（RemoteViews 不支持横向滚动，周视图不可行）
+                views.setOnClickPendingIntent(rows[i], openToday)
             }
             val remaining = courses.count { it.occ.end.isAfter(now) } - shown.size
             if (remaining > 0) {
