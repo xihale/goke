@@ -7,7 +7,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
-import android.provider.Settings as AndroidSettings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,11 +40,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import app.mintcal.R
 import app.mintcal.notify.Notifications
-import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalActions
+import app.mintcal.ui.LocalApp
 import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.theme.MintTheme
+import android.provider.Settings as AndroidSettings
 
 /**
  * 提醒可靠性自检：逐项检查会让提醒「悄悄失效」的系统设置，并给出一键跳转；

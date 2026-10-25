@@ -57,9 +57,9 @@ import app.mintcal.ui.screens.EventEditScreen
 import app.mintcal.ui.screens.HistoryScreen
 import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.JxfwScreen
-import app.mintcal.ui.screens.ReliabilityScreen
 import app.mintcal.ui.screens.ParcelScreen
 import app.mintcal.ui.screens.PeriodsScreen
+import app.mintcal.ui.screens.ReliabilityScreen
 import app.mintcal.ui.screens.SettingsScreen
 import app.mintcal.ui.screens.SyncScreen
 import app.mintcal.ui.screens.TaskDetailScreen

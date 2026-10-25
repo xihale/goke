@@ -198,7 +198,11 @@ fun TodayScreen() {
             item(key = "gap") {
                 val g = gapSuggestion
                 // 起点取整到 5 分钟，排出来的时间块更整齐
-                val start = g.gap.start.withSecond(0).withNano(0).let { it.plusMinutes(((5 - it.minute % 5) % 5).toLong()) }
+                val start =
+                    g.gap.start
+                        .withSecond(0)
+                        .withNano(0)
+                        .let { it.plusMinutes(((5 - it.minute % 5) % 5).toLong()) }
                 MintCard(color = MaterialTheme.colorScheme.secondaryContainer) {
                     Text(
                         stringResource(R.string.today_gap_text, g.gap.start.hm(), g.gap.end.hm(), g.gap.minutes, g.task.title, g.minutes),

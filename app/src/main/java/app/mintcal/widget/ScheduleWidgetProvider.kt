@@ -84,7 +84,11 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
                     .filter { it.isAfter(now) }
                     .minOrNull()
                     // 今天没有更多了：明早 0 点后刷新为明天
-                    ?: now.toLocalDate().plusDays(1).atStartOfDay().plusMinutes(1)
+                    ?: now
+                        .toLocalDate()
+                        .plusDays(1)
+                        .atStartOfDay()
+                        .plusMinutes(1)
             val pi =
                 PendingIntent.getBroadcast(
                     ctx,
@@ -107,9 +111,10 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
             val head = listOfNotNull(snap?.currentSemester?.name?.takeIf { it.isNotBlank() }, ctx.monthDayWeekday(today)).joinToString(" · ")
             views.setTextViewText(R.id.sched_title, head)
             val courses =
-                snap?.let { s ->
-                    Agenda.forDay(s, today, st.defaultBlockMinutes).filterIsInstance<CourseItem>()
-                }.orEmpty()
+                snap
+                    ?.let { s ->
+                        Agenda.forDay(s, today, st.defaultBlockMinutes).filterIsInstance<CourseItem>()
+                    }.orEmpty()
             val rows = intArrayOf(R.id.sched_row0, R.id.sched_row1, R.id.sched_row2, R.id.sched_row3, R.id.sched_row4, R.id.sched_row5)
             val bars = intArrayOf(R.id.sched_bar0, R.id.sched_bar1, R.id.sched_bar2, R.id.sched_bar3, R.id.sched_bar4, R.id.sched_bar5)
             val names = intArrayOf(R.id.sched_name0, R.id.sched_name1, R.id.sched_name2, R.id.sched_name3, R.id.sched_name4, R.id.sched_name5)
