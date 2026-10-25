@@ -166,7 +166,11 @@ internal fun QuickAddBar(
         if (items.isEmpty()) return
         val first = items.first().result
         val desc = if (items.size == 1) ctx.getString(R.string.add_task_desc, first.title) else ctx.getString(R.string.todo_batch_desc, items.size)
-        val where = first.due?.takeIf { items.size == 1 }?.let { " · " + ctx.dueLabel(it, first.dueHasTime, now.toLocalDate()) }.orEmpty()
+        val where =
+            first.due
+                ?.takeIf { items.size == 1 }
+                ?.let { " · " + ctx.dueLabel(it, first.dueHasTime, now.toLocalDate()) }
+                .orEmpty()
         val msg = if (items.size == 1) ctx.getString(R.string.task_added_toast, first.title) + where else ctx.getString(R.string.todo_batch_toast, items.size)
         actions.commit(buildQuickTasks(snap, items, listFilter, defaultBucket, now, desc), msg)
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -183,7 +187,10 @@ internal fun QuickAddBar(
     fun take(raw: String) {
         val items = QuickAdd.parseLines(raw, now)
         when {
-            items.size > 1 -> batch = items
+            items.size > 1 -> {
+                batch = items
+            }
+
             items.size == 1 -> {
                 text = raw.trim().replace(Regex("\\s+"), " ")
                 focus.requestFocus()
@@ -264,175 +271,175 @@ internal fun QuickAddBar(
         enter = fadeIn(MintTheme.spec()),
         exit = fadeOut(MintTheme.spec()),
     ) {
-    Surface(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .imePadding()
-                .navigationBarsPadding()
-                .padding(start = 16.dp, end = 16.dp, bottom = if (ime > 0.dp) 8.dp else 96.dp),
-        shape = RoundedCornerShape(26.dp),
-        color = MintTheme.card,
-        shadowElevation = 8.dp,
-        tonalElevation = 2.dp,
-    ) {
-        Column(Modifier.padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)) {
-            AnimatedVisibility(
-                visible = focused || text.isNotBlank(),
-                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-            ) {
-                LazyRow(Modifier.padding(bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    item { QuickChip(stringResource(R.string.today)) { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.COURSE), "今天") } }
-                    item { QuickChip(stringResource(R.string.tomorrow)) { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.COURSE), "明天") } }
-                    item { QuickChip(stringResource(R.string.date_weekend)) { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.COURSE), "本周末") } }
-                    item { QuickChip(stringResource(R.string.date_next_monday)) { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.COURSE), "下周一") } }
-                    if (snap.courses.isNotEmpty()) {
+        Surface(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .navigationBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, bottom = if (ime > 0.dp) 8.dp else 96.dp),
+            shape = RoundedCornerShape(26.dp),
+            color = MintTheme.card,
+            shadowElevation = 8.dp,
+            tonalElevation = 2.dp,
+        ) {
+            Column(Modifier.padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)) {
+                AnimatedVisibility(
+                    visible = focused || text.isNotBlank(),
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    LazyRow(Modifier.padding(bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        item { QuickChip(stringResource(R.string.today)) { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.COURSE), "今天") } }
+                        item { QuickChip(stringResource(R.string.tomorrow)) { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.COURSE), "明天") } }
+                        item { QuickChip(stringResource(R.string.date_weekend)) { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.COURSE), "本周末") } }
+                        item { QuickChip(stringResource(R.string.date_next_monday)) { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.COURSE), "下周一") } }
+                        if (snap.courses.isNotEmpty()) {
+                            item {
+                                Box {
+                                    QuickChip("🎓 " + stringResource(R.string.date_before_class)) { courseMenu = true }
+                                    DropdownMenu(courseMenu, { courseMenu = false }) {
+                                        snap.courses.distinctBy { it.name }.forEach { c ->
+                                            DropdownMenuItem(text = { Text(c.name) }, onClick = {
+                                                courseMenu = false
+                                                rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME, QuickTokenKind.COURSE), "/" + c.name.replace(" ", ""))
+                                            })
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (snap.lists.isNotEmpty()) {
+                            item {
+                                Box {
+                                    QuickChip("#" + stringResource(R.string.label_list)) { listMenu = true }
+                                    DropdownMenu(listMenu, { listMenu = false }) {
+                                        snap.lists.sortedBy { it.sort }.forEach { l ->
+                                            DropdownMenuItem(text = { Text(l.name) }, onClick = {
+                                                listMenu = false
+                                                rewrite(setOf(QuickTokenKind.LIST), "#" + l.name)
+                                            })
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         item {
                             Box {
-                                QuickChip("🎓 " + stringResource(R.string.date_before_class)) { courseMenu = true }
-                                DropdownMenu(courseMenu, { courseMenu = false }) {
-                                    snap.courses.distinctBy { it.name }.forEach { c ->
-                                        DropdownMenuItem(text = { Text(c.name) }, onClick = {
-                                            courseMenu = false
-                                            rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME, QuickTokenKind.COURSE), "/" + c.name.replace(" ", ""))
+                                QuickChip("!" + stringResource(R.string.label_priority)) { priorityMenu = true }
+                                DropdownMenu(priorityMenu, { priorityMenu = false }) {
+                                    listOf("高" to R.string.priority_3, "中" to R.string.priority_2, "低" to R.string.priority_1).forEach { (word, label) ->
+                                        DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = {
+                                            priorityMenu = false
+                                            rewrite(setOf(QuickTokenKind.PRIORITY), "!$word")
                                         })
                                     }
                                 }
                             }
                         }
+                        item { QuickChip("📋 " + stringResource(R.string.todo_paste)) { paste() } }
+                        item { QuickChip(stringResource(R.string.more_options)) { openDetail() } }
                     }
-                    if (snap.lists.isNotEmpty()) {
-                        item {
-                            Box {
-                                QuickChip("#" + stringResource(R.string.label_list)) { listMenu = true }
-                                DropdownMenu(listMenu, { listMenu = false }) {
-                                    snap.lists.sortedBy { it.sort }.forEach { l ->
-                                        DropdownMenuItem(text = { Text(l.name) }, onClick = {
-                                            listMenu = false
-                                            rewrite(setOf(QuickTokenKind.LIST), "#" + l.name)
-                                        })
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    item {
-                        Box {
-                            QuickChip("!" + stringResource(R.string.label_priority)) { priorityMenu = true }
-                            DropdownMenu(priorityMenu, { priorityMenu = false }) {
-                                listOf("高" to R.string.priority_3, "中" to R.string.priority_2, "低" to R.string.priority_1).forEach { (word, label) ->
-                                    DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = {
-                                        priorityMenu = false
-                                        rewrite(setOf(QuickTokenKind.PRIORITY), "!$word")
-                                    })
-                                }
-                            }
-                        }
-                    }
-                    item { QuickChip("📋 " + stringResource(R.string.todo_paste)) { paste() } }
-                    item { QuickChip(stringResource(R.string.more_options)) { openDetail() } }
                 }
-            }
-            if (defaultBucket != null) {
-                Row(Modifier.padding(bottom = 4.dp)) {
-                    Tag(
-                        stringResource(R.string.todo_add_to, stringResource(bucketRes(defaultBucket))) + " ×",
-                        MaterialTheme.colorScheme.secondaryContainer,
-                        MaterialTheme.colorScheme.onSecondaryContainer,
-                        Modifier.clickable { onClearBucket() },
+                if (defaultBucket != null) {
+                    Row(Modifier.padding(bottom = 4.dp)) {
+                        Tag(
+                            stringResource(R.string.todo_add_to, stringResource(bucketRes(defaultBucket))) + " ×",
+                            MaterialTheme.colorScheme.secondaryContainer,
+                            MaterialTheme.colorScheme.onSecondaryContainer,
+                            Modifier.clickable { onClearBucket() },
+                        )
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        text,
+                        { text = it },
+                        Modifier.weight(1f).focusRequester(focus).onFocusChanged { focused = it.isFocused },
+                        placeholder = { Text(stringResource(R.string.quick_add_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(20.dp),
+                        visualTransformation = highlight,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { save() }),
                     )
-                }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    text,
-                    { text = it },
-                    Modifier.weight(1f).focusRequester(focus).onFocusChanged { focused = it.isFocused },
-                    placeholder = { Text(stringResource(R.string.quick_add_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    singleLine = true,
-                    shape = RoundedCornerShape(20.dp),
-                    visualTransformation = highlight,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { save() }),
-                )
-                if (text.isBlank()) {
-                    IconButton(onClick = { startVoice() }) { Icon(Icons.Rounded.Mic, stringResource(R.string.todo_voice)) }
-                } else {
-                    IconButton(onClick = { save() }, enabled = parsed != null) {
-                        Icon(Icons.Rounded.Add, stringResource(R.string.add))
+                    if (text.isBlank()) {
+                        IconButton(onClick = { startVoice() }) { Icon(Icons.Rounded.Mic, stringResource(R.string.todo_voice)) }
+                    } else {
+                        IconButton(onClick = { save() }, enabled = parsed != null) {
+                            Icon(Icons.Rounded.Add, stringResource(R.string.add))
+                        }
                     }
                 }
-            }
-            AnimatedVisibility(
-                visible = parsed?.tokens?.isNotEmpty() == true,
-                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-            ) {
-                val p = parsed
-                if (p != null) {
-                    FlowRow(
-                        Modifier.padding(end = 6.dp, top = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        p.due?.let {
-                            Tag(
-                                ctx.dueLabel(it, p.dueHasTime, now.toLocalDate()) + " ×",
-                                MaterialTheme.colorScheme.primaryContainer,
-                                MaterialTheme.colorScheme.onPrimaryContainer,
-                                Modifier.clickable { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME), null) },
-                            )
-                        }
-                        p.courseName?.let { name ->
-                            val c = matchCourse(snap, name)
-                            Tag(
-                                "🎓 " + ctx.getString(R.string.before_next_class_short, c?.name ?: name) + " ×",
-                                MaterialTheme.colorScheme.primaryContainer,
-                                MaterialTheme.colorScheme.onPrimaryContainer,
-                                Modifier.clickable { rewrite(setOf(QuickTokenKind.COURSE), null) },
-                            )
-                        }
-                        if (p.priority > 0) {
-                            val label =
-                                when (p.priority) {
-                                    3 -> R.string.priority_3
-                                    2 -> R.string.priority_2
-                                    else -> R.string.priority_1
-                                }
-                            Tag(
-                                "!" + stringResource(label) + " ×",
-                                MaterialTheme.colorScheme.secondaryContainer,
-                                MaterialTheme.colorScheme.onSecondaryContainer,
-                                Modifier.clickable { rewrite(setOf(QuickTokenKind.PRIORITY), null) },
-                            )
-                        }
-                        p.listName?.let {
-                            Tag(
-                                "#$it ×",
-                                MaterialTheme.colorScheme.tertiaryContainer,
-                                MaterialTheme.colorScheme.onTertiaryContainer,
-                                Modifier.clickable { rewrite(setOf(QuickTokenKind.LIST), null) },
-                            )
-                        }
-                        val tagTokens = p.tokens.filter { it.kind == QuickTokenKind.TAG }
-                        p.tags.forEachIndexed { i, tag ->
-                            Tag(
-                                "@$tag ×",
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                MaterialTheme.colorScheme.onSurfaceVariant,
-                                Modifier.clickable {
-                                    tagTokens.getOrNull(i)?.let { tok ->
-                                        text = text.replace(tok.text, " ").replace(Regex("\\s+"), " ").trim()
+                AnimatedVisibility(
+                    visible = parsed?.tokens?.isNotEmpty() == true,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    val p = parsed
+                    if (p != null) {
+                        FlowRow(
+                            Modifier.padding(end = 6.dp, top = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            p.due?.let {
+                                Tag(
+                                    ctx.dueLabel(it, p.dueHasTime, now.toLocalDate()) + " ×",
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.onPrimaryContainer,
+                                    Modifier.clickable { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME), null) },
+                                )
+                            }
+                            p.courseName?.let { name ->
+                                val c = matchCourse(snap, name)
+                                Tag(
+                                    "🎓 " + ctx.getString(R.string.before_next_class_short, c?.name ?: name) + " ×",
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.onPrimaryContainer,
+                                    Modifier.clickable { rewrite(setOf(QuickTokenKind.COURSE), null) },
+                                )
+                            }
+                            if (p.priority > 0) {
+                                val label =
+                                    when (p.priority) {
+                                        3 -> R.string.priority_3
+                                        2 -> R.string.priority_2
+                                        else -> R.string.priority_1
                                     }
-                                },
-                            )
+                                Tag(
+                                    "!" + stringResource(label) + " ×",
+                                    MaterialTheme.colorScheme.secondaryContainer,
+                                    MaterialTheme.colorScheme.onSecondaryContainer,
+                                    Modifier.clickable { rewrite(setOf(QuickTokenKind.PRIORITY), null) },
+                                )
+                            }
+                            p.listName?.let {
+                                Tag(
+                                    "#$it ×",
+                                    MaterialTheme.colorScheme.tertiaryContainer,
+                                    MaterialTheme.colorScheme.onTertiaryContainer,
+                                    Modifier.clickable { rewrite(setOf(QuickTokenKind.LIST), null) },
+                                )
+                            }
+                            val tagTokens = p.tokens.filter { it.kind == QuickTokenKind.TAG }
+                            p.tags.forEachIndexed { i, tag ->
+                                Tag(
+                                    "@$tag ×",
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    MaterialTheme.colorScheme.onSurfaceVariant,
+                                    Modifier.clickable {
+                                        tagTokens.getOrNull(i)?.let { tok ->
+                                            text = text.replace(tok.text, " ").replace(Regex("\\s+"), " ").trim()
+                                        }
+                                    },
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-    }
     }
 
     batch?.let { items ->
@@ -554,7 +561,10 @@ fun buildQuickTasks(
         if (course == null && due == null && parentIdx == null && defaultBucket != null) {
             val d = TaskLogic.dropDate(defaultBucket, today)
             when {
-                defaultBucket == Bucket.TODAY -> start = today
+                defaultBucket == Bucket.TODAY -> {
+                    start = today
+                }
+
                 d != null && d != TaskLogic.NO_DROP -> {
                     due = LocalDateTime.of(d, LocalTime.of(23, 59))
                     dueHasTime = false

@@ -267,10 +267,15 @@ internal fun SubRow(
     val nav = LocalNav.current
     val actions = LocalActions.current
     Row(
-        modifier.fillMaxWidth().padding(start = 28.dp).clip(RoundedCornerShape(12.dp)).clickable { nav.openTask(sub.id) },
+        modifier
+            .fillMaxWidth()
+            .padding(start = 28.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { nav.openTask(sub.id) },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        app.mintcal.ui.components.MintCheck(sub.done, { d -> toggle(actions, snap, sub, d, now, ctx.getString(R.string.done_toast, sub.title)) })
+        app.mintcal.ui.components
+            .MintCheck(sub.done, { d -> toggle(actions, snap, sub, d, now, ctx.getString(R.string.done_toast, sub.title)) })
         Text(
             sub.title,
             Modifier.weight(1f).padding(vertical = 8.dp),
@@ -331,7 +336,13 @@ internal fun SectionHeader(
     val bg by animateColorAsState(if (hot) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent, MintTheme.spec(), label = "section-hot")
     val color = if (bucket == Bucket.OVERDUE) MintTheme.colors.removed else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(bg).clickable(onClick = onToggle).heightIn(min = 44.dp).padding(start = 6.dp),
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(bg)
+            .clickable(onClick = onToggle)
+            .heightIn(min = 44.dp)
+            .padding(start = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Rounded.ExpandMore, null, Modifier.rotate(rot).size(20.dp), tint = color)
@@ -356,7 +367,14 @@ internal fun DropPlaceholder(
     modifier: Modifier = Modifier,
 ) {
     val bg by animateColorAsState(if (hot) MaterialTheme.colorScheme.primaryContainer else MintTheme.card.copy(alpha = 0.5f), MintTheme.spec(), label = "drop-hot")
-    Box(modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(14.dp)).background(bg), contentAlignment = Alignment.Center) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = 44.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(bg),
+        contentAlignment = Alignment.Center,
+    ) {
         Text(stringResource(R.string.todo_drop_here), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -404,7 +422,8 @@ private fun NextUpTask(
     val actions = LocalActions.current
     val nav = LocalNav.current
     Row(Modifier.fillMaxWidth().clickable { nav.openTask(t.id) }, verticalAlignment = Alignment.CenterVertically) {
-        app.mintcal.ui.components.MintCheck(t.done, { d -> toggle(actions, snap, t, d, now, ctx.getString(R.string.done_toast, t.title)) })
+        app.mintcal.ui.components
+            .MintCheck(t.done, { d -> toggle(actions, snap, t, d, now, ctx.getString(R.string.done_toast, t.title)) })
         Text(
             t.title,
             Modifier.weight(1f),

@@ -201,11 +201,15 @@ class TodoV2Test {
 }
 
 class TodoSearchTest {
-    private val t = app.mintcal.core.model.Task("1", "写概率论作业", tags = listOf("期末"), priority = 3)
+    private val t =
+        app.mintcal.core.model
+            .Task("1", "写概率论作业", tags = listOf("期末"), priority = 3)
 
     @kotlin.test.Test
     fun `parses operators and words`() {
-        val q = app.mintcal.core.todo.TodoSearch.parse("#学习 @期末 !高 作业")
+        val q =
+            app.mintcal.core.todo.TodoSearch
+                .parse("#学习 @期末 !高 作业")
         kotlin.test.assertEquals(listOf("学习"), q.lists)
         kotlin.test.assertEquals(listOf("期末"), q.tags)
         kotlin.test.assertEquals(3, q.priority)

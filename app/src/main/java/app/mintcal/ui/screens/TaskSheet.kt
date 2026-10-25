@@ -50,12 +50,12 @@ import app.mintcal.core.change.Edits
 import app.mintcal.core.model.Freq
 import app.mintcal.core.model.Recurrence
 import app.mintcal.core.model.Task
-import app.mintcal.ui.components.ChipChoice
 import app.mintcal.core.todo.TaskLogic
 import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
+import app.mintcal.ui.components.ChipChoice
 import app.mintcal.ui.components.DatePickerDlg
 import app.mintcal.ui.components.MintCheck
 import app.mintcal.ui.components.TimePickerDlg

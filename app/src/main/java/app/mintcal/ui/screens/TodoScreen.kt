@@ -22,12 +22,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -313,7 +313,14 @@ fun TodoScreen() {
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (selecting) {
                         Text(stringResource(R.string.todo_selected_count, selected.size), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { selectedCsv = sections.filter { it.bucket != Bucket.DONE }.flatMap { s -> s.tasks.map { it.id } }.toSet().toCsv() }) {
+                        TextButton(onClick = {
+                            selectedCsv =
+                                sections
+                                    .filter { it.bucket != Bucket.DONE }
+                                    .flatMap { s -> s.tasks.map { it.id } }
+                                    .toSet()
+                                    .toCsv()
+                        }) {
                             Text(stringResource(R.string.todo_select_all))
                         }
                         TextButton(onClick = { exitSelect() }) { Text(stringResource(R.string.cancel)) }

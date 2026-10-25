@@ -21,8 +21,14 @@ object TodoSearch {
         for (raw in input.trim().split(Regex("\\s+"))) {
             if (raw.isEmpty()) continue
             when {
-                raw.startsWith("#") && raw.length > 1 -> lists += raw.substring(1).lowercase()
-                raw.startsWith("@") && raw.length > 1 -> tags += raw.substring(1).lowercase()
+                raw.startsWith("#") && raw.length > 1 -> {
+                    lists += raw.substring(1).lowercase()
+                }
+
+                raw.startsWith("@") && raw.length > 1 -> {
+                    tags += raw.substring(1).lowercase()
+                }
+
                 raw.startsWith("!") || raw.startsWith("！") -> {
                     priority =
                         when (raw.substring(1).lowercase()) {
@@ -33,7 +39,9 @@ object TodoSearch {
                         }
                 }
 
-                else -> words += raw.lowercase()
+                else -> {
+                    words += raw.lowercase()
+                }
             }
         }
         return TodoQuery(words, lists, tags, priority)
