@@ -21,6 +21,8 @@ data class Settings(
     val courseRemindMinutes: Int = 15,
     val remindTask: Boolean = true,
     val remindEvent: Boolean = true,
+    /** 每天早上 7:30 的「今日安排」摘要通知，默认关。 */
+    val dailyDigest: Boolean = false,
     val parcelEnabled: Boolean = false,
     val parcelAiFallback: Boolean = false,
     val aiBaseUrl: String = "https://api.openai.com/v1",
@@ -50,6 +52,7 @@ class SettingsStore(
             courseRemindMinutes = sp.getInt("courseRemindMinutes", d.courseRemindMinutes),
             remindTask = sp.getBoolean("remindTask", d.remindTask),
             remindEvent = sp.getBoolean("remindEvent", d.remindEvent),
+            dailyDigest = sp.getBoolean("dailyDigest", d.dailyDigest),
             parcelEnabled = sp.getBoolean("parcelEnabled", d.parcelEnabled),
             parcelAiFallback = sp.getBoolean("parcelAiFallback", d.parcelAiFallback),
             aiBaseUrl = sp.getString("aiBaseUrl", d.aiBaseUrl)!!,
@@ -72,6 +75,7 @@ class SettingsStore(
             .putInt("courseRemindMinutes", n.courseRemindMinutes)
             .putBoolean("remindTask", n.remindTask)
             .putBoolean("remindEvent", n.remindEvent)
+            .putBoolean("dailyDigest", n.dailyDigest)
             .putBoolean("parcelEnabled", n.parcelEnabled)
             .putBoolean("parcelAiFallback", n.parcelAiFallback)
             .putString("aiBaseUrl", n.aiBaseUrl)

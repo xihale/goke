@@ -109,6 +109,7 @@ class ReminderScheduler(
         /** 自检测试提醒的请求码，须落在 0 until MAX 之外，免得被重新调度时取消。 */
         const val TEST_ID = 9001
         private val ALL_DAY_REMIND_AT = LocalTime.of(9, 0)
+        private val DIGEST_AT = LocalTime.of(7, 30)
 
         /** 纯计算：未来 7 天内、晚于 now 的提醒，按触发时间排序。 */
         fun compute(
@@ -121,6 +122,13 @@ class ReminderScheduler(
             val days = Agenda.range(snap, from, from.plusDays(8), st.defaultBlockMinutes, includeDoneTasks = false)
             val out = mutableListOf<Reminder>()
             for ((date, items) in days) {
+                if (st.dailyDigest) {
+                    val courses = items.count { it is CourseItem }
+                    val tasks = items.count { it is TaskItem && !it.task.done }
+                    if (courses + tasks > 0) {
+                        out += Reminder(date.atTime(DIGEST_AT), ctx.getString(R.string.digest_title), ctx.getString(R.string.today_summary, courses, tasks), "digest$date")
+                    }
+                }
                 for (item in items) {
                     when (item) {
                         is CourseItem -> {
@@ -128,11 +136,19 @@ class ReminderScheduler(
                             val minutes = c.remindMinutes ?: st.courseRemindMinutes.takeIf { st.remindCourse }
                             if (minutes != null) {
                                 val loc = item.occ.room.ifBlank { null }
+                                // 「课前要交」的待办一并写进提醒：上课前最后一次想起来
+                                val due =
+                                    snap.tasks
+                                        .filter { t ->
+                                            t.deletedAt == null && t.parentId == null && !t.done && t.dueBeforeNextClass && t.courseId != null &&
+                                                (t.courseId == c.id || snap.courses.firstOrNull { x -> x.id == t.courseId }?.name == c.name)
+                                        }.map { it.title }
+                                val extra = if (due.isEmpty()) "" else " · " + ctx.getString(R.string.remind_course_tasks, due.take(3).joinToString("、"))
                                 out +=
                                     Reminder(
                                         item.occ.start.minusMinutes(minutes.toLong()),
                                         c.name,
-                                        ctx.getString(R.string.remind_course_text, "%02d:%02d".format(item.occ.start.hour, item.occ.start.minute), loc ?: ctx.getString(R.string.none)),
+                                        ctx.getString(R.string.remind_course_text, "%02d:%02d".format(item.occ.start.hour, item.occ.start.minute), loc ?: ctx.getString(R.string.none)) + extra,
                                         "c${c.id}${item.occ.start}",
                                     )
                             }

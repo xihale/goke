@@ -38,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +56,7 @@ import app.mintcal.core.agenda.Agenda
 import app.mintcal.core.agenda.BlockItem
 import app.mintcal.core.agenda.CourseItem
 import app.mintcal.core.agenda.EventItem
+import app.mintcal.core.agenda.FreeGaps
 import app.mintcal.core.agenda.TaskItem
 import app.mintcal.core.change.Edits
 import app.mintcal.core.time.SemesterCalendar
@@ -102,6 +104,12 @@ fun TodayScreen() {
                 }.orEmpty()
         }
     var menu by remember { mutableStateOf(false) }
+    var gapDismissed by rememberSaveable { mutableStateOf("") }
+    // 空档推荐：只推荐有估时、还没排进日历的待办，且每天可关掉
+    val gapSuggestion =
+        remember(snap, items, now, settings.defaultBlockMinutes) {
+            FreeGaps.suggest(FreeGaps.gaps(items, today, now, settings.defaultBlockMinutes), snap.tasks, now)
+        }
 
     val courseCount = items.count { it is CourseItem }
     val taskTotal = items.count { it is TaskItem || it is BlockItem }
@@ -182,6 +190,31 @@ fun TodayScreen() {
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                             )
                         }
+                    }
+                }
+            }
+        }
+        if (gapSuggestion != null && gapDismissed != today.toString()) {
+            item(key = "gap") {
+                val g = gapSuggestion
+                // 起点取整到 5 分钟，排出来的时间块更整齐
+                val start = g.gap.start.withSecond(0).withNano(0).let { it.plusMinutes(((5 - it.minute % 5) % 5).toLong()) }
+                MintCard(color = MaterialTheme.colorScheme.secondaryContainer) {
+                    Text(
+                        stringResource(R.string.today_gap_text, g.gap.start.hm(), g.gap.end.hm(), g.gap.minutes, g.task.title, g.minutes),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                    Row {
+                        androidx.compose.material3.TextButton(onClick = {
+                            actions.commit(
+                                Edits.updateTasks(listOf(g.task), ctx.getString(R.string.today_gap_desc, g.task.title), System.currentTimeMillis()) {
+                                    it.copy(blockStart = start, blockMinutes = g.minutes)
+                                },
+                                ctx.getString(R.string.today_gap_toast, start.hm()),
+                            )
+                        }) { Text(stringResource(R.string.today_gap_schedule)) }
+                        androidx.compose.material3.TextButton(onClick = { gapDismissed = today.toString() }) { Text(stringResource(R.string.today_gap_dismiss)) }
                     }
                 }
             }

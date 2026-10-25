@@ -50,6 +50,7 @@ import app.mintcal.core.time.SemesterCalendar
 import app.mintcal.core.time.WeekSets
 import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
+import app.mintcal.ui.Route
 import app.mintcal.ui.components.ChipChoice
 import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.FieldText
@@ -66,6 +67,7 @@ fun CourseEditScreen(
 ) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
+    val nav = app.mintcal.ui.LocalNav.current
     val snap = liveSnapshot()
     val sem = snap.currentSemester
     if (sem == null) {
@@ -191,6 +193,22 @@ fun CourseEditScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = if (weeks.isEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            if (existing != null) {
+                val related =
+                    snap.tasks.filter { t ->
+                        t.deletedAt == null && t.parentId == null && !t.done && t.courseId != null &&
+                            (t.courseId == existing.id || snap.courses.firstOrNull { it.id == t.courseId }?.name == existing.name)
+                    }
+                FormSection(stringResource(R.string.course_todos)) {
+                    if (related.isEmpty()) {
+                        Text(stringResource(R.string.course_todos_empty), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    related.forEach { t -> TodoLine(t, snap, java.time.LocalDateTime.now(), Modifier.padding(vertical = 3.dp)) }
+                    androidx.compose.material3.TextButton(onClick = {
+                        nav.push(Route.TaskDetail(id = null, title = "", courseId = existing.id, beforeClass = true))
+                    }) { Text(stringResource(R.string.course_todos_add)) }
+                }
             }
             FormSection(stringResource(R.string.section_more)) {
                 Text(stringResource(R.string.label_color), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)

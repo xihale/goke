@@ -150,6 +150,10 @@ fun SettingsScreen(onBack: () -> Unit) {
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(remindEvent = v) }
                 }
+                SwitchRow(stringResource(R.string.remind_digest), stringResource(R.string.remind_digest_desc), st.dailyDigest) { v ->
+                    if (v) ensureNotifPermission()
+                    app.settings.update { it.copy(dailyDigest = v) }
+                }
                 AnimatedVisibility(
                     visible = needExact,
                     enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
