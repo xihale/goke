@@ -8,6 +8,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,8 +25,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -42,13 +45,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
@@ -56,7 +63,6 @@ import app.mintcal.core.agenda.Agenda
 import app.mintcal.core.agenda.BlockItem
 import app.mintcal.core.agenda.CourseItem
 import app.mintcal.core.agenda.EventItem
-import app.mintcal.core.agenda.FreeGaps
 import app.mintcal.core.agenda.TaskItem
 import app.mintcal.core.change.Edits
 import app.mintcal.core.time.SemesterCalendar
@@ -90,6 +96,15 @@ fun TodayScreen() {
     val today = now.toLocalDate()
     val items = remember(snap, today, settings.defaultBlockMinutes) { Agenda.forDay(snap, today, settings.defaultBlockMinutes) }
     val overdue = remember(snap, now) { TaskLogic.filter(snap.tasks, SmartList.OVERDUE, now) }
+    // 逾期区已经列出的那条，时间线里不再重复一次
+    val overdueIds = remember(overdue) { overdue.map { it.id }.toSet() }
+    val timeline =
+        remember(items, overdueIds) {
+            items.filterNot {
+                // 逾期区已经列过的那条（有没有排时间块都一样）不再出现在时间线里
+                (it is TaskItem && it.task.id in overdueIds) || (it is BlockItem && it.task.id in overdueIds)
+            }
+        }
     val sem = snap.currentSemester
     val weekLabel =
         remember(sem, today) {
@@ -104,14 +119,12 @@ fun TodayScreen() {
                 }.orEmpty()
         }
     var menu by remember { mutableStateOf(false) }
-    var gapDismissed by rememberSaveable { mutableStateOf("") }
-    var gapSkip by rememberSaveable { mutableStateOf(0) }
-    // 空档推荐：只推荐有估时、还没排进日历的待办，且每天可关掉；「换一个」跳到下一个候选
-    val gapSuggestion =
-        remember(snap, items, now, settings.defaultBlockMinutes, gapSkip) {
-            FreeGaps.suggest(FreeGaps.gaps(items, today, now, settings.defaultBlockMinutes), snap.tasks, now, gapSkip)
-        }
 
+    // 做完的收在后面一栏，默认折叠：时间线只留还没做的
+    fun isDone(i: app.mintcal.core.agenda.AgendaItem): Boolean = (i is TaskItem && i.task.done) || (i is BlockItem && i.task.done)
+    val pendingItems = remember(timeline) { timeline.filterNot { isDone(it) } }
+    val doneItems = remember(timeline) { timeline.filter { isDone(it) } }
+    var showDone by rememberSaveable { mutableStateOf(false) }
     val courseCount = items.count { it is CourseItem }
     val taskTotal = items.count { it is TaskItem || it is BlockItem }
     val doneCount = items.count { (it is CourseItem && it.occ.end.isBefore(now)) || (it is EventItem && !it.allDay && it.end.isBefore(now)) || (it is TaskItem && it.task.done) || (it is BlockItem && it.task.done) }
@@ -140,13 +153,9 @@ fun TodayScreen() {
                 Box {
                     IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.Add, stringResource(R.string.add)) }
                     DropdownMenu(menu, { menu = false }) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.new_event)) }, onClick = {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.new_entry)) }, onClick = {
                             menu = false
-                            nav.push(Route.EventEdit(null, today.toString()))
-                        })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.new_task)) }, onClick = {
-                            menu = false
-                            nav.push(Route.TaskDetail(null))
+                            nav.push(Route.TodoEdit(null, today.toString()))
                         })
                         DropdownMenuItem(text = { Text(stringResource(R.string.new_course)) }, onClick = {
                             menu = false
@@ -195,44 +204,6 @@ fun TodayScreen() {
                 }
             }
         }
-        if (gapSuggestion != null && gapDismissed != today.toString()) {
-            item(key = "gap") {
-                val g = gapSuggestion
-                // 起点取整到 5 分钟，排出来的时间块更整齐
-                val start =
-                    g.gap.start
-                        .withSecond(0)
-                        .withNano(0)
-                        .let { it.plusMinutes(((5 - it.minute % 5) % 5).toLong()) }
-                MintCard(color = MaterialTheme.colorScheme.secondaryContainer) {
-                    Text(
-                        stringResource(R.string.today_gap_text, g.gap.start.hm(), g.gap.end.hm(), g.gap.minutes, g.task.title, g.minutes),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
-                    Row {
-                        androidx.compose.material3.TextButton(onClick = {
-                            actions.commit(
-                                Edits.updateTasks(listOf(g.task), ctx.getString(R.string.today_gap_desc, g.task.title), System.currentTimeMillis()) {
-                                    it.copy(blockStart = start, blockMinutes = g.minutes)
-                                },
-                                ctx.getString(R.string.today_gap_toast, start.hm()),
-                            )
-                        }) { Text(stringResource(R.string.today_gap_schedule)) }
-                        androidx.compose.material3.TextButton(onClick = {
-                            // 下一个候选；转完一圈从头再来
-                            gapSkip =
-                                if (FreeGaps.suggest(FreeGaps.gaps(items, today, now, settings.defaultBlockMinutes), snap.tasks, now, gapSkip + 1) != null) {
-                                    gapSkip + 1
-                                } else {
-                                    0
-                                }
-                        }) { Text(stringResource(R.string.today_gap_another)) }
-                        androidx.compose.material3.TextButton(onClick = { gapDismissed = today.toString() }) { Text(stringResource(R.string.today_gap_dismiss)) }
-                    }
-                }
-            }
-        }
         if (overdue.isNotEmpty()) {
             item(key = "h-overdue") { SectionLabel(stringResource(R.string.overdue_count, overdue.size), trailingColor = MintTheme.colors.removed) }
             items(overdue, key = { "od-" + it.id }) { t ->
@@ -245,20 +216,60 @@ fun TodayScreen() {
                 )
             }
         }
-        if (items.isNotEmpty()) item(key = "h-timeline") { SectionLabel(stringResource(R.string.timeline)) }
-        items(items, key = { itemKey(it) }, contentType = { agendaType(it) }) { item ->
+        if (pendingItems.isNotEmpty()) item(key = "h-timeline") { SectionLabel(stringResource(R.string.timeline)) }
+        items(pendingItems, key = { itemKey(it) }, contentType = { agendaType(it) }) { item ->
             AgendaRow(
                 item,
                 now,
                 settings.showTeacher,
                 onOpenCourse = { nav.push(Route.CourseEdit(it)) },
-                onOpenEvent = { nav.push(Route.EventEdit(it)) },
+                onOpenEvent = { nav.push(Route.TodoEdit(it)) },
                 onOpenTask = { nav.openTask(it) },
                 onToggleTask = { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) },
                 modifier = Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()),
             )
         }
-        if (items.isEmpty() && overdue.isEmpty()) {
+        if (doneItems.isNotEmpty()) {
+            item(key = "h-done") {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { showDone = !showDone }
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        stringResource(R.string.done_count, doneItems.size),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    val rot by animateFloatAsState(if (showDone) 180f else 0f, MintTheme.spec(), label = "done-rot")
+                    Icon(
+                        Icons.Rounded.ExpandMore,
+                        null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = rot },
+                    )
+                }
+            }
+            if (showDone) {
+                items(doneItems, key = { itemKey(it) }, contentType = { agendaType(it) }) { item ->
+                    // 做完的压成一行灰字，不再占视觉重心
+                    Text(
+                        if (item is TaskItem) item.task.title else (item as BlockItem).task.title,
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                        textDecoration = TextDecoration.LineThrough,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        if (timeline.isEmpty() && overdue.isEmpty()) {
             item(key = "empty") {
                 Column(Modifier.fillMaxWidth().padding(top = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(stringResource(R.string.today_empty_hint), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)

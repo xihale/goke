@@ -206,7 +206,7 @@ fun CourseEditScreen(
                     }
                     related.forEach { t -> TodoLine(t, snap, java.time.LocalDateTime.now(), Modifier.padding(vertical = 3.dp)) }
                     androidx.compose.material3.TextButton(onClick = {
-                        nav.push(Route.TaskDetail(id = null, title = "", courseId = existing.id, beforeClass = true))
+                        nav.push(Route.TodoEdit(courseId = existing.id))
                     }) { Text(stringResource(R.string.course_todos_add)) }
                 }
             }

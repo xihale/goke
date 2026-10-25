@@ -456,3 +456,15 @@ internal fun OverdueCard(
         }
     }
 }
+
+/** 无框输入框配色：只留文字与光标。 */
+@androidx.compose.runtime.Composable
+private fun transparentFieldColors() =
+    androidx.compose.material3.TextFieldDefaults.colors(
+        focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+        unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+        disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+        focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+        unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+        disabledIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+    )

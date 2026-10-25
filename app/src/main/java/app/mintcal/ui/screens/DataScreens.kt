@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
+import app.mintcal.core.change.Unify
 import app.mintcal.core.export.ExportBundle
 import app.mintcal.core.importer.IcsCalendar
 import app.mintcal.core.importer.IcsImporter
@@ -323,7 +324,8 @@ fun ImportScreen(
                                         else -> {
                                             val ev = IcsImporter.toEvents(cal, now)
                                             val tk = IcsImporter.toTasks(cal, now)
-                                            val recs = ev.value.orEmpty() + tk.value.orEmpty()
+                                            // 日程并进待办：导入的日历事件也落成待办
+                                            val recs = ev.value.orEmpty().map { Unify.eventToTask(it, it.id, 0) } + tk.value.orEmpty()
                                             PlanResult(ImportPlanner.planAdds(recs, now, desc), ev.warnings + tk.warnings, ev.errors + tk.errors, emptyList(), 0)
                                         }
                                     }

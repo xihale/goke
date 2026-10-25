@@ -2,10 +2,20 @@ package app.mintcal.ui.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -15,11 +25,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -38,13 +50,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.CalendarViewWeek
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Icon
@@ -60,29 +75,32 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import app.mintcal.ui.Tab
+import app.mintcal.ui.theme.LocalReduceMotion
 import app.mintcal.ui.theme.MintTheme
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
+import kotlin.math.roundToInt
 
 /** 通用页面骨架：状态栏避让 + 顶栏（返回 / 标题 / 右侧操作）。 */
 @Composable
@@ -273,7 +291,10 @@ fun NavRow(
     }
 }
 
-/** 浮动胶囊底栏：今日 · 课表 · 日历 · 待办，选中项以主容器色底、图标轻微放大。 */
+/**
+ * 浮动胶囊底栏。选中项是一颗滑动色块（匀速补间，不过冲）；按下的那一项原地轻微收紧，
+ * 松手即切换——反馈在按下瞬间就到，不等动画。
+ */
 @Composable
 fun FloatingNavBar(
     tab: Tab,
@@ -288,11 +309,23 @@ fun FloatingNavBar(
     val items =
         listOf(
             Item(Tab.TODAY, Icons.Rounded.WbSunny, R.string.tab_today),
-            Item(Tab.TIMETABLE, Icons.Rounded.GridView, R.string.tab_timetable),
+            Item(Tab.TIMETABLE, Icons.Rounded.CalendarViewWeek, R.string.tab_timetable),
             Item(Tab.CALENDAR, Icons.Rounded.CalendarMonth, R.string.tab_calendar),
             Item(Tab.TODO, Icons.Rounded.CheckCircle, R.string.tab_todo),
         )
+    val selectedIndex = items.indexOfFirst { it.tab == tab }.coerceAtLeast(0)
+    val reduce = LocalReduceMotion.current
     val haptics = LocalHapticFeedback.current
+    val travel = remember { Animatable(selectedIndex.toFloat()) }
+    LaunchedEffect(selectedIndex, reduce) {
+        if (reduce) {
+            travel.snapTo(selectedIndex.toFloat())
+        } else {
+            // 定速补间：色块跟手滑到目标，不拖尾也不过冲
+            travel.animateTo(selectedIndex.toFloat(), tween(durationMillis = 200, easing = FastOutSlowInEasing))
+        }
+    }
+    val index = travel.value
     Surface(
         modifier = modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth(),
         shape = RoundedCornerShape(32.dp),
@@ -300,45 +333,70 @@ fun FloatingNavBar(
         shadowElevation = 8.dp,
         tonalElevation = 2.dp,
     ) {
-        Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            items.forEach { it ->
-                val selected = it.tab == tab
-                val interaction = remember { MutableInteractionSource() }
-                val pressed by interaction.collectIsPressedAsState()
-                val bg by animateColorAsState(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, MintTheme.spec(), label = "nav-bg")
-                val fg by animateColorAsState(if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, MintTheme.spec(), label = "nav-fg")
-                val iconScale by animateFloatAsState(if (selected) 1.15f else 1f, MintTheme.spec(), label = "nav-icon")
-                val pressScale by animateFloatAsState(if (pressed) 0.94f else 1f, MintTheme.spec(), label = "nav-press")
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .graphicsLayer {
-                            scaleX = pressScale
-                            scaleY = pressScale
-                        }.clip(RoundedCornerShape(24.dp))
-                        .background(bg)
-                        .selectable(
-                            selected = selected,
-                            interactionSource = interaction,
-                            role = Role.Tab,
-                            onClick = {
-                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                                onTab(it.tab)
-                            },
-                        ).padding(vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Icon(
-                        it.icon,
-                        null,
-                        tint = fg,
-                        modifier =
-                            Modifier.size(24.dp).graphicsLayer {
-                                scaleX = iconScale
-                                scaleY = iconScale
-                            },
+        BoxWithConstraints(Modifier.fillMaxWidth().height(64.dp).padding(4.dp)) {
+            val itemWidth = maxWidth / items.size
+            Box(
+                Modifier
+                    // 用浮点位移，别用 offset{IntOffset(round)}：240px 的行程每帧只走 1~2px，
+                    // 取整会变成一格一格挪，看着就是抖
+                    .graphicsLayer { translationX = index * itemWidth.toPx() }
+                    .width(itemWidth)
+                    .fillMaxHeight()
+                    .padding(horizontal = 2.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+            )
+            Row(Modifier.fillMaxSize()) {
+                items.forEach { item ->
+                    val selected = item.tab == tab
+                    val interaction = remember { MutableInteractionSource() }
+                    val fg by animateColorAsState(
+                        if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        if (reduce) snap() else tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                        label = "nav-fg",
                     )
-                    Text(stringResource(it.label), style = MaterialTheme.typography.labelSmall, color = fg, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+                    val pressed by interaction.collectIsPressedAsState()
+                    // 按下就是按下：底色轻轻亮一层 + 图标缩一点，松手立刻切换
+                    val press by animateFloatAsState(
+                        if (pressed && !selected) 1f else 0f,
+                        if (reduce) snap() else tween(durationMillis = 110, easing = FastOutLinearInEasing),
+                        label = "nav-press",
+                    )
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f * press))
+                            .selectable(
+                                selected = selected,
+                                interactionSource = interaction,
+                                indication = null,
+                                role = Role.Tab,
+                                onClick = {
+                                    if (!selected) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                    onTab(item.tab)
+                                },
+                            ),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            item.icon,
+                            null,
+                            tint = fg,
+                            modifier =
+                                Modifier
+                                    .size(22.dp)
+                                    .graphicsLayer {
+                                        val k = 1f - 0.08f * press
+                                        scaleX = k
+                                        scaleY = k
+                                    },
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(stringResource(item.label), style = MaterialTheme.typography.labelSmall, color = fg, maxLines = 1)
+                    }
                 }
             }
         }
@@ -453,7 +511,8 @@ fun Modifier.mintPressable(
 }
 
 /**
- * 浮起提示:直接用 Material 3 官方 Snackbar(自带撤销/关闭按钮),这里只负责摆放位置。
+ * 浮起提示:纯消息用 Material 3 官方 Snackbar,这里只负责摆放位置。
+ * 带「撤销」的操作不用长条,见 [MintUndoButton]。
  */
 @Composable
 fun MintSnackbarHost(
@@ -461,6 +520,84 @@ fun MintSnackbarHost(
     modifier: Modifier = Modifier,
 ) {
     SnackbarHost(state, modifier)
+}
+
+/** 一次可撤销操作的提示:只剩一个圆,点一下回到上一步。 */
+data class UndoPrompt(
+    val csId: String,
+    val message: String,
+    val seq: Long,
+)
+
+/** 撤销圆的存活时间,和倒计时圈同步。 */
+const val UNDO_MILLIS: Int = 5000
+
+/**
+ * 圆形「撤销」:比通栏 snackbar 轻得多——不挡内容、不抢注意力。
+ * 外圈是剩余时间倒计时,点圆内即撤销;到时自动收起。
+ */
+@Composable
+fun MintUndoButton(
+    prompt: UndoPrompt?,
+    label: String,
+    onUndo: () -> Unit,
+    onTimeout: (UndoPrompt) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    AnimatedContent(
+        targetState = prompt,
+        // 连续操作只换提示内容,不重播进出动画;出现/收起时才动
+        contentKey = { if (it == null) "none" else "undo" },
+        transitionSpec = {
+            (fadeIn() + scaleIn(initialScale = 0.6f, animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))) togetherWith
+                (fadeOut() + scaleOut(targetScale = 0.9f))
+        },
+        modifier = modifier,
+        label = "undo-circle",
+    ) { p ->
+        if (p == null) {
+            Spacer(Modifier.size(0.dp))
+        } else {
+            val remain = remember { Animatable(1f) }
+            LaunchedEffect(p.seq) {
+                remain.snapTo(1f)
+                remain.animateTo(0f, tween(UNDO_MILLIS, easing = LinearEasing))
+                onTimeout(p)
+            }
+            val haptics = LocalHapticFeedback.current
+            Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(
+                    progress = { remain.value },
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                    strokeWidth = 3.dp,
+                    strokeCap = StrokeCap.Round,
+                )
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shadowElevation = 6.dp,
+                    modifier =
+                        Modifier
+                            .size(52.dp)
+                            .clickable {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onUndo()
+                            },
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.AutoMirrored.Rounded.Undo,
+                            contentDescription = "$label · ${p.message}",
+                            modifier = Modifier.size(26.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** 空状态：图标圆底 + 标题 +（可选）说明与操作按钮；出现/消失由调用方用 AnimatedVisibility 包裹。 */

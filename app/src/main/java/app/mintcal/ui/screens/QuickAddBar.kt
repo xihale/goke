@@ -243,26 +243,7 @@ internal fun QuickAddBar(
     }
 
     fun openDetail() {
-        val p = parsed
-        if (p == null) {
-            nav.push(Route.TaskDetail(id = null))
-            return
-        }
-        val course = matchCourse(snap, p.courseName)
-        nav.push(
-            Route.TaskDetail(
-                id = null,
-                title = p.title,
-                due = p.due?.toString(),
-                dueHasTime = p.dueHasTime,
-                priority = p.priority,
-                listId = p.listName?.let { name -> snap.lists.firstOrNull { it.name == name }?.id },
-                tags = p.tags.joinToString(" "),
-                startDate = if (defaultBucket == Bucket.TODAY && p.due == null) now.toLocalDate().toString() else null,
-                courseId = course?.id,
-                beforeClass = course != null,
-            ),
-        )
+        nav.push(Route.TodoEdit(text = text.ifBlank { null }))
     }
 
     AnimatedVisibility(

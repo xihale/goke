@@ -2,8 +2,8 @@ package app.mintcal.ui
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -42,9 +42,9 @@ import androidx.navigation.toRoute
 import app.mintcal.DeepLink
 import app.mintcal.MintCalApp
 import app.mintcal.R
-import app.mintcal.core.todo.QuickAdd
 import app.mintcal.ui.components.FloatingNavBar
 import app.mintcal.ui.components.MintSnackbarHost
+import app.mintcal.ui.components.MintUndoButton
 import app.mintcal.ui.screens.AboutScreen
 import app.mintcal.ui.screens.AdvancedFullScreen
 import app.mintcal.ui.screens.AiSettingsScreen
@@ -53,7 +53,6 @@ import app.mintcal.ui.screens.CalendarScreen
 import app.mintcal.ui.screens.CourseEditScreen
 import app.mintcal.ui.screens.DataScreen
 import app.mintcal.ui.screens.EditTimetableScreen
-import app.mintcal.ui.screens.EventEditScreen
 import app.mintcal.ui.screens.HistoryScreen
 import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.JxfwScreen
@@ -62,14 +61,11 @@ import app.mintcal.ui.screens.PeriodsScreen
 import app.mintcal.ui.screens.ReliabilityScreen
 import app.mintcal.ui.screens.SettingsScreen
 import app.mintcal.ui.screens.SyncScreen
-import app.mintcal.ui.screens.TaskDetailScreen
-import app.mintcal.ui.screens.TaskDraft
-import app.mintcal.ui.screens.TaskSheet
 import app.mintcal.ui.screens.TimetableScreen
 import app.mintcal.ui.screens.TodayScreen
+import app.mintcal.ui.screens.TodoEditScreen
 import app.mintcal.ui.screens.TodoScreen
 import app.mintcal.ui.screens.TrashScreen
-import app.mintcal.ui.theme.LocalReduceMotion
 import app.mintcal.ui.theme.MintTheme
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
@@ -123,7 +119,6 @@ fun MintCalRoot(
 
             is DeepLink.Add -> {
                 val lines = l.text.lines().count { it.isNotBlank() }
-                val p = if (l.text.isBlank()) null else QuickAdd.parse(l.text, LocalDateTime.now())
                 if (lines > 1) {
                     // 多行：交给待办页快速添加做批量预览
                     nav.clearToRoot()
@@ -131,28 +126,14 @@ fun MintCalRoot(
                     nav.pendingAddText = l.text
                     return@LaunchedEffect
                 }
-                nav.push(
-                    Route.TaskDetail(
-                        id = null,
-                        title = p?.title ?: "",
-                        due = p?.due?.toString(),
-                        dueHasTime = p?.dueHasTime ?: false,
-                        priority = p?.priority ?: 0,
-                        listId =
-                            p?.listName?.let { name ->
-                                app.repo.snapshot.value.lists
-                                    .firstOrNull { it.name == name }
-                                    ?.id
-                            },
-                        tags = p?.tags?.joinToString(" "),
-                    ),
-                )
+                nav.push(Route.TodoEdit(text = l.text))
             }
         }
     }
 
-    val slide = MintTheme.spec<IntOffset>()
-    val fade = MintTheme.spec<Float>()
+    // 转场用定长补间，不能用主题里的低刚度 spring：整页滑入过冲再弹回就是肉眼可见的抖
+    val slide = tween<IntOffset>(durationMillis = 260, easing = FastOutSlowInEasing)
+    val fade = tween<Float>(durationMillis = 200, easing = FastOutSlowInEasing)
     val back: () -> Unit = {
         nav.pop()
         Unit
@@ -177,7 +158,18 @@ fun MintCalRoot(
                     mintDestinations(nav, back)
                 }
             }
-            nav.sheetTaskId?.let { id -> TaskSheet(id) { nav.sheetTaskId = null } }
+            MintUndoButton(
+                prompt = actions.undo,
+                label = actions.undoLabel,
+                onUndo = actions::undoNow,
+                onTimeout = { actions.timeout(it.seq) },
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .navigationBarsPadding()
+                        .padding(start = 20.dp)
+                        .padding(bottom = if (!onRoute) 168.dp else 96.dp),
+            )
             MintSnackbarHost(
                 snack,
                 Modifier
@@ -211,63 +203,19 @@ fun NavGraphBuilder.mintDestinations(
     composable<Route.Reliability> { ReliabilityScreen(back) }
     composable<Route.Import> { e -> ImportScreen(e.toRoute<Route.Import>().uri, back) }
     composable<Route.CourseEdit> { e -> CourseEditScreen(e.toRoute<Route.CourseEdit>().id, back) }
-    composable<Route.EventEdit> { e ->
-        val r = e.toRoute<Route.EventEdit>()
-        EventEditScreen(r.id, r.date, r.start, r.end, back)
-    }
-    composable<Route.TaskDetail> { e ->
-        val r = e.toRoute<Route.TaskDetail>()
-        TaskDetailScreen(
-            id = r.id,
-            draft =
-                r.title?.let {
-                    TaskDraft(
-                        title = it,
-                        due = r.due?.let { iso -> runCatching { LocalDateTime.parse(iso) }.getOrNull() },
-                        dueHasTime = r.dueHasTime,
-                        priority = r.priority,
-                        listId = r.listId,
-                        tags = r.tags.orEmpty(),
-                        startDate = r.startDate?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() },
-                        courseId = r.courseId,
-                        beforeClass = r.beforeClass,
-                    )
-                },
-            onBack = back,
-        )
+    composable<Route.TodoEdit> { e ->
+        val r = e.toRoute<Route.TodoEdit>()
+        TodoEditScreen(r.id, r.date, r.start, r.end, r.text, r.courseId, r.extraDates, back)
     }
 }
 
 @Composable
 private fun Tabs(nav: Nav) {
-    // 全部 Tab 常驻组合：切换是纯绘制层过渡（零重组，滚动/筛选/翻页状态永不丢），
+    // 全部 Tab 常驻组合：切换只动绘制层（零重组，滚动/筛选/翻页状态永不丢），
     // 且四个页在启动时一次性组装——这帧重活落在启动屏底下，之后任何切换都不再有首访组装尖刺。
-    // 未选中的 Tab 在绘制层下透明且拦截指针，避免误触。
+    // 切页本身不做任何位移/淡入：内容瞬切、底栏色块滑过去。位移过渡需要在新页首帧之后才把
+    // 偏移打进去（一帧跳出去再滑回来），线框多的课表/日历上看着就是抖——平台惯例也是瞬切。
     val visited = remember { Tab.entries.toList() }
-    val reduce = LocalReduceMotion.current
-    val animSpec = MintTheme.spec<Float>()
-    val alphas =
-        remember {
-            mutableMapOf<Tab, Animatable<Float, AnimationVector1D>>().apply { put(nav.tab, Animatable(1f)) }
-        }
-    val prev = remember { mutableStateOf(nav.tab) }
-    var direction by remember { mutableStateOf(1f) }
-    LaunchedEffect(nav.tab) {
-        val old = prev.value
-        if (old == nav.tab) return@LaunchedEffect
-        direction = if (Tab.entries.indexOf(nav.tab) >= Tab.entries.indexOf(old)) 1f else -1f
-        prev.value = nav.tab
-        // 驱动所有 Tab 到目标透明度：连点中断时不会留下半透明残页
-        Tab.entries.forEach { t ->
-            val anim = alphas.getOrPut(t) { Animatable(0f) }
-            val target = if (t == nav.tab) 1f else 0f
-            if (reduce) {
-                anim.snapTo(target)
-            } else {
-                launch { anim.animateTo(target, animSpec) }
-            }
-        }
-    }
     Box(Modifier.fillMaxSize()) {
         visited.forEach { tab ->
             key(tab) {
@@ -276,17 +224,8 @@ private fun Tabs(nav: Nav) {
                     Modifier
                         .zIndex(if (current) 1f else 0f)
                         .fillMaxSize()
-                        .graphicsLayer {
-                            val a = alphas[tab]?.value ?: if (current) 1f else 0f
-                            alpha = a
-                            // 共享轴 X 方向感：新页随进度滑入，旧页反向轻微让位
-                            translationX =
-                                if (current) {
-                                    direction * (1f - a) * 0.05f * size.width
-                                } else {
-                                    -direction * (1f - a) * 0.03f * size.width
-                                }
-                        }.blockPointer(!current),
+                        .graphicsLayer { alpha = if (current) 1f else 0f }
+                        .blockPointer(!current),
                 ) {
                     when (tab) {
                         Tab.TODAY -> TodayScreen()

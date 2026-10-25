@@ -1,0 +1,69 @@
+package app.mintcal.core.change
+
+import app.mintcal.core.model.Event
+import app.mintcal.core.model.Recurrence
+import app.mintcal.core.model.Snapshot
+import app.mintcal.core.model.Source
+import app.mintcal.core.model.Task
+import app.mintcal.core.util.IdGenerator
+import app.mintcal.core.util.Ids
+import java.time.Duration
+import java.time.LocalTime
+
+/**
+ * 「日程」并进「待办」：一条日程就是一条带时间的待办。
+ * 有时间的把时间落到 blockStart（日历/课表上占一段），截止取结束时刻；
+ * 全天日程退化成只有日期的待办。
+ */
+object Unify {
+    const val MIN_BLOCK = 15
+
+    fun eventToTask(
+        e: Event,
+        id: String,
+        sortOrder: Int,
+    ): Task {
+        val timed = !e.allDay
+        val note =
+            listOf(e.note.trim(), e.location.trim())
+                .filter { it.isNotEmpty() }
+                .joinToString("\n")
+        val minutes =
+            Duration
+                .between(e.start, e.end)
+                .toMinutes()
+                .toInt()
+                .coerceIn(MIN_BLOCK, 24 * 60)
+        return Task(
+            id = id,
+            title = e.title,
+            note = note,
+            due = if (timed) e.end else e.start.toLocalDate().atTime(LocalTime.of(23, 59)),
+            dueHasTime = timed,
+            blockStart = if (timed) e.start else null,
+            blockMinutes = if (timed) minutes else null,
+            remindMinutes = e.remindMinutes,
+            repeat = e.recurrence?.let { r -> Recurrence(r.freq, r.interval, r.byDays, r.until, r.count, r.exDates) },
+            sortOrder = sortOrder,
+            source = e.source,
+        )
+    }
+
+    /** 把快照里所有未删除的日程转成待办；没有日程时返回 null。 */
+    fun changeSet(
+        s: Snapshot,
+        now: Long,
+        ids: IdGenerator = Ids,
+    ): ChangeSet? {
+        val events = s.events.filter { it.deletedAt == null }
+        if (events.isEmpty()) return null
+        var order = s.tasks.maxOfOrNull { it.sortOrder } ?: 0
+        val changes = mutableListOf<Change>()
+        events.forEach { e ->
+            order += 1
+            changes += Change.Add(eventToTask(e, ids.next(), order))
+            changes += Change.Remove(e)
+        }
+        return ChangeSet(ids.next(), "日程并进待办", Source.MANUAL, now, changes)
+    }
+}

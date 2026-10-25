@@ -3,6 +3,7 @@ package app.mintcal
 import android.app.Application
 import android.content.Context
 import app.mintcal.ai.AdvancedController
+import app.mintcal.core.change.Unify
 import app.mintcal.data.AutoBackup
 import app.mintcal.data.MintDb
 import app.mintcal.data.Repository
@@ -60,6 +61,12 @@ class MintCalApp : Application() {
         DeepLinks.publishShortcuts(this)
         scope.launch {
             repo.load()
+            // 一次性迁移：日程并进待办（「有时间的待办」），此后不再产生日程记录
+            if (!settings.value.unifiedTasks) {
+                val snap = repo.snapshot.value
+                Unify.changeSet(snap, System.currentTimeMillis())?.let { repo.commit(it) }
+                settings.update { it.copy(unifiedTasks = true) }
+            }
             sync.requestSync(1000)
             jxfw.ensureAlarm()
             launch { jxfw.catchUp() }

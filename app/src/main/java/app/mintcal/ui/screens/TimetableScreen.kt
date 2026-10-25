@@ -56,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,10 +68,13 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -81,6 +85,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import app.mintcal.R
 import app.mintcal.core.agenda.Agenda
 import app.mintcal.core.agenda.CellKind
@@ -89,6 +94,7 @@ import app.mintcal.core.agenda.TimetableDiff
 import app.mintcal.core.change.ChangeSet
 import app.mintcal.core.change.Edits
 import app.mintcal.core.change.apply
+import app.mintcal.core.change.repeatInstances
 import app.mintcal.core.model.Course
 import app.mintcal.core.model.CourseException
 import app.mintcal.core.model.ExceptionType
@@ -115,6 +121,7 @@ import app.mintcal.ui.weekdayShort
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
+import kotlin.math.roundToInt
 
 private val TimeColW = 34.dp
 private val RowH = 60.dp
@@ -168,6 +175,13 @@ fun TimetableScreen() {
     }
     // 再次点按「课表」Tab：跳回本周
     LaunchedEffect(nav.reselect) { pager.scrollToPage(startPage) }
+    // 冲突面板「去查看」：跳到那一天所在的周并选中它
+    LaunchedEffect(nav.focusDate) {
+        val d = nav.focusDate ?: return@LaunchedEffect
+        val w = cal.weekOf(d)
+        if (w in 1..sem.totalWeeks) pager.scrollToPage(w - 1)
+        nav.focusDate = null
+    }
 
     val slideSpec = MintTheme.spec<IntOffset>()
     val fadeSpec = MintTheme.spec<Float>()
@@ -231,13 +245,23 @@ fun TimetableScreen() {
             val weekEnd = cal.weekEnd(week)
             // 待办块:blockStart ?: due 落在本周的就画上格子(子任务除外),颜色取所属清单色,和课程块同构
             val listColor = remember(snap) { snap.lists.associate { it.id to it.colorIndex } }
+            // 重复的待办按周展开：同一时间块每周都画（结束日到了就停）
             val blocks =
-                remember(snap, week, listColor) {
+                remember(snap, week, listColor, weekStart, weekEnd) {
                     snap.tasks
-                        .filter { t ->
-                            t.parentId == null &&
-                                (t.blockStart ?: t.due)?.toLocalDate()?.let { d -> !d.isBefore(weekStart) && !d.isAfter(weekEnd) } == true
-                        }.map { it to (listColor[it.listId] ?: 1) }
+                        .filter { t -> t.parentId == null && (t.blockStart ?: t.due) != null }
+                        .flatMap { t ->
+                            val at = t.blockStart ?: t.due!!
+                            val days =
+                                if (t.blockStart == null) {
+                                    listOf(at.toLocalDate())
+                                } else {
+                                    repeatInstances(at.toLocalDate(), t.repeat?.freq, t.repeat?.until)
+                                }
+                            days
+                                .filter { d -> !d.isBefore(weekStart) && !d.isAfter(weekEnd) }
+                                .map { d -> BlockRow(t, listColor[t.listId] ?: 1, LocalDateTime.of(d, at.toLocalTime()), t.blockStart != null) }
+                        }
                 }
             // clipToBounds:视差 translationX 会把相邻页的内容拖进本页边缘(右侧露出邻页节次列),按页裁掉
             Box(Modifier.clipToBounds()) {
@@ -260,17 +284,31 @@ fun TimetableScreen() {
                         },
                     onClick = { selected = it },
                     onOpenTask = { nav.openTask(it) },
-                    onBoxSelect = { day, s, e ->
-                        val date = cal.dateOf(week, day)
+                    onMoveTask = { task, s, m ->
+                        val end = s.plusMinutes(m.toLong())
+                        actions.commit(
+                            Edits.save(
+                                snap,
+                                task.copy(blockStart = s, blockMinutes = m, due = end, dueHasTime = true),
+                                ctx.getString(R.string.edit_task_desc, task.title),
+                                System.currentTimeMillis(),
+                            ),
+                            ctx.getString(R.string.saved_toast),
+                        )
+                    },
+                    onBoxSelect = { days, s, e ->
                         val ps = sem.periods.sortedBy { it.index }
                         val startP = ps.firstOrNull { it.index == s } ?: return@WeekGrid
                         val endP = ps.firstOrNull { it.index == e } ?: return@WeekGrid
+                        val dates = days.map { cal.dateOf(week, it) }
+                        val first = dates.first()
                         nav.push(
-                            Route.EventEdit(
-                                null,
-                                date.toString(),
-                                start = date.atTime(startP.start).toString(),
-                                end = date.atTime(endP.end).toString(),
+                            Route.TodoEdit(
+                                id = null,
+                                date = first.toString(),
+                                start = first.atTime(startP.start).toString(),
+                                end = first.atTime(endP.end).toString(),
+                                extraDates = dates.drop(1).joinToString(",") { it.toString() },
                             ),
                         )
                     },
@@ -321,14 +359,15 @@ private fun WeekGrid(
     week: Int,
     today: LocalDate,
     cells: List<TimetableCell>,
-    blocks: List<Pair<Task, Int>>,
+    blocks: List<BlockRow>,
     defaultBlockMinutes: Int,
     showTeacher: Boolean,
     scroll: androidx.compose.foundation.ScrollState,
     modifier: Modifier = Modifier,
     onClick: (TimetableCell) -> Unit,
     onOpenTask: (String) -> Unit,
-    onBoxSelect: (day: Int, startPeriod: Int, endPeriod: Int) -> Unit,
+    onMoveTask: (Task, LocalDateTime, Int) -> Unit,
+    onBoxSelect: (days: IntRange, startPeriod: Int, endPeriod: Int) -> Unit,
 ) {
     val ctx = LocalContext.current
     val periods = sem.periods.sortedBy { it.index }
@@ -356,7 +395,7 @@ private fun WeekGrid(
             }
         }
         Box(Modifier.weight(1f).verticalScroll(scroll)) {
-            // 长按空白处拖动框选一段时间 → 直接新建日程;拖动中高亮所选列与节次段
+            // 长按空白处拖动框选：横跨几天、纵跨几节 → 一次建多条（重复/冲突在编辑页里定）
             var box by remember { mutableStateOf<BoxSel?>(null) }
             BoxWithConstraints(
                 Modifier
@@ -367,6 +406,8 @@ private fun WeekGrid(
                         val colPx = (size.width - timeColPx) / 7f
                         val rowPx = RowH.toPx()
 
+                        fun colOf(x: Float): Int = (((x - timeColPx) / colPx).toInt().coerceIn(0, 6)) + 1
+
                         fun slotOf(y: Float): Int {
                             for (p in 1..n) {
                                 val top = (RowH.value * (p - 1) + GroupGap.value * groupBoundaries(n).count { p > it }) * density
@@ -374,23 +415,25 @@ private fun WeekGrid(
                             }
                             return n
                         }
-                        var anchor = 0
+                        var anchorDay = 1
+                        var anchorSlot = 1
                         detectDragGesturesAfterLongPress(
                             onDragStart = { off ->
                                 if (off.x >= timeColPx) {
-                                    val day = (((off.x - timeColPx) / colPx).toInt().coerceIn(0, 6)) + 1
-                                    anchor = slotOf(off.y)
-                                    box = BoxSel(day, anchor, anchor)
+                                    anchorDay = colOf(off.x)
+                                    anchorSlot = slotOf(off.y)
+                                    box = BoxSel(anchorDay, anchorDay, anchorSlot, anchorSlot)
                                 }
                             },
                             onDrag = { change, _ ->
                                 val b = box ?: return@detectDragGesturesAfterLongPress
                                 change.consume()
+                                val d = colOf(change.position.x)
                                 val e = slotOf(change.position.y).coerceIn(1, n)
-                                box = b.copy(first = minOf(anchor, e), last = maxOf(anchor, e))
+                                box = b.copy(day2 = d, first = minOf(anchorSlot, e), last = maxOf(anchorSlot, e))
                             },
                             onDragEnd = {
-                                box?.let { b -> onBoxSelect(b.day, b.first, b.last) }
+                                box?.let { b -> onBoxSelect(minOf(b.day1, b.day2)..maxOf(b.day1, b.day2), b.first, b.last) }
                                 box = null
                             },
                             onDragCancel = { box = null },
@@ -435,20 +478,25 @@ private fun WeekGrid(
                     )
                 }
                 // 待办时间块:排入日历的按时长,普通待办画在截止时刻所在的节次;整列宽,压住课程格正好就是冲突
-                blocks.forEach { (t, ci) ->
-                    val s = t.blockStart ?: t.due ?: return@forEach
-                    val e = if (t.blockStart != null) TaskLogic.blockEnd(t, defaultBlockMinutes) ?: s else s.plusMinutes(1)
+                blocks.forEach { b ->
+                    val t = b.task
+                    val s = b.start
+                    val e = if (b.timed) s.plusMinutes(b.minutes.toLong()) else s.plusMinutes(1)
                     val rows = Agenda.blockRows(periods, s.toLocalTime(), e.toLocalTime()) ?: return@forEach
                     val top = periodTop(rows.first, n) + 2.dp
                     val bottom = periodTop(rows.last, n) + RowH - 2.dp
+                    val minutes = b.minutes
                     TaskBlock(
                         t,
-                        ci,
+                        b.color,
                         s,
-                        Modifier
-                            .absoluteOffset(TimeColW + colW * (s.dayOfWeek.value - 1) + 1.5.dp, top)
-                            .width(colW - 3.dp)
-                            .height(bottom - top),
+                        minutes,
+                        onCommit = { ns, nm -> onMoveTask(t, ns, nm) },
+                        modifier =
+                            Modifier
+                                .absoluteOffset(TimeColW + colW * (s.dayOfWeek.value - 1) + 1.5.dp, top)
+                                .width(colW - 3.dp)
+                                .height(bottom - top),
                         onClick = { onOpenTask(t.id) },
                     )
                 }
@@ -456,10 +504,12 @@ private fun WeekGrid(
                 box?.let { b ->
                     val top = periodTop(b.first, n) + 2.dp
                     val bottom = periodTop(b.last, n) + RowH - 2.dp
+                    val d1 = minOf(b.day1, b.day2)
+                    val d2 = maxOf(b.day1, b.day2)
                     Box(
                         Modifier
-                            .absoluteOffset(TimeColW + colW * (b.day - 1) + 1.5.dp, top)
-                            .width(colW - 3.dp)
+                            .absoluteOffset(TimeColW + colW * (d1 - 1) + 1.5.dp, top)
+                            .width(colW * (d2 - d1 + 1) - 3.dp)
                             .height(bottom - top)
                             .clip(RoundedCornerShape(14.dp))
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
@@ -471,9 +521,20 @@ private fun WeekGrid(
     }
 }
 
-/** 课表框选:day 1-7,first/last 为节次序号(升序)。 */
+/** 课表格子里的一条待办：同一条重复待办每周各算一条。 */
+private data class BlockRow(
+    val task: Task,
+    val color: Int,
+    val start: LocalDateTime,
+    val timed: Boolean,
+) {
+    val minutes: Int get() = task.blockMinutes ?: 60
+}
+
+/** 课表框选：day 1-7，first/last 为节次序号（升序）。 */
 private data class BoxSel(
-    val day: Int,
+    val day1: Int,
+    val day2: Int,
     val first: Int,
     val last: Int,
 )
@@ -483,34 +544,178 @@ private fun TaskBlock(
     task: Task,
     colorIndex: Int,
     start: LocalDateTime,
+    minutes: Int,
+    onCommit: (LocalDateTime, Int) -> Unit,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
-    // 与 CourseBlock 同款:圆角填色块、同字号,无勾选圈;点击进详情
+    // 与 CourseBlock 同款:圆角填色块、同字号,无勾选圈;点击进编辑
     val colors = MintTheme.colors
     val bg = colors.bg(colorIndex)
     val fg = colors.fg(colorIndex)
     val shape = RoundedCornerShape(14.dp)
-    Column(
+    val haptics = LocalHapticFeedback.current
+    var hPx by remember { mutableFloatStateOf(0f) }
+    // 0 不动 / 1 整体移动 / 2 拖上边 / 3 拖下边
+    var mode by remember { mutableIntStateOf(0) }
+    // 拖动中的目标偏移，已经按 15 分钟吸附：视觉跟数值一致，不是松手才算
+    var step by remember { mutableIntStateOf(0) }
+    val active = mode != 0
+    val dur = minutes.coerceAtLeast(15)
+    val pxPerMin = if (hPx > 0f) hPx / dur.toFloat() else 0f
+    val dy = step * pxPerMin
+    val edgePx = with(LocalDensity.current) { 16.dp.toPx() }
+
+    // 拖动中的预览：起点、时长、终点
+    val previewStart = if (mode == 2) start.plusMinutes(step.toLong()) else start
+    val previewMin =
+        when (mode) {
+            2 -> dur - step
+            3 -> dur + step
+            else -> dur
+        }
+    val previewEnd = previewStart.plusMinutes(previewMin.toLong())
+
+    val layer =
+        if (mode == 2) {
+            Modifier.graphicsLayer {
+                translationY = dy
+                transformOrigin = TransformOrigin(0.5f, 1f)
+                scaleY = ((hPx - dy) / hPx.coerceAtLeast(1f)).coerceIn(0.1f, 6f)
+            }
+        } else if (mode == 3) {
+            Modifier.graphicsLayer {
+                transformOrigin = TransformOrigin(0.5f, 0f)
+                scaleY = ((hPx + dy) / hPx.coerceAtLeast(1f)).coerceIn(0.1f, 6f)
+            }
+        } else {
+            Modifier.graphicsLayer { translationY = if (mode == 1) dy else 0f }
+        }
+
+    Box(
         modifier
-            .mintPressable(pressedScale = 0.97f, ripple = false) { onClick() }
-            .alpha(if (task.done) 0.5f else 1f)
-            .clip(shape)
-            .background(bg)
-            .padding(horizontal = 5.dp, vertical = 5.dp),
+            .zIndex(if (active) 3f else 0f)
+            .onSizeChanged { hPx = it.height.toFloat() }
+            .then(layer)
+            .mintPressable(pressedScale = if (active) 1f else 0.97f, ripple = false) { onClick() }
+            .pointerInput(dur, hPx) {
+                if (hPx <= 0f) return@pointerInput
+                val pxPerMinute = hPx / dur.toFloat()
+
+                /** 把手指位移换算成吸附后的分钟数，并按模式夹住上下限 */
+                fun snapTo(rawMin: Float): Int {
+                    val s = (rawMin / 15f).roundToInt() * 15
+                    return when (mode) {
+                        1 -> {
+                            // 整天内随便挪：00:00 ~ 24:00 之间放得下就行
+                            val maxUp = -start.toLocalTime().toSecondOfDay() / 60
+                            val maxDown = 24 * 60 - dur - start.toLocalTime().toSecondOfDay() / 60
+                            s.coerceIn(maxUp, maxDown)
+                        }
+
+                        2 -> {
+                            s.coerceIn(15 - dur, dur - 15)
+                        }
+
+                        else -> {
+                            s.coerceAtLeast(15 - dur)
+                        }
+                    }
+                }
+
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { off ->
+                        mode =
+                            when {
+                                off.y < edgePx -> 2
+                                off.y > hPx - edgePx -> 3
+                                else -> 1
+                            }
+                        step = 0
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        val next = snapTo((step + amount.y / pxPerMinute))
+                        if (next != step) {
+                            step = next
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                    },
+                    onDragEnd = {
+                        if (step != 0) {
+                            when (mode) {
+                                1 -> onCommit(start.plusMinutes(step.toLong()), dur)
+                                2 -> onCommit(start.plusMinutes(step.toLong()), dur - step)
+                                3 -> onCommit(start, dur + step)
+                            }
+                        }
+                        step = 0
+                        mode = 0
+                    },
+                    onDragCancel = {
+                        step = 0
+                        mode = 0
+                    },
+                )
+            },
     ) {
-        Text(
-            task.title,
-            color = fg,
-            fontSize = 11.sp,
-            lineHeight = 13.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 4,
-            overflow = TextOverflow.Ellipsis,
-            textDecoration = if (task.done) TextDecoration.LineThrough else null,
-        )
-        Text(start.hm(), color = fg.copy(alpha = 0.85f), fontSize = 9.sp, lineHeight = 11.sp, maxLines = 1)
+        Column(
+            Modifier
+                .fillMaxSize()
+                .alpha(if (task.done) 0.5f else 1f)
+                .clip(shape)
+                .background(bg)
+                .let { if (active) it.border(2.dp, MaterialTheme.colorScheme.primary, shape) else it }
+                .padding(horizontal = 5.dp, vertical = 5.dp),
+        ) {
+            Text(
+                task.title,
+                // 时间那行必须留得下：标题吃掉剩余空间，短块里自动收成省略号
+                modifier = Modifier.weight(1f, fill = false),
+                color = fg,
+                fontSize = 11.sp,
+                lineHeight = 13.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+                textDecoration = if (task.done) TextDecoration.LineThrough else null,
+            )
+            // 一格只有 40 来 dp 宽，放不下「10:15–11:15」；拖动时只报正在变的那一头
+            val label =
+                when {
+                    !active -> start.hm()
+                    mode == 3 -> previewEnd.hm()
+                    else -> previewStart.hm()
+                }
+            Text(
+                label,
+                color = if (active) MaterialTheme.colorScheme.primary else fg.copy(alpha = 0.85f),
+                fontSize = 9.sp,
+                lineHeight = 11.sp,
+                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+            )
+        }
+        // 拖起来才出现的抓手：上边 = 改开始时间，下边 = 改结束时间
+        Handle(Modifier.align(Alignment.TopCenter).padding(top = 2.dp), fg, active)
+        Handle(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp), fg, active)
     }
+}
+
+@Composable
+private fun Handle(
+    modifier: Modifier,
+    fg: Color,
+    active: Boolean,
+) {
+    Box(
+        modifier
+            .size(width = if (active) 22.dp else 16.dp, height = if (active) 4.dp else 3.dp)
+            .clip(CircleShape)
+            .background(fg.copy(alpha = if (active) 0.9f else 0.35f)),
+    )
 }
 
 @Composable

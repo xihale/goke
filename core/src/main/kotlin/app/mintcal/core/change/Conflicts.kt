@@ -2,11 +2,15 @@ package app.mintcal.core.change
 
 import app.mintcal.core.model.Course
 import app.mintcal.core.model.Event
+import app.mintcal.core.model.Freq
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.recurrence.CourseExpander
 import app.mintcal.core.recurrence.EventExpander
 import app.mintcal.core.time.SemesterCalendar
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.temporal.ChronoUnit
 
 data class Conflict(
     val aId: String,
@@ -67,4 +71,86 @@ object Conflicts {
             .filter { it is Course || it is Event }
             .map { it.id }
             .toSet()
+}
+
+private data class Occ(
+    val ownerId: String,
+    val title: String,
+    val start: LocalDateTime,
+    val end: LocalDateTime,
+)
+
+/** 时间块与别的事重叠的一次：[title] 是被挡住的那位（课程名或另一条待办）。 */
+data class SlotClash(
+    val at: LocalDateTime,
+    val title: String,
+    val course: Boolean,
+)
+
+/**
+ * 待办时间块（含重复展开）与课程 / 其它已排待办的重叠检查。
+ * [instances] 是要落地的日期（重复规则已展开）；[excludeId] 是正在编辑的待办自己。
+ */
+fun clashesOf(
+    snapshot: Snapshot,
+    excludeId: String?,
+    instances: List<LocalDate>,
+    start: LocalTime,
+    minutes: Int,
+    limit: Int = 6,
+): List<SlotClash> {
+    if (instances.isEmpty() || minutes <= 0) return emptyList()
+    val live = snapshot.live()
+    val from = instances.min()
+    val to = instances.max()
+    val taken = mutableListOf<Occ>()
+    live.currentSemester?.let { sem ->
+        for (o in CourseExpander.occurrences(sem, live.courses, live.exceptions, from, to)) {
+            taken += Occ(o.course.id, o.course.name, o.start, o.end)
+        }
+    }
+    for (t in live.tasks) {
+        if (t.id == excludeId || t.done) continue
+        val b = t.blockStart ?: continue
+        taken += Occ(t.id, t.title, b, b.plusMinutes((t.blockMinutes ?: 60).toLong()))
+    }
+    val out = mutableListOf<SlotClash>()
+    val seen = mutableSetOf<String>()
+    for (d in instances) {
+        val a0 = LocalDateTime.of(d, start)
+        val a1 = a0.plusMinutes(minutes.toLong())
+        for (s in taken) {
+            if (a0 < s.end && s.start < a1 && seen.add(s.ownerId + d)) {
+                out += SlotClash(maxOf(a0, s.start), s.title, s.ownerId !in live.tasks.map { it.id })
+            }
+        }
+    }
+    return out.sortedBy { it.at }.take(limit)
+}
+
+/** 把重复规则展开成要落地的日期（含起始日），最多 [cap] 个、最多往后半年。 */
+fun repeatInstances(
+    date: LocalDate,
+    freq: Freq?,
+    until: LocalDate?,
+    cap: Int = 60,
+): List<LocalDate> {
+    if (freq == null) return listOf(date)
+    val end = minOf(until ?: date.plusMonths(6), date.plusMonths(6))
+    val step = until?.plusDays(1)?.let { ChronoUnit.DAYS.between(date, it) } ?: Long.MAX_VALUE
+    val out = mutableListOf<LocalDate>()
+    var i = 0L
+    while (out.size < cap) {
+        val d =
+            when (freq) {
+                Freq.DAILY -> date.plusDays(i)
+                Freq.WEEKLY -> date.plusWeeks(i)
+                Freq.MONTHLY -> date.plusMonths(i)
+                Freq.YEARLY -> date.plusYears(i)
+            }
+        if (d > end || i >= step) break
+        out += d
+        i++
+    }
+    return out.ifEmpty { listOf(date) }
 }

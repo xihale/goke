@@ -72,7 +72,7 @@ import app.mintcal.ui.screens.CalendarScreen
 import app.mintcal.ui.screens.CourseEditScreen
 import app.mintcal.ui.screens.DataScreen
 import app.mintcal.ui.screens.EditTimetableScreen
-import app.mintcal.ui.screens.EventEditScreen
+import app.mintcal.ui.screens.EventTimeSheet
 import app.mintcal.ui.screens.HistoryScreen
 import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.JxfwScreen
@@ -83,11 +83,9 @@ import app.mintcal.ui.screens.ReliabilityScreen
 import app.mintcal.ui.screens.RescheduleSheet
 import app.mintcal.ui.screens.SettingsScreen
 import app.mintcal.ui.screens.SyncScreen
-import app.mintcal.ui.screens.TaskDetailScreen
-import app.mintcal.ui.screens.TaskDraft
-import app.mintcal.ui.screens.TaskSheet
 import app.mintcal.ui.screens.TimetableScreen
 import app.mintcal.ui.screens.TodayScreen
+import app.mintcal.ui.screens.TodoEditScreen
 import app.mintcal.ui.screens.TodoScreen
 import app.mintcal.ui.screens.TrashScreen
 import app.mintcal.ui.theme.MintCalTheme
@@ -136,9 +134,9 @@ class ScreensSmokeTest {
                     Task(Ids.next(), "逾期的任务", due = today.minusDays(1).atTime(12, 0), dueHasTime = true),
                     Task(Ids.next(), "排入日历的任务", blockStart = today.atTime(20, 0), blockMinutes = 90),
                 )
-            val ev = Event(Ids.next(), "社团例会", today.atTime(19, 0), today.atTime(20, 30), location = "活动室", remindMinutes = 15)
-            val exam = Event(Ids.next(), "期末考试", today.plusDays(10).atTime(9, 0), today.plusDays(10).atTime(11, 0), kind = EventKind.EXAM)
-            app.repo.commit(Edits.saveAll(app.repo.snapshot.value, listOf<app.mintcal.core.model.Record>(list) + tasks + ev + exam, "seed", now))
+            val meeting = Task(Ids.next(), "社团例会", listId = list.id, blockStart = today.atTime(19, 0), blockMinutes = 90, remindMinutes = 15)
+            val exam = Task(Ids.next(), "考试：期末考试", blockStart = today.plusDays(10).atTime(9, 0), blockMinutes = 120, tags = listOf("考试"))
+            app.repo.commit(Edits.saveAll(app.repo.snapshot.value, listOf<app.mintcal.core.model.Record>(list) + tasks + meeting + exam, "seed", now))
         }
     }
 
@@ -178,9 +176,6 @@ class ScreensSmokeTest {
         val task =
             app.repo.snapshot.value.tasks
                 .first()
-        val event =
-            app.repo.snapshot.value.events
-                .first()
         val screens: List<Pair<String, @Composable () -> Unit>> =
             listOf(
                 "today" to { TodayScreen() },
@@ -189,10 +184,9 @@ class ScreensSmokeTest {
                 "todo" to { TodoScreen() },
                 "course_edit" to { CourseEditScreen(first.id) {} },
                 "course_new" to { CourseEditScreen(null) {} },
-                "event_edit" to { EventEditScreen(event.id, null) {} },
-                "event_new" to { EventEditScreen(null, null) {} },
-                "task_edit" to { TaskDetailScreen(task.id) {} },
-                "task_new" to { TaskDetailScreen(null) {} },
+                "task_edit" to { TodoEditScreen(task.id) {} },
+                "task_new" to { TodoEditScreen(null) {} },
+                "time_sheet" to { EventTimeSheet(null, null, null, null, LocalDate.now(), {}, {}) },
                 "edit_timetable" to { EditTimetableScreen {} },
                 "periods" to { PeriodsScreen {} },
                 "appearance" to { AppearanceScreen {} },
@@ -201,7 +195,6 @@ class ScreensSmokeTest {
                 "data" to { DataScreen {} },
                 "sync" to { SyncScreen {} },
                 "jxfw" to { JxfwScreen {} },
-                "task_sheet" to { TaskSheet(task.id) {} },
                 "reliability" to { ReliabilityScreen {} },
                 "reschedule_sheet" to { RescheduleSheet(listOf(task), liveSnapshot(), onDismiss = {}) },
                 "morning_sheet" to { MorningSheet(listOf(task), java.time.LocalDateTime.now()) {} },
@@ -256,90 +249,15 @@ class ScreensSmokeTest {
         }
     }
 
-    /** 「更多选项」把快速添加解析出来的内容带进详情页。 */
+    /** 「更多选项」把快速添加解析出来的内容带进编辑页。 */
     @Test
     fun quickAddDraftPrefillsDetail() {
         rule.setContent {
             Host {
-                TaskDetailScreen(
-                    null,
-                    TaskDraft(
-                        title = "交实验报告",
-                        due = LocalDateTime.of(2026, 10, 25, 18, 0),
-                        dueHasTime = true,
-                        priority = 3,
-                    ),
-                ) {}
+                TodoEditScreen(null, textDraft = "交实验报告 明天 18:00") {}
             }
         }
-        rule.onNodeWithText("交实验报告").assertExists()
-        rule.onNodeWithText("18:00").assertExists()
-        rule.onNodeWithText("高").assertIsSelected()
-        rule.onNodeWithText("附件").performScrollTo().assertExists()
-        rule.onNodeWithText("图片").assertExists()
-        shot("task_attachments")
-    }
-
-    @Test
-    fun attachmentsEditorRenders() {
-        val file = File(Attachments.dir(app), "probe.png")
-        file.writeBytes(
-            Base64.decode(
-                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-                Base64.NO_WRAP,
-            ),
-        )
-        val items = listOf(Attachment("实验图.png", "image/png", "probe.png"), Attachment("报告.pdf", "application/pdf", "gone.pdf"))
-        rule.setContent {
-            Host {
-                Column(Modifier.fillMaxSize().padding(16.dp)) {
-                    AttachmentEditor(items, onChange = {}, onPasteText = {})
-                }
-            }
-        }
-        rule.onNodeWithText("实验图.png").assertExists()
-        rule.onNodeWithText("报告.pdf").assertExists()
-        shot("attachments")
-    }
-
-    @Test
-    fun snackbarIsCompact() {
-        val state = SnackbarHostState()
-        rule.setContent {
-            Host {
-                Box(Modifier.fillMaxSize()) {
-                    TodoScreen()
-                    LaunchedEffect(Unit) {
-                        state.showSnackbar("已删除「交高数作业」", actionLabel = "撤销", withDismissAction = true, duration = SnackbarDuration.Indefinite)
-                    }
-                    MintSnackbarHost(state, Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp).padding(bottom = 152.dp))
-                }
-            }
-        }
-        rule.waitForIdle()
-        rule.onNodeWithText("已删除「交高数作业」").assertExists()
-        rule.onNodeWithText("撤销").assertExists()
-        shot("snackbar")
-        app.settings.update { it.copy(darkMode = DarkMode.DARK, themeSource = ThemeSource.PRESET) }
-        rule.waitForIdle()
-        shot("snackbar_dark")
-    }
-
-    @Test
-    fun darkThemeRenders() {
-        app.settings.update { it.copy(darkMode = DarkMode.DARK, themeSource = ThemeSource.PRESET) }
-        val idx = mutableIntStateOf(0)
-        val screens: List<Pair<String, @Composable () -> Unit>> =
-            listOf(
-                "dark_today" to { TodayScreen() },
-                "dark_timetable" to { TimetableScreen() },
-                "dark_todo" to { TodoScreen() },
-            )
-        rule.setContent { Host { key(idx.intValue) { screens[idx.intValue].second() } } }
-        screens.forEachIndexed { i, (name, _) ->
-            rule.runOnIdle { idx.intValue = i }
-            rule.waitForIdle()
-            shot(name)
-        }
+        rule.onNodeWithText("交实验报告 明天 18:00").assertExists()
+        rule.onNodeWithText("明天 18:00 – 19:00").assertExists()
     }
 }

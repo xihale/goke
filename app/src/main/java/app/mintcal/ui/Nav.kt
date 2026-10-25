@@ -2,7 +2,6 @@ package app.mintcal.ui
 
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
@@ -14,6 +13,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import app.mintcal.MintCalApp
 import app.mintcal.core.change.ChangeSet
+import app.mintcal.ui.components.UndoPrompt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -62,26 +62,18 @@ sealed interface Route {
         val id: String?,
     ) : Route
 
-    @Serializable data class EventEdit(
-        val id: String?,
+    /** 唯一的编辑页：新建 / 修改共用；[id] 为空时 [text] 是带过来的草稿标题。 */
+    @Serializable data class TodoEdit(
+        val id: String? = null,
         val date: String? = null,
         // 课表格子上框选带来的起止时刻（ISO），新建时预填
         val start: String? = null,
         val end: String? = null,
-    ) : Route
-
-    @Serializable data class TaskDetail(
-        val id: String?,
-        // 从「快速添加」带过来的草稿（id 为 null 时生效），免得进详情还要重输
-        val title: String? = null,
-        val due: String? = null,
-        val dueHasTime: Boolean = false,
-        val priority: Int = 0,
-        val listId: String? = null,
-        val tags: String? = null,
-        val startDate: String? = null,
+        val text: String? = null,
+        /** 从课程页「加一条待办」带过来的关联课程。 */
         val courseId: String? = null,
-        val beforeClass: Boolean = false,
+        /** 周历上框选了几天：其余日期（ISO，逗号分隔）跟着一起建。 */
+        val extraDates: String? = null,
     ) : Route
 }
 
@@ -94,15 +86,15 @@ class Nav(
 ) {
     var tab by mutableStateOf(Tab.TODAY)
 
-    /** 当前打开的待办底部抽屉（全局一个，由 MintCalRoot 承载）。 */
-    var sheetTaskId by mutableStateOf<String?>(null)
-
     /** 外部分享来的多行文字，待办页的快速添加接手并给出批量预览。 */
     var pendingAddText by mutableStateOf<String?>(null)
 
     fun openTask(id: String) {
-        sheetTaskId = id
+        push(Route.TodoEdit(id = id))
     }
+
+    /** 要求课表跳到某一天（冲突面板「去查看」用），课表消费后清空。 */
+    var focusDate by mutableStateOf<java.time.LocalDate?>(null)
 
     /** 再次点按当前 Tab 时自增，供各 Tab 内滚动回顶部。 */
     var reselect by mutableIntStateOf(0)
@@ -138,6 +130,10 @@ class Actions(
 ) {
     var undoLabel: String = "撤销"
 
+    /** 当前可撤销的一步:一个圆,点一下回退,到时自动收起。 */
+    var undo by mutableStateOf<UndoPrompt?>(null)
+        private set
+
     fun commit(
         cs: ChangeSet,
         message: String? = null,
@@ -145,11 +141,22 @@ class Actions(
         scope.launch {
             app.repo.commit(cs)
             if (message != null && !cs.isEmpty) {
-                snack.currentSnackbarData?.dismiss()
-                val r = snack.showSnackbar(message, actionLabel = undoLabel, duration = SnackbarDuration.Long, withDismissAction = true)
-                if (r == SnackbarResult.ActionPerformed) app.repo.undo(cs.id)
+                // 新操作顶掉旧提示;倒计时由那个圆自己数,走完自动收起
+                undo = UndoPrompt(cs.id, message, System.currentTimeMillis())
             }
         }
+    }
+
+    /** 点圆:撤销最近这条,按钮立即收起。 */
+    fun undoNow() {
+        val p = undo ?: return
+        undo = null
+        scope.launch { app.repo.undo(p.csId) }
+    }
+
+    /** 倒计时走完:收起圆(期间已有新操作则保留新的那条)。 */
+    fun timeout(seq: Long) {
+        if (undo?.seq == seq) undo = null
     }
 
     fun toast(message: String) {

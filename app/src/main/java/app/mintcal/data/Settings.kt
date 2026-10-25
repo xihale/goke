@@ -37,6 +37,8 @@ data class Settings(
     val aiBaseUrl: String = "https://api.openai.com/v1",
     val aiModel: String = "gpt-4o-mini",
     val weekStartsMonday: Boolean = true,
+    /** 一次性迁移标记：日程已并入待办。 */
+    val unifiedTasks: Boolean = false,
 )
 
 /** 轻量设置存储（SharedPreferences + StateFlow）。AI Key 另存于 [SecretStore]，不进此处。 */
@@ -72,6 +74,7 @@ class SettingsStore(
             aiBaseUrl = sp.getString("aiBaseUrl", d.aiBaseUrl)!!,
             aiModel = sp.getString("aiModel", d.aiModel)!!,
             weekStartsMonday = sp.getBoolean("weekStartsMonday", d.weekStartsMonday),
+            unifiedTasks = sp.getBoolean("unifiedTasks", d.unifiedTasks),
         )
     }
 
@@ -100,6 +103,7 @@ class SettingsStore(
             .putString("aiBaseUrl", n.aiBaseUrl)
             .putString("aiModel", n.aiModel)
             .putBoolean("weekStartsMonday", n.weekStartsMonday)
+            .putBoolean("unifiedTasks", n.unifiedTasks)
             .apply()
         _flow.value = n
     }
