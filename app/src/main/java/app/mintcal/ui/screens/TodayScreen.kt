@@ -105,10 +105,11 @@ fun TodayScreen() {
         }
     var menu by remember { mutableStateOf(false) }
     var gapDismissed by rememberSaveable { mutableStateOf("") }
-    // 空档推荐：只推荐有估时、还没排进日历的待办，且每天可关掉
+    var gapSkip by rememberSaveable { mutableStateOf(0) }
+    // 空档推荐：只推荐有估时、还没排进日历的待办，且每天可关掉；「换一个」跳到下一个候选
     val gapSuggestion =
-        remember(snap, items, now, settings.defaultBlockMinutes) {
-            FreeGaps.suggest(FreeGaps.gaps(items, today, now, settings.defaultBlockMinutes), snap.tasks, now)
+        remember(snap, items, now, settings.defaultBlockMinutes, gapSkip) {
+            FreeGaps.suggest(FreeGaps.gaps(items, today, now, settings.defaultBlockMinutes), snap.tasks, now, gapSkip)
         }
 
     val courseCount = items.count { it is CourseItem }
@@ -218,6 +219,15 @@ fun TodayScreen() {
                                 ctx.getString(R.string.today_gap_toast, start.hm()),
                             )
                         }) { Text(stringResource(R.string.today_gap_schedule)) }
+                        androidx.compose.material3.TextButton(onClick = {
+                            // 下一个候选；转完一圈从头再来
+                            gapSkip =
+                                if (FreeGaps.suggest(FreeGaps.gaps(items, today, now, settings.defaultBlockMinutes), snap.tasks, now, gapSkip + 1) != null) {
+                                    gapSkip + 1
+                                } else {
+                                    0
+                                }
+                        }) { Text(stringResource(R.string.today_gap_another)) }
                         androidx.compose.material3.TextButton(onClick = { gapDismissed = today.toString() }) { Text(stringResource(R.string.today_gap_dismiss)) }
                     }
                 }

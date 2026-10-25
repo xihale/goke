@@ -70,21 +70,27 @@ object FreeGaps {
 
     /**
      * 为今天最近的一个空档挑一条有估时、还没排进日历的待办：优先更紧的截止、更高的优先级，
-     * 且估时不超过空档长度。没有合适的返回 null（没估时的不推荐，避免噪音）。
+     * 且估时不超过空档长度。[skip] 跳过前 n 个候选（「换一个」）。没有合适的返回 null
+     * （没估时的不推荐，避免噪音）。
      */
     fun suggest(
         gaps: List<Gap>,
         tasks: List<Task>,
         now: LocalDateTime,
+        skip: Int = 0,
     ): GapSuggestion? {
         val candidates =
             TaskLogic
                 .topLevel(tasks)
                 .filter { !it.done && it.blockStart == null && (it.estimateMinutes ?: 0) > 0 }
                 .sortedWith(compareBy<Task>({ it.due == null }, { it.due }, { -it.priority }))
+        var seen = 0
         for (g in gaps) {
-            val t = candidates.firstOrNull { it.estimateMinutes!! <= g.minutes } ?: continue
-            return GapSuggestion(g, t, t.estimateMinutes!!)
+            for (t in candidates) {
+                if (t.estimateMinutes!! > g.minutes) continue
+                if (seen++ < skip) continue
+                return GapSuggestion(g, t, t.estimateMinutes!!)
+            }
         }
         return null
     }

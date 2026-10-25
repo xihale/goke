@@ -626,6 +626,7 @@
     <string name="today_gap_text">%1$s–%2$s 有 %3$d 分钟空档，要不要做「%4$s」（预计 %5$d 分钟）？</string>
     <string name="today_gap_schedule">排进去</string>
     <string name="today_gap_dismiss">不用了</string>
+    <string name="today_gap_another">换一个</string>
     <string name="today_gap_desc">排进空档：%1$s</string>
     <string name="today_gap_toast">已排到 %1$s</string>
     <string name="course_todos">这门课的待办</string>
