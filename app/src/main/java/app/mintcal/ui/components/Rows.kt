@@ -21,10 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -102,7 +98,14 @@ fun AgendaRow(
         }
 
         is BlockItem -> {
-            BlockRow(item, onToggleTask, onOpenTask, modifier = modifier)
+            // 排入日历的待办也用正常 todo 行,只把时间段放副标题
+            TaskRow(
+                item.task,
+                onToggleTask,
+                onOpenTask,
+                subtitle = stringResource(R.string.block_subtitle_short, item.start.hm(), item.end.hm()),
+                modifier = modifier,
+            )
         }
     }
 }
@@ -173,54 +176,5 @@ fun TaskRow(
             )
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-    }
-}
-
-@Composable
-private fun BlockRow(
-    item: BlockItem,
-    onToggle: (Task, Boolean) -> Unit,
-    onOpen: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val line = MaterialTheme.colorScheme.primary
-    Row(
-        modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .clickable { onOpen(item.task.id) }
-            .drawBehind {
-                drawRoundRect(
-                    color = line,
-                    cornerRadius = CornerRadius(20.dp.toPx()),
-                    style = Stroke(width = 1.6.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))),
-                )
-            }.padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(item.start.hm(), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.widthIn(min = 52.dp))
-        Spacer(Modifier.width(8.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                item.task.title,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textDecoration = if (item.task.done) TextDecoration.LineThrough else null,
-            )
-            Text(
-                stringResource(
-                    R.string.block_subtitle,
-                    (
-                        java.time.Duration
-                            .between(item.start, item.end)
-                            .toMinutes() / 60.0
-                    ).let { if (it % 1.0 == 0.0) it.toInt().toString() else "%.1f".format(it) },
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        MintCheck(item.task.done, { onToggle(item.task, it) })
     }
 }

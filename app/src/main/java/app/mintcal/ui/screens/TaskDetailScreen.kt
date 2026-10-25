@@ -118,9 +118,6 @@ fun TaskDetailScreen(
     var remind by remember { mutableStateOf(existing?.remindMinutes) }
     var courseId by remember { mutableStateOf(existing?.courseId) }
     var beforeClass by remember { mutableStateOf(existing?.dueBeforeNextClass ?: false) }
-    var blockDate by remember { mutableStateOf(existing?.blockStart?.toLocalDate()) }
-    var blockTime by remember { mutableStateOf(existing?.blockStart?.toLocalTime() ?: LocalTime.of(16, 30)) }
-    var blockMinutes by remember { mutableIntStateOf(existing?.blockMinutes ?: settings.defaultBlockMinutes) }
     var startDate by remember { mutableStateOf(existing?.startDate ?: draft?.startDate) }
     var tags by remember {
         mutableStateOf(
@@ -152,8 +149,9 @@ fun TaskDetailScreen(
             remindMinutes = remind,
             courseId = courseId,
             dueBeforeNextClass = beforeClass && courseId != null,
-            blockStart = blockDate?.let { LocalDateTime.of(it, blockTime) },
-            blockMinutes = if (blockDate != null) blockMinutes else null,
+            // 时间块不再手动排:有时间的待办由课表/今日直接按 due 上格子,这里只保留旧数据不动
+            blockStart = existing?.blockStart,
+            blockMinutes = existing?.blockMinutes,
             tags = tags.split(' ', ',', '，', '#').map { it.trim() }.filter { it.isNotEmpty() },
             attachments = attachments,
             startDate = startDate,
@@ -165,7 +163,7 @@ fun TaskDetailScreen(
 
     fun isDirty(): Boolean =
         if (existing == null) {
-            title.isNotBlank() || note.isNotBlank() || dueDate != null || blockDate != null || tags.isNotBlank() || priority != 0 || estimate.isNotBlank()
+            title.isNotBlank() || note.isNotBlank() || dueDate != null || tags.isNotBlank() || priority != 0 || estimate.isNotBlank()
         } else {
             buildTask() != existing
         }
@@ -267,23 +265,8 @@ fun TaskDetailScreen(
                 }
             }
 
-            FormSection(stringResource(R.string.section_block)) {
-                ValueRow(stringResource(R.string.label_block_date), blockDate?.let { ctx.monthDayWeekday(it) } ?: stringResource(R.string.not_scheduled), { pick = "block" })
-                AnimatedVisibility(
-                    visible = blockDate != null,
-                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-                ) {
-                    Column {
-                        ValueRow(stringResource(R.string.label_block_time), blockTime.hm(), { pick = "blockTime" })
-                        ChipChoice(listOf(30, 60, 90, 120, 180).map { it to stringResource(R.string.minutes_n, it) }, blockMinutes, { blockMinutes = it })
-                        TextButton(onClick = { blockDate = null }) { Text(stringResource(R.string.remove_block)) }
-                    }
-                }
-                FieldText(stringResource(R.string.label_estimate), estimate, { estimate = it.filter(Char::isDigit) }, number = true)
-            }
-
             FormSection(stringResource(R.string.section_organize)) {
+                FieldText(stringResource(R.string.label_estimate), estimate, { estimate = it.filter(Char::isDigit) }, number = true)
                 Text(stringResource(R.string.label_list), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 ChipChoice(listOf<Pair<String?, String>>(null to stringResource(R.string.none)) + snap.lists.map { it.id to it.name }, listId, { listId = it })
                 Spacer(Modifier.height(8.dp))
@@ -332,8 +315,6 @@ fun TaskDetailScreen(
     when (pick) {
         "due" -> DatePickerDlg(dueDate ?: LocalDate.now(), { pick = null }) { dueDate = it }
         "dueTime" -> TimePickerDlg(dueTime ?: LocalTime.of(18, 0), { pick = null }) { dueTime = it }
-        "block" -> DatePickerDlg(blockDate ?: dueDate ?: LocalDate.now(), { pick = null }) { blockDate = it }
-        "blockTime" -> TimePickerDlg(blockTime, { pick = null }) { blockTime = it }
     }
     if (confirmDiscard) {
         ConfirmDialog(

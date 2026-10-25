@@ -26,7 +26,6 @@
     <string name="delete_forever">永久删除</string>
     <string name="coming_soon">即将推出</string>
     <string name="never">永不</string>
-    <string name="not_scheduled">未排入</string>
     <string name="more_options">更多选项</string>
     <string name="saved_toast">已保存</string>
     <string name="deleted_toast">已删除</string>
@@ -101,7 +100,7 @@
     <string name="timeline">今日时间线</string>
     <string name="done_toast">已完成「%1$s」</string>
     <string name="go_todo">去待办看看</string>
-    <string name="block_subtitle">待办时间块 · %1$s 小时</string>
+    <string name="block_subtitle_short">%1$s – %2$s</string>
     <string name="mode_day">日</string>
     <string name="mode_week">周</string>
     <string name="mode_month">月</string>
@@ -153,8 +152,6 @@
     <string name="label_list">清单</string>
     <string name="label_related_course">关联课程</string>
     <string name="label_remind">提醒</string>
-    <string name="label_block_date">排入日历的日期</string>
-    <string name="label_block_time">开始时间</string>
     <string name="label_weeks">周次</string>
     <string name="label_semester_name">学期名称</string>
     <string name="label_total_weeks">总周数</string>
@@ -167,7 +164,6 @@
     <string name="section_when">时间</string>
     <string name="section_organize">整理</string>
     <string name="section_subtasks">子任务</string>
-    <string name="section_block">排入日历</string>
     <string name="section_attachments">附件</string>
     <string name="attach_image">图片</string>
     <string name="attach_file">文件</string>
@@ -189,7 +185,6 @@
     <string name="weeks_even">双周</string>
     <string name="weeks_invalid">请输入有效的周次</string>
     <string name="clear_due">清除截止</string>
-    <string name="remove_block">取消排入</string>
     <string name="due_before_next_class">下次上课前完成</string>
     <string name="block_in_calendar">已排入日历 %1$s–%2$s</string>
     <string name="add_subtask">添加子任务</string>

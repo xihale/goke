@@ -235,6 +235,17 @@ class ChangeAndTodoTest {
         assertNull(r4.due)
         assertEquals("买牛奶", r4.title)
         assertEquals(LocalDateTime.of(2026, 10, 23, 20, 0), QuickAdd.parse("晚上八点开会", now).due)
+        val r5 = QuickAdd.parse("27号18点 数学作业", now)
+        assertEquals(LocalDateTime.of(2026, 10, 27, 18, 0), r5.due)
+        assertEquals("数学作业", r5.title)
+        // 本月已过的「N号」顺延到下个月
+        val r6 = QuickAdd.parse("3号 交房租", now)
+        assertEquals(LocalDate.of(2026, 11, 3), r6.due!!.toLocalDate())
+        assertEquals("交房租", r6.title)
+        // 「3D」的 3 不是「点」的分钟
+        val r7 = QuickAdd.parse("后天早上 10 点 3D 打印", now)
+        assertEquals(LocalDateTime.of(2026, 10, 25, 10, 0), r7.due)
+        assertEquals("3D 打印", r7.title)
     }
 
     @Test fun `quick add understands more date forms`() {

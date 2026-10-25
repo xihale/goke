@@ -152,8 +152,17 @@ object QuickAdd {
             }
             text = text.replace(m.value, " ")
         }
+        // 「N号」= 本月 N 日，已过则下个月（「27号」）
+        Regex("(\\d{1,2})\\s*号").find(text)?.let { m ->
+            runCatching {
+                var d = LocalDate.of(today.year, today.month, m.groupValues[1].toInt())
+                if (!d.isAfter(today)) d = d.plusMonths(1)
+                date = d
+                text = text.replace(m.value, " ")
+            }
+        }
         // 时间
-        Regex("(早上|上午|中午|下午|傍晚|晚上|凌晨)?\\s*(\\d{1,2}|[一二两三四五六七八九十]{1,3})\\s*(?:点|:|：)\\s*(半|一刻|三刻|\\d{1,2})?\\s*分?").find(text)?.let { m ->
+        Regex("(早上|上午|中午|下午|傍晚|晚上|凌晨)?\\s*(\\d{1,2}|[一二两三四五六七八九十]{1,3})\\s*(?:点|:|：)\\s*(半|一刻|三刻|\\d{1,2}(?![A-Za-z]))?\\s*分?").find(text)?.let { m ->
             val period = m.groupValues[1]
             var h = cnNumber(m.groupValues[2]) ?: -1
             val mm =

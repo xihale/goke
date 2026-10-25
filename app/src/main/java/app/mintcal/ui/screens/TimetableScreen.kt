@@ -14,6 +14,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -32,9 +35,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
@@ -60,8 +65,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
@@ -231,28 +239,45 @@ fun TimetableScreen() {
                                 (t.blockStart ?: t.due)?.toLocalDate()?.let { d -> !d.isBefore(weekStart) && !d.isAfter(weekEnd) } == true
                         }.map { it to (listColor[it.listId] ?: 1) }
                 }
-            WeekGrid(
-                sem,
-                cal,
-                week,
-                today,
-                cells,
-                blocks,
-                settings.defaultBlockMinutes,
-                settings.showTeacher,
-                scroll,
-                modifier =
-                    Modifier.graphicsLayer {
-                        // 滑动视差：偏移符号与旧 calculateCurrentOffsetForPage 相反（相邻页反向平移并淡出）
-                        val off = (pager.currentPage - page) + pager.currentPageOffsetFraction
-                        alpha = 1f - (kotlin.math.abs(off) * 0.18f).coerceIn(0f, 0.18f)
-                        translationX = off * 16.dp.toPx()
+            // clipToBounds:视差 translationX 会把相邻页的内容拖进本页边缘(右侧露出邻页节次列),按页裁掉
+            Box(Modifier.clipToBounds()) {
+                WeekGrid(
+                    sem,
+                    cal,
+                    week,
+                    today,
+                    cells,
+                    blocks,
+                    settings.defaultBlockMinutes,
+                    settings.showTeacher,
+                    scroll,
+                    modifier =
+                        Modifier.graphicsLayer {
+                            // 滑动视差：偏移符号与旧 calculateCurrentOffsetForPage 相反（相邻页反向平移并淡出）
+                            val off = (pager.currentPage - page) + pager.currentPageOffsetFraction
+                            alpha = 1f - (kotlin.math.abs(off) * 0.18f).coerceIn(0f, 0.18f)
+                            translationX = off * 16.dp.toPx()
+                        },
+                    onClick = { selected = it },
+                    onOpenTask = { nav.push(Route.TaskDetail(it)) },
+                    onBoxSelect = { day, s, e ->
+                        val date = cal.dateOf(week, day)
+                        val ps = sem.periods.sortedBy { it.index }
+                        val startP = ps.firstOrNull { it.index == s } ?: return@WeekGrid
+                        val endP = ps.firstOrNull { it.index == e } ?: return@WeekGrid
+                        nav.push(
+                            Route.EventEdit(
+                                null,
+                                date.toString(),
+                                start = date.atTime(startP.start).toString(),
+                                end = date.atTime(endP.end).toString(),
+                            ),
+                        )
                     },
-                onClick = { selected = it },
-                onOpenTask = { nav.push(Route.TaskDetail(it)) },
-            )
+                )
+            }
         }
-        Spacer(Modifier.height(86.dp))
+        Spacer(Modifier.height(132.dp))
     }
 
     selected?.let { cell ->
@@ -303,6 +328,7 @@ private fun WeekGrid(
     modifier: Modifier = Modifier,
     onClick: (TimetableCell) -> Unit,
     onOpenTask: (String) -> Unit,
+    onBoxSelect: (day: Int, startPeriod: Int, endPeriod: Int) -> Unit,
 ) {
     val ctx = LocalContext.current
     val periods = sem.periods.sortedBy { it.index }
@@ -330,7 +356,47 @@ private fun WeekGrid(
             }
         }
         Box(Modifier.weight(1f).verticalScroll(scroll)) {
-            BoxWithConstraints(Modifier.fillMaxWidth().height(totalH)) {
+            // 长按空白处拖动框选一段时间 → 直接新建日程;拖动中高亮所选列与节次段
+            var box by remember { mutableStateOf<BoxSel?>(null) }
+            BoxWithConstraints(
+                Modifier
+                    .fillMaxWidth()
+                    .height(totalH)
+                    .pointerInput(n) {
+                        val timeColPx = TimeColW.toPx()
+                        val colPx = (size.width - timeColPx) / 7f
+                        val rowPx = RowH.toPx()
+
+                        fun slotOf(y: Float): Int {
+                            for (p in 1..n) {
+                                val top = (RowH.value * (p - 1) + GroupGap.value * groupBoundaries(n).count { p > it }) * density
+                                if (y < top + rowPx) return p
+                            }
+                            return n
+                        }
+                        var anchor = 0
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { off ->
+                                if (off.x >= timeColPx) {
+                                    val day = (((off.x - timeColPx) / colPx).toInt().coerceIn(0, 6)) + 1
+                                    anchor = slotOf(off.y)
+                                    box = BoxSel(day, anchor, anchor)
+                                }
+                            },
+                            onDrag = { change, _ ->
+                                val b = box ?: return@detectDragGesturesAfterLongPress
+                                change.consume()
+                                val e = slotOf(change.position.y).coerceIn(1, n)
+                                box = b.copy(first = minOf(anchor, e), last = maxOf(anchor, e))
+                            },
+                            onDragEnd = {
+                                box?.let { b -> onBoxSelect(b.day, b.first, b.last) }
+                                box = null
+                            },
+                            onDragCancel = { box = null },
+                        )
+                    },
+            ) {
                 val colW = (maxWidth - TimeColW) / 7
                 // 左侧节次
                 periods.forEach { p ->
@@ -386,10 +452,31 @@ private fun WeekGrid(
                         onClick = { onOpenTask(t.id) },
                     )
                 }
+                // 框选高亮
+                box?.let { b ->
+                    val top = periodTop(b.first, n) + 2.dp
+                    val bottom = periodTop(b.last, n) + RowH - 2.dp
+                    Box(
+                        Modifier
+                            .absoluteOffset(TimeColW + colW * (b.day - 1) + 1.5.dp, top)
+                            .width(colW - 3.dp)
+                            .height(bottom - top)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                            .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(14.dp)),
+                    )
+                }
             }
         }
     }
 }
+
+/** 课表框选:day 1-7,first/last 为节次序号(升序)。 */
+private data class BoxSel(
+    val day: Int,
+    val first: Int,
+    val last: Int,
+)
 
 @Composable
 private fun TaskBlock(
@@ -399,7 +486,7 @@ private fun TaskBlock(
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
-    // 与 CourseBlock 同构:同样的圆角、填色、字号,颜色取所属清单色
+    // 与 CourseBlock 同款:圆角填色块、同字号,无勾选圈;点击进详情
     val colors = MintTheme.colors
     val bg = colors.bg(colorIndex)
     val fg = colors.fg(colorIndex)
