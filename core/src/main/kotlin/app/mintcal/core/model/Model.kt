@@ -193,6 +193,8 @@ data class Task(
     val estimateMinutes: Int? = null,
     val done: Boolean = false,
     val doneAt: Long? = null,
+    /** 「不做了」：放弃而非完成。仍记 done=true（所有「已结束」逻辑复用），只是展示与统计上区分。 */
+    val dropped: Boolean = false,
     /** 子任务（仅一层） */
     val parentId: String? = null,
     val repeat: Recurrence? = null,

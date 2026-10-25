@@ -71,6 +71,62 @@ object Edits {
         return ChangeSet(ids.next(), description, Source.MANUAL, now, changes)
     }
 
+    /** 批量改任务字段，合成一个变更集（一次撤销）。无变化的任务跳过。 */
+    fun updateTasks(
+        tasks: List<Task>,
+        description: String,
+        now: Long,
+        ids: IdGenerator = Ids,
+        transform: (Task) -> Task,
+    ): ChangeSet {
+        val changes =
+            tasks.mapNotNull { t ->
+                val n = transform(t)
+                if (n == t) null else Change.Modify(t, n)
+            }
+        return ChangeSet(ids.next(), description, Source.MANUAL, now, changes)
+    }
+
+    /** 改期：[date] 为 null 清除日期（回收集箱）。带时间的保留原时刻，否则当天 23:59 的无时间截止。 */
+    fun reschedule(
+        tasks: List<Task>,
+        date: LocalDate?,
+        description: String,
+        now: Long,
+        ids: IdGenerator = Ids,
+    ): ChangeSet =
+        updateTasks(tasks, description, now, ids) { t ->
+            if (date == null) {
+                t.copy(due = null, dueHasTime = false, startDate = null, blockStart = null, dueBeforeNextClass = false)
+            } else {
+                val time = if (t.dueHasTime) t.due?.toLocalTime() ?: java.time.LocalTime.of(23, 59) else java.time.LocalTime.of(23, 59)
+                t.copy(due = java.time.LocalDateTime.of(date, time), startDate = null, blockStart = null, dueBeforeNextClass = false)
+            }
+        }
+
+    /** 「不做了」：放弃而非完成。 */
+    fun dropTasks(
+        tasks: List<Task>,
+        description: String,
+        now: Long,
+        ids: IdGenerator = Ids,
+    ): ChangeSet = updateTasks(tasks.filter { !it.done }, description, now, ids) { it.copy(done = true, dropped = true, doneAt = now) }
+
+    /** 变成另一条任务的子任务（只允许一层，且被拖的任务不能自带子任务）。条件不满足返回空变更集。 */
+    fun makeSubtask(
+        s: Snapshot,
+        task: Task,
+        parent: Task,
+        description: String,
+        now: Long,
+        ids: IdGenerator = Ids,
+    ): ChangeSet {
+        val ok = task.id != parent.id && parent.parentId == null && task.parentId != parent.id && s.live().tasks.none { it.parentId == task.id }
+        if (!ok) return ChangeSet(ids.next(), description, Source.MANUAL, now, emptyList())
+        val order = (s.live().tasks.filter { it.parentId == parent.id }.maxOfOrNull { it.sortOrder } ?: 0) + 1
+        return updateTasks(listOf(task), description, now, ids) { it.copy(parentId = parent.id, listId = parent.listId, sortOrder = order) }
+    }
+
     /** 完成 / 取消完成待办；重复任务完成后生成下一次实例。 */
     fun toggleTask(
         s: Snapshot,

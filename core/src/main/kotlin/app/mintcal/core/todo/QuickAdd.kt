@@ -12,11 +12,13 @@ data class QuickAddResult(
     val priority: Int,
     val listName: String?,
     val tags: List<String>,
+    /** 「/课程名」= 下节该课前截止（调用方按名字匹配课程）。 */
+    val courseName: String? = null,
     /** 被识别并从标题里剔除的原文片段（供输入框高亮、点标签回写）。 */
     val tokens: List<QuickToken> = emptyList(),
 )
 
-enum class QuickTokenKind { DATE, TIME, PRIORITY, LIST, TAG }
+enum class QuickTokenKind { DATE, TIME, PRIORITY, LIST, TAG, COURSE }
 
 /** 输入里被识别的一段原文。 */
 data class QuickToken(
@@ -51,6 +53,7 @@ object QuickAdd {
         var listName: String? = null
         val tags = mutableListOf<String>()
         val tokens = mutableListOf<QuickToken>()
+        var courseName: String? = null
 
         fun eat(
             src: String,
@@ -77,6 +80,12 @@ object QuickAdd {
         Regex("@([^\\s#@!！，,。.？?]+)[，,。.？?]*").findAll(text).toList().forEach {
             tags += it.groupValues[1]
             text = eat(text, it.value, QuickTokenKind.TAG)
+        }
+
+        // 「/概率论」：必须在开头或空白之后，避免吃掉 10/26 这类日期
+        Regex("(?:^|\\s)/([^\\s#@!！/，,。.？?]+)").find(text)?.let {
+            courseName = it.groupValues[1]
+            text = eat(text, it.value, QuickTokenKind.COURSE)
         }
 
         var date: LocalDate? = null
@@ -211,6 +220,35 @@ object QuickAdd {
             due = LocalDateTime.of(d, time ?: LocalTime.MIDNIGHT)
         }
         val title = text.replace(Regex("\\s+"), " ").trim().ifEmpty { input.trim() }
-        return QuickAddResult(title, due, hasTime, priority, listName, tags, tokens)
+        return QuickAddResult(title, due, hasTime, priority, listName, tags, courseName, tokens)
+    }
+
+    /**
+     * 多行粘贴（群通知、老师发的作业清单）：每行一条；缩进或 `- ` 开头的行是上一条的子任务；
+     * `1.`、`1、`、`•` 这类序号会被去掉。
+     */
+    fun parseLines(
+        input: String,
+        now: LocalDateTime,
+    ): List<QuickBatchItem> {
+        val out = mutableListOf<QuickBatchItem>()
+        var lastTop: Int? = null
+        for (raw in input.lines()) {
+            if (raw.isBlank()) continue
+            val indented = raw.startsWith(" ") || raw.startsWith("\t") || raw.startsWith("　")
+            val dash = Regex("^\\s*[-*]\\s+").containsMatchIn(raw)
+            val body = raw.trim().replace(Regex("^([-*•·]|\\d{1,2}[.、)）])\\s*"), "").trim()
+            if (body.isEmpty()) continue
+            val parent = if ((indented || dash) && lastTop != null) lastTop else null
+            out += QuickBatchItem(parse(body, now), parent)
+            if (parent == null) lastTop = out.lastIndex
+        }
+        return out
     }
 }
+
+/** 多行解析的一条；[parentIndex] 指向同一批里的父条目（子任务）。 */
+data class QuickBatchItem(
+    val result: QuickAddResult,
+    val parentIndex: Int?,
+)
