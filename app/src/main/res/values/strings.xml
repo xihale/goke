@@ -117,6 +117,8 @@
     <string name="todo_all_empty">这里还没有待办</string>
     <string name="todo_done_empty">还没有已完成的待办</string>
     <string name="quick_add_hint">明天 18:00 交作业 !高 #课程</string>
+    <string name="quick_add_event_hint">日程:后天早上10点 3D打印</string>
+    <string name="event_added_toast">已添加日程:%1$s</string>
     <string name="before_next_class">%1$s 下次课前 · %2$s</string>
     <string name="subtasks_progress">%1$d/%2$d</string>
     <string name="priority_high_tag">高优先</string>

@@ -154,7 +154,7 @@ fun NavGraphBuilder.mintDestinations(
     composable<Route.CourseEdit> { e -> CourseEditScreen(e.toRoute<Route.CourseEdit>().id, back) }
     composable<Route.EventEdit> { e ->
         val r = e.toRoute<Route.EventEdit>()
-        EventEditScreen(r.id, r.date, back)
+        EventEditScreen(r.id, r.date, r.start, r.end, back)
     }
     composable<Route.TaskDetail> { e ->
         val r = e.toRoute<Route.TaskDetail>()

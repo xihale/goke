@@ -70,6 +70,8 @@ import java.time.LocalTime
 fun EventEditScreen(
     id: String?,
     dateArg: String?,
+    startArg: String? = null,
+    endArg: String? = null,
     onBack: () -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -84,14 +86,16 @@ fun EventEditScreen(
     // 新建时自动聚焦标题
     val titleFocus = remember { FocusRequester() }
     LaunchedEffect(existing == null) { if (existing == null) titleFocus.requestFocus() }
-    val initDate = remember { dateArg?.let { LocalDate.parse(it) } ?: LocalDate.now() }
+    val selStart = startArg?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }
+    val selEnd = endArg?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }
+    val initDate = remember { dateArg?.let { LocalDate.parse(it) } ?: selStart?.toLocalDate() ?: LocalDate.now() }
 
     var title by remember { mutableStateOf(existing?.title.orEmpty()) }
     var allDay by remember { mutableStateOf(existing?.allDay ?: false) }
-    var startDate by remember { mutableStateOf(existing?.start?.toLocalDate() ?: initDate) }
-    var startTime by remember { mutableStateOf(existing?.start?.toLocalTime() ?: LocalTime.of(14, 0)) }
-    var endDate by remember { mutableStateOf(existing?.end?.toLocalDate() ?: initDate) }
-    var endTime by remember { mutableStateOf(existing?.end?.toLocalTime() ?: LocalTime.of(15, 0)) }
+    var startDate by remember { mutableStateOf(existing?.start?.toLocalDate() ?: selStart?.toLocalDate() ?: initDate) }
+    var startTime by remember { mutableStateOf(existing?.start?.toLocalTime() ?: selStart?.toLocalTime() ?: LocalTime.of(14, 0)) }
+    var endDate by remember { mutableStateOf(existing?.end?.toLocalDate() ?: selEnd?.toLocalDate() ?: initDate) }
+    var endTime by remember { mutableStateOf(existing?.end?.toLocalTime() ?: selEnd?.toLocalTime() ?: selStart?.toLocalTime()?.plusHours(1) ?: LocalTime.of(15, 0)) }
     var location by remember { mutableStateOf(existing?.location.orEmpty()) }
     var note by remember { mutableStateOf(existing?.note.orEmpty()) }
     var category by remember { mutableStateOf(existing?.category.orEmpty()) }

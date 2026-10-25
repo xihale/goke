@@ -31,6 +31,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -39,6 +41,8 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,7 +62,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
@@ -67,11 +73,17 @@ import app.mintcal.core.agenda.BlockItem
 import app.mintcal.core.agenda.CourseItem
 import app.mintcal.core.agenda.EventItem
 import app.mintcal.core.agenda.TaskItem
+import app.mintcal.core.change.Edits
+import app.mintcal.core.model.Event
+import app.mintcal.core.todo.QuickAdd
+import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
 import app.mintcal.ui.components.AgendaRow
 import app.mintcal.ui.components.EmptyState
+import app.mintcal.ui.components.Tag
+import app.mintcal.ui.dueLabel
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDayWeekday
 import app.mintcal.ui.reduceMotion
@@ -82,6 +94,8 @@ import app.mintcal.ui.weekdayShort
 import app.mintcal.ui.yearMonth
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.temporal.TemporalAdjusters
 
 private enum class CalMode { MONTH, WEEK, DAY }
@@ -144,6 +158,7 @@ fun CalendarScreen() {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 150.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item(key = "quick") { EventQuickAdd(selected, now) }
             item(key = "h-month") {
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { shift(-1) }) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, null) }
@@ -341,4 +356,76 @@ private fun DayCell(
 @Composable
 private fun Dot(color: Color) {
     Box(Modifier.size(5.dp).clip(CircleShape).background(color))
+}
+
+/**
+ * 一句话建日程(与待办快速添加同一套解析):「后天早上10点 3D打印」。
+ * 有时间 → 定时日程(时长用默认课程时长);没时间 → 所选日期的全天日程。
+ */
+@Composable
+private fun EventQuickAdd(
+    selected: LocalDate,
+    now: LocalDateTime,
+    modifier: Modifier = Modifier,
+) {
+    val ctx = LocalContext.current
+    val actions = LocalActions.current
+    val haptics = LocalHapticFeedback.current
+    val snap = liveSnapshot()
+    val settings = settingsState()
+    var text by rememberSaveable { mutableStateOf("") }
+    val parsed = remember(text, now) { if (text.isBlank()) null else QuickAdd.parse(text, now) }
+
+    fun save() {
+        val p = parsed ?: return
+        val start = p.due
+        val ev =
+            if (start != null && p.dueHasTime) {
+                Event(Ids.next(), p.title, start, start.plusMinutes(settings.defaultBlockMinutes.toLong()))
+            } else {
+                val day = p.due?.toLocalDate() ?: selected
+                Event(Ids.next(), p.title, day.atStartOfDay(), day.atStartOfDay(), allDay = true)
+            }
+        actions.commit(
+            Edits.save(snap, ev, ctx.getString(R.string.add_event_desc, p.title), System.currentTimeMillis()),
+            ctx.getString(R.string.event_added_toast, p.title),
+        )
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        text = ""
+    }
+
+    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), color = MintTheme.card, shadowElevation = 8.dp, tonalElevation = 2.dp) {
+        Column(Modifier.padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    text,
+                    { text = it },
+                    Modifier.weight(1f),
+                    placeholder = { Text(stringResource(R.string.quick_add_event_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(20.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { save() }),
+                )
+                IconButton(onClick = { save() }, enabled = parsed != null) {
+                    Icon(Icons.Rounded.Add, stringResource(R.string.new_event))
+                }
+            }
+            parsed?.let { p ->
+                Row(Modifier.padding(end = 6.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Tag(p.title, MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurface)
+                    val due = p.due
+                    Tag(
+                        if (due != null && p.dueHasTime) {
+                            ctx.dueLabel(due, true, now.toLocalDate())
+                        } else {
+                            ctx.monthDayWeekday(due?.toLocalDate() ?: selected)
+                        },
+                        MaterialTheme.colorScheme.primaryContainer,
+                        MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+            }
+        }
+    }
 }

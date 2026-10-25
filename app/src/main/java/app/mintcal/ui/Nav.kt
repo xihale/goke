@@ -61,6 +61,9 @@ sealed interface Route {
     @Serializable data class EventEdit(
         val id: String?,
         val date: String? = null,
+        // 课表格子上框选带来的起止时刻（ISO），新建时预填
+        val start: String? = null,
+        val end: String? = null,
     ) : Route
 
     @Serializable data class TaskDetail(
