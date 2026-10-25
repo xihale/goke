@@ -20,6 +20,8 @@ import app.mintcal.R
 object Notifications {
     const val CHANNEL_REMINDER = "reminder"
     const val CHANNEL_PARCEL = "parcel"
+    const val CHANNEL_QUICK = "quickadd"
+    const val NOTIFY_QUICK_ID = 9002
 
     fun ensureChannels(ctx: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -30,6 +32,40 @@ object Notifications {
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_PARCEL, ctx.getString(R.string.channel_parcel), NotificationManager.IMPORTANCE_DEFAULT),
         )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_QUICK, ctx.getString(R.string.channel_quick), NotificationManager.IMPORTANCE_LOW).apply {
+                setShowBadge(false)
+            },
+        )
+    }
+
+    /** 常驻通知栏的「快速添加待办」入口：点按进新建页。 */
+    fun postQuickAdd(ctx: Context) {
+        if (!canPost(ctx)) return
+        val open =
+            PendingIntent.getActivity(
+                ctx,
+                NOTIFY_QUICK_ID,
+                Intent(Intent.ACTION_VIEW, DeepLinks.addUri(), ctx, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        val n =
+            NotificationCompat
+                .Builder(ctx, CHANNEL_QUICK)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(ctx.getString(R.string.quick_notif_title))
+                .setContentText(ctx.getString(R.string.quick_notif_text))
+                .setContentIntent(open)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setShowWhen(false)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+        runCatching { NotificationManagerCompat.from(ctx).notify(NOTIFY_QUICK_ID, n.build()) }
+    }
+
+    fun cancelQuickAdd(ctx: Context) {
+        NotificationManagerCompat.from(ctx).cancel(NOTIFY_QUICK_ID)
     }
 
     fun canPost(ctx: Context): Boolean =

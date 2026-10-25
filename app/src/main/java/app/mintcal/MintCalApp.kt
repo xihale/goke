@@ -69,6 +69,8 @@ class MintCalApp : Application() {
                 .debounce(800)
                 .collect { (snap, st) ->
                     reminders.reschedule(snap, st)
+                    // 常驻快速添加通知跟随设置（重启 / 数据变化时自动恢复或撤掉）
+                    if (st.quickAddNotif) Notifications.postQuickAdd(this@MintCalApp) else Notifications.cancelQuickAdd(this@MintCalApp)
                     TodayWidgetProvider.refreshAll(this@MintCalApp, snap, st)
                     TodoWidgetProvider.refreshAll(this@MintCalApp)
                     ScheduleWidgetProvider.refreshAll(this@MintCalApp, snap, st)

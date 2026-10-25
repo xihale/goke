@@ -623,6 +623,11 @@
     <string name="digest_title">今日安排</string>
     <string name="remind_digest">每日摘要</string>
     <string name="remind_digest_desc">每天早上 7:30 提醒今天有几节课、几项待办（没有安排则不打扰）</string>
+    <string name="quick_notif_row">常驻快速添加</string>
+    <string name="quick_notif_desc">在通知栏保留一个入口，点按直接新建待办</string>
+    <string name="quick_notif_title">快速添加待办</string>
+    <string name="quick_notif_text">点按新建一条待办</string>
+    <string name="channel_quick">快速添加入口</string>
     <string name="today_gap_text">%1$s–%2$s 有 %3$d 分钟空档，要不要做「%4$s」（预计 %5$d 分钟）？</string>
     <string name="today_gap_schedule">排进去</string>
     <string name="today_gap_dismiss">不用了</string>
