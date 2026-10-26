@@ -2,19 +2,28 @@ package app.mintcal.ui
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -30,7 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -43,8 +54,6 @@ import app.mintcal.DeepLink
 import app.mintcal.MintCalApp
 import app.mintcal.R
 import app.mintcal.ui.components.FloatingNavBar
-import app.mintcal.ui.components.MintSnackbarHost
-import app.mintcal.ui.components.MintUndoButton
 import app.mintcal.ui.screens.AboutScreen
 import app.mintcal.ui.screens.AdvancedFullScreen
 import app.mintcal.ui.screens.AiSettingsScreen
@@ -67,6 +76,7 @@ import app.mintcal.ui.screens.TodoEditScreen
 import app.mintcal.ui.screens.TodoScreen
 import app.mintcal.ui.screens.TrashScreen
 import app.mintcal.ui.theme.MintTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 
@@ -77,17 +87,26 @@ fun MintCalRoot(
     onIncomingHandled: () -> Unit,
 ) {
     val nav = rememberNav()
-    val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val actions = remember { Actions(app, snack, scope, nav) }
-    actions.undoLabel = stringResource(R.string.undo)
+    val actions = remember { Actions(app, scope, nav) }
     val ready by app.repo.ready.collectAsState()
+
+    // 悬浮撤销按钮：出现后 5 秒自动收起；新操作会把计时重置
+    LaunchedEffect(actions.undo?.seq) {
+        val prompt = actions.undo ?: return@LaunchedEffect
+        delay(5_000)
+        actions.timeout(prompt.seq)
+    }
 
     // 是否在压栈页（Tab 层 = home 目的地）。转场与返回栈由标准 navigation-compose 接管。
     val backStack by nav.controller.currentBackStackEntryAsState()
     val onRoute = backStack?.destination?.route != HOME
 
+    // Tab 层：非今日 Tab 返回回今日。压栈页的返回交给 NavHost 默认处理。
     BackHandler(enabled = ready && !onRoute && nav.tab != Tab.TODAY) { nav.back() }
+    // 压栈页兜底：显式注册返回 = 弹一层，绝不把返回事件漏给系统导致整个应用退出
+    // （部分 ROM 的预测性返回会在无人认领事件时直接结束 Activity）。
+    BackHandler(enabled = ready && onRoute) { nav.pop() }
 
     LaunchedEffect(incoming, ready) {
         if (incoming != null && ready) {
@@ -158,26 +177,31 @@ fun MintCalRoot(
                     mintDestinations(nav, back)
                 }
             }
-            MintUndoButton(
-                prompt = actions.undo,
-                label = actions.undoLabel,
-                onUndo = actions::undoNow,
-                onTimeout = { actions.timeout(it.seq) },
+            // TickTick 式悬浮撤销：可撤销操作不再弹提示条，改为左下角一颗圆形按钮
+            AnimatedVisibility(
+                visible = actions.undo != null,
+                enter = scaleIn(MintTheme.spec(), initialScale = 0.6f) + fadeIn(MintTheme.spec()),
+                exit = scaleOut(MintTheme.spec(), targetScale = 0.6f) + fadeOut(MintTheme.spec()),
                 modifier =
                     Modifier
                         .align(Alignment.BottomStart)
+                        .zIndex(2f)
+                        // 键盘弹起时跟快速添加栏一起浮到键盘上方，否则会被压在键盘底下
+                        .imePadding()
                         .navigationBarsPadding()
                         .padding(start = 20.dp)
-                        .padding(bottom = if (!onRoute) 168.dp else 96.dp),
-            )
-            MintSnackbarHost(
-                snack,
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = if (!onRoute) 152.dp else 88.dp),
-            )
+                        .padding(bottom = if (!onRoute) 152.dp else 88.dp),
+            ) {
+                FloatingActionButton(
+                    onClick = { actions.undoNow() },
+                    shape = CircleShape,
+                    containerColor = MaterialTheme.colorScheme.tertiary,
+                    contentColor = MaterialTheme.colorScheme.onTertiary,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp),
+                ) {
+                    Icon(Icons.AutoMirrored.Rounded.Undo, stringResource(R.string.undo))
+                }
+            }
         }
     }
 }
@@ -205,7 +229,9 @@ fun NavGraphBuilder.mintDestinations(
     composable<Route.CourseEdit> { e -> CourseEditScreen(e.toRoute<Route.CourseEdit>().id, back) }
     composable<Route.TodoEdit> { e ->
         val r = e.toRoute<Route.TodoEdit>()
-        TodoEditScreen(r.id, r.date, r.start, r.end, r.text, r.courseId, r.extraDates, back)
+        TodoEditScreen(r.id, r.date, r.start, r.end, r.text, r.courseId, r.extraDates) {
+            if (nav.controller.currentBackStackEntry == e) back()
+        }
     }
 }
 
@@ -216,6 +242,8 @@ private fun Tabs(nav: Nav) {
     // 切页本身不做任何位移/淡入：内容瞬切、底栏色块滑过去。位移过渡需要在新页首帧之后才把
     // 偏移打进去（一帧跳出去再滑回来），线框多的课表/日历上看着就是抖——平台惯例也是瞬切。
     val visited = remember { Tab.entries.toList() }
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(nav.tab) { focusManager.clearFocus(force = true) }
     Box(Modifier.fillMaxSize()) {
         visited.forEach { tab ->
             key(tab) {
@@ -225,6 +253,7 @@ private fun Tabs(nav: Nav) {
                         .zIndex(if (current) 1f else 0f)
                         .fillMaxSize()
                         .graphicsLayer { alpha = if (current) 1f else 0f }
+                        .then(if (current) Modifier else Modifier.clearAndSetSemantics {})
                         .blockPointer(!current),
                 ) {
                     when (tab) {

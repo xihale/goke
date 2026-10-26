@@ -5,6 +5,8 @@ import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Indication
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
@@ -26,12 +28,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import app.mintcal.R
 import app.mintcal.data.DarkMode
 import app.mintcal.data.Settings
 import app.mintcal.data.ThemeSource
@@ -41,13 +43,14 @@ import com.materialkolor.dynamicColorScheme
 enum class Preset(
     val key: String,
     val seed: Color,
+    val label: Int,
 ) {
-    MINT("mint", Color(0xFF4FA796)),
-    PEACH("peach", Color(0xFFE8836B)),
-    LAVENDER("lavender", Color(0xFF7A6CC4)),
-    SKY("sky", Color(0xFF4A90D9)),
-    ROSE("rose", Color(0xFFD65C7A)),
-    LEMON("lemon", Color(0xFFC9A227)),
+    MINT("mint", Color(0xFF4FA796), R.string.preset_mint),
+    PEACH("peach", Color(0xFFE8836B), R.string.preset_peach),
+    LAVENDER("lavender", Color(0xFF7A6CC4), R.string.preset_lavender),
+    SKY("sky", Color(0xFF4A90D9), R.string.preset_sky),
+    ROSE("rose", Color(0xFFD65C7A), R.string.preset_rose),
+    LEMON("lemon", Color(0xFFC9A227), R.string.preset_lemon),
     ;
 
     companion object {
@@ -113,16 +116,25 @@ fun mintColors(dark: Boolean): MintColors {
 val LocalMintColors = compositionLocalOf { mintColors(false) }
 val LocalReduceMotion = compositionLocalOf { false }
 
+/** 无按压高亮：clickable/selectable/Surface(onClick) 的默认 indication 落到这里 = 不画任何东西。 */
+private object NoIndication : androidx.compose.foundation.IndicationNodeFactory {
+    override fun create(interactionSource: androidx.compose.foundation.interaction.InteractionSource): androidx.compose.ui.Modifier.Node =
+        object : androidx.compose.ui.Modifier.Node() {}
+
+    override fun equals(other: Any?) = other === this
+
+    override fun hashCode() = javaClass.hashCode()
+}
+
 object MintTheme {
     val colors: MintColors
         @Composable @ReadOnlyComposable
         get() = LocalMintColors.current
 
-    /** 卡片底色：浅色用最亮的容器色（在带色调的背景上显出白卡片），深色用较亮的容器色。 */
+    /** 普通内容统一使用低层容器，主色留给选中态与操作。 */
     val card: Color
         @Composable @ReadOnlyComposable
-        get() =
-            if (LocalMintColors.current.dark) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainerLowest
+        get() = MaterialTheme.colorScheme.surfaceContainerLow
 
     /** 弹簧动效（阻尼 0.7）；系统「移除动画」时直接切换。 */
     @Composable
@@ -197,21 +209,25 @@ private fun brandDark() =
 
 val MintShapes =
     Shapes(
-        extraSmall = RoundedCornerShape(8.dp),
+        extraSmall = RoundedCornerShape(4.dp),
         small = RoundedCornerShape(12.dp),
         medium = RoundedCornerShape(16.dp),
-        large = RoundedCornerShape(22.dp),
+        large = RoundedCornerShape(24.dp),
         extraLarge = RoundedCornerShape(28.dp),
     )
 
 private val MintTypography =
     Typography().let { t ->
         t.copy(
-            headlineMedium = t.headlineMedium.copy(fontWeight = FontWeight.Bold, fontSize = 26.sp),
-            titleLarge = t.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 22.sp),
-            titleMedium = t.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
-            bodyMedium = t.bodyMedium.copy(fontSize = 14.sp),
-            labelMedium = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium),
+            headlineMedium = t.headlineMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 26.sp, lineHeight = 32.sp, letterSpacing = 0.sp),
+            titleLarge = t.titleLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = 0.sp),
+            titleMedium = t.titleMedium.copy(fontWeight = FontWeight.Medium, fontSize = 16.sp, lineHeight = 24.sp, letterSpacing = 0.sp),
+            bodyLarge = t.bodyLarge.copy(letterSpacing = 0.sp),
+            bodyMedium = t.bodyMedium.copy(fontSize = 14.sp, letterSpacing = 0.sp),
+            bodySmall = t.bodySmall.copy(letterSpacing = 0.sp),
+            labelLarge = t.labelLarge.copy(letterSpacing = 0.sp),
+            labelMedium = t.labelMedium.copy(letterSpacing = 0.sp),
+            labelSmall = t.labelSmall.copy(letterSpacing = 0.sp),
         )
     }
 
@@ -260,7 +276,14 @@ fun MintCalTheme(
         reduce = runCatching { !android.animation.ValueAnimator.areAnimatorsEnabled() }.getOrDefault(false)
     }
     val scheme = resolveColorScheme(settings, dark)
-    CompositionLocalProvider(LocalMintColors provides mintColors(dark), LocalReduceMotion provides reduce) {
+    // 全应用关闭按压浅背景高亮（ripple/状态层里的可点底色）：点击反馈交给按下缩放、滑动、
+    // 勾选动画等既有交互表达，不再闪底色。显式传 indication = ripple() 的调用点也已清理。
+    CompositionLocalProvider(
+        LocalMintColors provides mintColors(dark),
+        LocalReduceMotion provides reduce,
+        // 本项目 Compose 版本没有 Indication.None，这里给等价的无高亮实现
+        LocalIndication provides NoIndication,
+    ) {
         MaterialTheme(colorScheme = scheme, shapes = MintShapes, typography = MintTypography) {
             // 提供默认内容色：没有 Surface 包裹时文字会是黑色，深色模式下看不见
             androidx.compose.material3.Surface(color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground, content = content)

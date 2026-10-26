@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -29,13 +30,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,8 +57,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -129,7 +133,10 @@ fun TodayScreen() {
     val taskTotal = items.count { it is TaskItem || it is BlockItem }
     val doneCount = items.count { (it is CourseItem && it.occ.end.isBefore(now)) || (it is EventItem && !it.allDay && it.end.isBefore(now)) || (it is TaskItem && it.task.done) || (it is BlockItem && it.task.done) }
     val progress = if (items.isEmpty()) 0f else doneCount.toFloat() / items.size
+    val pendingTasks = pendingItems.count { it is TaskItem || it is BlockItem } + overdue.size
     val next = items.firstOrNull { it is CourseItem && it.occ.end.isAfter(now) } as? CourseItem
+    // 只用于 hero 的完成判定：逾期未清就不算全部完成
+    val allDone = items.isNotEmpty() && doneCount == items.size && overdue.isEmpty()
 
     val reduce = reduceMotion()
     val listState = rememberLazyListState()
@@ -138,146 +145,170 @@ fun TodayScreen() {
     }
     val slideSpec = MintTheme.spec<IntOffset>()
     val fadeSpec = MintTheme.spec<Float>()
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize().statusBarsPadding(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 132.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        item {
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(ctx.monthDayWeekday(today), style = MaterialTheme.typography.headlineMedium)
-                    Text(weekLabel, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Box {
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.Add, stringResource(R.string.add)) }
-                    DropdownMenu(menu, { menu = false }) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.new_entry)) }, onClick = {
-                            menu = false
-                            nav.push(Route.TodoEdit(null, today.toString()))
-                        })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.new_course)) }, onClick = {
-                            menu = false
-                            nav.push(Route.CourseEdit(null))
-                        })
-                    }
-                }
-                IconButton(onClick = { nav.push(Route.Settings) }) { Icon(Icons.Rounded.Settings, stringResource(R.string.settings)) }
-            }
-        }
-        item {
-            MintCard(color = MaterialTheme.colorScheme.primaryContainer) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    ProgressRing(progress, Modifier.size(64.dp))
-                    Spacer(Modifier.width(16.dp))
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().statusBarsPadding(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 132.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            item {
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        AnimatedContent(
-                            if (items.isEmpty()) stringResource(R.string.today_empty_title) else stringResource(R.string.today_summary, courseCount, taskTotal),
-                            transitionSpec = {
-                                (fadeIn(fadeSpec) + slideInVertically(slideSpec) { it / 3 }) togetherWith
-                                    (fadeOut(fadeSpec) + slideOutVertically(slideSpec) { -it / 3 })
-                            },
-                            label = "today-summary",
-                        ) { t ->
-                            Text(t, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(ctx.monthDayWeekday(today), style = MaterialTheme.typography.titleLarge)
+                        Text(weekLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Box {
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
+                        DropdownMenu(menu, { menu = false }) {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.new_course)) }, onClick = {
+                                menu = false
+                                nav.push(Route.CourseEdit(null))
+                            })
                         }
-                        AnimatedContent(
-                            next,
-                            transitionSpec = {
-                                (fadeIn(fadeSpec) + slideInVertically(slideSpec) { it / 3 }) togetherWith
-                                    (fadeOut(fadeSpec) + slideOutVertically(slideSpec) { -it / 3 })
-                            },
-                            label = "today-next",
-                        ) { n ->
-                            Text(
-                                if (n != null) {
-                                    stringResource(R.string.today_next_class, n.occ.start.hm(), n.occ.course.name, n.occ.room)
-                                } else {
-                                    stringResource(R.string.today_no_more_class)
+                    }
+                    IconButton(onClick = { nav.push(Route.Settings) }) { Icon(Icons.Rounded.Settings, stringResource(R.string.settings)) }
+                }
+            }
+            item {
+                MintCard {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ProgressRing(progress, Modifier.size(56.dp))
+                        Spacer(Modifier.width(16.dp))
+                        Column(Modifier.weight(1f)) {
+                            AnimatedContent(
+                                when {
+                                    timeline.isEmpty() && overdue.isEmpty() -> stringResource(R.string.today_empty_title)
+                                    allDone -> stringResource(R.string.today_all_done_title)
+                                    else -> stringResource(R.string.today_summary, courseCount, taskTotal)
                                 },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                            )
+                                transitionSpec = {
+                                    (fadeIn(fadeSpec) + slideInVertically(slideSpec) { it / 3 }) togetherWith
+                                        (fadeOut(fadeSpec) + slideOutVertically(slideSpec) { -it / 3 })
+                                },
+                                label = "today-summary",
+                            ) { t ->
+                                Text(t, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                            }
+                            if (!allDone) {
+                                AnimatedContent(
+                                    next,
+                                    transitionSpec = {
+                                        (fadeIn(fadeSpec) + slideInVertically(slideSpec) { it / 3 }) togetherWith
+                                            (fadeOut(fadeSpec) + slideOutVertically(slideSpec) { -it / 3 })
+                                    },
+                                    label = "today-next",
+                                ) { n ->
+                                    Text(
+                                        if (n != null) {
+                                            stringResource(R.string.today_next_class, n.occ.start.hm(), n.occ.course.name, n.occ.room)
+                                        } else if (pendingTasks > 0) {
+                                            stringResource(R.string.today_remaining, pendingTasks)
+                                        } else if (timeline.isEmpty() && overdue.isEmpty()) {
+                                            stringResource(R.string.today_empty_hint)
+                                        } else {
+                                            // 没课没待办但还有没结束的日程：报实际当天概览
+                                            stringResource(R.string.today_summary, courseCount, taskTotal)
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            if (allDone) {
+                                TextButton(
+                                    onClick = { nav.push(Route.TodoEdit(null, today.plusDays(1).toString())) },
+                                    contentPadding = PaddingValues(0.dp),
+                                ) {
+                                    Text(stringResource(R.string.plan_tomorrow))
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
-        if (overdue.isNotEmpty()) {
-            item(key = "h-overdue") { SectionLabel(stringResource(R.string.overdue_count, overdue.size), trailingColor = MintTheme.colors.removed) }
-            items(overdue, key = { "od-" + it.id }) { t ->
-                TaskRow(
-                    t,
-                    { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) },
-                    { nav.openTask(it) },
-                    subtitle = t.due?.let { ctx.getString(R.string.overdue_since, it.toLocalDate().toString().substring(5)) },
+            if (overdue.isNotEmpty()) {
+                item(key = "h-overdue") { SectionLabel(stringResource(R.string.overdue_count, overdue.size), trailingColor = MintTheme.colors.removed) }
+                items(overdue, key = { "od-" + it.id }) { t ->
+                    TaskRow(
+                        t,
+                        { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) },
+                        { nav.openTask(it) },
+                        subtitle = t.due?.let { ctx.getString(R.string.overdue_since, it.toLocalDate().toString().substring(5)) },
+                        modifier = Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()),
+                    )
+                }
+            }
+            if (pendingItems.isNotEmpty()) item(key = "h-timeline") { SectionLabel(stringResource(R.string.timeline)) }
+            items(pendingItems, key = { itemKey(it) }, contentType = { agendaType(it) }) { item ->
+                AgendaRow(
+                    item,
+                    now,
+                    settings.showTeacher,
+                    onOpenCourse = { nav.push(Route.CourseEdit(it)) },
+                    onOpenEvent = { nav.push(Route.TodoEdit(it)) },
+                    onOpenTask = { nav.openTask(it) },
+                    onToggleTask = { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) },
                     modifier = Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()),
                 )
             }
-        }
-        if (pendingItems.isNotEmpty()) item(key = "h-timeline") { SectionLabel(stringResource(R.string.timeline)) }
-        items(pendingItems, key = { itemKey(it) }, contentType = { agendaType(it) }) { item ->
-            AgendaRow(
-                item,
-                now,
-                settings.showTeacher,
-                onOpenCourse = { nav.push(Route.CourseEdit(it)) },
-                onOpenEvent = { nav.push(Route.TodoEdit(it)) },
-                onOpenTask = { nav.openTask(it) },
-                onToggleTask = { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) },
-                modifier = Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()),
-            )
-        }
-        if (doneItems.isNotEmpty()) {
-            item(key = "h-done") {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable { showDone = !showDone }
-                        .padding(vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        stringResource(R.string.done_count, doneItems.size),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                    )
-                    val rot by animateFloatAsState(if (showDone) 180f else 0f, MintTheme.spec(), label = "done-rot")
-                    Icon(
-                        Icons.Rounded.ExpandMore,
-                        null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = rot },
-                    )
+            if (doneItems.isNotEmpty()) {
+                item(key = "h-done") {
+                    val expansion = stringResource(if (showDone) R.string.state_expanded else R.string.state_collapsed)
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { showDone = !showDone }
+                            .semantics { stateDescription = expansion }
+                            .padding(horizontal = 4.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            stringResource(R.string.done_count, doneItems.size),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        val rot by animateFloatAsState(if (showDone) 0f else -90f, MintTheme.spec(), label = "done-rot")
+                        Icon(
+                            Icons.Rounded.ExpandMore,
+                            null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = rot },
+                        )
+                    }
+                }
+                if (showDone) {
+                    items(doneItems, key = { itemKey(it) }, contentType = { agendaType(it) }) { item ->
+                        val task = if (item is TaskItem) item.task else (item as BlockItem).task
+                        val doneMessage = stringResource(R.string.done_toast, task.title)
+                        TaskRow(
+                            task,
+                            { t, done -> toggle(actions, snap, t, done, now, doneMessage) },
+                            { nav.openTask(it) },
+                        )
+                    }
                 }
             }
-            if (showDone) {
-                items(doneItems, key = { itemKey(it) }, contentType = { agendaType(it) }) { item ->
-                    // 做完的压成一行灰字，不再占视觉重心
-                    Text(
-                        if (item is TaskItem) item.task.title else (item as BlockItem).task.title,
-                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 5.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                        textDecoration = TextDecoration.LineThrough,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+            if (timeline.isEmpty() && overdue.isEmpty()) {
+                item(key = "empty") {
+                    Column(Modifier.fillMaxWidth().padding(top = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(stringResource(R.string.today_empty_hint), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.height(12.dp))
+                        androidx.compose.material3.FilledTonalButton(onClick = { nav.tab = Tab.TODO }) { Text(stringResource(R.string.go_todo)) }
+                    }
                 }
             }
         }
-        if (timeline.isEmpty() && overdue.isEmpty()) {
-            item(key = "empty") {
-                Column(Modifier.fillMaxWidth().padding(top = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(stringResource(R.string.today_empty_hint), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(12.dp))
-                    androidx.compose.material3.FilledTonalButton(onClick = { nav.tab = Tab.TODO }) { Text(stringResource(R.string.go_todo)) }
-                }
-            }
-        }
+        FloatingActionButton(
+            onClick = { nav.push(Route.TodoEdit(null, today.toString())) },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 108.dp),
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            shape = MaterialTheme.shapes.medium,
+        ) { Icon(Icons.Rounded.Add, stringResource(R.string.new_entry)) }
     }
 }
 
@@ -315,28 +346,30 @@ fun ProgressRing(
     progress: Float,
     modifier: Modifier = Modifier,
 ) {
-    val p by animateFloatAsState(progress, MintTheme.spec(), label = "ring")
+    val p by animateFloatAsState(progress.coerceIn(0f, 1f), MintTheme.spec(), label = "ring")
+    // 文字只在目标百分比变化时切换，不跟随动画每一帧重定向
+    val pctTarget = (progress.coerceIn(0f, 1f) * 100).toInt()
     val slideSpec = MintTheme.spec<IntOffset>()
     val fadeSpec = MintTheme.spec<Float>()
-    val track = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f)
+    val track = MaterialTheme.colorScheme.surfaceContainerHighest
     val bar = MaterialTheme.colorScheme.primary
     Box(modifier, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            val stroke = 8.dp.toPx()
+            val stroke = 4.dp.toPx()
             val inset = stroke / 2
             val sz = Size(size.width - stroke, size.height - stroke)
             drawArc(track, 0f, 360f, false, Offset(inset, inset), sz, style = Stroke(stroke))
-            drawArc(bar, -90f, 360f * p, false, Offset(inset, inset), sz, style = Stroke(stroke, cap = StrokeCap.Round))
+            drawArc(bar, -90f, 360f * p.coerceIn(0f, 1f), false, Offset(inset, inset), sz, style = Stroke(stroke, cap = StrokeCap.Round))
         }
         AnimatedContent(
-            targetState = (p * 100).toInt(),
+            targetState = pctTarget,
             transitionSpec = {
                 (slideInVertically(slideSpec) { it / 2 } + fadeIn(fadeSpec)) togetherWith
                     (slideOutVertically(slideSpec) { -it / 2 } + fadeOut(fadeSpec))
             },
             label = "ring-pct",
         ) { pct ->
-            Text("$pct%", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Text("$pct%", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }

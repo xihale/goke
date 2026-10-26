@@ -1,11 +1,14 @@
 package app.mintcal.ui.screens
 
-import android.app.Activity
-import android.content.ActivityNotFoundException
+import android.Manifest
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -17,37 +20,46 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ContentPaste
+import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Label
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.OpenInFull
+import androidx.compose.material.icons.rounded.School
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,11 +70,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -73,6 +86,7 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import app.mintcal.R
 import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
@@ -90,6 +104,7 @@ import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
+import app.mintcal.ui.components.DatePickerDlg
 import app.mintcal.ui.components.Tag
 import app.mintcal.ui.dueLabel
 import app.mintcal.ui.theme.MintTheme
@@ -97,37 +112,38 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 
 /**
- * 常驻的一行添加（如「明天下午3点交作业 #概率论 !高 @期末 /高数」）：输入即解析并在输入框内高亮识别到的片段，
- * 下方标签点一下就去掉对应片段；输入框上方有日期 / 课程 / 清单 / 优先级 / 粘贴 快捷条，不会打字也能录。
+ * TickTick 式快速添加浮层：点右下角 + 打开，输入区从顶部盖下来（遮罩点空白收起，草稿保留）。
+ * 输入即解析并就地高亮识别到的片段；下方工具条一排图标：放大进详细编辑（带已输入内容进编辑页继续安排，不重输）/
+ * 优先级旗子（弹出高-中-低-无菜单）/ 日期 / 课程 / 清单 / 粘贴，右侧语音；解析标签保留。
  * 多行文字（从别处复制 / 分享来的清单）会先给预览，再一次性全部添加，缩进行成为上一条的子任务。
- * 「更多」把已解析的内容带进详情页，不用重输。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun QuickAddBar(
+internal fun QuickAddSheet(
     snap: Snapshot,
     now: LocalDateTime,
     listFilter: String?,
     defaultBucket: Bucket?,
     onClearBucket: () -> Unit,
     focusSignal: Int,
-    hidden: Boolean,
+    visible: Boolean,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ctx = LocalContext.current
+    val resources = LocalResources.current
     val nav = LocalNav.current
     val actions = LocalActions.current
     val haptics = LocalHapticFeedback.current
     var text by rememberSaveable { mutableStateOf("") }
-    var focused by remember { mutableStateOf(false) }
     var listMenu by remember { mutableStateOf(false) }
     var priorityMenu by remember { mutableStateOf(false) }
     var courseMenu by remember { mutableStateOf(false) }
+    var datePick by remember { mutableStateOf(false) }
     var batch by remember { mutableStateOf<List<QuickBatchItem>?>(null) }
     val parsed = remember(text, now) { if (text.isBlank()) null else QuickAdd.parse(text, now) }
     val focus = remember { FocusRequester() }
-    // 键盘弹起时贴着键盘，收起时悬在底栏之上
-    val ime = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+    val focusManager = LocalFocusManager.current
     val scheme = MaterialTheme.colorScheme
     val highlight =
         remember(parsed, scheme) {
@@ -142,6 +158,14 @@ internal fun QuickAddBar(
         }
 
     LaunchedEffect(focusSignal) { if (focusSignal > 0) focus.requestFocus() }
+    // 打开浮层即弹键盘；关闭时把焦点交回去，键盘跟着收起
+    LaunchedEffect(visible) {
+        if (visible) {
+            focus.requestFocus()
+        } else {
+            focusManager.clearFocus(force = true)
+        }
+    }
 
     /** 去掉某类片段后（可选）追加一个新片段，用于快捷条与标签点按。 */
     fun rewrite(
@@ -206,27 +230,72 @@ internal fun QuickAddBar(
         }
     }
 
-    val speech =
-        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-            val spoken =
-                r.data
-                    ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-                    ?.firstOrNull()
-            if (r.resultCode == Activity.RESULT_OK && !spoken.isNullOrBlank()) {
-                text = (text + " " + spoken).trim()
-                focus.requestFocus()
-            }
+    // 直接用系统识别服务在应用内出结果：不跳 Google 语音服务的界面，也没有它的安装/确认提示
+    var listening by remember { mutableStateOf(false) }
+    val recognizer = remember { if (SpeechRecognizer.isRecognitionAvailable(ctx)) SpeechRecognizer.createSpeechRecognizer(ctx) else null }
+    DisposableEffect(recognizer) { onDispose { recognizer?.destroy() } }
+    LaunchedEffect(recognizer) {
+        recognizer?.setRecognitionListener(
+            object : RecognitionListener {
+                override fun onResults(results: Bundle) {
+                    listening = false
+                    val said = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                    if (!said.isNullOrBlank()) {
+                        text = (text + " " + said).trim()
+                        focus.requestFocus()
+                    }
+                }
+
+                override fun onError(error: Int) {
+                    listening = false
+                    if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                        actions.toast(ctx.getString(R.string.todo_voice_unavailable))
+                    }
+                }
+
+                override fun onReadyForSpeech(params: Bundle?) {}
+
+                override fun onBeginningOfSpeech() {}
+
+                override fun onRmsChanged(rmsdB: Float) {}
+
+                override fun onBufferReceived(buffer: ByteArray?) {}
+
+                override fun onEndOfSpeech() {}
+
+                override fun onPartialResults(partialResults: Bundle?) {}
+
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            },
+        )
+    }
+
+    fun listen() {
+        val sr = recognizer
+        if (sr == null) {
+            actions.toast(ctx.getString(R.string.todo_voice_unavailable))
+            return
+        }
+        sr.cancel()
+        listening = true
+        sr.startListening(
+            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1),
+        )
+    }
+
+    /** 录音权限给了才开始听。 */
+    val micPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) listen() else actions.toast(ctx.getString(R.string.todo_voice_unavailable))
         }
 
     fun startVoice() {
-        val i =
-            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                .putExtra(RecognizerIntent.EXTRA_PROMPT, ctx.getString(R.string.todo_voice_prompt))
-        try {
-            speech.launch(i)
-        } catch (_: ActivityNotFoundException) {
-            actions.toast(ctx.getString(R.string.todo_voice_unavailable))
+        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            listen()
+        } else {
+            micPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
@@ -243,83 +312,140 @@ internal fun QuickAddBar(
     }
 
     fun openDetail() {
-        nav.push(Route.TodoEdit(text = text.ifBlank { null }))
+        val draft = text.ifBlank { null }
+        // 草稿移交编辑页：浮层清空收起，回来不残留旧文字
+        text = ""
+        onDismiss()
+        nav.push(Route.TodoEdit(text = draft))
     }
 
     AnimatedVisibility(
-        visible = !hidden,
+        visible = visible,
         modifier = modifier,
         enter = fadeIn(MintTheme.spec()),
         exit = fadeOut(MintTheme.spec()),
     ) {
-        Surface(
-            modifier =
+        Box(Modifier.fillMaxSize()) {
+            // 遮罩：点空白 = 收起（＋/回车才保存，草稿留在输入框）
+            Box(
                 Modifier
-                    .fillMaxWidth()
-                    .imePadding()
-                    .navigationBarsPadding()
-                    .padding(start = 16.dp, end = 16.dp, bottom = if (ime > 0.dp) 8.dp else 96.dp),
-            shape = RoundedCornerShape(26.dp),
-            color = MintTheme.card,
-            shadowElevation = 8.dp,
-            tonalElevation = 2.dp,
-        ) {
-            Column(Modifier.padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)) {
-                AnimatedVisibility(
-                    visible = focused || text.isNotBlank(),
-                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-                ) {
-                    LazyRow(Modifier.padding(bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        item { QuickChip(stringResource(R.string.today)) { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.COURSE), "今天") } }
-                        item { QuickChip(stringResource(R.string.tomorrow)) { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.COURSE), "明天") } }
-                        item { QuickChip(stringResource(R.string.date_weekend)) { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.COURSE), "本周末") } }
-                        item { QuickChip(stringResource(R.string.date_next_monday)) { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.COURSE), "下周一") } }
-                        if (snap.courses.isNotEmpty()) {
-                            item {
-                                Box {
-                                    QuickChip("🎓 " + stringResource(R.string.date_before_class)) { courseMenu = true }
-                                    DropdownMenu(courseMenu, { courseMenu = false }) {
-                                        snap.courses.distinctBy { it.name }.forEach { c ->
-                                            DropdownMenuItem(text = { Text(c.name) }, onClick = {
-                                                courseMenu = false
-                                                rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME, QuickTokenKind.COURSE), "/" + c.name.replace(" ", ""))
-                                            })
-                                        }
-                                    }
+                    .matchParentSize()
+                    // 压暗背后内容，把注意力收进输入区
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .pointerInput(Unit) { detectTapGestures { onDismiss() } },
+            )
+            Surface(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .imePadding()
+                        .navigationBarsPadding(),
+                shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shadowElevation = 3.dp,
+            ) {
+                Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextField(
+                        text,
+                        { text = it },
+                        Modifier.weight(1f).focusRequester(focus),
+                        placeholder = { Text(stringResource(R.string.quick_add_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(20.dp),
+                        colors =
+                            TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                            ),
+                        visualTransformation = highlight,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { save() }),
+                    )
+                    FilledTonalIconButton(onClick = { save() }, enabled = parsed != null) {
+                        Icon(Icons.Rounded.Add, stringResource(R.string.add))
+                    }
+                }
+                // TickTick 式工具条：放大进详细编辑 / 优先级旗子（高-中-低-无） / 日期 / 课程 / 清单 / 粘贴，语音放最右
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { openDetail() }) {
+                        Icon(Icons.Rounded.OpenInFull, stringResource(R.string.detail_editor_full_edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Box {
+                        IconButton(onClick = { priorityMenu = true }) {
+                            Icon(Icons.Rounded.Flag, stringResource(R.string.label_priority), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        DropdownMenu(priorityMenu, { priorityMenu = false }) {
+                            listOf(
+                                Triple(3, R.string.priority_3, Color(0xFFE53935)),
+                                Triple(2, R.string.priority_2, Color(0xFFF57C00)),
+                                Triple(1, R.string.priority_1, Color(0xFF1E88E5)),
+                            ).forEach { (level, label, color) ->
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(label) + stringResource(R.string.label_priority)) },
+                                    leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = color) },
+                                    onClick = {
+                                        priorityMenu = false
+                                        rewrite(setOf(QuickTokenKind.PRIORITY), "!" + ctx.getString(label))
+                                    },
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.priority_none)) },
+                                leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                                onClick = {
+                                    priorityMenu = false
+                                    rewrite(setOf(QuickTokenKind.PRIORITY), null)
+                                },
+                            )
+                        }
+                    }
+                    IconButton(onClick = { datePick = true }) {
+                        Icon(Icons.Rounded.Event, stringResource(R.string.detail_editor_pick_date), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (snap.courses.isNotEmpty()) {
+                        Box {
+                            IconButton(onClick = { courseMenu = true }) {
+                                Icon(Icons.Rounded.School, stringResource(R.string.detail_editor_next_class), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            DropdownMenu(courseMenu, { courseMenu = false }) {
+                                snap.courses.distinctBy { it.name }.forEach { c ->
+                                    DropdownMenuItem(text = { Text(c.name) }, onClick = {
+                                        courseMenu = false
+                                        rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME, QuickTokenKind.COURSE), "/" + c.name.replace(" ", ""))
+                                    })
                                 }
                             }
                         }
-                        if (snap.lists.isNotEmpty()) {
-                            item {
-                                Box {
-                                    QuickChip("#" + stringResource(R.string.label_list)) { listMenu = true }
-                                    DropdownMenu(listMenu, { listMenu = false }) {
-                                        snap.lists.sortedBy { it.sort }.forEach { l ->
-                                            DropdownMenuItem(text = { Text(l.name) }, onClick = {
-                                                listMenu = false
-                                                rewrite(setOf(QuickTokenKind.LIST), "#" + l.name)
-                                            })
-                                        }
-                                    }
+                    }
+                    if (snap.lists.isNotEmpty()) {
+                        Box {
+                            IconButton(onClick = { listMenu = true }) {
+                                Icon(Icons.Rounded.Label, stringResource(R.string.label_list), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            DropdownMenu(listMenu, { listMenu = false }) {
+                                snap.lists.sortedBy { it.sort }.forEach { l ->
+                                    DropdownMenuItem(text = { Text(l.name) }, onClick = {
+                                        listMenu = false
+                                        rewrite(setOf(QuickTokenKind.LIST), "#" + l.name)
+                                    })
                                 }
                             }
                         }
-                        item {
-                            Box {
-                                QuickChip("!" + stringResource(R.string.label_priority)) { priorityMenu = true }
-                                DropdownMenu(priorityMenu, { priorityMenu = false }) {
-                                    listOf("高" to R.string.priority_3, "中" to R.string.priority_2, "低" to R.string.priority_1).forEach { (word, label) ->
-                                        DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = {
-                                            priorityMenu = false
-                                            rewrite(setOf(QuickTokenKind.PRIORITY), "!$word")
-                                        })
-                                    }
-                                }
-                            }
-                        }
-                        item { QuickChip("📋 " + stringResource(R.string.todo_paste)) { paste() } }
-                        item { QuickChip(stringResource(R.string.more_options)) { openDetail() } }
+                    }
+                    IconButton(onClick = { paste() }) {
+                        Icon(Icons.Rounded.ContentPaste, stringResource(R.string.todo_paste), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = { startVoice() }) {
+                        // 正在听时点主题色，其它时候保持默认
+                        Icon(
+                            Icons.Rounded.Mic,
+                            stringResource(R.string.todo_voice),
+                            tint = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
                 if (defaultBucket != null) {
@@ -330,26 +456,6 @@ internal fun QuickAddBar(
                             MaterialTheme.colorScheme.onSecondaryContainer,
                             Modifier.clickable { onClearBucket() },
                         )
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        text,
-                        { text = it },
-                        Modifier.weight(1f).focusRequester(focus).onFocusChanged { focused = it.isFocused },
-                        placeholder = { Text(stringResource(R.string.quick_add_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(20.dp),
-                        visualTransformation = highlight,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { save() }),
-                    )
-                    if (text.isBlank()) {
-                        IconButton(onClick = { startVoice() }) { Icon(Icons.Rounded.Mic, stringResource(R.string.todo_voice)) }
-                    } else {
-                        IconButton(onClick = { save() }, enabled = parsed != null) {
-                            Icon(Icons.Rounded.Add, stringResource(R.string.add))
-                        }
                     }
                 }
                 AnimatedVisibility(
@@ -375,7 +481,7 @@ internal fun QuickAddBar(
                             p.courseName?.let { name ->
                                 val c = matchCourse(snap, name)
                                 Tag(
-                                    "🎓 " + ctx.getString(R.string.before_next_class_short, c?.name ?: name) + " ×",
+                                    stringResource(R.string.detail_editor_before_class, c?.name ?: name) + " ×",
                                     MaterialTheme.colorScheme.primaryContainer,
                                     MaterialTheme.colorScheme.onPrimaryContainer,
                                     Modifier.clickable { rewrite(setOf(QuickTokenKind.COURSE), null) },
@@ -421,12 +527,22 @@ internal fun QuickAddBar(
                 }
             }
         }
+        }
     }
 
     batch?.let { items ->
         BatchPreviewDialog(items, snap, now, onDismiss = { batch = null }) {
             commitItems(items)
             batch = null
+        }
+    }
+    if (datePick) {
+        DatePickerDlg(
+            now.toLocalDate(),
+            { datePick = false },
+        ) { d ->
+            datePick = false
+            rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.COURSE), resources.getString(R.string.detail_editor_date_token, d.monthValue, d.dayOfMonth))
         }
     }
 }
@@ -452,7 +568,7 @@ private fun BatchPreviewDialog(
                     val meta =
                         buildList {
                             p.due?.let { d -> add(ctx.dueLabel(d, p.dueHasTime, now.toLocalDate())) }
-                            p.courseName?.let { c -> add("🎓 " + (matchCourse(snap, c)?.name ?: c)) }
+                            p.courseName?.let { c -> add(matchCourse(snap, c)?.name ?: c) }
                             p.listName?.let { l -> add("#$l") }
                             p.tags.forEach { t -> add("@$t") }
                             if (p.priority > 0) add("!" + ctx.getString(listOf(R.string.priority_1, R.string.priority_2, R.string.priority_3)[p.priority - 1]))
@@ -467,14 +583,6 @@ private fun BatchPreviewDialog(
         confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.todo_batch_add_all)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
-}
-
-@Composable
-private fun QuickChip(
-    label: String,
-    onClick: () -> Unit,
-) {
-    AssistChip(onClick = onClick, label = { Text(label, maxLines = 1) }, shape = CircleShape)
 }
 
 /** 把解析出的日期 / 课程 / 清单 / 优先级 / 标签片段在输入框里着色（不改文字与光标位置）。 */

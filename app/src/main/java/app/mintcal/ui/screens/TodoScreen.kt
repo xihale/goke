@@ -1,14 +1,17 @@
 package app.mintcal.ui.screens
 
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.scrollBy
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -21,7 +24,13 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -30,6 +39,8 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,7 +54,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,13 +62,15 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.currentBackStackEntryAsState
 import app.mintcal.R
 import app.mintcal.core.agenda.NextUps
 import app.mintcal.core.change.Edits
@@ -67,9 +79,11 @@ import app.mintcal.core.model.Task
 import app.mintcal.core.todo.Bucket
 import app.mintcal.core.todo.TaskLogic
 import app.mintcal.core.todo.TodoSearch
+import app.mintcal.ui.HOME
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
+import app.mintcal.ui.Tab
 import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.reduceMotion
@@ -77,25 +91,14 @@ import app.mintcal.ui.rememberNow
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import kotlinx.coroutines.delay
-import java.time.LocalDate
 import kotlin.math.roundToInt
 
 private val DROPPABLE = listOf(Bucket.TODAY, Bucket.TOMORROW, Bucket.THIS_WEEK, Bucket.LATER, Bucket.INBOX)
 
-/** 拖动回调里读最新数据用（pointerInput 只在 key 变化时重启，不能直接捕获快照）。 */
-private class DragEnv(
-    val snap: Snapshot,
-    val taskById: Map<String, Task>,
-    val bucketOfTask: Map<String, Bucket>,
-    val today: LocalDate,
-    val dropBuckets: List<Bucket>,
-    val sections: List<app.mintcal.core.todo.TimelineSection>,
-)
-
 /**
  * 待办页：一条时间线（逾期 / 今天 / 明天 / 本周 / 之后 / 收集箱 / 已完成），分区可折叠，
- * 顶部有「下一件事」与逾期整理；右滑完成、左滑改期、长按拖到别的分区改期（拖到行右侧 = 变子任务）、
- * 顶栏按钮进入多选，搜索支持 `#清单 @标签 !高`。
+ * 顶部有「下一件事」与逾期整理；右滑完成、左滑改期、长按进入多选（勾选后底部批量条改期/改清单/完成/删除）、
+ * 顶栏按钮也可进入多选，搜索支持 `#清单 @标签 !高`。
  */
 @Composable
 fun TodoScreen() {
@@ -104,6 +107,7 @@ fun TodoScreen() {
     val actions = LocalActions.current
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
+    val focusManager = LocalFocusManager.current
     val snap = liveSnapshot()
     val settings = settingsState()
     val now by rememberNow()
@@ -118,11 +122,17 @@ fun TodoScreen() {
     var expandedCsv by rememberSaveable { mutableStateOf("") }
     var addTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var focusSignal by rememberSaveable { mutableIntStateOf(0) }
+    var quickAddOpen by rememberSaveable { mutableStateOf(false) }
     var rescheduleFor by remember { mutableStateOf<List<String>?>(null) }
     var tidy by remember { mutableStateOf(false) }
     var listMenu by remember { mutableStateOf(false) }
-    val drag = remember { TodoDrag() }
     val searchFocus = remember { FocusRequester() }
+    var bulkBarHeight by remember { mutableIntStateOf(0) }
+    // 底部留白：多选时给批量条让位；否则给右下角加号让位（浮层是顶部盖下来的，不占列表空间）
+    val bottomSpace =
+        with(density) {
+            (if (selecting) bulkBarHeight else 0).toDp()
+        }.coerceAtLeast(if (selecting) 96.dp else 160.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
 
     val q = remember(queryText) { TodoSearch.parse(queryText) }
     val visible =
@@ -142,7 +152,6 @@ fun TodoScreen() {
     val nextUp = remember(snap, now) { NextUps.find(snap, now) }
     val urgent = overdueTasks.firstOrNull() ?: sections.firstOrNull { it.bucket == Bucket.TODAY }?.tasks?.firstOrNull()
     val dropBuckets = DROPPABLE.filter { TaskLogic.dropDate(it, today) != TaskLogic.NO_DROP }
-    val env by rememberUpdatedState(DragEnv(snap, taskById, bucketOfTask, today, dropBuckets, sections))
 
     val expanded = remember(expandedCsv) { csvToSet(expandedCsv) }
     val collapsed = remember(collapsedCsv) { csvToSet(collapsedCsv) }
@@ -160,6 +169,18 @@ fun TodoScreen() {
         selecting = false
         selectedCsv = ""
     }
+    val backStack by nav.controller.currentBackStackEntryAsState()
+    BackHandler(enabled = nav.tab == Tab.TODO && backStack?.destination?.route == HOME && (quickAddOpen || selecting || searching)) {
+        when {
+            quickAddOpen -> quickAddOpen = false
+            selecting -> exitSelect()
+            else -> {
+                searching = false
+                queryText = ""
+                focusManager.clearFocus()
+            }
+        }
+    }
 
     val reduce = reduceMotion()
     val listState = rememberLazyListState()
@@ -172,88 +193,6 @@ fun TodoScreen() {
         listState.layoutInfo.visibleItemsInfo
             .firstOrNull { y >= it.offset && y < it.offset + it.size }
             ?.key as? String
-
-    fun updateHover() {
-        val e = env
-        val dragged = drag.task ?: return
-        val info = listState.layoutInfo
-        val key = hitKey(drag.pointer.y)
-        var bucket: Bucket? = null
-        var sub: String? = null
-        if (key != null) {
-            if (key.startsWith("h-") || key.startsWith("e-")) {
-                bucket = Bucket.valueOf(key.substring(2))
-            } else {
-                val b = e.bucketOfTask[key]
-                val target = e.taskById[key]
-                if (b != null && target != null) {
-                    val rightHalf = drag.pointer.x > info.viewportSize.width * 0.6f
-                    drag.overRowId = if (rightHalf) null else key
-                    if (rightHalf && target.id != dragged.id && !target.done && !Edits.makeSubtask(e.snap, dragged, target, "", 0).isEmpty) {
-                        sub = target.id
-                    } else {
-                        bucket = b
-                    }
-                }
-            }
-        }
-        // 落回自己所在的分区 = 不动
-        if (bucket != null && (bucket !in e.dropBuckets || bucket == e.bucketOfTask[dragged.id])) bucket = null
-        drag.overBucket = bucket
-        drag.overTaskId = sub
-    }
-
-    fun finishDrag() {
-        val e = env
-        val t = drag.task
-        val sub = drag.overTaskId
-        val bucket = drag.overBucket
-        drag.reset()
-        if (t == null) return
-        val ms = System.currentTimeMillis()
-        if (sub != null) {
-            val parent = e.taskById[sub] ?: return
-            val cs = Edits.makeSubtask(e.snap, t, parent, ctx.getString(R.string.todo_subtask_desc, t.title), ms)
-            if (!cs.isEmpty) actions.commit(cs, ctx.getString(R.string.todo_subtask_toast, t.title, parent.title))
-        } else {
-            val row = drag.overRowId
-            val myBucket = e.bucketOfTask[t.id]
-            if (row != null && row != t.id && myBucket != null && e.bucketOfTask[row] == myBucket) {
-                // 同区落行 = 手动排序：插到该行前面（排序在相同截止 + 优先级内生效）
-                val bucketTasks =
-                    e.sections
-                        .firstOrNull { it.bucket == myBucket }
-                        ?.tasks
-                        .orEmpty()
-                val cs = Edits.reorder(bucketTasks, t.id, row, ctx.getString(R.string.todo_reorder_desc, t.title), ms)
-                if (!cs.isEmpty) actions.commit(cs, ctx.getString(R.string.todo_moved_to_toast, ctx.getString(bucketRes(myBucket))))
-            } else if (bucket != null) {
-                val d = TaskLogic.dropDate(bucket, e.today)
-                if (d == TaskLogic.NO_DROP) return
-                val cs = Edits.reschedule(listOf(t), d, ctx.getString(R.string.todo_reschedule_desc, t.title), ms)
-                if (!cs.isEmpty) actions.commit(cs, ctx.getString(R.string.todo_moved_to_toast, ctx.getString(bucketRes(bucket))))
-            }
-        }
-    }
-
-    // 拖动期间：靠边自动滚动，并随滚动刷新落点
-    LaunchedEffect(drag.active) {
-        while (drag.active) {
-            val h = listState.layoutInfo.viewportSize.height
-            val edge = with(density) { 96.dp.toPx() }
-            val bottomEdge = h - with(density) { 220.dp.toPx() }
-            val y = drag.pointer.y
-            val speed =
-                when {
-                    y < edge -> -((edge - y) / edge).coerceIn(0f, 1f) * 28f
-                    y > bottomEdge -> ((y - bottomEdge) / edge).coerceIn(0f, 1f) * 28f
-                    else -> 0f
-                }
-            if (speed != 0f) listState.scrollBy(speed)
-            updateHover()
-            delay(16)
-        }
-    }
 
     val selectedTasks = selected.mapNotNull { taskById[it] }
 
@@ -273,18 +212,20 @@ fun TodoScreen() {
                     task = t,
                     snap = snap,
                     now = now,
-                    swipeEnabled = !selecting && !drag.active,
+                    swipeEnabled = !selecting,
                     selectMode = selecting,
                     swapSwipe = settings.swapSwipe,
                     selected = t.id in selected,
-                    dim = drag.task?.id == t.id,
-                    subTarget = drag.overTaskId == t.id,
-                    tint = drag.active && drag.overBucket == bucket,
                     expanded = if (subs.isNotEmpty()) open else null,
                     onToggleExpand = { expandedCsv = toggleIn(expandedCsv, t.id) },
                     onClick = {
-                        if (!drag.active) {
-                            if (selecting) selectedCsv = toggleIn(selectedCsv, t.id) else nav.openTask(t.id)
+                        if (selecting) selectedCsv = toggleIn(selectedCsv, t.id) else nav.openTask(t.id)
+                    },
+                    onLongClick = {
+                        if (!t.done) {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            selecting = true
+                            if (t.id !in selected) selectedCsv = (selected + t.id).toCsv()
                         }
                     },
                     onSwipeLeft = { rescheduleFor = listOf(t.id) },
@@ -299,32 +240,8 @@ fun TodoScreen() {
 
         LazyColumn(
             state = listState,
-            userScrollEnabled = !drag.active,
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .pointerInput(selecting) {
-                        if (selecting) return@pointerInput
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = { off ->
-                                val t = hitKey(off.y)?.let { env.taskById[it] }
-                                if (t != null && !t.done && t.parentId == null && env.bucketOfTask.containsKey(t.id)) {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    drag.start(t, off)
-                                    updateHover()
-                                }
-                            },
-                            onDrag = { change, _ ->
-                                if (drag.active) {
-                                    change.consume()
-                                    drag.pointer = change.position
-                                }
-                            },
-                            onDragEnd = { finishDrag() },
-                            onDragCancel = { drag.reset() },
-                        )
-                    },
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 240.dp),
+            modifier = Modifier.fillMaxSize().padding(bottom = bottomSpace),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             item(key = "top") {
@@ -343,11 +260,14 @@ fun TodoScreen() {
                         }
                         TextButton(onClick = { exitSelect() }) { Text(stringResource(R.string.cancel)) }
                     } else {
-                        Text(stringResource(R.string.tab_todo), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                        Text(stringResource(R.string.tab_todo), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                         IconButton(onClick = {
                             searching = !searching
-                            if (!searching) queryText = ""
-                        }) { Icon(Icons.Rounded.Search, stringResource(R.string.todo_search)) }
+                            if (!searching) {
+                                queryText = ""
+                                focusManager.clearFocus()
+                            }
+                        }) { Icon(if (searching) Icons.Rounded.Close else Icons.Rounded.Search, stringResource(if (searching) R.string.cancel else R.string.todo_search)) }
                         IconButton(onClick = { selecting = true }) { Icon(Icons.Rounded.Checklist, stringResource(R.string.todo_multi_select)) }
                         IconButton(onClick = { nav.push(Route.Settings) }) { Icon(Icons.Rounded.Settings, stringResource(R.string.settings)) }
                     }
@@ -399,7 +319,7 @@ fun TodoScreen() {
                     }
                 }
             }
-            if (!selecting && !searching && !drag.active) {
+            if (!selecting && !searching) {
                 if (nextUp != null || urgent != null) {
                     item(key = "next") { NextUpCard(nextUp, urgent, snap, now, anim()) }
                 }
@@ -407,26 +327,23 @@ fun TodoScreen() {
                     item(key = "overdue-card") { OverdueCard(overdueTasks.size, { tidy = true }, anim()) }
                 }
             }
-            if (sections.isEmpty() && !drag.active) {
+            if (sections.isEmpty()) {
                 item(key = "empty") { EmptyState(stringResource(if (searching && !q.isEmpty) R.string.todo_search_empty else R.string.todo_all_empty)) }
             }
-            val byBucket = sections.associateBy { it.bucket }
-            Bucket.entries.forEach { b ->
-                val sec = byBucket[b]
-                val droppable = drag.active && b in dropBuckets
-                if (sec == null && !droppable) return@forEach
+            sections.forEach { sec ->
+                val b = sec.bucket
                 val isCollapsed = b.name in collapsed
                 item(key = "h-${b.name}") {
                     SectionHeader(
                         bucket = b,
-                        count = sec?.tasks?.size ?: 0,
+                        count = sec.tasks.size,
                         collapsed = isCollapsed,
-                        hot = drag.active && drag.overBucket == b,
                         onToggle = { collapsedCsv = toggleIn(collapsedCsv, b.name) },
                         onAdd =
                             if (b in dropBuckets && !selecting) {
                                 {
                                     addTarget = b.name
+                                    quickAddOpen = true
                                     focusSignal++
                                 }
                             } else {
@@ -436,50 +353,43 @@ fun TodoScreen() {
                     )
                 }
                 if (!isCollapsed) {
-                    if (sec == null) {
-                        item(key = "e-${b.name}") { DropPlaceholder(drag.overBucket == b, anim()) }
-                    } else {
-                        sec.tasks.take(if (b == Bucket.DONE) 100 else Int.MAX_VALUE).forEach { t -> taskRows(t, b) }
-                    }
+                    sec.tasks.take(if (b == Bucket.DONE) 100 else Int.MAX_VALUE).forEach { t -> taskRows(t, b) }
                 }
             }
         }
 
-        if (drag.active) {
-            val t = drag.task
-            Surface(
-                Modifier
-                    .offset {
-                        IntOffset(
-                            (drag.pointer.x - 48.dp.toPx()).roundToInt().coerceAtLeast(0),
-                            (drag.pointer.y - 72.dp.toPx()).roundToInt(),
-                        )
-                    }.widthIn(max = 260.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shadowElevation = 10.dp,
-            ) {
-                Text(
-                    t?.title.orEmpty(),
-                    Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-
-        QuickAddBar(
+        QuickAddSheet(
             snap = snap,
             now = now,
             listFilter = listFilter,
             defaultBucket = addTarget?.let { runCatching { Bucket.valueOf(it) }.getOrNull() },
             onClearBucket = { addTarget = null },
             focusSignal = focusSignal,
-            hidden = selecting || drag.active,
-            modifier = Modifier.align(Alignment.BottomCenter),
+            visible = quickAddOpen && !selecting && !searching,
+            onDismiss = { quickAddOpen = false },
+            modifier = Modifier.align(Alignment.TopCenter).fillMaxSize(),
         )
+        // 右下角加号：打开快速添加浮层（多选/搜索时隐藏）
+        AnimatedVisibility(
+            visible = !selecting && !searching && !quickAddOpen,
+            enter = scaleIn(MintTheme.spec(), initialScale = 0.8f) + fadeIn(MintTheme.spec()),
+            exit = scaleOut(MintTheme.spec(), targetScale = 0.8f) + fadeOut(MintTheme.spec()),
+            modifier = Modifier.align(Alignment.BottomEnd),
+        ) {
+            FloatingActionButton(
+                onClick = {
+                    addTarget = null
+                    quickAddOpen = true
+                },
+                modifier = Modifier.navigationBarsPadding().padding(end = 20.dp, bottom = 100.dp),
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 2.dp),
+            ) {
+                Icon(Icons.Rounded.Add, stringResource(R.string.add))
+            }
+        }
         if (selecting) {
             BulkBar(
                 snap = snap,
@@ -525,7 +435,12 @@ fun TodoScreen() {
                         exitSelect()
                     }
                 },
-                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 96.dp),
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .onSizeChanged { bulkBarHeight = it.height }
+                        .navigationBarsPadding()
+                        .padding(bottom = 96.dp),
             )
         }
     }

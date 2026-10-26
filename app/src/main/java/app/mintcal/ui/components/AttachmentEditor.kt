@@ -13,7 +13,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,10 +22,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.UploadFile
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,72 +53,80 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * 待办附件：相册图片、任意文件、剪贴板粘贴。文件在选中时就复制进私有目录，记录里只留文件名；
- * 剪贴板是纯文字时交给 [onPasteText] 写进备注。
+ * 待办附件：相册图片、任意文件、剪贴板粘贴。文件在选中时就复制进私有目录，记录里只留文件名。
+ * 本组件只负责展示已添加的附件（缩略图可预览、点开、可删）；添加动作由编辑页底部工具栏触发，
+ * 剪贴板是纯文字时交给 [pasteFromClipboard] 的回调写进备注。
  */
 @Composable
 fun AttachmentEditor(
     items: List<Attachment>,
     onChange: (List<Attachment>) -> Unit,
-    onPasteText: (String) -> Unit,
 ) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
-
-    fun add(uri: Uri) {
-        val a = Attachments.import(ctx, uri)
-        if (a == null) actions.toast(ctx.getString(R.string.attachment_failed)) else onChange(items + a)
-    }
-
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(::add) }
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(::add) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AssistChip(
-                onClick = { imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                label = { Text(stringResource(R.string.attach_image)) },
-                leadingIcon = { Icon(Icons.Rounded.Image, null, Modifier.size(18.dp)) },
-            )
-            AssistChip(
-                onClick = { filePicker.launch(arrayOf("*/*")) },
-                label = { Text(stringResource(R.string.attach_file)) },
-                leadingIcon = { Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)) },
-            )
-            AssistChip(
-                onClick = {
-                    val clip = (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip
-                    val item = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
-                    val uri = item?.uri
-                    if (uri != null) {
-                        add(uri)
-                    } else {
-                        item
-                            ?.text
-                            ?.toString()
-                            ?.takeIf { it.isNotBlank() }
-                            ?.let(onPasteText)
-                    }
+    if (items.isEmpty()) return
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.forEach { a ->
+            AttachmentChip(
+                a,
+                onOpen = { open(ctx, a, actions) },
+                onRemove = {
+                    Attachments.delete(ctx, a)
+                    onChange(items - a)
                 },
-                label = { Text(stringResource(R.string.attach_paste)) },
-                leadingIcon = { Icon(Icons.Rounded.ContentCopy, null, Modifier.size(18.dp)) },
             )
         }
-        if (items.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items.forEach { a ->
-                    AttachmentChip(
-                        a,
-                        onOpen = { open(ctx, a, actions) },
-                        onRemove = {
-                            Attachments.delete(ctx, a)
-                            onChange(items - a)
-                        },
-                    )
-                }
-            }
-        }
     }
+}
+
+/** 选中的内容复制进私有目录并回调；失败时提示。 */
+fun importAttachment(
+    ctx: Context,
+    uri: Uri,
+    actions: Actions,
+    onAdded: (Attachment) -> Unit,
+) {
+    val a = Attachments.import(ctx, uri)
+    if (a == null) actions.toast(ctx.getString(R.string.attachment_failed)) else onAdded(a)
+}
+
+/** 从剪贴板取内容：URI 当附件导入，纯文字交给备注。 */
+fun pasteFromClipboard(
+    ctx: Context,
+    actions: Actions,
+    onUri: (Attachment) -> Unit,
+    onText: (String) -> Unit,
+) {
+    val clip = (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip
+    val item = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
+    val uri = item?.uri
+    if (uri != null) {
+        importAttachment(ctx, uri, actions, onUri)
+    } else {
+        item?.text?.toString()?.takeIf { it.isNotBlank() }?.let(onText)
+    }
+}
+
+/** 相册图片附件选择器，返回放进工具栏按钮 onClick 的触发函数。 */
+@Composable
+fun rememberImageAttachmentPicker(onAdded: (Attachment) -> Unit): () -> Unit {
+    val ctx = LocalContext.current
+    val actions = LocalActions.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { importAttachment(ctx, it, actions, onAdded) }
+    }
+    return { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+}
+
+/** 任意文件附件选择器，返回放进工具栏按钮 onClick 的触发函数。 */
+@Composable
+fun rememberFileAttachmentPicker(onAdded: (Attachment) -> Unit): () -> Unit {
+    val ctx = LocalContext.current
+    val actions = LocalActions.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { importAttachment(ctx, it, actions, onAdded) }
+    }
+    return { launcher.launch(arrayOf("*/*")) }
 }
 
 @Composable

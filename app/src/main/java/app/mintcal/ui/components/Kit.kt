@@ -3,11 +3,9 @@ package app.mintcal.ui.components
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
@@ -65,8 +63,6 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -77,7 +73,9 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -135,7 +133,7 @@ fun MintScreen(
 fun MintCard(
     modifier: Modifier = Modifier,
     color: Color = MintTheme.card,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp),
+    shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.large,
     onClick: (() -> Unit)? = null,
     border: BorderStroke? = null,
     content: @Composable ColumnScope.() -> Unit,
@@ -187,26 +185,24 @@ fun Tag(
     )
 }
 
-/** 勾选框：未选中是圆角方块，选中时形变为圆形（弹簧动效）；命中区保底 48dp，带触觉反馈。 */
+/** 勾选框：两态保持相同轮廓，命中区保底 48dp，使用水波与触觉反馈。 */
 @Composable
 fun MintCheck(
     checked: Boolean,
     onChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    size: Dp = 26.dp,
+    size: Dp = 22.dp,
     /** 圈的颜色（如清单色）；null 用主题默认。 */
     tint: Color? = null,
     /** 圈的粗细（如用粗细表示优先级）。 */
     strokeWidth: Dp = 2.dp,
 ) {
-    val radius by animateDpAsState(if (checked) size / 2 else 8.dp, MintTheme.spec(), label = "check-radius")
-    val fill by animateColorAsState(if (checked) (tint ?: MaterialTheme.colorScheme.primary) else Color.Transparent, MintTheme.spec(), label = "check-fill")
-    val stroke by animateColorAsState(if (checked) (tint ?: MaterialTheme.colorScheme.primary) else (tint ?: MaterialTheme.colorScheme.outline), MintTheme.spec(), label = "check-stroke")
+    val shape = MaterialTheme.shapes.extraSmall
+    // 完成态整体退灰：描边与勾都是灰、不再填充清单色/主题色，少占视觉资源
+    val stroke by animateColorAsState(if (checked) MaterialTheme.colorScheme.onSurfaceVariant else (tint ?: MaterialTheme.colorScheme.outline), MintTheme.spec(), label = "check-stroke")
     val tick by animateFloatAsState(if (checked) 1f else 0f, MintTheme.spec(), label = "check-tick")
     val haptics = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val press by animateFloatAsState(if (pressed) 0.86f else 1f, MintTheme.spec(), label = "check-press")
     Box(
         modifier
             .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
@@ -226,15 +222,11 @@ fun MintCheck(
         Box(
             Modifier
                 .size(size)
-                .graphicsLayer {
-                    scaleX = press
-                    scaleY = press
-                }.clip(RoundedCornerShape(radius))
-                .background(fill)
-                .border(strokeWidth, stroke, RoundedCornerShape(radius)),
+                .clip(shape)
+                .border(strokeWidth, stroke, shape),
             contentAlignment = Alignment.Center,
         ) {
-            if (tick > 0.01f) Icon(Icons.Rounded.Check, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(size * 0.7f * tick.coerceIn(0f, 1f)))
+            if (tick > 0.01f) Icon(Icons.Rounded.Check, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(size * 0.7f * tick.coerceIn(0f, 1f)))
         }
     }
 }
@@ -251,7 +243,7 @@ fun SwitchRow(
         Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }.padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(end = 16.dp)) {
             Text(title, style = MaterialTheme.typography.bodyLarge, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -282,7 +274,7 @@ fun NavRow(
             }
             Spacer(Modifier.width(14.dp))
         }
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(end = 16.dp)) {
             Text(title, style = MaterialTheme.typography.bodyLarge, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -292,8 +284,9 @@ fun NavRow(
 }
 
 /**
- * 浮动胶囊底栏。选中项是一颗滑动色块（匀速补间，不过冲）；按下的那一项原地轻微收紧，
- * 松手即切换——反馈在按下瞬间就到，不等动画。
+ * 浮动胶囊底栏，Telegram 风格：岛是中性色，选中项是一块中性浅色圆角块，
+ * 图标文字切主题强调色（不是整块 primaryContainer 的大色块）。尺寸放大一档，
+ * 选中块不顶满格子、四周留白。匀速补间滑动不过冲；按下不画高亮，反馈靠色块滑动 + 触感。
  */
 @Composable
 fun FloatingNavBar(
@@ -328,49 +321,44 @@ fun FloatingNavBar(
     val index = travel.value
     Surface(
         modifier = modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth(),
-        shape = RoundedCornerShape(32.dp),
-        color = MintTheme.card,
-        shadowElevation = 8.dp,
-        tonalElevation = 2.dp,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shadowElevation = 1.dp,
     ) {
-        BoxWithConstraints(Modifier.fillMaxWidth().height(64.dp).padding(4.dp)) {
+        BoxWithConstraints(Modifier.fillMaxWidth().height(68.dp).padding(4.dp)) {
             val itemWidth = maxWidth / items.size
             Box(
                 Modifier
-                    // 用浮点位移，别用 offset{IntOffset(round)}：240px 的行程每帧只走 1~2px，
+                    // 用浮点位移，别用 offset{IntOffset(round)}：行程每帧只走 1~2px，
                     // 取整会变成一格一格挪，看着就是抖
-                    .graphicsLayer { translationX = index * itemWidth.toPx() }
-                    .width(itemWidth)
-                    .fillMaxHeight()
-                    .padding(horizontal = 2.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    .graphicsLayer {
+                        translationX = index * itemWidth.toPx() + 6.dp.toPx()
+                        translationY = ((maxHeight - 56.dp).toPx() / 2).coerceAtLeast(0f)
+                    }
+                    // 不顶满格子：左右各留 6dp，高度 56dp，四周透气
+                    .width(itemWidth - 12.dp)
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             )
             Row(Modifier.fillMaxSize()) {
                 items.forEach { item ->
                     val selected = item.tab == tab
                     val interaction = remember { MutableInteractionSource() }
                     val fg by animateColorAsState(
-                        if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         if (reduce) snap() else tween(durationMillis = 180, easing = FastOutSlowInEasing),
                         label = "nav-fg",
-                    )
-                    val pressed by interaction.collectIsPressedAsState()
-                    // 按下就是按下：底色轻轻亮一层 + 图标缩一点，松手立刻切换
-                    val press by animateFloatAsState(
-                        if (pressed && !selected) 1f else 0f,
-                        if (reduce) snap() else tween(durationMillis = 110, easing = FastOutLinearInEasing),
-                        label = "nav-press",
                     )
                     Column(
                         Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .clip(RoundedCornerShape(22.dp))
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f * press))
+                            .clip(CircleShape)
                             .selectable(
                                 selected = selected,
                                 interactionSource = interaction,
+                                // 按下不做高亮：选中态由滑动的色块表达，避免闪底色
                                 indication = null,
                                 role = Role.Tab,
                                 onClick = {
@@ -381,21 +369,11 @@ fun FloatingNavBar(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
-                        Icon(
-                            item.icon,
-                            null,
-                            tint = fg,
-                            modifier =
-                                Modifier
-                                    .size(22.dp)
-                                    .graphicsLayer {
-                                        val k = 1f - 0.08f * press
-                                        scaleX = k
-                                        scaleY = k
-                                    },
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(stringResource(item.label), style = MaterialTheme.typography.labelSmall, color = fg, maxLines = 1)
+                        Box(Modifier.height(26.dp), contentAlignment = Alignment.Center) {
+                            Icon(item.icon, null, tint = fg, modifier = Modifier.size(26.dp))
+                        }
+                        Spacer(Modifier.height(3.dp))
+                        Text(stringResource(item.label), style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1)
                     }
                 }
             }
@@ -469,6 +447,7 @@ fun TimePickerDlg(
     onDismiss: () -> Unit,
     onPick: (LocalTime) -> Unit,
 ) {
+    // 只留圆盘：不给键盘输入入口，时间一律在盘上拨
     val state = rememberTimePickerState(initial.hour, initial.minute, is24Hour = true)
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -479,17 +458,20 @@ fun TimePickerDlg(
             }) { Text(stringResource(R.string.ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-        text = { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { TimePicker(state = state) } },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                TimePicker(state = state)
+            }
+        },
         shape = RoundedCornerShape(28.dp),
     )
 }
 
-/** 统一按压反馈：按下轻微缩放 + 长按触觉；可选系统水波纹。用于自绘可点击块（课程格、格子等）。 */
+/** 统一按压反馈：按下轻微缩放 + 长按触觉；不做背景高亮。用于自绘可点击块（课程格、格子等）。 */
 @Composable
 fun Modifier.mintPressable(
     pressedScale: Float = 0.96f,
     enabled: Boolean = true,
-    ripple: Boolean = true,
     onClick: () -> Unit,
 ): Modifier {
     val source = remember { MutableInteractionSource() }
@@ -502,7 +484,7 @@ fun Modifier.mintPressable(
             scaleY = scale
         }.clickable(
             interactionSource = source,
-            indication = if (ripple) androidx.compose.material3.ripple() else null,
+            indication = null,
             enabled = enabled,
         ) {
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -510,95 +492,11 @@ fun Modifier.mintPressable(
         }
 }
 
-/**
- * 浮起提示:纯消息用 Material 3 官方 Snackbar,这里只负责摆放位置。
- * 带「撤销」的操作不用长条,见 [MintUndoButton]。
- */
-@Composable
-fun MintSnackbarHost(
-    state: SnackbarHostState,
-    modifier: Modifier = Modifier,
-) {
-    SnackbarHost(state, modifier)
-}
-
-/** 一次可撤销操作的提示:只剩一个圆,点一下回到上一步。 */
+/** 一次可撤销操作：撤销按钮显示期间持有对应变更集。 */
 data class UndoPrompt(
     val csId: String,
-    val message: String,
     val seq: Long,
 )
-
-/** 撤销圆的存活时间,和倒计时圈同步。 */
-const val UNDO_MILLIS: Int = 5000
-
-/**
- * 圆形「撤销」:比通栏 snackbar 轻得多——不挡内容、不抢注意力。
- * 外圈是剩余时间倒计时,点圆内即撤销;到时自动收起。
- */
-@Composable
-fun MintUndoButton(
-    prompt: UndoPrompt?,
-    label: String,
-    onUndo: () -> Unit,
-    onTimeout: (UndoPrompt) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    AnimatedContent(
-        targetState = prompt,
-        // 连续操作只换提示内容,不重播进出动画;出现/收起时才动
-        contentKey = { if (it == null) "none" else "undo" },
-        transitionSpec = {
-            (fadeIn() + scaleIn(initialScale = 0.6f, animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))) togetherWith
-                (fadeOut() + scaleOut(targetScale = 0.9f))
-        },
-        modifier = modifier,
-        label = "undo-circle",
-    ) { p ->
-        if (p == null) {
-            Spacer(Modifier.size(0.dp))
-        } else {
-            val remain = remember { Animatable(1f) }
-            LaunchedEffect(p.seq) {
-                remain.snapTo(1f)
-                remain.animateTo(0f, tween(UNDO_MILLIS, easing = LinearEasing))
-                onTimeout(p)
-            }
-            val haptics = LocalHapticFeedback.current
-            Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(
-                    progress = { remain.value },
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-                    strokeWidth = 3.dp,
-                    strokeCap = StrokeCap.Round,
-                )
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shadowElevation = 6.dp,
-                    modifier =
-                        Modifier
-                            .size(52.dp)
-                            .clickable {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onUndo()
-                            },
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.Undo,
-                            contentDescription = "$label · ${p.message}",
-                            modifier = Modifier.size(26.dp),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
 
 /** 空状态：图标圆底 + 标题 +（可选）说明与操作按钮；出现/消失由调用方用 AnimatedVisibility 包裹。 */
 @Composable

@@ -205,8 +205,7 @@ fun TimetableScreen() {
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            "${ctx.getString(R.string.fmt_range_md, cal.weekStart(p + 1).monthValue, cal.weekStart(p + 1).dayOfMonth, cal.weekEnd(p + 1).monthValue, cal.weekEnd(p + 1).dayOfMonth)}" +
-                                if (p + 1 == currentWeek) " · ${stringResource(R.string.this_week)}" else "",
+                            ctx.getString(R.string.fmt_range_md, cal.weekStart(p + 1).monthValue, cal.weekStart(p + 1).dayOfMonth, cal.weekEnd(p + 1).monthValue, cal.weekEnd(p + 1).dayOfMonth),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -597,7 +596,7 @@ private fun TaskBlock(
             .zIndex(if (active) 3f else 0f)
             .onSizeChanged { hPx = it.height.toFloat() }
             .then(layer)
-            .mintPressable(pressedScale = if (active) 1f else 0.97f, ripple = false) { onClick() }
+            .mintPressable(pressedScale = if (active) 1f else 0.97f) { onClick() }
             .pointerInput(dur, hPx) {
                 if (hPx <= 0f) return@pointerInput
                 val pxPerMinute = hPx / dur.toFloat()
@@ -663,9 +662,8 @@ private fun TaskBlock(
         Column(
             Modifier
                 .fillMaxSize()
-                .alpha(if (task.done) 0.5f else 1f)
                 .clip(shape)
-                .background(bg)
+                .background(if (task.done) bg.copy(alpha = 0.5f) else bg)
                 .let { if (active) it.border(2.dp, MaterialTheme.colorScheme.primary, shape) else it }
                 .padding(horizontal = 5.dp, vertical = 5.dp),
         ) {
@@ -673,13 +671,12 @@ private fun TaskBlock(
                 task.title,
                 // 时间那行必须留得下：标题吃掉剩余空间，短块里自动收成省略号
                 modifier = Modifier.weight(1f, fill = false),
-                color = fg,
+                color = if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else fg,
                 fontSize = 11.sp,
                 lineHeight = 13.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
-                textDecoration = if (task.done) TextDecoration.LineThrough else null,
             )
             // 一格只有 40 来 dp 宽，放不下「10:15–11:15」；拖动时只报正在变的那一头
             val label =
@@ -690,7 +687,12 @@ private fun TaskBlock(
                 }
             Text(
                 label,
-                color = if (active) MaterialTheme.colorScheme.primary else fg.copy(alpha = 0.85f),
+                color =
+                    when {
+                        active -> MaterialTheme.colorScheme.primary
+                        task.done -> MaterialTheme.colorScheme.onSurfaceVariant
+                        else -> fg.copy(alpha = 0.85f)
+                    },
                 fontSize = 9.sp,
                 lineHeight = 11.sp,
                 fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
@@ -699,8 +701,10 @@ private fun TaskBlock(
             )
         }
         // 拖起来才出现的抓手：上边 = 改开始时间，下边 = 改结束时间
-        Handle(Modifier.align(Alignment.TopCenter).padding(top = 2.dp), fg, active)
-        Handle(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp), fg, active)
+        if (active) {
+            Handle(Modifier.align(Alignment.TopCenter).padding(top = 2.dp), fg)
+            Handle(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp), fg)
+        }
     }
 }
 
@@ -708,13 +712,12 @@ private fun TaskBlock(
 private fun Handle(
     modifier: Modifier,
     fg: Color,
-    active: Boolean,
 ) {
     Box(
         modifier
-            .size(width = if (active) 22.dp else 16.dp, height = if (active) 4.dp else 3.dp)
+            .size(width = 22.dp, height = 4.dp)
             .clip(CircleShape)
-            .background(fg.copy(alpha = if (active) 0.9f else 0.35f)),
+            .background(fg.copy(alpha = 0.9f)),
     )
 }
 
@@ -739,7 +742,7 @@ private fun CourseBlock(
     val shape = RoundedCornerShape(14.dp)
     Column(
         modifier
-            .mintPressable(pressedScale = 0.97f, ripple = false) { onClick() }
+            .mintPressable(pressedScale = 0.97f) { onClick() }
             .alpha(if (cell.kind == CellKind.REMOVED) 0.6f else 1f)
             .clip(shape)
             .background(if (cell.kind == CellKind.REMOVED) colors.conflictBg else bg)
@@ -757,7 +760,7 @@ private fun CourseBlock(
             overflow = TextOverflow.Ellipsis,
             textDecoration = strike,
         )
-        if (o.room.isNotBlank()) Text("@" + o.room, color = (if (cell.kind == CellKind.REMOVED) colors.removed else fg).copy(alpha = 0.85f), fontSize = 9.sp, lineHeight = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, textDecoration = strike)
+        if (o.room.isNotBlank()) Text("@" + o.room, modifier = Modifier.weight(1f, fill = false), color = (if (cell.kind == CellKind.REMOVED) colors.removed else fg).copy(alpha = 0.85f), fontSize = 9.sp, lineHeight = 11.sp, overflow = TextOverflow.Ellipsis, textDecoration = strike)
         if (showTeacher && o.course.teacher.isNotBlank()) Text(o.course.teacher, color = fg.copy(alpha = 0.75f), fontSize = 9.sp, lineHeight = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (o.rescheduled) Text(stringResource(R.string.rescheduled), color = fg, fontSize = 9.sp, fontWeight = FontWeight.Bold)
     }

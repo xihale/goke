@@ -3,9 +3,11 @@ package app.mintcal.ui.screens
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,8 +52,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
@@ -64,11 +68,13 @@ import app.mintcal.core.todo.TaskLogic
 import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
+import app.mintcal.ui.Route
 import app.mintcal.ui.dueLabel
 import app.mintcal.ui.hm
 import app.mintcal.ui.theme.MintTheme
 import java.time.LocalDateTime
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TodoLine(
     task: Task,
@@ -81,6 +87,8 @@ fun TodoLine(
     expanded: Boolean? = null,
     onToggleExpand: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
+    /** 长按：进入多选并勾上本行；combinedClickable 消费掉长按后不再触发 onClick。 */
+    onLongClick: (() -> Unit)? = null,
 ) {
     val ctx = LocalContext.current
     val nav = LocalNav.current
@@ -107,9 +115,12 @@ fun TodoLine(
             task.tags.take(2).forEach { add("#$it") }
         }
     Surface(
-        onClick = { if (onClick != null) onClick() else nav.openTask(task.id) },
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        modifier =
+            modifier.combinedClickable(
+                onLongClick = onLongClick,
+                onClick = { if (onClick != null) onClick() else nav.openTask(task.id) },
+            ),
+        shape = MaterialTheme.shapes.medium,
         color = MintTheme.card,
     ) {
         Row(Modifier.heightIn(min = 52.dp).padding(start = 4.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -129,37 +140,34 @@ fun TodoLine(
                     strokeWidth = ring,
                 )
             }
-            Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+            Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
                 Text(
                     task.title,
                     style = MaterialTheme.typography.bodyLarge,
-                    textDecoration = if (task.done) TextDecoration.LineThrough else null,
                     color = titleColor,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (meta.isNotEmpty()) {
                     Text(meta.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-            }
-            if (due != null) {
-                val label =
-                    if (task.dueBeforeNextClass && course != null) {
-                        stringResource(R.string.before_next_class_short, course.name)
-                    } else {
-                        ctx.dueLabel(due, task.dueHasTime, now.toLocalDate())
-                    }
-                Text(
-                    label,
-                    Modifier.padding(start = 8.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (overdue && !task.done) colors.removed else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
+                if (due != null) {
+                    val label =
+                        if (task.dueBeforeNextClass && course != null) {
+                            stringResource(R.string.before_next_class_short, course.name)
+                        } else {
+                            ctx.dueLabel(due, task.dueHasTime, now.toLocalDate())
+                        }
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (overdue && !task.done) colors.removed else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             if (expanded != null && onToggleExpand != null) {
                 val rot by animateFloatAsState(if (expanded) 0f else -90f, MintTheme.spec(), label = "sub-chevron")
-                IconButton(onClick = onToggleExpand, Modifier.size(40.dp)) {
+                IconButton(onClick = onToggleExpand, Modifier.size(48.dp)) {
                     Icon(Icons.Rounded.ExpandMore, stringResource(R.string.todo_toggle_subtasks), Modifier.rotate(rot), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -169,7 +177,7 @@ fun TodoLine(
 
 /**
  * 行手势：右滑完成/恢复；左滑不再直接删，而是弹「改期」抽屉（今天/明天/…/不做了/删除）。
- * 选择模式或拖动中关闭滑动。lambda 里一律读最新的 task / snap，避免行复用后拿到旧值。
+ * 选择模式下关闭滑动。lambda 里一律读最新的 task / snap，避免行复用后拿到旧值。
  */
 @Composable
 internal fun TodoRow(
@@ -179,13 +187,11 @@ internal fun TodoRow(
     swipeEnabled: Boolean,
     selectMode: Boolean,
     selected: Boolean,
-    dim: Boolean,
-    subTarget: Boolean,
-    tint: Boolean,
     swapSwipe: Boolean = false,
     expanded: Boolean?,
     onToggleExpand: (() -> Unit)?,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     onSwipeLeft: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -223,12 +229,7 @@ internal fun TodoRow(
     val shape = RoundedCornerShape(16.dp)
     SwipeToDismissBox(
         state = state,
-        modifier =
-            modifier
-                .alpha(if (dim) 0.35f else 1f)
-                .clip(shape)
-                .then(if (tint) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)) else Modifier)
-                .then(if (subTarget) Modifier.border(BorderStroke(2.dp, MaterialTheme.colorScheme.primary), shape) else Modifier),
+        modifier = modifier.clip(shape),
         enableDismissFromStartToEnd = swipeEnabled,
         enableDismissFromEndToStart = swipeEnabled,
         backgroundContent = {
@@ -257,6 +258,7 @@ internal fun TodoRow(
             expanded = expanded,
             onToggleExpand = onToggleExpand,
             onClick = onClick,
+            onLongClick = onLongClick,
         )
     }
 }
@@ -286,7 +288,6 @@ internal fun SubRow(
             sub.title,
             Modifier.weight(1f).padding(vertical = 8.dp),
             style = MaterialTheme.typography.bodyMedium,
-            textDecoration = if (sub.done) TextDecoration.LineThrough else null,
             color = if (sub.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -333,21 +334,20 @@ internal fun SectionHeader(
     bucket: Bucket,
     count: Int,
     collapsed: Boolean,
-    hot: Boolean,
     onToggle: () -> Unit,
     onAdd: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val rot by animateFloatAsState(if (collapsed) -90f else 0f, MintTheme.spec(), label = "section-chevron")
-    val bg by animateColorAsState(if (hot) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent, MintTheme.spec(), label = "section-hot")
     val color = if (bucket == Bucket.OVERDUE) MintTheme.colors.removed else MaterialTheme.colorScheme.onSurfaceVariant
+    val expansion = stringResource(if (collapsed) R.string.state_collapsed else R.string.state_expanded)
     Row(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(bg)
-            .clickable(onClick = onToggle)
-            .heightIn(min = 44.dp)
+            .semantics { stateDescription = expansion }
+            .clickable(role = Role.Button, onClick = onToggle)
+            .heightIn(min = 48.dp)
             .padding(start = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -359,29 +359,10 @@ internal fun SectionHeader(
             color = color,
         )
         if (onAdd != null) {
-            IconButton(onClick = onAdd, Modifier.size(44.dp)) {
+            IconButton(onClick = onAdd, Modifier.size(48.dp)) {
                 Icon(Icons.Rounded.Add, stringResource(R.string.todo_add_here), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-    }
-}
-
-/** 拖动时空分区的落点。 */
-@Composable
-internal fun DropPlaceholder(
-    hot: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val bg by animateColorAsState(if (hot) MaterialTheme.colorScheme.primaryContainer else MintTheme.card.copy(alpha = 0.5f), MintTheme.spec(), label = "drop-hot")
-    Box(
-        modifier
-            .fillMaxWidth()
-            .heightIn(min = 44.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(bg),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(stringResource(R.string.todo_drop_here), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -396,19 +377,36 @@ internal fun NextUpCard(
 ) {
     val ctx = LocalContext.current
     val today = now.toLocalDate()
-    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(stringResource(R.string.todo_next_up), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
+    val nav = LocalNav.current
+    Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MintTheme.card) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(stringResource(R.string.todo_next_up), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (up != null) {
                 val o = up.occurrence
                 val whenText = (if (o.date == today) "" else ctx.dueLabel(o.date.atStartOfDay(), false, today) + " ") + o.start.hm()
-                Text(
-                    listOf(o.course.name + " " + whenText, o.room.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · "),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(role = Role.Button) { nav.push(Route.CourseEdit(o.course.id)) }
+                        .padding(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        o.course.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        listOfNotNull(whenText, o.room.takeIf { it.isNotBlank() }).joinToString(" · "),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (up.tasks.isEmpty()) {
-                    Text(stringResource(R.string.todo_next_up_none), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
+                    Text(stringResource(R.string.todo_next_up_none), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 up.tasks.take(3).forEach { t -> NextUpTask(t, snap, now) }
             } else if (urgent != null) {
@@ -434,9 +432,8 @@ private fun NextUpTask(
             t.title,
             Modifier.weight(1f),
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-            textDecoration = if (t.done) TextDecoration.LineThrough else null,
-            maxLines = 1,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
     }

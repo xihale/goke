@@ -68,6 +68,8 @@ fun ReliabilityScreen(onBack: () -> Unit) {
                 ?.importance != NotificationManager.IMPORTANCE_NONE
     val exactOn = tick >= 0 && (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms())
     val batteryOn = tick >= 0 && (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName)
+    // 已授权的项不再显示一行「已授权」，只把还没过的项列出来；全过时整节隐藏
+    val anyIssue = !(notifOn && channelOn && exactOn && batteryOn)
 
     fun open(intent: Intent) {
         runCatching { ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -85,22 +87,32 @@ fun ReliabilityScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(stringResource(R.string.reliability_intro), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            FormSection(stringResource(R.string.reliability_checks)) {
-                CheckRow(stringResource(R.string.reliability_notif), stringResource(R.string.reliability_notif_desc), notifOn, stringResource(R.string.reliability_fix)) {
-                    open(Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(AndroidSettings.EXTRA_APP_PACKAGE, ctx.packageName))
-                }
-                CheckRow(stringResource(R.string.reliability_channel), stringResource(R.string.reliability_channel_desc), channelOn, stringResource(R.string.reliability_fix)) {
-                    open(
-                        Intent(AndroidSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-                            .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, ctx.packageName)
-                            .putExtra(AndroidSettings.EXTRA_CHANNEL_ID, Notifications.CHANNEL_REMINDER),
-                    )
-                }
-                CheckRow(stringResource(R.string.reliability_exact), stringResource(R.string.reliability_exact_desc), exactOn, stringResource(R.string.reliability_fix)) {
-                    open(Intent(AndroidSettings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${ctx.packageName}")))
-                }
-                CheckRow(stringResource(R.string.reliability_battery), stringResource(R.string.reliability_battery_desc), batteryOn, stringResource(R.string.reliability_fix)) {
-                    open(Intent(AndroidSettings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            if (anyIssue) {
+                FormSection(stringResource(R.string.reliability_checks)) {
+                    if (!notifOn) {
+                        CheckRow(stringResource(R.string.reliability_notif), stringResource(R.string.reliability_notif_desc), notifOn, stringResource(R.string.reliability_fix)) {
+                            open(Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(AndroidSettings.EXTRA_APP_PACKAGE, ctx.packageName))
+                        }
+                    }
+                    if (!channelOn) {
+                        CheckRow(stringResource(R.string.reliability_channel), stringResource(R.string.reliability_channel_desc), channelOn, stringResource(R.string.reliability_fix)) {
+                            open(
+                                Intent(AndroidSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                                    .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, ctx.packageName)
+                                    .putExtra(AndroidSettings.EXTRA_CHANNEL_ID, Notifications.CHANNEL_REMINDER),
+                            )
+                        }
+                    }
+                    if (!exactOn) {
+                        CheckRow(stringResource(R.string.reliability_exact), stringResource(R.string.reliability_exact_desc), exactOn, stringResource(R.string.reliability_fix)) {
+                            open(Intent(AndroidSettings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${ctx.packageName}")))
+                        }
+                    }
+                    if (!batteryOn) {
+                        CheckRow(stringResource(R.string.reliability_battery), stringResource(R.string.reliability_battery_desc), batteryOn, stringResource(R.string.reliability_fix)) {
+                            open(Intent(AndroidSettings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                        }
+                    }
                 }
             }
             FormSection(stringResource(R.string.reliability_vendor)) {

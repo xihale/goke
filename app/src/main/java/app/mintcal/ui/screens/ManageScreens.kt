@@ -89,6 +89,7 @@ fun TrashScreen(onBack: () -> Unit) {
             snap.allRecords().filter { it.deletedAt != null && it !is CourseException }.sortedByDescending { it.deletedAt }
         }
     var confirmEmpty by remember { mutableStateOf(false) }
+    var purgeTarget by remember { mutableStateOf<Record?>(null) }
 
     MintScreen(
         title = stringResource(R.string.trash_title),
@@ -126,7 +127,7 @@ fun TrashScreen(onBack: () -> Unit) {
                                     deps.forEach { app.repo.restoreFromTrash(it) }
                                 }
                             }) { Text(stringResource(R.string.restore)) }
-                            TextButton(onClick = { scope.launch { app.repo.purge(listOf(r)) } }) { Text(stringResource(R.string.delete_forever), color = MaterialTheme.colorScheme.error) }
+                            TextButton(onClick = { purgeTarget = r }) { Text(stringResource(R.string.delete_forever), color = MaterialTheme.colorScheme.error) }
                         }
                     }
                 }
@@ -140,6 +141,16 @@ fun TrashScreen(onBack: () -> Unit) {
             stringResource(R.string.delete_forever),
             { scope.launch { app.repo.purge(snap.allRecords().filter { it.deletedAt != null }) } },
             { confirmEmpty = false },
+            danger = true,
+        )
+    }
+    purgeTarget?.let { target ->
+        ConfirmDialog(
+            stringResource(R.string.delete_forever),
+            stringResource(R.string.delete_forever_confirm, target.displayTitle),
+            stringResource(R.string.delete_forever),
+            { scope.launch { app.repo.purge(listOf(target)) } },
+            { purgeTarget = null },
             danger = true,
         )
     }

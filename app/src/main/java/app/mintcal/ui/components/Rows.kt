@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,7 +22,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
@@ -94,7 +92,7 @@ fun AgendaRow(
         }
 
         is TaskItem -> {
-            TaskRow(item.task, onToggleTask, onOpenTask, subtitle = if (item.hasTime) item.due.hm() else null, modifier = modifier)
+            TaskRow(item.task, onToggleTask, onOpenTask, subtitle = if (item.hasTime) item.due.hm() else stringResource(R.string.time_unscheduled), modifier = modifier)
         }
 
         is BlockItem -> {
@@ -128,7 +126,7 @@ private fun RowShell(
         modifier
             .fillMaxWidth()
             .alpha(alpha)
-            .clip(RoundedCornerShape(20.dp))
+            .clip(MaterialTheme.shapes.medium)
             .background(bg)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -157,7 +155,7 @@ fun TaskRow(
         modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .clip(MaterialTheme.shapes.medium)
             .background(MintTheme.card)
             .clickable { onOpen(task.id) }
             .padding(start = 8.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
@@ -168,10 +166,9 @@ fun TaskRow(
         Column(Modifier.weight(1f)) {
             Text(
                 task.title,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.bodyLarge,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                textDecoration = if (task.done) TextDecoration.LineThrough else null,
                 color = titleColor,
             )
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

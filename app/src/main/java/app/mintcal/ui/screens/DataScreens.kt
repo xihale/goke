@@ -5,6 +5,11 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -66,9 +71,11 @@ import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.NavRow
 import app.mintcal.ui.components.SwitchRow
+import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.fullDate
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.settingsState
+import app.mintcal.ui.theme.MintTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -120,8 +127,20 @@ fun DataScreen(onBack: () -> Unit) {
                 NavRow(stringResource(R.string.import_file), stringResource(R.string.import_file_desc), Icons.Rounded.UploadFile) { nav.push(Route.Import(null)) }
             }
             FormSection(stringResource(R.string.section_backup)) {
-                SwitchRow(stringResource(R.string.auto_backup), stringResource(R.string.auto_backup_desc), st.autoBackup) { v ->
+                SwitchRow(stringResource(R.string.auto_backup), stringResource(R.string.auto_backup_desc, st.backupKeep), st.autoBackup) { v ->
                     app.settings.update { it.copy(autoBackup = v) }
+                }
+                AnimatedVisibility(
+                    visible = st.autoBackup,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    Column {
+                        Text(stringResource(R.string.backup_keep), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
+                        MinutesChoiceRow(listOf(7, 14, 30), st.backupKeep, 1..365, dialogTitle = stringResource(R.string.backup_keep), label = { stringResource(R.string.backup_keep_n, it) }) { v ->
+                            app.settings.update { it.copy(backupKeep = v) }
+                        }
+                    }
                 }
             }
             FormSection(stringResource(R.string.section_export)) {

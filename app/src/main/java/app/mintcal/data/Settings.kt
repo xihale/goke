@@ -21,8 +21,11 @@ data class Settings(
     val courseRemindMinutes: Int = 15,
     val remindTask: Boolean = true,
     val remindEvent: Boolean = true,
-    /** 每天早上 7:30 的「今日安排」摘要通知，默认关。 */
+    /** 「今日安排」摘要通知，默认关；时间由 [digestHour]/[digestMinute] 决定。 */
     val dailyDigest: Boolean = false,
+    /** 每日摘要的触发时间（24 小时制），默认 7:30。 */
+    val digestHour: Int = 7,
+    val digestMinute: Int = 30,
     /** 常驻通知栏的「快速添加待办」入口，默认关。 */
     val quickAddNotif: Boolean = false,
     /** 交换待办滑动方向：左滑完成、右滑改期。 */
@@ -64,6 +67,8 @@ class SettingsStore(
             remindTask = sp.getBoolean("remindTask", d.remindTask),
             remindEvent = sp.getBoolean("remindEvent", d.remindEvent),
             dailyDigest = sp.getBoolean("dailyDigest", d.dailyDigest),
+            digestHour = sp.getInt("digestHour", d.digestHour).coerceIn(0, 23),
+            digestMinute = sp.getInt("digestMinute", d.digestMinute).coerceIn(0, 59),
             quickAddNotif = sp.getBoolean("quickAddNotif", d.quickAddNotif),
             swapSwipe = sp.getBoolean("swapSwipe", d.swapSwipe),
             autoMute = sp.getBoolean("autoMute", d.autoMute),
@@ -93,6 +98,8 @@ class SettingsStore(
             .putBoolean("remindTask", n.remindTask)
             .putBoolean("remindEvent", n.remindEvent)
             .putBoolean("dailyDigest", n.dailyDigest)
+            .putInt("digestHour", n.digestHour)
+            .putInt("digestMinute", n.digestMinute)
             .putBoolean("quickAddNotif", n.quickAddNotif)
             .putBoolean("swapSwipe", n.swapSwipe)
             .putBoolean("autoMute", n.autoMute)

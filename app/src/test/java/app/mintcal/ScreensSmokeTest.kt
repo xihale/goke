@@ -8,8 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -23,13 +22,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
@@ -59,7 +61,6 @@ import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.components.AttachmentEditor
-import app.mintcal.ui.components.MintSnackbarHost
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.mintDestinations
 import app.mintcal.ui.rememberNav
@@ -144,9 +145,8 @@ class ScreensSmokeTest {
     private fun Host(content: @Composable () -> Unit) {
         val st by app.settings.flow.collectAsState()
         val nav = rememberNav()
-        val snack = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
-        val actions = remember { Actions(app, snack, scope, nav) }
+        val actions = remember { Actions(app, scope, nav) }
         MintCalTheme(st) {
             CompositionLocalProvider(LocalApp provides app, LocalActions provides actions, LocalNav provides nav) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -186,7 +186,7 @@ class ScreensSmokeTest {
                 "course_new" to { CourseEditScreen(null) {} },
                 "task_edit" to { TodoEditScreen(task.id) {} },
                 "task_new" to { TodoEditScreen(null) {} },
-                "time_sheet" to { EventTimeSheet(null, null, null, null, LocalDate.now(), {}, {}) },
+                "time_sheet" to { EventTimeSheet(null, LocalDate.now(), 30, {}, {}) },
                 "edit_timetable" to { EditTimetableScreen {} },
                 "periods" to { PeriodsScreen {} },
                 "appearance" to { AppearanceScreen {} },
@@ -222,10 +222,13 @@ class ScreensSmokeTest {
         assertTrue("渲染失败的页面：\n" + failures.joinToString("\n"), failures.isEmpty())
     }
 
-    /** 快速添加：回车即入库并清空输入，可直接接着录下一条。 */
+    /** 快速添加：点右下角加号开浮层，回车即入库并清空输入，可直接接着录下一条。 */
     @Test
     fun quickAddAddsAndKeepsTyping() {
         rule.setContent { Host { TodoScreen() } }
+        // 右下角 + 打开快速添加浮层（静息时唯一带「添加」描述的节点就是这颗 FAB）
+        rule.onNodeWithContentDescription(app.getString(R.string.add)).performClick()
+        rule.waitForIdle()
         rule.onNode(hasSetTextAction()).performTextInput("交实验报告 !高 #学习")
         rule.waitForIdle()
         shot("todo_typing")
@@ -239,8 +242,8 @@ class ScreensSmokeTest {
                 .first { it.title == "交实验报告" }
         assertEquals(3, task.priority)
         rule.waitForIdle()
-        // 输入框已清空：标题只剩列表卡片这一处
-        rule.onAllNodesWithText("交实验报告").assertCountEquals(1)
+        // 输入框已清空：带标记的原文不应再出现在任何节点（提示条已改为悬浮撤销按钮，不再有文字节点）
+        rule.onAllNodesWithText("交实验报告 !高 #学习").assertCountEquals(0)
         rule.onNode(hasSetTextAction()).performTextInput("买牛奶")
         rule.onNode(hasSetTextAction()).performImeAction()
         rule.waitUntil(5_000) {
@@ -251,13 +254,50 @@ class ScreensSmokeTest {
 
     /** 「更多选项」把快速添加解析出来的内容带进编辑页。 */
     @Test
-    fun quickAddDraftPrefillsDetail() {
+    fun quickAddDraftUsesChosenDuration() {
+        val existingIds =
+            app.repo.snapshot.value.tasks
+                .map { it.id }
+                .toSet()
+        app.settings.update { it.copy(defaultBlockMinutes = 37) }
         rule.setContent {
             Host {
                 TodoEditScreen(null, textDraft = "交实验报告 明天 18:00") {}
             }
         }
-        rule.onNodeWithText("交实验报告 明天 18:00").assertExists()
-        rule.onNodeWithText("明天 18:00 – 19:00").assertExists()
+        rule.onNodeWithText("保存").performClick()
+        rule.waitUntil(5_000) {
+            app.repo.snapshot.value.tasks
+                .any { it.id !in existingIds }
+        }
+        val task =
+            app.repo.snapshot.value.tasks
+                .first { it.id !in existingIds }
+        assertEquals(LocalDate.now().plusDays(1).atTime(18, 0), task.blockStart)
+        assertEquals(37, task.blockMinutes)
+        assertEquals(task.blockStart!!.plusMinutes(37), task.due)
+    }
+
+    @Test
+    fun deletingOpenTaskReturnsToHome() {
+        val task =
+            app.repo.snapshot.value.tasks
+                .first()
+        lateinit var nav: app.mintcal.ui.Nav
+        rule.setContent {
+            Host {
+                nav = LocalNav.current
+                Text("主页")
+            }
+        }
+        rule.runOnIdle { nav.openTask(task.id) }
+        rule.onNodeWithContentDescription("删除").performClick()
+        rule.onNodeWithText("删除").performClick()
+        rule.waitUntil(5_000) {
+            app.repo.snapshot.value.tasks
+                .any { it.id == task.id && it.deletedAt != null }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithText("主页").assertIsDisplayed()
     }
 }

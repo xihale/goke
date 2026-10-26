@@ -193,7 +193,6 @@ class ReminderScheduler(
         /** 自检测试提醒的请求码，须落在 0 until MAX 之外，免得被重新调度时取消。 */
         const val TEST_ID = 9001
         private val ALL_DAY_REMIND_AT = LocalTime.of(9, 0)
-        private val DIGEST_AT = LocalTime.of(7, 30)
 
         /** 纯计算：未来 7 天内、晚于 now 的提醒，按触发时间排序。 */
         fun compute(
@@ -210,7 +209,7 @@ class ReminderScheduler(
                     val courses = items.count { it is CourseItem }
                     val tasks = items.count { it is TaskItem && !it.task.done }
                     if (courses + tasks > 0) {
-                        out += Reminder(date.atTime(DIGEST_AT), ctx.getString(R.string.digest_title), ctx.getString(R.string.today_summary, courses, tasks), "digest$date")
+                        out += Reminder(date.atTime(LocalTime.of(st.digestHour, st.digestMinute)), ctx.getString(R.string.digest_title), ctx.getString(R.string.today_summary, courses, tasks), "digest$date")
                     }
                 }
                 for (item in items) {

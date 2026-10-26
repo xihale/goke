@@ -1,7 +1,6 @@
 package app.mintcal.ui
 
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHostState
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
@@ -121,16 +120,13 @@ fun rememberNav(): Nav {
     return remember { Nav(controller) }
 }
 
-/** 页面里发起的写操作:统一走变更集,并给出「撤销」提示。 */
+/** 页面里发起的写操作:统一走变更集;可撤销的操作由根布局渲染成悬浮撤销按钮,普通提示走系统 Toast。 */
 class Actions(
     val app: MintCalApp,
-    val snack: SnackbarHostState,
     val scope: CoroutineScope,
     val nav: Nav,
 ) {
-    var undoLabel: String = "撤销"
-
-    /** 当前可撤销的一步:一个圆,点一下回退,到时自动收起。 */
+    /** 当前可撤销的一步；非空即显示悬浮撤销按钮。 */
     var undo by mutableStateOf<UndoPrompt?>(null)
         private set
 
@@ -141,29 +137,26 @@ class Actions(
         scope.launch {
             app.repo.commit(cs)
             if (message != null && !cs.isEmpty) {
-                // 新操作顶掉旧提示;倒计时由那个圆自己数,走完自动收起
-                undo = UndoPrompt(cs.id, message, System.currentTimeMillis())
+                // 新操作替换旧提示，根布局负责 5 秒后自动收起。
+                undo = UndoPrompt(cs.id, System.currentTimeMillis())
             }
         }
     }
 
-    /** 点圆:撤销最近这条,按钮立即收起。 */
+    /** 撤销当前提示对应的操作。 */
     fun undoNow() {
         val p = undo ?: return
         undo = null
         scope.launch { app.repo.undo(p.csId) }
     }
 
-    /** 倒计时走完:收起圆(期间已有新操作则保留新的那条)。 */
+    /** 提示关闭或超时，只清除仍匹配的操作。 */
     fun timeout(seq: Long) {
         if (undo?.seq == seq) undo = null
     }
 
     fun toast(message: String) {
-        scope.launch {
-            snack.currentSnackbarData?.dismiss()
-            snack.showSnackbar(message, duration = SnackbarDuration.Short)
-        }
+        Toast.makeText(app, message, Toast.LENGTH_SHORT).show()
     }
 }
 
