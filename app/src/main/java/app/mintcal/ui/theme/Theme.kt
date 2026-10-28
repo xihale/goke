@@ -68,6 +68,8 @@ class MintColors(
     val removed: Color,
     val conflictBg: Color,
     val success: Color,
+    /** 优先级语义色 [低, 中, 高]；旗子、圈粗、菜单、chip 同源取色。 */
+    val priority: List<Color>,
     val dark: Boolean,
 ) {
     fun bg(i: Int) = courseBg[((i % 8) + 8) % 8]
@@ -109,9 +111,25 @@ fun mintColors(dark: Boolean): MintColors {
         removed = Color(0xFFE56458),
         conflictBg = if (dark) Color(0xFF4A2A27) else Color(0xFFFCE9E7),
         success = Color(0xFF46A171),
+        // 低=中性灰绿（安静），中=金（提醒），高=红（同 removed/错误族）
+        priority =
+            if (dark) {
+                listOf(Color(0xFF93A39E), Color(0xFFE0B45C), Color(0xFFFF8F84))
+            } else {
+                listOf(Color(0xFF64756F), Color(0xFFB07F1E), Color(0xFFE56458))
+            },
         dark = dark,
     )
 }
+
+/** 优先级（0..3）取语义色；0 档无色返回 null。 */
+fun MintColors.priorityColor(priority: Int): Color? =
+    when (priority) {
+        0 -> null
+        1 -> this.priority[0]
+        2 -> this.priority[1]
+        else -> this.priority[2]
+    }
 
 val LocalMintColors = compositionLocalOf { mintColors(false) }
 val LocalReduceMotion = compositionLocalOf { false }
