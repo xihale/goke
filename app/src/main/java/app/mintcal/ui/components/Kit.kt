@@ -19,6 +19,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -502,6 +503,40 @@ fun Modifier.mintPressable(
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             onClick()
         }
+}
+
+/**
+ * mintPressable 的通用版：可选长按、角色语义、触觉开关。
+ * 全局 NoIndication 下所有自绘可点区域统一走这里，保证「点了有反应」的基线不丢。
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun Modifier.mintClickable(
+    enabled: Boolean = true,
+    role: Role? = null,
+    haptic: Boolean = true,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+): Modifier {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.96f else 1f, MintTheme.spec(), label = "press-scale")
+    val haptics = LocalHapticFeedback.current
+    val click: () -> Unit = {
+        if (haptic) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        onClick()
+    }
+    val gesture =
+        if (onLongClick != null) {
+            Modifier.combinedClickable(interactionSource = source, indication = null, enabled = enabled, role = role, onClick = click, onLongClick = onLongClick)
+        } else {
+            Modifier.clickable(interactionSource = source, indication = null, enabled = enabled, role = role, onClick = click)
+        }
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }.then(gesture)
 }
 
 /** 一次可撤销操作：撤销按钮显示期间持有对应变更集。 */
