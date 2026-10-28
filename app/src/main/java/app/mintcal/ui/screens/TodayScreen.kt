@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,12 +25,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
@@ -77,6 +76,7 @@ import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
 import app.mintcal.ui.Tab
 import app.mintcal.ui.components.AgendaRow
+import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.SectionLabel
 import app.mintcal.ui.components.TaskRow
@@ -149,8 +149,8 @@ fun TodayScreen() {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 132.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 176.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -199,20 +199,25 @@ fun TodayScreen() {
                                     },
                                     label = "today-next",
                                 ) { n ->
-                                    Text(
-                                        if (n != null) {
-                                            stringResource(R.string.today_next_class, n.occ.start.hm(), n.occ.course.name, n.occ.room)
-                                        } else if (pendingTasks > 0) {
-                                            stringResource(R.string.today_remaining, pendingTasks)
-                                        } else if (timeline.isEmpty() && overdue.isEmpty()) {
-                                            stringResource(R.string.today_empty_hint)
-                                        } else {
+                                    // 空天时 hero 只留标题，说明与入口交给下方空态，同一文案不出现两次
+                                    val sub =
+                                        when {
+                                            n != null -> stringResource(R.string.today_next_class, n.occ.start.hm(), n.occ.course.name, n.occ.room)
+
+                                            pendingTasks > 0 -> stringResource(R.string.today_remaining, pendingTasks)
+
+                                            timeline.isEmpty() && overdue.isEmpty() -> null
+
                                             // 没课没待办但还有没结束的日程：报实际当天概览
-                                            stringResource(R.string.today_summary, courseCount, taskTotal)
-                                        },
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                                            else -> stringResource(R.string.today_summary, courseCount, taskTotal)
+                                        }
+                                    if (sub != null) {
+                                        Text(
+                                            sub,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                 }
                             }
                             if (allDone) {
@@ -259,7 +264,7 @@ fun TodayScreen() {
                         Modifier
                             .fillMaxWidth()
                             .heightIn(min = 48.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(MaterialTheme.shapes.small)
                             .clickable { showDone = !showDone }
                             .semantics { stateDescription = expansion }
                             .padding(horizontal = 4.dp, vertical = 6.dp),
@@ -294,11 +299,13 @@ fun TodayScreen() {
             }
             if (timeline.isEmpty() && overdue.isEmpty()) {
                 item(key = "empty") {
-                    Column(Modifier.fillMaxWidth().padding(top = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(stringResource(R.string.today_empty_hint), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(12.dp))
-                        androidx.compose.material3.FilledTonalButton(onClick = { nav.tab = Tab.TODO }) { Text(stringResource(R.string.go_todo)) }
-                    }
+                    EmptyState(
+                        title = stringResource(R.string.today_empty_hint),
+                        modifier = Modifier.padding(top = 16.dp),
+                        icon = Icons.Rounded.WbSunny,
+                        actionLabel = stringResource(R.string.go_todo),
+                        onAction = { nav.tab = Tab.TODO },
+                    )
                 }
             }
         }
@@ -307,7 +314,7 @@ fun TodayScreen() {
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 108.dp),
             containerColor = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            shape = MaterialTheme.shapes.medium,
+            shape = MaterialTheme.shapes.large,
         ) { Icon(Icons.Rounded.Add, stringResource(R.string.new_entry)) }
     }
 }
