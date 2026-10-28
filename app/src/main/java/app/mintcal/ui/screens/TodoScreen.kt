@@ -1,6 +1,11 @@
 package app.mintcal.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,11 +29,6 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Checklist
@@ -172,8 +172,14 @@ fun TodoScreen() {
     val backStack by nav.controller.currentBackStackEntryAsState()
     BackHandler(enabled = nav.tab == Tab.TODO && backStack?.destination?.route == HOME && (quickAddOpen || selecting || searching)) {
         when {
-            quickAddOpen -> quickAddOpen = false
-            selecting -> exitSelect()
+            quickAddOpen -> {
+                quickAddOpen = false
+            }
+
+            selecting -> {
+                exitSelect()
+            }
+
             else -> {
                 searching = false
                 queryText = ""
@@ -242,7 +248,7 @@ fun TodoScreen() {
             state = listState,
             modifier = Modifier.fillMaxSize().padding(bottom = bottomSpace),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item(key = "top") {
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -328,7 +334,19 @@ fun TodoScreen() {
                 }
             }
             if (sections.isEmpty()) {
-                item(key = "empty") { EmptyState(stringResource(if (searching && !q.isEmpty) R.string.todo_search_empty else R.string.todo_all_empty)) }
+                // 有搜索词或清单筛选时是「没匹配到」，否则是真空白；都给一条新建的出路
+                val filtered = (searching && !q.isEmpty) || listFilter != null
+                item(key = "empty") {
+                    EmptyState(
+                        stringResource(if (filtered) R.string.todo_search_empty else R.string.todo_all_empty),
+                        hint = if (filtered) stringResource(R.string.todo_empty_filtered_hint) else null,
+                        actionLabel = stringResource(R.string.shortcut_add_task),
+                        onAction = {
+                            addTarget = null
+                            quickAddOpen = true
+                        },
+                    )
+                }
             }
             sections.forEach { sec ->
                 val b = sec.bucket
@@ -382,7 +400,7 @@ fun TodoScreen() {
                     quickAddOpen = true
                 },
                 modifier = Modifier.navigationBarsPadding().padding(end = 20.dp, bottom = 100.dp),
-                shape = RoundedCornerShape(20.dp),
+                shape = MaterialTheme.shapes.large,
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 2.dp),

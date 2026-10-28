@@ -120,6 +120,7 @@
     <string name="day_empty">这一天没有安排</string>
     <string name="filter_done">已完成</string>
     <string name="todo_all_empty">这里还没有待办</string>
+    <string name="todo_empty_filtered_hint">换个条件试试，或直接新建一条</string>
     <string name="quick_add_hint">添加待办，如明天交作业</string>
     <string name="date_weekend">本周末</string>
     <string name="date_next_monday">下周一</string>
