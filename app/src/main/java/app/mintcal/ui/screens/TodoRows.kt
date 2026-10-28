@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -69,6 +72,7 @@ import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
+import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.dueLabel
 import app.mintcal.ui.hm
 import app.mintcal.ui.theme.MintTheme
@@ -114,12 +118,25 @@ fun TodoLine(
             if (total > 0) add(ctx.getString(R.string.subtasks_progress, done, total))
             task.tags.take(2).forEach { add("#$it") }
         }
+    val haptics = LocalHapticFeedback.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(if (pressed) 0.96f else 1f, MintTheme.spec(), label = "todo-press")
     Surface(
         modifier =
-            modifier.combinedClickable(
-                onLongClick = onLongClick,
-                onClick = { if (onClick != null) onClick() else nav.openTask(task.id) },
-            ),
+            modifier
+                .graphicsLayer {
+                    scaleX = pressScale
+                    scaleY = pressScale
+                }.combinedClickable(
+                    interactionSource = interaction,
+                    indication = null,
+                    onLongClick = onLongClick,
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                        if (onClick != null) onClick() else nav.openTask(task.id)
+                    },
+                ),
         shape = MaterialTheme.shapes.medium,
         color = MintTheme.card,
     ) {
@@ -277,9 +294,11 @@ internal fun SubRow(
     Row(
         modifier
             .fillMaxWidth()
-            .padding(start = 28.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { nav.openTask(sub.id) },
+            .padding(start = 40.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(MintTheme.card)
+            .mintClickable { nav.openTask(sub.id) }
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         app.mintcal.ui.components
@@ -388,7 +407,7 @@ internal fun NextUpCard(
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable(role = Role.Button) { nav.push(Route.CourseEdit(o.course.id)) }
+                        .mintClickable(role = Role.Button) { nav.push(Route.CourseEdit(o.course.id)) }
                         .padding(vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
@@ -425,7 +444,7 @@ private fun NextUpTask(
     val ctx = LocalContext.current
     val actions = LocalActions.current
     val nav = LocalNav.current
-    Row(Modifier.fillMaxWidth().clickable { nav.openTask(t.id) }, verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().mintClickable { nav.openTask(t.id) }, verticalAlignment = Alignment.CenterVertically) {
         app.mintcal.ui.components
             .MintCheck(t.done, { d -> toggle(actions, snap, t, d, now, ctx.getString(R.string.done_toast, t.title)) })
         Text(
