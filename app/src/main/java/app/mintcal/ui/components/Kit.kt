@@ -352,11 +352,20 @@ fun FloatingNavBar(
                         if (reduce) snap() else tween(durationMillis = 180, easing = FastOutSlowInEasing),
                         label = "nav-fg",
                     )
+                    val pressed by interaction.collectIsPressedAsState()
+                    val pressScale by animateFloatAsState(
+                        if (pressed) 0.92f else 1f,
+                        if (reduce) snap() else tween(durationMillis = 140, easing = FastOutSlowInEasing),
+                        label = "nav-press",
+                    )
                     Column(
                         Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .clip(CircleShape)
+                            .graphicsLayer {
+                                scaleX = pressScale
+                                scaleY = pressScale
+                            }.clip(CircleShape)
                             .selectable(
                                 selected = selected,
                                 interactionSource = interaction,
@@ -364,7 +373,8 @@ fun FloatingNavBar(
                                 indication = null,
                                 role = Role.Tab,
                                 onClick = {
-                                    if (!selected) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                    // 重选当前 Tab 也给触觉回执（回顶动效是视觉回执），避免「点了没反应」
+                                    haptics.performHapticFeedback(if (selected) HapticFeedbackType.LongPress else HapticFeedbackType.SegmentTick)
                                     onTab(item.tab)
                                 },
                             ),
