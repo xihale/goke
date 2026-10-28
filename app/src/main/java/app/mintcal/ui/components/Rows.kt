@@ -11,14 +11,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -120,22 +118,22 @@ private fun RowShell(
     tag: String? = null,
     modifier: Modifier = Modifier,
 ) {
-    // 过期置灰随时间平滑过渡（30s 心跳）
-    val alpha by animateFloatAsState(if (dim) 0.55f else 1f, MintTheme.spec(), label = "row-dim")
+    // 过期置灰随时间平滑过渡（30s 心跳）；只淡背景，文字保持独立可读强度
+    val bgAlpha by animateFloatAsState(if (dim) 0.45f else 1f, MintTheme.spec(), label = "row-dim")
     Row(
         modifier
             .fillMaxWidth()
-            .alpha(alpha)
             .clip(MaterialTheme.shapes.medium)
-            .background(bg)
+            .background(bg.copy(alpha = bgAlpha))
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(time, color = fg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.widthIn(min = 52.dp))
+        // 40dp 时间槽 + 8dp 间隔：与 TaskRow 的勾选框槽（12+48）同起点，混排时标题左沿对齐
+        Text(time, color = fg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.width(40.dp))
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, color = fg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, color = fg, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (subtitle.isNotBlank()) Text(subtitle, color = fg.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (tag != null) Tag(tag, fg.copy(alpha = 0.15f), fg)
