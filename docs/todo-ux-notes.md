@@ -172,3 +172,20 @@
 评审为独立视觉审阅一轮（不打分）与独立任务走查一轮；修正上述问题后由主 Agent 真机复验。`assembleDebug`、两项行为回归（删除后返回主页、快速添加草稿按自选 37 分钟保存）、`spotlessCheck` 与字符串检查通过。Lint 任务完成但报告仍有 115 errors、57 warnings、4 hints，未视为全绿；未运行全量测试。
 
 证据目录：`app/build/ux-details/`。前一轮为 `detail-final-*.png`、`detail-*-preview.png`、`detail-font200-*.png` 与 `detail-task-reopened.png`；修正后的实际页面为 `mintcal-detail-final-reviewed-*.png`，返回保护为 `mintcal-detail-discard-guard.png`，跨午夜为 `mintcal-detail-overnight-2min.png`，删除后主页为 `mintcal-detail-final-delete-return.png`，恢复用户设置后的日历为 `mintcal-detail-final-restored-calendar.png`。
+
+## 10. 2026-10-26 细节设计感收敛
+
+用户反馈「细节处缺乏设计感」。先由三个只读侦察分别盘点共享组件层、主 Tab 三屏、待办流与设置页，收敛为三条系统性问题：① 全局 NoIndication 之后「按下有反应」的基线只在 `mintPressable` 一处实现，共享组件全是裸 clickable，大量可点区域按下完全静止；② 同一信息多套视觉语言（行标题两种字号、优先级三种表达、空态两套、圆角五套、底部安全区两套）；③ 对比度与弱态缺陷（`onSurfaceVariant` 白卡上 3.58:1、过期行整行 alpha 文字糊掉、课表无学期整屏空白）。本轮从共享层源头修起，再铺到各屏。
+
+- 反馈基线：新增 `Modifier.mintClickable`（按下 0.96 缩放 + 点击触觉，支持长按与语义角色）；待办行、子任务行、下一件事课程块、设置 ValueRow、日历日期格接入；底栏项加按下缩放，重选当前 Tab 也给触觉回执。
+- 优先级语义色：`MintTheme.colors.priority`（低灰绿 / 中金 / 高红，深浅各一档）与 `priorityColor()`；编辑页旗子、QuickAdd 高亮 / 菜单 / chip、批量菜单、待办行旗子同源取色，QuickAdd 优先级高亮不再一律错误红。
+- 对比度：浅色 `onSurfaceVariant` #7B8B86 → #64756F（白卡 3.58:1 → 4.9:1）。
+- 行语法：RowShell 时间槽 40dp、标题 titleMedium，与 TaskRow 勾选槽同在 60dp 左轴，混排左沿对齐；过期只淡背景（alpha 0.45）不淡文字。
+- 层级与节奏：ValueRow 标签弱化、值为主体、补 chevron；分区标题计数改小胶囊（逾期红、已完成弱化）；子任务行入卡片；逾期卡补图标并统一 large 圆角；今日 / 日历列表间距统一 8dp、底部安全区 176dp；FAB 统一 `shapes.large`；FieldText 16dp、chip 12dp 圆角归档。
+- 空态：今日页改用 `EmptyState`（图标 + CTA）并去掉 hero 与空态重复的文案；待办空态区分筛选 / 全空并给「新建」入口；课表无学期不再整屏空白（保留头部骨架 + EmptyState + 去编辑课表）。
+- 日历 / 课表：月视图按实际周数 5 / 6 行（高度平滑过渡）；今天数字改淡 primaryContainer 圆底；待办 / 完成指示点改空心环 / 实心形状区分；课表今天整列淡底 + 当前时间线，时间串统一 tnum；预览条改中性底 + 语义徽标色；CourseSheet 三按钮 FlowRow 防溢出。
+- 弹层：改期弹层危险项与普通项之间加间隔 + 分隔线；晨间弹层任务行 8dp 行距、批量按钮统一尺寸；批量条改 CircleShape + 按压缩放，批量优先级菜单补旗子 leadingIcon。
+
+验证：Robolectric `ScreensSmokeTest` 全量 27 屏渲染 + 三项行为回归（快速添加两条、草稿时长、删除返回）通过；另以一次性测试渲染深色空态四主屏确认空态与深色优先级色（用后已删）。`spotlessApply` 修复本轮与存量格式违规后 `spotlessCheck`、`scripts/check_strings.py` 通过。真机复验未完成：WiFi adb 中途掉线（设备离线），待重连后补真机走查；动画帧率未测。真机截图对比基线为 `app/build/shots-baseline/`（改动前）与 `app/build/shots/`（改动后）。
+
+本轮明确不做（结构性，留待之后）：TodoEdit 顶栏 56dp 与 MintScreen 64dp 骨架统一（含内联标题输入）；ChangeList diff 排版与摘要截断；附件删除 48dp 触控与撤销；EventTimeSheet 自绘 sheet 改 ModalBottomSheet；课表硬编码字符串的 i18n。
