@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.rounded.Weekend
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -109,6 +112,10 @@ internal fun RescheduleSheet(
             SheetOption(Icons.Rounded.Upcoming, stringResource(R.string.date_next_monday)) { moveTo(today.with(TemporalAdjusters.next(DayOfWeek.MONDAY))) }
             SheetOption(Icons.Rounded.CalendarMonth, stringResource(R.string.date_pick)) { pickDate = true }
             SheetOption(Icons.Rounded.Inbox, stringResource(R.string.todo_no_date)) { moveTo(null) }
+            // 普通操作与危险操作隔开
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(Modifier.height(8.dp))
             SheetOption(Icons.Rounded.Block, stringResource(R.string.todo_drop)) {
                 finish(
                     Edits.dropTasks(tasks, ctx.getString(R.string.todo_drop_desc, title), System.currentTimeMillis()),
@@ -188,13 +195,13 @@ internal fun MorningSheet(
             Text(stringResource(R.string.todo_tidy_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
             if (tasks.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilledTonalButton(onClick = { move(tasks, today) }) { Text(stringResource(R.string.todo_all_to_today)) }
-                    TextButton(onClick = { drop(tasks) }) { Text(stringResource(R.string.todo_all_drop)) }
+                    FilledTonalButton(onClick = { move(tasks, today) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.todo_all_to_today)) }
+                    FilledTonalButton(onClick = { drop(tasks) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.todo_all_drop)) }
                 }
             }
-            LazyColumn(Modifier.heightIn(max = 420.dp)) {
+            LazyColumn(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(tasks, key = { it.id }) { t ->
-                    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    Column(Modifier.fillMaxWidth()) {
                         Text(t.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         t.due?.let {
                             Text(ctx.dueLabel(it, t.dueHasTime, today), style = MaterialTheme.typography.bodySmall, color = MintTheme.colors.removed)
