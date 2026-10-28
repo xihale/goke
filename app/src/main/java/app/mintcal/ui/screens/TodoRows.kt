@@ -14,11 +14,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -26,8 +28,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -76,6 +80,7 @@ import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.dueLabel
 import app.mintcal.ui.hm
 import app.mintcal.ui.theme.MintTheme
+import app.mintcal.ui.theme.priorityColor
 import java.time.LocalDateTime
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -181,6 +186,10 @@ fun TodoLine(
                         color = if (overdue && !task.done) colors.removed else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+            // 优先级旗子：圈粗太细看不出来，行尾补一面旗（0 档无色不显示）
+            colors.priorityColor(task.priority)?.let { prio ->
+                Icon(Icons.Rounded.Flag, null, Modifier.padding(end = 8.dp).size(14.dp), tint = prio)
             }
             if (expanded != null && onToggleExpand != null) {
                 val rot by animateFloatAsState(if (expanded) 0f else -90f, MintTheme.spec(), label = "sub-chevron")
@@ -358,24 +367,44 @@ internal fun SectionHeader(
     modifier: Modifier = Modifier,
 ) {
     val rot by animateFloatAsState(if (collapsed) -90f else 0f, MintTheme.spec(), label = "section-chevron")
-    val color = if (bucket == Bucket.OVERDUE) MintTheme.colors.removed else MaterialTheme.colorScheme.onSurfaceVariant
+    val colors = MintTheme.colors
+    // 逾期桶整组用警示色；已完成弱化；其余正常标题色
+    val titleColor =
+        when (bucket) {
+            Bucket.OVERDUE -> colors.removed
+            Bucket.DONE -> MaterialTheme.colorScheme.onSurfaceVariant
+            else -> MaterialTheme.colorScheme.onSurface
+        }
+    val pillBg =
+        if (bucket == Bucket.OVERDUE) colors.removed.copy(alpha = 0.1f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
+    val pillFg = if (bucket == Bucket.OVERDUE) colors.removed else MaterialTheme.colorScheme.onSurfaceVariant
     val expansion = stringResource(if (collapsed) R.string.state_collapsed else R.string.state_expanded)
     Row(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(MaterialTheme.shapes.small)
             .semantics { stateDescription = expansion }
             .clickable(role = Role.Button, onClick = onToggle)
             .heightIn(min = 48.dp)
-            .padding(start = 6.dp),
+            .padding(start = 6.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.ExpandMore, null, Modifier.rotate(rot).size(20.dp), tint = color)
+        Icon(Icons.Rounded.ExpandMore, null, Modifier.rotate(rot).size(20.dp), tint = titleColor)
         Text(
-            stringResource(bucketRes(bucket)) + "  " + count,
+            stringResource(bucketRes(bucket)),
             Modifier.weight(1f).padding(start = 6.dp),
             style = MaterialTheme.typography.labelLarge,
-            color = color,
+            color = titleColor,
+        )
+        // 计数做成小胶囊，不再和标题拼字符串
+        Text(
+            count.toString(),
+            Modifier
+                .clip(MaterialTheme.shapes.small)
+                .background(pillBg)
+                .padding(horizontal = 10.dp, vertical = 3.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = pillFg,
         )
         if (onAdd != null) {
             IconButton(onClick = onAdd, Modifier.size(48.dp)) {
@@ -465,9 +494,11 @@ internal fun OverdueCard(
     onTidy: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MintTheme.colors.removed.copy(alpha = 0.12f)) {
+    Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MintTheme.colors.removed.copy(alpha = 0.12f)) {
         Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.todo_overdue_card, count), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Icon(Icons.Rounded.ErrorOutline, null, tint = MintTheme.colors.removed)
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.todo_overdue_card, count), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MintTheme.colors.removed)
             TextButton(onClick = onTidy) { Text(stringResource(R.string.todo_tidy)) }
         }
     }
