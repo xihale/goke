@@ -136,8 +136,7 @@ val LocalReduceMotion = compositionLocalOf { false }
 
 /** 无按压高亮：clickable/selectable/Surface(onClick) 的默认 indication 落到这里 = 不画任何东西。 */
 private object NoIndication : androidx.compose.foundation.IndicationNodeFactory {
-    override fun create(interactionSource: androidx.compose.foundation.interaction.InteractionSource): androidx.compose.ui.Modifier.Node =
-        object : androidx.compose.ui.Modifier.Node() {}
+    override fun create(interactionSource: androidx.compose.foundation.interaction.InteractionSource): androidx.compose.ui.Modifier.Node = object : androidx.compose.ui.Modifier.Node() {}
 
     override fun equals(other: Any?) = other === this
 
@@ -178,7 +177,8 @@ private fun brandLight() =
         surface = Color(0xFFFFFFFF),
         onSurface = Color(0xFF24312D),
         surfaceVariant = Color(0xFFE9F1EE),
-        onSurfaceVariant = Color(0xFF7B8B86),
+        // #7B8B86 在白卡上只有 3.58:1，而它承担副标题/说明等正文级文字；加深到 4.9:1
+        onSurfaceVariant = Color(0xFF64756F),
         surfaceContainerLowest = Color(0xFFFFFFFF),
         surfaceContainerLow = Color(0xFFFFFFFF),
         surfaceContainer = Color(0xFFFFFFFF),
