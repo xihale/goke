@@ -1,7 +1,6 @@
 package app.mintcal.ui.components
 
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -9,10 +8,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -82,7 +85,10 @@ fun <T> ChipChoice(
     }
 }
 
-/** 一行「标签 + 当前值」，点击后由调用方弹出选择器。 */
+/**
+ * 一行「标签 + 当前值」，点击后由调用方弹出选择器。
+ * 标签弱化（bodyMedium/次要色）、值为主体；带 chevron 表达可点，按下有缩放反馈。
+ */
 @Composable
 fun ValueRow(
     label: String,
@@ -94,12 +100,23 @@ fun ValueRow(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .clickable(onClick = onClick)
+            .mintClickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        Text(value, style = MaterialTheme.typography.bodyLarge, color = valueColor)
+        Text(
+            label,
+            Modifier.weight(1f).padding(end = 16.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(value, style = MaterialTheme.typography.bodyLarge, color = valueColor, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        Icon(
+            Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+            null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp).size(20.dp),
+        )
     }
 }
 
