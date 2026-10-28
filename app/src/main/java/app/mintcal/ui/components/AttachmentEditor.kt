@@ -103,7 +103,11 @@ fun pasteFromClipboard(
     if (uri != null) {
         importAttachment(ctx, uri, actions, onUri)
     } else {
-        item?.text?.toString()?.takeIf { it.isNotBlank() }?.let(onText)
+        item
+            ?.text
+            ?.toString()
+            ?.takeIf { it.isNotBlank() }
+            ?.let(onText)
     }
 }
 
@@ -112,9 +116,10 @@ fun pasteFromClipboard(
 fun rememberImageAttachmentPicker(onAdded: (Attachment) -> Unit): () -> Unit {
     val ctx = LocalContext.current
     val actions = LocalActions.current
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { importAttachment(ctx, it, actions, onAdded) }
-    }
+    val launcher =
+        rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            uri?.let { importAttachment(ctx, it, actions, onAdded) }
+        }
     return { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
 }
 
@@ -123,9 +128,10 @@ fun rememberImageAttachmentPicker(onAdded: (Attachment) -> Unit): () -> Unit {
 fun rememberFileAttachmentPicker(onAdded: (Attachment) -> Unit): () -> Unit {
     val ctx = LocalContext.current
     val actions = LocalActions.current
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { importAttachment(ctx, it, actions, onAdded) }
-    }
+    val launcher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            uri?.let { importAttachment(ctx, it, actions, onAdded) }
+        }
     return { launcher.launch(arrayOf("*/*")) }
 }
 

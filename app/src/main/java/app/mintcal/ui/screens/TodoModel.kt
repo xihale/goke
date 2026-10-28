@@ -31,4 +31,3 @@ internal fun mergeChangeSets(
     description: String,
     sets: List<ChangeSet>,
 ): ChangeSet = ChangeSet(Ids.next(), description, Source.MANUAL, System.currentTimeMillis(), sets.flatMap { it.changes })
-

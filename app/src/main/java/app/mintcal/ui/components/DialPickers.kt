@@ -9,9 +9,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -71,7 +71,10 @@ fun MinutesDialSheet(
     var minutes by remember { mutableIntStateOf(initialMinutes.coerceIn(0, maxMinutes) % 60) }
     var mode by remember { mutableStateOf(DialMode.HOUR) }
 
-    fun clamp(h: Int, m: Int): Pair<Int, Int> = if (h * 60 + m > maxMinutes) maxMinutes / 60 to maxMinutes % 60 else h to m
+    fun clamp(
+        h: Int,
+        m: Int,
+    ): Pair<Int, Int> = if (h * 60 + m > maxMinutes) maxMinutes / 60 to maxMinutes % 60 else h to m
 
     DialDialog(
         hours = hours,
@@ -119,8 +122,10 @@ fun TimeDialSheet(
 }
 
 @Composable
-private fun hourMinuteDesc(hours: Int, minutes: Int): String =
-    "${stringResource(R.string.dial_hours)} $hours，${stringResource(R.string.dial_minutes)} $minutes"
+private fun hourMinuteDesc(
+    hours: Int,
+    minutes: Int,
+): String = "${stringResource(R.string.dial_hours)} $hours，${stringResource(R.string.dial_minutes)} $minutes"
 
 @Composable
 private fun DialDialog(
@@ -258,7 +263,9 @@ private fun DialFace(
                         polar(i * 30.0, (if (outer) labelR else innerR).toPx(), c)
                     }
 
-                    DialMode.MINUTE -> polar(selected * 6.0, labelR.toPx(), c)
+                    DialMode.MINUTE -> {
+                        polar(selected * 6.0, labelR.toPx(), c)
+                    }
                 }
             drawLine(cs.primary, c, pos, strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
             drawCircle(cs.primary, radius = 4.dp.toPx(), center = c)
@@ -349,6 +356,8 @@ private fun hitSlot(
             if (dist >= widthPx * 0.3375f) HOUR_OUTER[idx] else HOUR_INNER[idx]
         }
 
-        DialMode.MINUTE -> (deg / 6.0).roundToInt().mod(60)
+        DialMode.MINUTE -> {
+            (deg / 6.0).roundToInt().mod(60)
+        }
     }
 }
