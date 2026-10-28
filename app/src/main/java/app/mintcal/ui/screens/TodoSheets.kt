@@ -1,6 +1,9 @@
 package app.mintcal.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +16,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Block
@@ -50,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -64,6 +69,7 @@ import app.mintcal.ui.LocalActions
 import app.mintcal.ui.components.DatePickerDlg
 import app.mintcal.ui.dueLabel
 import app.mintcal.ui.theme.MintTheme
+import app.mintcal.ui.theme.priorityColor
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -218,6 +224,30 @@ internal fun MorningSheet(
     }
 }
 
+/** 批量条图标按钮：全局无水波，这里自己补按下缩放。 */
+@Composable
+private fun BulkIconButton(
+    icon: ImageVector,
+    desc: String,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
+    onClick: () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.9f else 1f, MintTheme.spec(), label = "bulk-press")
+    IconButton(
+        onClick = onClick,
+        interactionSource = interaction,
+        modifier =
+            Modifier.graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+    ) {
+        Icon(icon, desc, tint = tint)
+    }
+}
+
 /** 多选时的底部操作条。 */
 @Composable
 internal fun BulkBar(
@@ -231,11 +261,11 @@ internal fun BulkBar(
 ) {
     var listMenu by remember { mutableStateOf(false) }
     var priorityMenu by remember { mutableStateOf(false) }
-    Surface(modifier, shape = RoundedCornerShape(26.dp), color = MintTheme.card, shadowElevation = 8.dp, tonalElevation = 2.dp) {
+    Surface(modifier, shape = CircleShape, color = MintTheme.card, shadowElevation = 8.dp, tonalElevation = 2.dp) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            IconButton(onClick = onReschedule) { Icon(Icons.Rounded.Event, stringResource(R.string.todo_reschedule)) }
+            BulkIconButton(Icons.Rounded.Event, stringResource(R.string.todo_reschedule), onClick = onReschedule)
             Box {
-                IconButton(onClick = { listMenu = true }) { Icon(Icons.Rounded.FolderOpen, stringResource(R.string.label_list)) }
+                BulkIconButton(Icons.Rounded.FolderOpen, stringResource(R.string.label_list)) { listMenu = true }
                 DropdownMenu(listMenu, { listMenu = false }) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.none)) }, onClick = {
                         listMenu = false
@@ -250,18 +280,25 @@ internal fun BulkBar(
                 }
             }
             Box {
-                IconButton(onClick = { priorityMenu = true }) { Icon(Icons.Rounded.Flag, stringResource(R.string.label_priority)) }
+                BulkIconButton(Icons.Rounded.Flag, stringResource(R.string.label_priority)) { priorityMenu = true }
                 DropdownMenu(priorityMenu, { priorityMenu = false }) {
                     listOf(3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1, 0 to R.string.priority_0).forEach { (v, label) ->
-                        DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = {
-                            priorityMenu = false
-                            onPriority(v)
-                        })
+                        DropdownMenuItem(
+                            text = { Text(stringResource(label)) },
+                            leadingIcon = {
+                                // 旗子色与行内/圈粗同源；0 档无语义色，用次要文字色
+                                Icon(Icons.Rounded.Flag, null, tint = MintTheme.colors.priorityColor(v) ?: MaterialTheme.colorScheme.onSurfaceVariant)
+                            },
+                            onClick = {
+                                priorityMenu = false
+                                onPriority(v)
+                            },
+                        )
                     }
                 }
             }
-            IconButton(onClick = onDone) { Icon(Icons.Rounded.Check, stringResource(R.string.todo_complete)) }
-            IconButton(onClick = onDelete) { Icon(Icons.Rounded.Delete, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.error) }
+            BulkIconButton(Icons.Rounded.Check, stringResource(R.string.todo_complete), onClick = onDone)
+            BulkIconButton(Icons.Rounded.Delete, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.error, onClick = onDelete)
         }
     }
 }
