@@ -24,7 +24,6 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import app.mintcal.ui.theme.MintTheme
 
 @Composable
 fun FieldText(
@@ -44,10 +43,14 @@ fun FieldText(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
-        modifier = modifier.fillMaxWidth().animateContentSize(MintTheme.spec()),
+        modifier =
+            modifier.fillMaxWidth().animateContentSize(
+                app.mintcal.ui.theme.MintTheme
+                    .spec(),
+            ),
         singleLine = singleLine,
         minLines = minLines,
-        shape = RoundedCornerShape(18.dp),
+        shape = MaterialTheme.shapes.medium,
         placeholder = placeholder?.let { { Text(it) } },
         isError = isError,
         supportingText = supporting?.let { { Text(it) } },
@@ -68,9 +71,13 @@ fun <T> ChipChoice(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    FlowRow(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(
+        modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
         options.forEach { (v, label) ->
-            FilterChip(selected = v == selected, onClick = { onSelect(v) }, label = { Text(label) }, shape = androidx.compose.foundation.shape.CircleShape)
+            FilterChip(selected = v == selected, onClick = { onSelect(v) }, label = { Text(label) }, shape = RoundedCornerShape(12.dp))
         }
     }
 }
