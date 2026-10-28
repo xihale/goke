@@ -16,13 +16,12 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -72,6 +71,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -108,6 +108,7 @@ import app.mintcal.ui.components.DatePickerDlg
 import app.mintcal.ui.components.Tag
 import app.mintcal.ui.dueLabel
 import app.mintcal.ui.theme.MintTheme
+import app.mintcal.ui.theme.priorityColor
 import java.time.LocalDateTime
 import java.time.LocalTime
 
@@ -145,13 +146,18 @@ internal fun QuickAddSheet(
     val focus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val scheme = MaterialTheme.colorScheme
+    val colors = MintTheme.colors
     val highlight =
-        remember(parsed, scheme) {
+        remember(parsed, scheme, colors) {
             TokenHighlight(parsed?.tokens.orEmpty()) { kind ->
                 when (kind) {
                     QuickTokenKind.DATE, QuickTokenKind.TIME, QuickTokenKind.COURSE -> scheme.primary
-                    QuickTokenKind.PRIORITY -> scheme.error
+
+                    // 优先级高亮走语义色（低灰绿/中金/高红），不再一律错误红
+                    QuickTokenKind.PRIORITY -> colors.priorityColor(parsed?.priority ?: 3) ?: scheme.error
+
                     QuickTokenKind.LIST -> scheme.tertiary
+
                     QuickTokenKind.TAG -> scheme.secondary
                 }
             }
@@ -265,7 +271,10 @@ internal fun QuickAddSheet(
 
                 override fun onPartialResults(partialResults: Bundle?) {}
 
-                override fun onEvent(eventType: Int, params: Bundle?) {}
+                override fun onEvent(
+                    eventType: Int,
+                    params: Bundle?,
+                ) {}
             },
         )
     }
@@ -345,188 +354,190 @@ internal fun QuickAddSheet(
                 shadowElevation = 3.dp,
             ) {
                 Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextField(
-                        text,
-                        { text = it },
-                        Modifier.weight(1f).focusRequester(focus),
-                        placeholder = { Text(stringResource(R.string.quick_add_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(20.dp),
-                        colors =
-                            TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                            ),
-                        visualTransformation = highlight,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { save() }),
-                    )
-                    FilledTonalIconButton(onClick = { save() }, enabled = parsed != null) {
-                        Icon(Icons.Rounded.Add, stringResource(R.string.add))
-                    }
-                }
-                // TickTick 式工具条：放大进详细编辑 / 优先级旗子（高-中-低-无） / 日期 / 课程 / 清单 / 粘贴，语音放最右
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { openDetail() }) {
-                        Icon(Icons.Rounded.OpenInFull, stringResource(R.string.detail_editor_full_edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Box {
-                        IconButton(onClick = { priorityMenu = true }) {
-                            Icon(Icons.Rounded.Flag, stringResource(R.string.label_priority), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextField(
+                            text,
+                            { text = it },
+                            Modifier.weight(1f).focusRequester(focus),
+                            placeholder = { Text(stringResource(R.string.quick_add_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(20.dp),
+                            colors =
+                                TextFieldDefaults.colors(
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent,
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent,
+                                ),
+                            visualTransformation = highlight,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { save() }),
+                        )
+                        FilledTonalIconButton(onClick = { save() }, enabled = parsed != null) {
+                            Icon(Icons.Rounded.Add, stringResource(R.string.add))
                         }
-                        DropdownMenu(priorityMenu, { priorityMenu = false }) {
-                            listOf(
-                                Triple(3, R.string.priority_3, Color(0xFFE53935)),
-                                Triple(2, R.string.priority_2, Color(0xFFF57C00)),
-                                Triple(1, R.string.priority_1, Color(0xFF1E88E5)),
-                            ).forEach { (level, label, color) ->
+                    }
+                    // TickTick 式工具条：放大进详细编辑 / 优先级旗子（高-中-低-无） / 日期 / 课程 / 清单 / 粘贴，语音放最右
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { openDetail() }) {
+                            Icon(Icons.Rounded.OpenInFull, stringResource(R.string.detail_editor_full_edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Box {
+                            IconButton(onClick = { priorityMenu = true }) {
+                                Icon(Icons.Rounded.Flag, stringResource(R.string.label_priority), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            DropdownMenu(priorityMenu, { priorityMenu = false }) {
+                                listOf(
+                                    Triple(3, R.string.priority_3, colors.priorityColor(3)),
+                                    Triple(2, R.string.priority_2, colors.priorityColor(2)),
+                                    Triple(1, R.string.priority_1, colors.priorityColor(1)),
+                                ).forEach { (level, label, color) ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(label) + stringResource(R.string.label_priority)) },
+                                        leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = color ?: MaterialTheme.colorScheme.onSurfaceVariant) },
+                                        onClick = {
+                                            priorityMenu = false
+                                            rewrite(setOf(QuickTokenKind.PRIORITY), "!" + ctx.getString(label))
+                                        },
+                                    )
+                                }
                                 DropdownMenuItem(
-                                    text = { Text(stringResource(label) + stringResource(R.string.label_priority)) },
-                                    leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = color) },
+                                    text = { Text(stringResource(R.string.priority_none)) },
+                                    leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                                     onClick = {
                                         priorityMenu = false
-                                        rewrite(setOf(QuickTokenKind.PRIORITY), "!" + ctx.getString(label))
+                                        rewrite(setOf(QuickTokenKind.PRIORITY), null)
                                     },
                                 )
                             }
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.priority_none)) },
-                                leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-                                onClick = {
-                                    priorityMenu = false
-                                    rewrite(setOf(QuickTokenKind.PRIORITY), null)
-                                },
+                        }
+                        IconButton(onClick = { datePick = true }) {
+                            Icon(Icons.Rounded.Event, stringResource(R.string.detail_editor_pick_date), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (snap.courses.isNotEmpty()) {
+                            Box {
+                                IconButton(onClick = { courseMenu = true }) {
+                                    Icon(Icons.Rounded.School, stringResource(R.string.detail_editor_next_class), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                DropdownMenu(courseMenu, { courseMenu = false }) {
+                                    snap.courses.distinctBy { it.name }.forEach { c ->
+                                        DropdownMenuItem(text = { Text(c.name) }, onClick = {
+                                            courseMenu = false
+                                            rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME, QuickTokenKind.COURSE), "/" + c.name.replace(" ", ""))
+                                        })
+                                    }
+                                }
+                            }
+                        }
+                        if (snap.lists.isNotEmpty()) {
+                            Box {
+                                IconButton(onClick = { listMenu = true }) {
+                                    Icon(Icons.Rounded.Label, stringResource(R.string.label_list), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                DropdownMenu(listMenu, { listMenu = false }) {
+                                    snap.lists.sortedBy { it.sort }.forEach { l ->
+                                        DropdownMenuItem(text = { Text(l.name) }, onClick = {
+                                            listMenu = false
+                                            rewrite(setOf(QuickTokenKind.LIST), "#" + l.name)
+                                        })
+                                    }
+                                }
+                            }
+                        }
+                        IconButton(onClick = { paste() }) {
+                            Icon(Icons.Rounded.ContentPaste, stringResource(R.string.todo_paste), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Spacer(Modifier.weight(1f))
+                        IconButton(onClick = { startVoice() }) {
+                            // 正在听时点主题色，其它时候保持默认
+                            Icon(
+                                Icons.Rounded.Mic,
+                                stringResource(R.string.todo_voice),
+                                tint = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
-                    IconButton(onClick = { datePick = true }) {
-                        Icon(Icons.Rounded.Event, stringResource(R.string.detail_editor_pick_date), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    if (snap.courses.isNotEmpty()) {
-                        Box {
-                            IconButton(onClick = { courseMenu = true }) {
-                                Icon(Icons.Rounded.School, stringResource(R.string.detail_editor_next_class), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            DropdownMenu(courseMenu, { courseMenu = false }) {
-                                snap.courses.distinctBy { it.name }.forEach { c ->
-                                    DropdownMenuItem(text = { Text(c.name) }, onClick = {
-                                        courseMenu = false
-                                        rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME, QuickTokenKind.COURSE), "/" + c.name.replace(" ", ""))
-                                    })
-                                }
-                            }
+                    if (defaultBucket != null) {
+                        Row(Modifier.padding(bottom = 4.dp)) {
+                            Tag(
+                                stringResource(R.string.todo_add_to, stringResource(bucketRes(defaultBucket))) + " ×",
+                                MaterialTheme.colorScheme.secondaryContainer,
+                                MaterialTheme.colorScheme.onSecondaryContainer,
+                                Modifier.clickable { onClearBucket() },
+                            )
                         }
                     }
-                    if (snap.lists.isNotEmpty()) {
-                        Box {
-                            IconButton(onClick = { listMenu = true }) {
-                                Icon(Icons.Rounded.Label, stringResource(R.string.label_list), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            DropdownMenu(listMenu, { listMenu = false }) {
-                                snap.lists.sortedBy { it.sort }.forEach { l ->
-                                    DropdownMenuItem(text = { Text(l.name) }, onClick = {
-                                        listMenu = false
-                                        rewrite(setOf(QuickTokenKind.LIST), "#" + l.name)
-                                    })
+                    AnimatedVisibility(
+                        visible = parsed?.tokens?.isNotEmpty() == true,
+                        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                    ) {
+                        val p = parsed
+                        if (p != null) {
+                            FlowRow(
+                                Modifier.padding(end = 6.dp, top = 2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                p.due?.let {
+                                    Tag(
+                                        ctx.dueLabel(it, p.dueHasTime, now.toLocalDate()) + " ×",
+                                        MaterialTheme.colorScheme.primaryContainer,
+                                        MaterialTheme.colorScheme.onPrimaryContainer,
+                                        Modifier.clickable { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME), null) },
+                                    )
                                 }
-                            }
-                        }
-                    }
-                    IconButton(onClick = { paste() }) {
-                        Icon(Icons.Rounded.ContentPaste, stringResource(R.string.todo_paste), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Spacer(Modifier.weight(1f))
-                    IconButton(onClick = { startVoice() }) {
-                        // 正在听时点主题色，其它时候保持默认
-                        Icon(
-                            Icons.Rounded.Mic,
-                            stringResource(R.string.todo_voice),
-                            tint = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                if (defaultBucket != null) {
-                    Row(Modifier.padding(bottom = 4.dp)) {
-                        Tag(
-                            stringResource(R.string.todo_add_to, stringResource(bucketRes(defaultBucket))) + " ×",
-                            MaterialTheme.colorScheme.secondaryContainer,
-                            MaterialTheme.colorScheme.onSecondaryContainer,
-                            Modifier.clickable { onClearBucket() },
-                        )
-                    }
-                }
-                AnimatedVisibility(
-                    visible = parsed?.tokens?.isNotEmpty() == true,
-                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-                ) {
-                    val p = parsed
-                    if (p != null) {
-                        FlowRow(
-                            Modifier.padding(end = 6.dp, top = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            p.due?.let {
-                                Tag(
-                                    ctx.dueLabel(it, p.dueHasTime, now.toLocalDate()) + " ×",
-                                    MaterialTheme.colorScheme.primaryContainer,
-                                    MaterialTheme.colorScheme.onPrimaryContainer,
-                                    Modifier.clickable { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME), null) },
-                                )
-                            }
-                            p.courseName?.let { name ->
-                                val c = matchCourse(snap, name)
-                                Tag(
-                                    stringResource(R.string.detail_editor_before_class, c?.name ?: name) + " ×",
-                                    MaterialTheme.colorScheme.primaryContainer,
-                                    MaterialTheme.colorScheme.onPrimaryContainer,
-                                    Modifier.clickable { rewrite(setOf(QuickTokenKind.COURSE), null) },
-                                )
-                            }
-                            if (p.priority > 0) {
-                                val label =
-                                    when (p.priority) {
-                                        3 -> R.string.priority_3
-                                        2 -> R.string.priority_2
-                                        else -> R.string.priority_1
-                                    }
-                                Tag(
-                                    "!" + stringResource(label) + " ×",
-                                    MaterialTheme.colorScheme.secondaryContainer,
-                                    MaterialTheme.colorScheme.onSecondaryContainer,
-                                    Modifier.clickable { rewrite(setOf(QuickTokenKind.PRIORITY), null) },
-                                )
-                            }
-                            p.listName?.let {
-                                Tag(
-                                    "#$it ×",
-                                    MaterialTheme.colorScheme.tertiaryContainer,
-                                    MaterialTheme.colorScheme.onTertiaryContainer,
-                                    Modifier.clickable { rewrite(setOf(QuickTokenKind.LIST), null) },
-                                )
-                            }
-                            val tagTokens = p.tokens.filter { it.kind == QuickTokenKind.TAG }
-                            p.tags.forEachIndexed { i, tag ->
-                                Tag(
-                                    "@$tag ×",
-                                    MaterialTheme.colorScheme.surfaceVariant,
-                                    MaterialTheme.colorScheme.onSurfaceVariant,
-                                    Modifier.clickable {
-                                        tagTokens.getOrNull(i)?.let { tok ->
-                                            text = text.replace(tok.text, " ").replace(Regex("\\s+"), " ").trim()
+                                p.courseName?.let { name ->
+                                    val c = matchCourse(snap, name)
+                                    Tag(
+                                        stringResource(R.string.detail_editor_before_class, c?.name ?: name) + " ×",
+                                        MaterialTheme.colorScheme.primaryContainer,
+                                        MaterialTheme.colorScheme.onPrimaryContainer,
+                                        Modifier.clickable { rewrite(setOf(QuickTokenKind.COURSE), null) },
+                                    )
+                                }
+                                if (p.priority > 0) {
+                                    val label =
+                                        when (p.priority) {
+                                            3 -> R.string.priority_3
+                                            2 -> R.string.priority_2
+                                            else -> R.string.priority_1
                                         }
-                                    },
-                                )
+                                    // chip 与旗子/高亮同源取优先级语义色，低透明度底 + 实色字
+                                    val prio = colors.priorityColor(p.priority) ?: MaterialTheme.colorScheme.secondary
+                                    Tag(
+                                        "!" + stringResource(label) + " ×",
+                                        prio.copy(alpha = 0.14f),
+                                        prio,
+                                        Modifier.clickable { rewrite(setOf(QuickTokenKind.PRIORITY), null) },
+                                    )
+                                }
+                                p.listName?.let {
+                                    Tag(
+                                        "#$it ×",
+                                        MaterialTheme.colorScheme.tertiaryContainer,
+                                        MaterialTheme.colorScheme.onTertiaryContainer,
+                                        Modifier.clickable { rewrite(setOf(QuickTokenKind.LIST), null) },
+                                    )
+                                }
+                                val tagTokens = p.tokens.filter { it.kind == QuickTokenKind.TAG }
+                                p.tags.forEachIndexed { i, tag ->
+                                    Tag(
+                                        "@$tag ×",
+                                        MaterialTheme.colorScheme.surfaceVariant,
+                                        MaterialTheme.colorScheme.onSurfaceVariant,
+                                        Modifier.clickable {
+                                            tagTokens.getOrNull(i)?.let { tok ->
+                                                text = text.replace(tok.text, " ").replace(Regex("\\s+"), " ").trim()
+                                            }
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
-        }
         }
     }
 
