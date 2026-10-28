@@ -109,6 +109,7 @@ import app.mintcal.ui.monthDayWeekday
 import app.mintcal.ui.rememberNow
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
+import app.mintcal.ui.theme.priorityColor
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -848,11 +849,9 @@ private fun CardDivider() {
     HorizontalDivider(Modifier.padding(vertical = 4.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 }
 
-/** 优先级旗子颜色（对齐 TickTick）：高红 / 中橙 / 低蓝 / 无灰，取中饱和色保证明暗主题都可读。 */
-private fun priorityColor(p: Int): Color =
-    when (p) {
-        3 -> Color(0xFFE5484D)
-        2 -> Color(0xFFEE7F2D)
-        1 -> Color(0xFF4A90D9)
-        else -> Color(0xFF98A1A8)
-    }
+/**
+ * 优先级旗子颜色：走 MintTheme.colors 语义色（低灰绿 / 中金 / 高红，深浅主题各有一档），
+ * 与待办行、批量菜单同源；0 档回退中性灰。
+ */
+@Composable
+private fun priorityColor(p: Int): Color = MintTheme.colors.priorityColor(p) ?: MaterialTheme.colorScheme.outline
