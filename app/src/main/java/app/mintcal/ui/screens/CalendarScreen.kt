@@ -2,14 +2,16 @@ package app.mintcal.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,6 +64,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -74,6 +78,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import app.mintcal.core.agenda.Agenda
@@ -211,7 +216,7 @@ fun CalendarScreen() {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 180.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 176.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item(key = "header") {
@@ -268,15 +273,24 @@ fun CalendarScreen() {
                         beyondViewportPageCount = 1,
                     ) { page ->
                         val start = periodStart(page)
-                        val rows = if (mode == CalMode.MONTH) 6 else 1
-                        val inMonthOf = if (mode == CalMode.MONTH) anchor.plusMonths((page - PAGE_CENTER).toLong()).month else null
+                        // 月视图按当月实际周数 5/6 行排，避免 5 周的月份底部空一行
+                        val monthOf = anchor.plusMonths((page - PAGE_CENTER).toLong())
+                        val rows =
+                            if (mode == CalMode.MONTH) {
+                                ChronoUnit.WEEKS.between(start, monthOf.plusMonths(1).with(TemporalAdjusters.previousOrSame(first))).toInt()
+                            } else {
+                                1
+                            }
+                        // 翻月/切换时高度平滑过渡，不跳变
+                        val gridH by animateDpAsState(48.dp * rows, MintTheme.spec<Dp>(), label = "grid-h")
+                        val inMonthOf = if (mode == CalMode.MONTH) monthOf.month else null
                         val dayMarks =
                             remember(snap, start, settings.defaultBlockMinutes, rows) {
                                 Agenda
                                     .range(snap, start, start.plusDays(rows * 7L - 1), settings.defaultBlockMinutes)
                                     .mapValues { (_, entries) -> CalendarMarks.from(entries) }
                             }
-                        Column {
+                        Column(Modifier.height(gridH)) {
                             for (r in 0 until rows) {
                                 Row(Modifier.fillMaxWidth()) {
                                     for (c in 0..6) {
@@ -499,8 +513,24 @@ private fun DayCell(
     onPreview: (LocalDate) -> Unit,
 ) {
     val ctx = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    // 按下缩放 + 点击触觉：全局 NoIndication 下自绘可点区域的统一反馈
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.96f else 1f, MintTheme.spec(), label = "cell-press")
     val dayDescription = stringResource(R.string.calendar_day_detail, marks.scheduled, marks.pending, marks.done)
-    val discBg by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, MintTheme.spec(), label = "cell-bg")
+    val discBg by animateColorAsState(
+        when {
+            selected -> MaterialTheme.colorScheme.primary
+
+            // 今天给淡 primaryContainer 圆底，靠填充而不是描边
+            today -> MaterialTheme.colorScheme.primaryContainer
+
+            else -> Color.Transparent
+        },
+        MintTheme.spec(),
+        label = "cell-bg",
+    )
     val fg by animateColorAsState(
         when {
             selected -> MaterialTheme.colorScheme.onPrimary
@@ -513,15 +543,24 @@ private fun DayCell(
     )
     Column(
         modifier
-            .height(48.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }.height(48.dp)
             .combinedClickable(
-                // 按下不做浅背景高亮：选中态交给圆点本身，避免整格闪底色
-                interactionSource = remember { MutableInteractionSource() },
+                // 按下不做浅背景高亮：缩放反馈由 graphicsLayer 提供，选中态交给圆点本身
+                interactionSource = interaction,
                 indication = null,
                 role = Role.Button,
-                onClick = { onClick(d) },
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    onClick(d)
+                },
                 onLongClickLabel = stringResource(R.string.calendar_preview_day),
-                onLongClick = { onPreview(d) },
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    onPreview(d)
+                },
             ).semantics(mergeDescendants = true) {
                 this.selected = selected
                 contentDescription = ctx.fullDate(d) + ", " + dayDescription
@@ -533,14 +572,7 @@ private fun DayCell(
             Modifier
                 .size(28.dp)
                 .clip(CircleShape)
-                .background(discBg)
-                .then(
-                    if (today && !selected) {
-                        Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                    } else {
-                        Modifier
-                    },
-                ),
+                .background(discBg),
             contentAlignment = Alignment.Center,
         ) {
             Text("${d.dayOfMonth}", color = fg, fontWeight = if (today || selected) FontWeight.Bold else FontWeight.Normal, style = MaterialTheme.typography.bodyMedium)
@@ -581,7 +613,8 @@ private fun CalendarIndicators(
     modifier: Modifier = Modifier,
 ) {
     val schedule = MaterialTheme.colorScheme.primary.copy(alpha = if (inPeriod) 1f else 0.45f)
-    val pending = MaterialTheme.colorScheme.tertiary.copy(alpha = if (inPeriod) 1f else 0.45f)
+    // 待办与日程同族主色，靠形状区分：pending 空心环，done 实心灰点
+    val pending = MaterialTheme.colorScheme.primary.copy(alpha = if (inPeriod) 1f else 0.45f)
     val done = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (inPeriod) 0.85f else 0.4f)
     Canvas(modifier.size(width = 36.dp, height = 9.dp)) {
         val scheduledWidth = if (marks.scheduled > 0) (3 + minOf(marks.scheduled, 3) * 3).dp.toPx() else 0f
@@ -596,9 +629,9 @@ private fun CalendarIndicators(
         repeat(taskSlots) { index ->
             val center = Offset(x + 3.dp.toPx(), size.height / 2f)
             if (index < marks.pending) {
-                drawCircle(pending, 2.5.dp.toPx(), center)
+                drawCircle(pending, 2.5.dp.toPx(), center, style = Stroke(1.5.dp.toPx()))
             } else {
-                // 已完成用实心灰点，不再画空心圈
+                // 已完成用实心灰点
                 drawCircle(done, 2.5.dp.toPx(), center)
             }
             x += 7.dp.toPx()
