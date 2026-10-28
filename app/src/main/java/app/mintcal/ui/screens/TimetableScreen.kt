@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.absoluteOffset
@@ -39,6 +41,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CalendarViewWeek
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Settings
@@ -109,6 +112,7 @@ import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
+import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.mintPressable
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
@@ -149,7 +153,22 @@ fun TimetableScreen() {
     val settings = settingsState()
     val now by rememberNow()
     val adv by app.advanced.state.collectAsState()
-    val sem = snap.currentSemester ?: return
+    val sem = snap.currentSemester
+    // 还没建学期：保留 64dp 头部骨架，给一个入口引导去课表设置
+    if (sem == null) {
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+            Row(Modifier.fillMaxWidth().height(64.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.section_semester), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            }
+            EmptyState(
+                stringResource(R.string.import_no_semester),
+                icon = Icons.Rounded.CalendarViewWeek,
+                actionLabel = stringResource(R.string.edit_timetable),
+                onAction = { nav.push(Route.EditTimetable) },
+            )
+        }
+        return
+    }
     val cal = remember(sem) { SemesterCalendar(sem) }
     val today = now.toLocalDate()
     val currentWeek = cal.weekOf(today)
@@ -186,7 +205,7 @@ fun TimetableScreen() {
     val slideSpec = MintTheme.spec<IntOffset>()
     val fadeSpec = MintTheme.spec<Float>()
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().height(64.dp).padding(start = 20.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(64.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 AnimatedContent(
                     targetState = pager.currentPage,
@@ -269,6 +288,7 @@ fun TimetableScreen() {
                     cal,
                     week,
                     today,
+                    now,
                     cells,
                     blocks,
                     settings.defaultBlockMinutes,
@@ -332,17 +352,17 @@ private fun PreviewBanner(
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp)
             .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.tertiaryContainer)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.preview_mode), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onTertiaryContainer)
+            Text(stringResource(R.string.preview_mode), style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("+${cs.addCount}", color = colors.added, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
-                Text("~${cs.modifyCount}", color = colors.onModified, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                Text("~${cs.modifyCount}", color = colors.modified, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
                 Text("−${cs.removeCount}", color = colors.removed, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
             }
         }
@@ -357,6 +377,7 @@ private fun WeekGrid(
     cal: SemesterCalendar,
     week: Int,
     today: LocalDate,
+    now: LocalDateTime,
     cells: List<TimetableCell>,
     blocks: List<BlockRow>,
     defaultBlockMinutes: Int,
@@ -389,7 +410,7 @@ private fun WeekGrid(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Text(ctx.weekdayShort(d), style = MaterialTheme.typography.labelMedium, color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("${date.monthValue}/${date.dayOfMonth}", fontSize = 10.sp, color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${date.monthValue}/${date.dayOfMonth}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, fontFeatureSettings = "tnum"), color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -440,6 +461,51 @@ private fun WeekGrid(
                     },
             ) {
                 val colW = (maxWidth - TimeColW) / 7
+                // 「今天」表达：整列淡 primaryContainer 底 + 当前时间线（仅今天的那个周页画）
+                val todayDow = (1..7).firstOrNull { cal.dateOf(week, it) == today }
+                // 当前时间落在某节内：在该节里按比例取 y；不在任何节内就不画线
+                val nowY =
+                    todayDow?.let {
+                        val t = now.toLocalTime()
+                        periods.firstOrNull { p -> !t.isBefore(p.start) && t.isBefore(p.end) }?.let { p ->
+                            val span =
+                                java.time.Duration
+                                    .between(p.start, p.end)
+                                    .toMinutes()
+                                    .toFloat()
+                            periodTop(p.index, n) + RowH * (
+                                java.time.Duration
+                                    .between(p.start, t)
+                                    .toMinutes() / span
+                            )
+                        }
+                    }
+                if (todayDow != null) {
+                    Box(
+                        Modifier
+                            .absoluteOffset(TimeColW + colW * (todayDow - 1), 0.dp)
+                            .width(colW)
+                            .height(totalH)
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)),
+                    )
+                    nowY?.let { y ->
+                        // 2dp primary 时间线，左端一个小圆点端头
+                        Box(
+                            Modifier
+                                .absoluteOffset(TimeColW + colW * (todayDow - 1), y)
+                                .width(colW)
+                                .height(2.dp)
+                                .background(MaterialTheme.colorScheme.primary),
+                        )
+                        Box(
+                            Modifier
+                                .absoluteOffset(TimeColW + colW * (todayDow - 1), y - 3.dp)
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary),
+                        )
+                    }
+                }
                 // 左侧节次
                 periods.forEach { p ->
                     Column(
@@ -448,7 +514,11 @@ private fun WeekGrid(
                         verticalArrangement = Arrangement.Center,
                     ) {
                         Text("${p.index}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                        Text(p.start.hm(), fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            p.start.hm(),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontFeatureSettings = "tnum"),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
                 // 组间分隔（上午 / 下午 / 晚上之间的留白）
@@ -667,16 +737,20 @@ private fun TaskBlock(
                 .let { if (active) it.border(2.dp, MaterialTheme.colorScheme.primary, shape) else it }
                 .padding(horizontal = 5.dp, vertical = 5.dp),
         ) {
+            // 时间数字统一 tnum；标题走 labelSmall token 局部 copy
+            val titleStyle = MaterialTheme.typography.labelSmall.copy(lineHeight = 13.sp)
+            val timeStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp, fontFeatureSettings = "tnum")
+            // 失效态语法与「已调课」一致：底色降饱和 + 标题删除线
             Text(
                 task.title,
                 // 时间那行必须留得下：标题吃掉剩余空间，短块里自动收成省略号
                 modifier = Modifier.weight(1f, fill = false),
                 color = if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else fg,
-                fontSize = 11.sp,
-                lineHeight = 13.sp,
+                style = titleStyle,
                 fontWeight = FontWeight.Bold,
                 maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
+                textDecoration = if (task.done) TextDecoration.LineThrough else null,
             )
             // 一格只有 40 来 dp 宽，放不下「10:15–11:15」；拖动时只报正在变的那一头
             val label =
@@ -693,8 +767,7 @@ private fun TaskBlock(
                         task.done -> MaterialTheme.colorScheme.onSurfaceVariant
                         else -> fg.copy(alpha = 0.85f)
                     },
-                fontSize = 9.sp,
-                lineHeight = 11.sp,
+                style = timeStyle,
                 fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Clip,
@@ -750,22 +823,47 @@ private fun CourseBlock(
             .padding(horizontal = 5.dp, vertical = 5.dp),
     ) {
         val strike = if (cell.kind == CellKind.REMOVED) TextDecoration.LineThrough else null
+        // 字号统一走 typography token 局部 copy；时间/教室数字用 tnum
         Text(
             o.course.name,
             color = if (cell.kind == CellKind.REMOVED) colors.removed else fg,
-            fontSize = 11.sp,
-            lineHeight = 13.sp,
+            style = MaterialTheme.typography.labelSmall.copy(lineHeight = 13.sp),
             fontWeight = FontWeight.Bold,
             maxLines = 4,
             overflow = TextOverflow.Ellipsis,
             textDecoration = strike,
         )
-        if (o.room.isNotBlank()) Text("@" + o.room, modifier = Modifier.weight(1f, fill = false), color = (if (cell.kind == CellKind.REMOVED) colors.removed else fg).copy(alpha = 0.85f), fontSize = 9.sp, lineHeight = 11.sp, overflow = TextOverflow.Ellipsis, textDecoration = strike)
-        if (showTeacher && o.course.teacher.isNotBlank()) Text(o.course.teacher, color = fg.copy(alpha = 0.75f), fontSize = 9.sp, lineHeight = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (o.rescheduled) Text(stringResource(R.string.rescheduled), color = fg, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        if (o.room.isNotBlank()) {
+            Text(
+                "@" + o.room,
+                modifier = Modifier.weight(1f, fill = false),
+                color = (if (cell.kind == CellKind.REMOVED) colors.removed else fg).copy(alpha = 0.85f),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp, fontFeatureSettings = "tnum"),
+                overflow = TextOverflow.Ellipsis,
+                textDecoration = strike,
+            )
+        }
+        if (showTeacher && o.course.teacher.isNotBlank()) {
+            Text(
+                o.course.teacher,
+                color = fg.copy(alpha = 0.75f),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (o.rescheduled) {
+            Text(
+                stringResource(R.string.rescheduled),
+                color = fg,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CourseSheet(
     cell: TimetableCell,
@@ -781,7 +879,7 @@ private fun CourseSheet(
     val cal = remember(sem) { SemesterCalendar(sem) }
     var reschedule by remember { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(c.name, style = MaterialTheme.typography.titleLarge)
             Text(
                 "${ctx.weekdayShort(o.date.dayOfWeek.value).let { stringResource(R.string.weekday_prefix, it) }} ${cal.startTime(o.startPeriod)?.hm().orEmpty()}–${cal.endTime(o.endPeriod)?.hm().orEmpty()} · ${stringResource(R.string.periods_range, o.startPeriod, o.endPeriod)}",
@@ -794,7 +892,8 @@ private fun CourseSheet(
             if (c.note.isNotBlank()) Text(c.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             if (cell.kind == CellKind.NORMAL) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 小屏放不下三个按钮就换行，主次不变：编辑 > 停课 > 调课
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = {
                         onDismiss()
                         nav.push(Route.CourseEdit(c.id))
