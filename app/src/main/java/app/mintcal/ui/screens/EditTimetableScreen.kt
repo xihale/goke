@@ -256,7 +256,8 @@ fun PeriodsScreen(onBack: () -> Unit) {
         actions = {
             TextButton(onClick = { periods = app.mintcal.core.model.GdutPeriods.default }) { Text(stringResource(R.string.reset_default)) }
             TextButton(onClick = {
-                actions.commit(Edits.save(snap, sem.copy(periods = periods), ctx.getString(R.string.edit_periods_op), System.currentTimeMillis()), ctx.getString(R.string.saved_toast))
+                val desc = ctx.getString(R.string.edit_periods_op)
+                actions.commit(Edits.save(snap, sem.copy(periods = periods), desc, System.currentTimeMillis()), desc)
                 onBack()
             }) { Text(stringResource(R.string.save)) }
         },

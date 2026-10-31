@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import app.mintcal.MintCalApp
+import app.mintcal.R
 import app.mintcal.core.change.ChangeSet
 import app.mintcal.ui.components.UndoPrompt
 import kotlinx.coroutines.CoroutineScope
@@ -88,6 +89,9 @@ class Nav(
     /** 外部分享来的多行文字，待办页的快速添加接手并给出批量预览。 */
     var pendingAddText by mutableStateOf<String?>(null)
 
+    /** 快速添加浮层展开中。浮层是模态层：底栏与撤销条都要让位，不能再叠在输入区上。 */
+    var composerOpen by mutableStateOf(false)
+
     fun openTask(id: String) {
         push(Route.TodoEdit(id = id))
     }
@@ -120,13 +124,13 @@ fun rememberNav(): Nav {
     return remember { Nav(controller) }
 }
 
-/** 页面里发起的写操作:统一走变更集;可撤销的操作由根布局渲染成悬浮撤销按钮,普通提示走系统 Toast。 */
+/** 页面里发起的写操作:统一走变更集。可撤销的操作留一条说明，直到下一次操作或用户关掉；不能撤销的提示走系统 Toast。 */
 class Actions(
     val app: MintCalApp,
     val scope: CoroutineScope,
     val nav: Nav,
 ) {
-    /** 当前可撤销的一步；非空即显示悬浮撤销按钮。 */
+    /** 当前可撤销的一步；非空即显示底部说明条。 */
     var undo by mutableStateOf<UndoPrompt?>(null)
         private set
 
@@ -137,8 +141,7 @@ class Actions(
         scope.launch {
             app.repo.commit(cs)
             if (message != null && !cs.isEmpty) {
-                // 新操作替换旧提示，根布局负责 5 秒后自动收起。
-                undo = UndoPrompt(cs.id, System.currentTimeMillis())
+                undo = UndoPrompt(cs.id, System.currentTimeMillis(), message)
             }
         }
     }
@@ -147,12 +150,15 @@ class Actions(
     fun undoNow() {
         val p = undo ?: return
         undo = null
-        scope.launch { app.repo.undo(p.csId) }
+        scope.launch {
+            val ok = app.repo.undo(p.csId)
+            toast(app.getString(if (ok) R.string.undone_toast else R.string.history_blocked_toast))
+        }
     }
 
-    /** 提示关闭或超时，只清除仍匹配的操作。 */
-    fun timeout(seq: Long) {
-        if (undo?.seq == seq) undo = null
+    /** 用户关掉说明条，不撤销。 */
+    fun dismissUndo() {
+        undo = null
     }
 
     fun toast(message: String) {

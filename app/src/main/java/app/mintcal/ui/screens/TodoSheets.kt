@@ -131,7 +131,7 @@ internal fun RescheduleSheet(
             SheetOption(Icons.Rounded.Delete, stringResource(R.string.delete), MaterialTheme.colorScheme.error) {
                 val now = System.currentTimeMillis()
                 val desc = ctx.getString(R.string.delete_desc, title)
-                finish(mergeChangeSets(desc, tasks.map { Edits.delete(snap, it, desc, now) }), ctx.getString(R.string.deleted_toast))
+                finish(mergeChangeSets(desc, tasks.map { Edits.delete(snap, it, desc, now) }), desc)
             }
         }
     }

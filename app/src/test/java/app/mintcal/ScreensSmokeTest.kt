@@ -73,7 +73,6 @@ import app.mintcal.ui.screens.CalendarScreen
 import app.mintcal.ui.screens.CourseEditScreen
 import app.mintcal.ui.screens.DataScreen
 import app.mintcal.ui.screens.EditTimetableScreen
-import app.mintcal.ui.screens.EventTimeSheet
 import app.mintcal.ui.screens.HistoryScreen
 import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.JxfwScreen
@@ -88,6 +87,7 @@ import app.mintcal.ui.screens.TimetableScreen
 import app.mintcal.ui.screens.TodayScreen
 import app.mintcal.ui.screens.TodoEditScreen
 import app.mintcal.ui.screens.TodoScreen
+import app.mintcal.ui.screens.WhenPanel
 import app.mintcal.ui.screens.TrashScreen
 import app.mintcal.ui.theme.MintCalTheme
 import kotlinx.coroutines.runBlocking
@@ -186,7 +186,7 @@ class ScreensSmokeTest {
                 "course_new" to { CourseEditScreen(null) {} },
                 "task_edit" to { TodoEditScreen(task.id) {} },
                 "task_new" to { TodoEditScreen(null) {} },
-                "time_sheet" to { EventTimeSheet(null, LocalDate.now(), 30, {}, {}) },
+                "time_sheet" to { WhenPanel(null, LocalDate.now(), 30, onDismiss = {}, onPick = {}) },
                 "edit_timetable" to { EditTimetableScreen {} },
                 "periods" to { PeriodsScreen {} },
                 "appearance" to { AppearanceScreen {} },
@@ -265,7 +265,8 @@ class ScreensSmokeTest {
                 TodoEditScreen(null, textDraft = "交实验报告 明天 18:00") {}
             }
         }
-        rule.onNodeWithText("保存").performClick()
+        // 编辑页没有独立的保存键：点返回即静默落盘（空标题才等于放弃）
+        rule.onNodeWithContentDescription("返回").performClick()
         rule.waitUntil(5_000) {
             app.repo.snapshot.value.tasks
                 .any { it.id !in existingIds }

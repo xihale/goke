@@ -1,12 +1,8 @@
 package app.mintcal.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,20 +23,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -81,10 +76,12 @@ import app.mintcal.core.todo.TaskLogic
 import app.mintcal.core.todo.TodoSearch
 import app.mintcal.ui.HOME
 import app.mintcal.ui.LocalActions
+import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
 import app.mintcal.ui.Tab
 import app.mintcal.ui.components.EmptyState
+import app.mintcal.ui.components.MintFab
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
@@ -103,6 +100,7 @@ private val DROPPABLE = listOf(Bucket.TODAY, Bucket.TOMORROW, Bucket.THIS_WEEK, 
 @Composable
 fun TodoScreen() {
     val ctx = LocalContext.current
+    val app = LocalApp.current
     val nav = LocalNav.current
     val actions = LocalActions.current
     val haptics = LocalHapticFeedback.current
@@ -114,6 +112,7 @@ fun TodoScreen() {
     val today = now.toLocalDate()
 
     var listFilter by rememberSaveable { mutableStateOf<String?>(null) }
+    var priorityFilter by rememberSaveable { mutableIntStateOf(0) }
     var queryText by rememberSaveable { mutableStateOf("") }
     var searching by rememberSaveable { mutableStateOf(false) }
     var selecting by rememberSaveable { mutableStateOf(false) }
@@ -126,9 +125,10 @@ fun TodoScreen() {
     var rescheduleFor by remember { mutableStateOf<List<String>?>(null) }
     var tidy by remember { mutableStateOf(false) }
     var listMenu by remember { mutableStateOf(false) }
+    var priorityMenu by remember { mutableStateOf(false) }
     val searchFocus = remember { FocusRequester() }
     var bulkBarHeight by remember { mutableIntStateOf(0) }
-    // 底部留白：多选时给批量条让位；否则给右下角加号让位（浮层是顶部盖下来的，不占列表空间）
+    // 底部留白：多选时给批量条让位；否则给底部添加入口让位
     val bottomSpace =
         with(density) {
             (if (selecting) bulkBarHeight else 0).toDp()
@@ -136,9 +136,10 @@ fun TodoScreen() {
 
     val q = remember(queryText) { TodoSearch.parse(queryText) }
     val visible =
-        remember(snap, listFilter, q) {
+        remember(snap, listFilter, priorityFilter, q) {
             snap.tasks.filter { t ->
                 t.deletedAt == null && t.parentId == null && (listFilter == null || t.listId == listFilter) &&
+                    (priorityFilter == 0 || t.priority == priorityFilter) &&
                     TodoSearch.matches(q, t, TaskLogic.subtasks(snap.tasks, t.id), snap.lists.firstOrNull { it.id == t.listId }?.name)
             }
         }
@@ -246,8 +247,9 @@ fun TodoScreen() {
 
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(bottom = bottomSpace),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
+            // 列表铺满整屏：底部留白放进行内边距，行可以滚到岛下面，滚到底再让出底栏和批量条
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = bottomSpace),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item(key = "top") {
@@ -275,7 +277,6 @@ fun TodoScreen() {
                             }
                         }) { Icon(if (searching) Icons.Rounded.Close else Icons.Rounded.Search, stringResource(if (searching) R.string.cancel else R.string.todo_search)) }
                         IconButton(onClick = { selecting = true }) { Icon(Icons.Rounded.Checklist, stringResource(R.string.todo_multi_select)) }
-                        IconButton(onClick = { nav.push(Route.Settings) }) { Icon(Icons.Rounded.Settings, stringResource(R.string.settings)) }
                     }
                 }
             }
@@ -296,28 +297,56 @@ fun TodoScreen() {
                             },
                         )
                     }
-                    if (snap.lists.isNotEmpty()) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (snap.lists.isNotEmpty()) {
+                            Box {
+                                Surface(onClick = { listMenu = true }, shape = CircleShape, color = MintTheme.card) {
+                                    Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Rounded.FolderOpen, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(
+                                            snap.lists.firstOrNull { it.id == listFilter }?.name ?: stringResource(R.string.todo_all_lists),
+                                            Modifier.padding(horizontal = 8.dp),
+                                            style = MaterialTheme.typography.labelLarge,
+                                        )
+                                        Icon(Icons.Rounded.ExpandMore, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                DropdownMenu(listMenu, { listMenu = false }) {
+                                    DropdownMenuItem(text = { Text(stringResource(R.string.todo_all_lists)) }, onClick = {
+                                        listMenu = false
+                                        listFilter = null
+                                    })
+                                    snap.lists.sortedBy { it.sort }.forEach { l ->
+                                        DropdownMenuItem(text = { Text(l.name) }, onClick = {
+                                            listMenu = false
+                                            listFilter = l.id
+                                        })
+                                    }
+                                }
+                            }
+                        }
                         Box {
-                            Surface(onClick = { listMenu = true }, shape = CircleShape, color = MintTheme.card) {
+                            Surface(onClick = { priorityMenu = true }, shape = CircleShape, color = MintTheme.card) {
                                 Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Rounded.FolderOpen, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Icon(Icons.Rounded.Flag, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text(
-                                        snap.lists.firstOrNull { it.id == listFilter }?.name ?: stringResource(R.string.todo_all_lists),
+                                        when (priorityFilter) {
+                                            3 -> stringResource(R.string.priority_3)
+                                            2 -> stringResource(R.string.priority_2)
+                                            1 -> stringResource(R.string.priority_1)
+                                            else -> stringResource(R.string.label_priority)
+                                        },
                                         Modifier.padding(horizontal = 8.dp),
                                         style = MaterialTheme.typography.labelLarge,
                                     )
                                     Icon(Icons.Rounded.ExpandMore, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
-                            DropdownMenu(listMenu, { listMenu = false }) {
-                                DropdownMenuItem(text = { Text(stringResource(R.string.todo_all_lists)) }, onClick = {
-                                    listMenu = false
-                                    listFilter = null
-                                })
-                                snap.lists.sortedBy { it.sort }.forEach { l ->
-                                    DropdownMenuItem(text = { Text(l.name) }, onClick = {
-                                        listMenu = false
-                                        listFilter = l.id
+                            DropdownMenu(priorityMenu, { priorityMenu = false }) {
+                                listOf(0 to R.string.todo_priority_all, 3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1).forEach { (v, label) ->
+                                    DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = {
+                                        priorityMenu = false
+                                        priorityFilter = v
                                     })
                                 }
                             }
@@ -329,13 +358,10 @@ fun TodoScreen() {
                 if (nextUp != null || urgent != null) {
                     item(key = "next") { NextUpCard(nextUp, urgent, snap, now, anim()) }
                 }
-                if (overdueTasks.size >= 2) {
-                    item(key = "overdue-card") { OverdueCard(overdueTasks.size, { tidy = true }, anim()) }
-                }
             }
             if (sections.isEmpty()) {
                 // 有搜索词或清单筛选时是「没匹配到」，否则是真空白；都给一条新建的出路
-                val filtered = (searching && !q.isEmpty) || listFilter != null
+                val filtered = (searching && !q.isEmpty) || listFilter != null || priorityFilter != 0
                 item(key = "empty") {
                     EmptyState(
                         stringResource(if (filtered) R.string.todo_search_empty else R.string.todo_all_empty),
@@ -368,6 +394,19 @@ fun TodoScreen() {
                                 null
                             },
                         modifier = anim(),
+                        // 逾期的批量整理挂在分区标题上，不再单独占一张红色提醒卡
+                        action =
+                            if (b == Bucket.OVERDUE && sec.tasks.size >= 2 && !selecting) {
+                                {
+                                    // 动作跟着分区语义色走，别在红色分区里冒一个蓝色按钮
+                                    TextButton(
+                                        onClick = { tidy = true },
+                                        colors = ButtonDefaults.textButtonColors(contentColor = MintTheme.colors.removed),
+                                    ) { Text(stringResource(R.string.todo_tidy)) }
+                                }
+                            } else {
+                                null
+                            },
                     )
                 }
                 if (!isCollapsed) {
@@ -381,33 +420,20 @@ fun TodoScreen() {
             now = now,
             listFilter = listFilter,
             defaultBucket = addTarget?.let { runCatching { Bucket.valueOf(it) }.getOrNull() },
-            onClearBucket = { addTarget = null },
             focusSignal = focusSignal,
             visible = quickAddOpen && !selecting && !searching,
             onDismiss = { quickAddOpen = false },
             modifier = Modifier.align(Alignment.TopCenter).fillMaxSize(),
         )
-        // 右下角加号：打开快速添加浮层（多选/搜索时隐藏）
-        AnimatedVisibility(
+        MintFab(
             visible = !selecting && !searching && !quickAddOpen,
-            enter = scaleIn(MintTheme.spec(), initialScale = 0.8f) + fadeIn(MintTheme.spec()),
-            exit = scaleOut(MintTheme.spec(), targetScale = 0.8f) + fadeOut(MintTheme.spec()),
-            modifier = Modifier.align(Alignment.BottomEnd),
-        ) {
-            FloatingActionButton(
-                onClick = {
-                    addTarget = null
-                    quickAddOpen = true
-                },
-                modifier = Modifier.navigationBarsPadding().padding(end = 20.dp, bottom = 100.dp),
-                shape = MaterialTheme.shapes.large,
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 2.dp),
-            ) {
-                Icon(Icons.Rounded.Add, stringResource(R.string.add))
-            }
-        }
+            onClick = {
+                addTarget = null
+                quickAddOpen = true
+            },
+            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = 92.dp),
+            description = stringResource(R.string.add),
+        )
         if (selecting) {
             BulkBar(
                 snap = snap,
@@ -448,7 +474,7 @@ fun TodoScreen() {
                         val desc = ctx.getString(R.string.todo_bulk_delete_desc, selectedTasks.size)
                         actions.commit(
                             mergeChangeSets(desc, selectedTasks.map { Edits.delete(snap, it, desc, ms) }),
-                            ctx.getString(R.string.deleted_toast),
+                            desc,
                         )
                         exitSelect()
                     }

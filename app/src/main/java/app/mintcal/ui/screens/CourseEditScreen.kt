@@ -1,5 +1,10 @@
 package app.mintcal.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -53,6 +58,7 @@ import app.mintcal.ui.LocalActions
 import app.mintcal.ui.Route
 import app.mintcal.ui.components.ChipChoice
 import app.mintcal.ui.components.ConfirmDialog
+import app.mintcal.ui.components.ConflictCard
 import app.mintcal.ui.components.FieldText
 import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintScreen
@@ -132,7 +138,8 @@ fun CourseEditScreen(
             Button(
                 onClick = {
                     val c = build()
-                    actions.commit(Edits.save(snap, c, ctx.getString(if (existing == null) R.string.add_course_desc else R.string.edit_course_desc, c.name), System.currentTimeMillis()), ctx.getString(R.string.saved_toast))
+                    val desc = ctx.getString(if (existing == null) R.string.add_course_desc else R.string.edit_course_desc, c.name)
+                    actions.commit(Edits.save(snap, c, desc, System.currentTimeMillis()), desc)
                     onBack()
                 },
                 enabled = valid,
@@ -223,19 +230,18 @@ fun CourseEditScreen(
                 Spacer(Modifier.height(8.dp))
                 FieldText(stringResource(R.string.label_note), note, { note = it }, singleLine = false, minLines = 2)
             }
-            if (!preview.isNullOrEmpty()) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(
-                            androidx.compose.foundation.shape
-                                .RoundedCornerShape(20.dp),
-                        ).background(MintTheme.colors.conflictBg)
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(stringResource(R.string.conflict_title), color = MintTheme.colors.removed, style = MaterialTheme.typography.labelLarge)
-                    preview.take(4).forEach { Text(stringResource(R.string.conflict_line, it.aTitle, it.bTitle, it.start.toLocalDate().toString()), style = MaterialTheme.typography.bodySmall) }
+            AnimatedVisibility(
+                visible = !preview.isNullOrEmpty(),
+                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+            ) {
+                ConflictCard(title = stringResource(R.string.conflict_title)) {
+                    preview.orEmpty().take(4).forEach {
+                        Text(
+                            stringResource(R.string.conflict_line, it.aTitle, it.bTitle, it.start.toLocalDate().toString()),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(32.dp))
@@ -247,7 +253,8 @@ fun CourseEditScreen(
             stringResource(R.string.delete_to_trash_hint),
             stringResource(R.string.delete),
             onConfirm = {
-                actions.commit(Edits.delete(snap, existing, ctx.getString(R.string.delete_desc, existing.name), System.currentTimeMillis()), ctx.getString(R.string.deleted_toast))
+                val desc = ctx.getString(R.string.delete_desc, existing.name)
+                actions.commit(Edits.delete(snap, existing, desc, System.currentTimeMillis()), desc)
                 onBack()
             },
             onDismiss = { confirmDelete = false },

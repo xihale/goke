@@ -5,8 +5,10 @@ import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Indication
+import androidx.compose.foundation.IndicationNodeFactory
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.FocusInteraction
+import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
@@ -26,7 +28,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,6 +48,7 @@ import app.mintcal.data.DarkMode
 import app.mintcal.data.Settings
 import app.mintcal.data.ThemeSource
 import com.materialkolor.dynamicColorScheme
+import kotlinx.coroutines.launch
 
 /** 预设主题：薄荷为品牌主题（手写 Token），其余由种子色生成。 */
 enum class Preset(
@@ -134,13 +145,56 @@ fun MintColors.priorityColor(priority: Int): Color? =
 val LocalMintColors = compositionLocalOf { mintColors(false) }
 val LocalReduceMotion = compositionLocalOf { false }
 
-/** 无按压高亮：clickable/selectable/Surface(onClick) 的默认 indication 落到这里 = 不画任何东西。 */
-private object NoIndication : androidx.compose.foundation.IndicationNodeFactory {
-    override fun create(interactionSource: androidx.compose.foundation.interaction.InteractionSource): androidx.compose.ui.Modifier.Node = object : androidx.compose.ui.Modifier.Node() {}
+/**
+ * 只画键盘/无障碍焦点环。按下和悬停不铺底色：手机上的按下反馈交给缩放和触感。
+ */
+private class FocusRingIndication(
+    private val color: Color,
+) : IndicationNodeFactory {
+    override fun create(interactionSource: InteractionSource): Modifier.Node = FocusRingNode(interactionSource, color)
 
-    override fun equals(other: Any?) = other === this
+    override fun equals(other: Any?) = other is FocusRingIndication && other.color == color
 
-    override fun hashCode() = javaClass.hashCode()
+    override fun hashCode() = color.hashCode()
+}
+
+private class FocusRingNode(
+    private val interactionSource: InteractionSource,
+    private val color: Color,
+) : Modifier.Node(),
+    DrawModifierNode {
+    private var focused by mutableStateOf(false)
+
+    override fun onAttach() {
+        coroutineScope.launch {
+            val active = mutableListOf<FocusInteraction.Focus>()
+            interactionSource.interactions.collect { interaction ->
+                when (interaction) {
+                    is FocusInteraction.Focus -> active.add(interaction)
+                    is FocusInteraction.Unfocus -> active.remove(interaction.focus)
+                }
+                val now = active.isNotEmpty()
+                if (now != focused) {
+                    focused = now
+                    invalidateDraw()
+                }
+            }
+        }
+    }
+
+    override fun ContentDrawScope.draw() {
+        drawContent()
+        if (!focused) return
+        val stroke = 2.dp.toPx()
+        val inset = stroke / 2f
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(inset, inset),
+            size = Size(size.width - stroke, size.height - stroke),
+            cornerRadius = CornerRadius(12.dp.toPx()),
+            style = Stroke(width = stroke),
+        )
+    }
 }
 
 object MintTheme {
@@ -294,17 +348,16 @@ fun MintCalTheme(
         reduce = runCatching { !android.animation.ValueAnimator.areAnimatorsEnabled() }.getOrDefault(false)
     }
     val scheme = resolveColorScheme(settings, dark)
-    // 全应用关闭按压浅背景高亮（ripple/状态层里的可点底色）：点击反馈交给按下缩放、滑动、
-    // 勾选动画等既有交互表达，不再闪底色。显式传 indication = ripple() 的调用点也已清理。
+    // 按下不闪浅底。焦点环用主题色，键盘和 TalkBack 仍能看见当前位置。
     CompositionLocalProvider(
         LocalMintColors provides mintColors(dark),
         LocalReduceMotion provides reduce,
-        // 本项目 Compose 版本没有 Indication.None，这里给等价的无高亮实现
-        LocalIndication provides NoIndication,
     ) {
         MaterialTheme(colorScheme = scheme, shapes = MintShapes, typography = MintTypography) {
-            // 提供默认内容色：没有 Surface 包裹时文字会是黑色，深色模式下看不见
-            androidx.compose.material3.Surface(color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground, content = content)
+            CompositionLocalProvider(LocalIndication provides remember(scheme.primary) { FocusRingIndication(scheme.primary) }) {
+                // 提供默认内容色：没有 Surface 包裹时文字会是黑色，深色模式下看不见
+                androidx.compose.material3.Surface(color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground, content = content)
+            }
         }
     }
 }

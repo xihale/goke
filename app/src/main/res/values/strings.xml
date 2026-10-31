@@ -93,6 +93,7 @@
     <string name="preview_mode">预览模式</string>
     <string name="preview_cell_hint">绿色为新增，黄色为修改，红色为删除；应用前不会改动任何数据。</string>
     <string name="today_summary">%1$d 节课 · %2$d 项待办</string>
+    <string name="today_task_progress">待办 %1$d/%2$d</string>
     <string name="today_next_class">下一节 %1$s %2$s %3$s</string>
     <string name="today_empty_title">今天没有安排</string>
     <string name="today_empty_hint">好好休息，或者去待办里挑一件小事做。</string>
@@ -122,6 +123,7 @@
     <string name="todo_all_empty">这里还没有待办</string>
     <string name="todo_empty_filtered_hint">换个条件试试，或直接新建一条</string>
     <string name="quick_add_hint">添加待办，如明天交作业</string>
+    <string name="quick_add_prompt">准备做什么？</string>
     <string name="date_weekend">本周末</string>
     <string name="date_next_monday">下周一</string>
     <string name="date_pick">选日期…</string>
@@ -140,6 +142,10 @@
     <string name="label_color">颜色</string>
     <string name="label_priority">优先级</string>
     <string name="label_repeat">重复</string>
+    <string name="label_time">时间</string>
+    <string name="label_duration">时长</string>
+    <string name="tonight">今天晚上</string>
+    <string name="date_and_repeat">日期&amp;重复</string>
     <string name="label_list">清单</string>
     <string name="label_remind">提醒</string>
     <string name="label_weeks">周次</string>
@@ -193,9 +199,15 @@
     <string name="add_course_desc">添加课程「%1$s」</string>
     <string name="edit_course_desc">修改课程「%1$s」</string>
     <string name="conflict_title">时间冲突</string>
+    <string name="conflict_count">%1$d 项</string>
+    <string name="conflict_slot_title">这段时间有 %1$d 项安排</string>
     <string name="conflict_line">「%1$s」与「%2$s」在 %3$s 冲突</string>
     <string name="no_conflict">没有冲突</string>
     <string name="edit_timetable">编辑课表</string>
+    <string name="timetable_empty_title">还没有课表</string>
+    <string name="timetable_empty_hint">登录学校教务，这一学期的课会进到这里。也可以先手动建一个学期。</string>
+    <string name="timetable_import_jxfw">登录教务</string>
+    <string name="timetable_create_semester">手动建学期</string>
     <string name="edit_semester_desc">修改学期信息</string>
     <string name="semester_progress_hint">今天是第 %1$d 周（0 表示尚未开学）</string>
     <string name="courses_count">%1$d 门</string>
@@ -278,6 +290,7 @@
     <string name="field_done">完成</string>
     <string name="field_block">时间块</string>
     <string name="field_tags">标签</string>
+    <string name="quick_tag_new">新建标签…</string>
     <string name="field_semester">学期</string>
     <string name="entity_semester">学期</string>
     <string name="entity_course">课程</string>
@@ -331,6 +344,14 @@
     <string name="trash_row_desc">已删除内容保留 30 天</string>
     <string name="about_title">关于</string>
     <string name="about_desc">薄荷日程：把课表、日历和待办放在一起的本地优先日程应用。</string>
+    <string name="demo_data_title">演示数据</string>
+    <string name="demo_data_hint">写入一批课程、日程与待办（含逾期、今天、已完成、已放弃、子任务与时间块），日期按今天生成。现有 %1$d 条记录会一起进回收站，整批算一次操作，可在操作记录里一步撤销。</string>
+    <string name="demo_data_replace">替换为演示数据</string>
+    <string name="demo_data_confirm_title">用演示数据替换现有内容？</string>
+    <string name="demo_data_confirm_text">现有的 %1$d 条课程、日程与待办会进回收站（保留 30 天），然后写入一批演示数据。整批算一次操作，可以在操作记录里一步撤销。</string>
+    <string name="demo_data_confirm_ok">替换</string>
+    <string name="demo_data_running">正在写入…</string>
+    <string name="demo_data_done">已写入 %1$d 条演示数据，可在操作记录里撤销</string>
     <string name="about_license_title">开源许可</string>
     <string name="about_license">本应用以 AGPL-3.0 协议开源。</string>
     <string name="about_privacy">所有数据默认只保存在本机；只有你主动使用 AI 时，才会把必要的摘要发送给你配置的服务。</string>
@@ -511,7 +532,8 @@
     <string name="todo_select_all">全选</string>
     <string name="todo_search">搜索</string>
     <string name="todo_multi_select">多选</string>
-    <string name="todo_search_hint">搜索（可用 #清单 @标签 !高）</string>
+    <string name="todo_search_hint">搜索标题</string>
+    <string name="todo_priority_all">全部优先级</string>
     <string name="todo_search_empty">没有符合条件的待办</string>
     <string name="todo_clear">清除</string>
     <string name="todo_all_lists">全部清单</string>
@@ -536,10 +558,8 @@
     <string name="todo_bulk_delete_desc">批量删除 %1$d 项待办</string>
     <string name="todo_bulk_toast">已处理 %1$d 项</string>
     <string name="todo_add_to">添加到：%1$s</string>
-    <string name="todo_paste">粘贴</string>
     <string name="todo_voice">语音输入</string>
     <string name="todo_voice_unavailable">这台设备没有可用的语音输入</string>
-    <string name="todo_clipboard_empty">剪贴板里没有文字</string>
     <string name="todo_batch_title">一次添加 %1$d 条待办？</string>
     <string name="todo_batch_add_all">全部添加</string>
     <string name="todo_batch_desc">批量添加 %1$d 条待办</string>
@@ -598,7 +618,6 @@
     <string name="done_count">已完成 %1$d</string>
     <string name="state_expanded">已展开</string>
     <string name="state_collapsed">已收起</string>
-    <string name="today_remaining">还剩 %1$d 项待办</string>
     <string name="today_all_done_title">今天的事都做完了</string>
     <string name="plan_tomorrow">安排明天</string>
     <string name="back_today">回今天</string>
@@ -609,8 +628,8 @@
     <string name="calendar_preview_hint">长按日期预览</string>
     <string name="calendar_preview_day">预览当天安排</string>
     <string name="calendar_view_day">查看当天</string>
-    <string name="calendar_day_totals">%1$d 项日程 · %2$d 件待办</string>
-    <string name="calendar_day_detail">%1$d 项日程，%2$d 件待办未完成，%3$d 件已完成</string>
+    <string name="calendar_day_totals">%1$d 项日程 · %2$d 项待办</string>
+    <string name="calendar_day_detail">%1$d 项日程，%2$d 项待办未完成，%3$d 项已完成</string>
     <string name="detail_custom">自定义</string>
     <string name="detail_custom_value">自定义（%1$s）</string>
     <string name="detail_minutes_invalid">请输入 %1$d–%2$d 之间的整数</string>
@@ -647,7 +666,6 @@
     <string name="detail_editor_repeat_until">重复结束</string>
     <string name="detail_editor_full_edit">详细编辑</string>
     <string name="detail_editor_pick_date">选日期</string>
-    <string name="detail_editor_next_class">下节课前</string>
     <string name="detail_editor_before_class">%1$s 课前</string>
     <string name="detail_editor_date_token">%1$d月%2$d日</string>
     <string name="time_end_next_day">结束 · 次日</string>

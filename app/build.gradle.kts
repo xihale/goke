@@ -88,6 +88,8 @@ dependencies {
     implementation(libs.quickjs.kt)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
+    // 手写 baseline profile（baseline-prof.txt）在装包时 AOT 生效的载体
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)

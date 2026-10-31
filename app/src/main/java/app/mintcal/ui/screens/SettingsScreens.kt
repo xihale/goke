@@ -59,9 +59,11 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,7 +83,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import app.mintcal.BuildConfig
 import app.mintcal.R
+import app.mintcal.core.change.Change
+import app.mintcal.core.model.Semester
 import app.mintcal.data.DarkMode
+import app.mintcal.data.DemoData
 import app.mintcal.data.ThemeSource
 import app.mintcal.notify.Notifications
 import app.mintcal.ui.LocalActions
@@ -101,6 +106,8 @@ import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.theme.Preset
+import kotlinx.coroutines.launch
+import java.time.LocalDateTime
 import java.time.LocalTime
 import android.provider.Settings as AndroidSettings
 
@@ -515,7 +522,68 @@ fun AboutScreen(onBack: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 Text(stringResource(R.string.about_privacy), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            DemoDataCard()
         }
+    }
+}
+
+/** 填入一批真实含量的演示数据：整批一次提交，可在操作记录里一步撤销。 */
+@Composable
+private fun DemoDataCard() {
+    val ctx = LocalContext.current
+    val app = LocalApp.current
+    val actions = LocalActions.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf(false) }
+    val snap =
+        app.repo.snapshot
+            .collectAsState()
+            .value
+    val semester = snap.currentSemester
+    val existing = snap.allRecords().count { it !is Semester && it.deletedAt == null }
+
+    fun fill() {
+        val sem = semester ?: return
+        busy = true
+        // 先删后建在同一次提交里：结果只剩演示数据，撤销一步就全部回来
+        val all = snap.allRecords()
+        scope.launch {
+            val cs = DemoData.build(LocalDateTime.now(), sem.id, replace = true, existing = all)
+            app.repo.commit(cs)
+            busy = false
+            actions.toast(ctx.getString(R.string.demo_data_done, cs.changes.count { it is Change.Add }))
+        }
+    }
+
+    MintCard {
+        Text(stringResource(R.string.demo_data_title), style = MaterialTheme.typography.titleMedium)
+        Text(
+            stringResource(R.string.demo_data_hint, existing),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        TextButton(
+            enabled = !busy && semester != null,
+            onClick = { if (existing > 0) confirm = true else fill() },
+        ) {
+            Text(stringResource(if (busy) R.string.demo_data_running else R.string.demo_data_replace))
+        }
+    }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text(stringResource(R.string.demo_data_confirm_title)) },
+            text = { Text(stringResource(R.string.demo_data_confirm_text, existing)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = false
+                    fill()
+                }) { Text(stringResource(R.string.demo_data_confirm_ok)) }
+            },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } },
+        )
     }
 }
 

@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -149,10 +150,14 @@ fun TaskRow(
     modifier: Modifier = Modifier,
 ) {
     val titleColor by animateColorAsState(if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface, MintTheme.spec(), label = "task-title")
+    // 完成整行退灰（与周历格子同款思路，弱于背景色只淡文字）：勾选框、文字、底色一起退，
+    // 对齐 RowShell 过期置灰的 0.45 系数，不再占用视觉资源
+    val rowAlpha by animateFloatAsState(if (task.done) 0.45f else 1f, MintTheme.spec(), label = "task-done-alpha")
     Row(
         modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
+            .graphicsLayer { alpha = rowAlpha }
             .clip(MaterialTheme.shapes.medium)
             .background(MintTheme.card)
             .clickable { onOpen(task.id) }

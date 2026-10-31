@@ -8,6 +8,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -29,6 +30,11 @@ class MainActivity : ComponentActivity() {
         val app = mintApp
         setContent {
             val settings by app.settings.flow.collectAsState()
+            val ready by app.repo.ready.collectAsState()
+            // 首帧真实内容（数据就绪 + 首屏组装完成）后上报，logcat 的「Fully drawn」即真实冷启动耗时
+            LaunchedEffect(ready) {
+                if (ready) reportFullyDrawn()
+            }
             // 系统栏图标明暗跟随应用内深色模式设置（而非系统 uiMode），否则强制深色时图标不可见
             val dark =
                 when (settings.darkMode) {

@@ -1,7 +1,6 @@
 package app.mintcal.ui.screens
 
 import android.Manifest
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -24,43 +23,50 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.ContentPaste
+import androidx.compose.material.icons.automirrored.rounded.Label
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Flag
-import androidx.compose.material.icons.rounded.Label
+import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.OpenInFull
-import androidx.compose.material.icons.rounded.School
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -75,7 +81,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -86,10 +91,13 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.ContextCompat
 import app.mintcal.R
 import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
+import app.mintcal.core.model.Freq
+import app.mintcal.core.model.Recurrence
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
@@ -104,19 +112,20 @@ import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
-import app.mintcal.ui.components.DatePickerDlg
 import app.mintcal.ui.components.Tag
 import app.mintcal.ui.dueLabel
+import app.mintcal.ui.hm
+import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.theme.priorityColor
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 
 /**
- * TickTick 式快速添加浮层：点右下角 + 打开，输入区从顶部盖下来（遮罩点空白收起，草稿保留）。
- * 输入即解析并就地高亮识别到的片段；下方工具条一排图标：放大进详细编辑（带已输入内容进编辑页继续安排，不重输）/
- * 优先级旗子（弹出高-中-低-无菜单）/ 日期 / 课程 / 清单 / 粘贴，右侧语音；解析标签保留。
- * 多行文字（从别处复制 / 分享来的清单）会先给预览，再一次性全部添加，缩进行成为上一条的子任务。
+ * 快速添加：右下角加号打开，输入区贴在键盘上方（点空白收起，草稿保留）。
+ * 日期、优先级、标签、清单在工具条上；详细编辑、粘贴、课程收进更多。
+ * [anchorDate] 不写进输入框，只在没写日期时作为这一天的默认落点。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -125,24 +134,51 @@ internal fun QuickAddSheet(
     now: LocalDateTime,
     listFilter: String?,
     defaultBucket: Bucket?,
-    onClearBucket: () -> Unit,
     focusSignal: Int,
     visible: Boolean,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    anchorDate: LocalDate? = null,
+    acceptShare: Boolean = true,
 ) {
     val ctx = LocalContext.current
-    val resources = LocalResources.current
     val nav = LocalNav.current
     val actions = LocalActions.current
     val haptics = LocalHapticFeedback.current
     var text by rememberSaveable { mutableStateOf("") }
     var listMenu by remember { mutableStateOf(false) }
     var priorityMenu by remember { mutableStateOf(false) }
-    var courseMenu by remember { mutableStateOf(false) }
-    var datePick by remember { mutableStateOf(false) }
+    // 日期面板：日期/时间段 + 提醒 + 重复一次选好；设了就压过文本里识别出的日期
+    var whenPanel by remember { mutableStateOf(false) }
+    var panelWhen by remember { mutableStateOf<WhenPick?>(null) }
+    var panelRemind by remember { mutableStateOf<Int?>(null) }
+    var panelFreq by remember { mutableStateOf<Freq?>(null) }
+    var panelInterval by remember { mutableIntStateOf(1) }
+    var panelUntil by remember { mutableStateOf<LocalDate?>(null) }
+    val settings = settingsState()
+    // 工具栏弹出的菜单都不抢焦点：键盘保持打开，浮层不跟着上下跳
+    val noFocusPopup = remember { PopupProperties(focusable = false) }
     var batch by remember { mutableStateOf<List<QuickBatchItem>?>(null) }
     val parsed = remember(text, now) { if (text.isBlank()) null else QuickAdd.parse(text, now) }
+
+    /** 已有标签按使用次数排序：标签按钮直接点选，不用手打 @ */
+    val knownTags =
+        remember(snap.tasks) {
+            snap.tasks
+                .flatMap { it.tags }
+                .filter { it.isNotBlank() }
+                .groupingBy { it }
+                .eachCount()
+                .entries
+                .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+                .map { it.key }
+        }
+    var tagMenu by remember { mutableStateOf(false) }
+    // 三个 Tab 各挂一份浮层，只有可见的那份向外报状态；隐藏的那份不写，免得互相覆盖。
+    DisposableEffect(visible) {
+        if (visible) nav.composerOpen = true
+        onDispose { if (visible) nav.composerOpen = false }
+    }
     val focus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val scheme = MaterialTheme.colorScheme
@@ -164,7 +200,7 @@ internal fun QuickAddSheet(
         }
 
     LaunchedEffect(focusSignal) { if (focusSignal > 0) focus.requestFocus() }
-    // 打开浮层即弹键盘；关闭时把焦点交回去，键盘跟着收起
+    // 打开即弹键盘。日期不写进输入框，避免「今天」占掉标题。
     LaunchedEffect(visible) {
         if (visible) {
             focus.requestFocus()
@@ -192,17 +228,43 @@ internal fun QuickAddSheet(
         focus.requestFocus()
     }
 
+    /** 追加一个已有标签；已经在输入里的标签不重复加。 */
+    fun addTag(name: String) {
+        if (parsed?.tags?.any { it.equals(name, ignoreCase = true) } == true) return
+        val t = text.replace(Regex("\\s+"), " ").trim()
+        text = if (t.isEmpty()) "@$name " else "$t @$name"
+        focus.requestFocus()
+    }
+
+    /** 新建标签：只落一个 @，后面继续打字就是新标签名。 */
+    fun tagMarker() {
+        val t = text.trimEnd()
+        text = if (t.isEmpty()) "@" else "$t @"
+        focus.requestFocus()
+    }
+
     fun commitItems(items: List<QuickBatchItem>) {
         if (items.isEmpty()) return
-        val first = items.first().result
-        val desc = if (items.size == 1) ctx.getString(R.string.add_task_desc, first.title) else ctx.getString(R.string.todo_batch_desc, items.size)
+        val placed = placeOnAnchor(items, anchorDate, defaultBucket)
+        val first = placed.first().result
+        val desc = if (placed.size == 1) ctx.getString(R.string.add_task_desc, first.title) else ctx.getString(R.string.todo_batch_desc, placed.size)
         val where =
             first.due
-                ?.takeIf { items.size == 1 }
+                ?.takeIf { placed.size == 1 }
                 ?.let { " · " + ctx.dueLabel(it, first.dueHasTime, now.toLocalDate()) }
                 .orEmpty()
-        val msg = if (items.size == 1) ctx.getString(R.string.task_added_toast, first.title) + where else ctx.getString(R.string.todo_batch_toast, items.size)
-        actions.commit(buildQuickTasks(snap, items, listFilter, defaultBucket, now, desc), msg)
+        val msg = if (placed.size == 1) ctx.getString(R.string.task_added_toast, first.title) + where else ctx.getString(R.string.todo_batch_toast, placed.size)
+        val ov =
+            if (panelWhen != null || panelRemind != null || panelFreq != null) {
+                QuickOverride(
+                    whenPick = panelWhen,
+                    remind = panelRemind,
+                    repeat = panelFreq?.let { f -> Recurrence(f, panelInterval.coerceAtLeast(1), until = panelUntil) },
+                )
+            } else {
+                null
+            }
+        actions.commit(buildQuickTasks(snap, placed, listFilter, defaultBucket, now, desc, ov), msg)
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
     }
 
@@ -210,6 +272,10 @@ internal fun QuickAddSheet(
         val p = parsed ?: return
         commitItems(listOf(QuickBatchItem(p, null)))
         text = ""
+        panelWhen = null
+        panelRemind = null
+        panelFreq = null
+        panelUntil = null
         focus.requestFocus()
     }
 
@@ -230,7 +296,7 @@ internal fun QuickAddSheet(
 
     val pending = nav.pendingAddText
     LaunchedEffect(pending) {
-        if (pending != null) {
+        if (acceptShare && pending != null) {
             nav.pendingAddText = null
             take(pending)
         }
@@ -308,18 +374,6 @@ internal fun QuickAddSheet(
         }
     }
 
-    fun paste() {
-        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        val raw =
-            cm
-                ?.primaryClip
-                ?.takeIf { it.itemCount > 0 }
-                ?.getItemAt(0)
-                ?.coerceToText(ctx)
-                ?.toString()
-        if (raw.isNullOrBlank()) actions.toast(ctx.getString(R.string.todo_clipboard_empty)) else take(raw)
-    }
-
     fun openDetail() {
         val draft = text.ifBlank { null }
         // 草稿移交编辑页：浮层清空收起，回来不残留旧文字
@@ -327,7 +381,16 @@ internal fun QuickAddSheet(
         onDismiss()
         nav.push(Route.TodoEdit(text = draft))
     }
-
+    val daySet = parsed?.due != null || defaultBucket != null || anchorDate != null || panelWhen != null
+    val panelWhenLabel =
+        panelWhen?.let { wp ->
+            val base = ctx.dueLabel(wp.date.atStartOfDay(), false, now.toLocalDate())
+            when {
+                wp.start == null -> base
+                wp.block -> "$base ${wp.start.hm()}–${wp.end?.hm().orEmpty()}"
+                else -> "$base ${wp.start.hm()}"
+            }
+        }
     AnimatedVisibility(
         visible = visible,
         modifier = modifier,
@@ -335,63 +398,92 @@ internal fun QuickAddSheet(
         exit = fadeOut(MintTheme.spec()),
     ) {
         Box(Modifier.fillMaxSize()) {
-            // 遮罩：点空白 = 收起（＋/回车才保存，草稿留在输入框）
+            // 遮罩：点空白 = 收起。压浅一点，列表还看得见。
             Box(
                 Modifier
                     .matchParentSize()
-                    // 压暗背后内容，把注意力收进输入区
-                    .background(Color.Black.copy(alpha = 0.5f))
+                    .background(Color.Black.copy(alpha = 0.2f))
                     .pointerInput(Unit) { detectTapGestures { onDismiss() } },
             )
             Surface(
                 modifier =
                     Modifier
+                        .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .imePadding()
-                        .navigationBarsPadding(),
-                shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+                        .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shadowElevation = 3.dp,
+                shadowElevation = 6.dp,
             ) {
-                Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextField(
+                Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        // 输入框：细描边的胶囊,不再是一整块灰色方块;正文 16sp 常规字重
+                        OutlinedTextField(
                             text,
                             { text = it },
                             Modifier.weight(1f).focusRequester(focus),
-                            placeholder = { Text(stringResource(R.string.quick_add_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            textStyle = MaterialTheme.typography.bodyLarge,
+                            placeholder = {
+                                Text(
+                                    stringResource(R.string.quick_add_prompt),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
                             singleLine = true,
-                            shape = RoundedCornerShape(20.dp),
+                            shape = RoundedCornerShape(28.dp),
+                            trailingIcon = {
+                                IconButton(onClick = { startVoice() }) {
+                                    Icon(
+                                        Icons.Rounded.Mic,
+                                        stringResource(R.string.todo_voice),
+                                        tint = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            },
                             colors =
-                                TextFieldDefaults.colors(
+                                OutlinedTextFieldDefaults.colors(
                                     focusedContainerColor = Color.Transparent,
                                     unfocusedContainerColor = Color.Transparent,
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent,
+                                    focusedBorderColor = MaterialTheme.colorScheme.outline,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
                                 ),
                             visualTransformation = highlight,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(onDone = { save() }),
                         )
-                        FilledTonalIconButton(onClick = { save() }, enabled = parsed != null) {
-                            Icon(Icons.Rounded.Add, stringResource(R.string.add))
-                        }
+                        Spacer(Modifier.width(10.dp))
+                        // 主动作只有一个：输入框右侧的圆形确认键
+                        FilledIconButton(
+                            onClick = { save() },
+                            enabled = text.isNotBlank(),
+                            modifier = Modifier.size(48.dp),
+                        ) { Icon(Icons.Rounded.Check, stringResource(R.string.add), modifier = Modifier.size(22.dp)) }
                     }
-                    // TickTick 式工具条：放大进详细编辑 / 优先级旗子（高-中-低-无） / 日期 / 课程 / 清单 / 粘贴，语音放最右
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { openDetail() }) {
-                            Icon(Icons.Rounded.OpenInFull, stringResource(R.string.detail_editor_full_edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        IconButton(onClick = { whenPanel = true }, modifier = Modifier.size(40.dp)) {
+                            Icon(
+                                Icons.Rounded.Event,
+                                stringResource(R.string.detail_editor_pick_date),
+                                tint = if (daySet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                         Box {
-                            IconButton(onClick = { priorityMenu = true }) {
-                                Icon(Icons.Rounded.Flag, stringResource(R.string.label_priority), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            IconButton(onClick = { priorityMenu = true }, modifier = Modifier.size(40.dp)) {
+                                Icon(
+                                    Icons.Rounded.Flag,
+                                    stringResource(R.string.label_priority),
+                                    tint = colors.priorityColor(parsed?.priority ?: 0) ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
-                            DropdownMenu(priorityMenu, { priorityMenu = false }) {
+                            DropdownMenu(priorityMenu, { priorityMenu = false }, properties = noFocusPopup) {
                                 listOf(
                                     Triple(3, R.string.priority_3, colors.priorityColor(3)),
                                     Triple(2, R.string.priority_2, colors.priorityColor(2)),
                                     Triple(1, R.string.priority_1, colors.priorityColor(1)),
-                                ).forEach { (level, label, color) ->
+                                ).forEach { (_, label, color) ->
                                     DropdownMenuItem(
                                         text = { Text(stringResource(label) + stringResource(R.string.label_priority)) },
                                         leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = color ?: MaterialTheme.colorScheme.onSurfaceVariant) },
@@ -411,30 +503,36 @@ internal fun QuickAddSheet(
                                 )
                             }
                         }
-                        IconButton(onClick = { datePick = true }) {
-                            Icon(Icons.Rounded.Event, stringResource(R.string.detail_editor_pick_date), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        if (snap.courses.isNotEmpty()) {
-                            Box {
-                                IconButton(onClick = { courseMenu = true }) {
-                                    Icon(Icons.Rounded.School, stringResource(R.string.detail_editor_next_class), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Box {
+                            IconButton(onClick = { tagMenu = true }, modifier = Modifier.size(40.dp)) {
+                                Icon(
+                                    Icons.AutoMirrored.Rounded.Label,
+                                    stringResource(R.string.field_tags),
+                                    tint = if (parsed?.tags?.isNotEmpty() == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            DropdownMenu(tagMenu, { tagMenu = false }, properties = noFocusPopup) {
+                                knownTags.forEach { name ->
+                                    DropdownMenuItem(text = { Text("@$name") }, onClick = {
+                                        tagMenu = false
+                                        addTag(name)
+                                    })
                                 }
-                                DropdownMenu(courseMenu, { courseMenu = false }) {
-                                    snap.courses.distinctBy { it.name }.forEach { c ->
-                                        DropdownMenuItem(text = { Text(c.name) }, onClick = {
-                                            courseMenu = false
-                                            rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME, QuickTokenKind.COURSE), "/" + c.name.replace(" ", ""))
-                                        })
-                                    }
+                                if (knownTags.isNotEmpty()) {
+                                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                 }
+                                DropdownMenuItem(text = { Text(stringResource(R.string.quick_tag_new)) }, onClick = {
+                                    tagMenu = false
+                                    tagMarker()
+                                })
                             }
                         }
                         if (snap.lists.isNotEmpty()) {
                             Box {
-                                IconButton(onClick = { listMenu = true }) {
-                                    Icon(Icons.Rounded.Label, stringResource(R.string.label_list), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                IconButton(onClick = { listMenu = true }, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Rounded.Inbox, stringResource(R.string.label_list), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                DropdownMenu(listMenu, { listMenu = false }) {
+                                DropdownMenu(listMenu, { listMenu = false }, properties = noFocusPopup) {
                                     snap.lists.sortedBy { it.sort }.forEach { l ->
                                         DropdownMenuItem(text = { Text(l.name) }, onClick = {
                                             listMenu = false
@@ -444,31 +542,13 @@ internal fun QuickAddSheet(
                                 }
                             }
                         }
-                        IconButton(onClick = { paste() }) {
-                            Icon(Icons.Rounded.ContentPaste, stringResource(R.string.todo_paste), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
                         Spacer(Modifier.weight(1f))
-                        IconButton(onClick = { startVoice() }) {
-                            // 正在听时点主题色，其它时候保持默认
-                            Icon(
-                                Icons.Rounded.Mic,
-                                stringResource(R.string.todo_voice),
-                                tint = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    if (defaultBucket != null) {
-                        Row(Modifier.padding(bottom = 4.dp)) {
-                            Tag(
-                                stringResource(R.string.todo_add_to, stringResource(bucketRes(defaultBucket))) + " ×",
-                                MaterialTheme.colorScheme.secondaryContainer,
-                                MaterialTheme.colorScheme.onSecondaryContainer,
-                                Modifier.clickable { onClearBucket() },
-                            )
+                        IconButton(onClick = { openDetail() }, modifier = Modifier.size(40.dp)) {
+                            Icon(Icons.Rounded.OpenInFull, stringResource(R.string.detail_editor_full_edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     AnimatedVisibility(
-                        visible = parsed?.tokens?.isNotEmpty() == true,
+                        visible = parsed?.tokens?.isNotEmpty() == true || panelWhenLabel != null || panelRemind != null || panelFreq != null,
                         enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
                         exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
                     ) {
@@ -535,6 +615,41 @@ internal fun QuickAddSheet(
                                 }
                             }
                         }
+                        if (panelWhenLabel != null || panelRemind != null || panelFreq != null) {
+                            FlowRow(
+                                Modifier.padding(end = 6.dp, top = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                if (panelWhenLabel != null) {
+                                    Tag(
+                                        "$panelWhenLabel ×",
+                                        MaterialTheme.colorScheme.primaryContainer,
+                                        MaterialTheme.colorScheme.onPrimaryContainer,
+                                        Modifier.clickable { panelWhen = null },
+                                    )
+                                }
+                                if (panelRemind != null) {
+                                    Tag(
+                                        remindLabel(panelRemind) + " ×",
+                                        MaterialTheme.colorScheme.secondaryContainer,
+                                        MaterialTheme.colorScheme.onSecondaryContainer,
+                                        Modifier.clickable { panelRemind = null },
+                                    )
+                                }
+                                if (panelFreq != null) {
+                                    Tag(
+                                        freqLabel(panelFreq, panelUntil, panelInterval) + " ×",
+                                        MaterialTheme.colorScheme.tertiaryContainer,
+                                        MaterialTheme.colorScheme.onTertiaryContainer,
+                                        Modifier.clickable {
+                                            panelFreq = null
+                                            panelUntil = null
+                                        },
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -547,13 +662,45 @@ internal fun QuickAddSheet(
             batch = null
         }
     }
-    if (datePick) {
-        DatePickerDlg(
-            now.toLocalDate(),
-            { datePick = false },
-        ) { d ->
-            datePick = false
-            rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.COURSE), resources.getString(R.string.detail_editor_date_token, d.monthValue, d.dayOfMonth))
+    if (whenPanel) {
+        WhenPanel(
+            initial =
+                panelWhen ?: parsed?.due?.let { d ->
+                    WhenPick(d.toLocalDate(), if (parsed.dueHasTime) d.toLocalTime() else null, settings.defaultBlockMinutes, block = false)
+                },
+            defaultDate = now.toLocalDate(),
+            defaultMinutes = settings.defaultBlockMinutes,
+            initialRemind = panelRemind,
+            initialFreq = panelFreq,
+            initialInterval = panelInterval,
+            initialUntil = panelUntil,
+            onDismiss = { whenPanel = false },
+            onPick = { r ->
+                panelWhen = r.whenPick
+                panelRemind = r.remindMinutes
+                panelFreq = r.freq
+                panelInterval = r.interval
+                panelUntil = r.until
+                whenPanel = false
+            },
+        )
+    }
+}
+
+/** 没写日期、也没有分区落点时，把任务放到 [anchor] 当天（只有日期，没有钟点）。 */
+private fun placeOnAnchor(
+    items: List<QuickBatchItem>,
+    anchor: LocalDate?,
+    bucket: Bucket?,
+): List<QuickBatchItem> {
+    val day = anchor ?: return items
+    if (bucket != null) return items
+    return items.map { item ->
+        val p = item.result
+        if (p.due != null || p.courseName != null || item.parentIndex != null) {
+            item
+        } else {
+            item.copy(result = p.copy(due = LocalDateTime.of(day, LocalTime.of(23, 59)), dueHasTime = false))
         }
     }
 }
@@ -621,17 +768,25 @@ internal fun matchCourse(
     snap.courses.firstOrNull { it.name.replace(" ", "") == n } ?: snap.courses.firstOrNull { it.name.contains(n, ignoreCase = true) }
 }
 
+/** 面板给出的覆盖值：时间/时间段 + 提醒 + 重复，只落在第一条顶层任务上。 */
+internal data class QuickOverride(
+    val whenPick: WhenPick?,
+    val remind: Int?,
+    val repeat: Recurrence?,
+)
+
 /**
  * 一批解析结果 → 一个变更集。新清单只建一次；缩进的行挂到父任务（继承其清单）；
  * 没写日期的顶层任务按 [defaultBucket] 落点：今天 → startDate=今天（不会次日变红），其它分区 → 当天截止；收集箱不设日期。
  */
-fun buildQuickTasks(
+internal fun buildQuickTasks(
     snap: Snapshot,
     items: List<QuickBatchItem>,
     defaultListId: String?,
     defaultBucket: Bucket?,
     now: LocalDateTime,
     desc: String,
+    override: QuickOverride? = null,
 ): ChangeSet {
     val changes = mutableListOf<Change>()
     val newLists = mutableMapOf<String, TaskList>()
@@ -675,6 +830,26 @@ fun buildQuickTasks(
         val id = Ids.next()
         ids += id
         listIds += listId
+        // 面板覆盖只给第一条顶层任务：日期/时间段、提醒、重复一次带上
+        val ov = override?.takeIf { i == 0 && parentIdx == null && course == null }
+        val wp = ov?.whenPick
+        var blockStart: LocalDateTime? = null
+        var blockMinutes: Int? = null
+        if (wp != null) {
+            if (wp.start != null) {
+                if (wp.block) {
+                    blockStart = LocalDateTime.of(wp.date, wp.start)
+                    blockMinutes = wp.minutes
+                    due = blockStart.plusMinutes(wp.minutes.toLong())
+                } else {
+                    due = LocalDateTime.of(wp.date, wp.start)
+                }
+                dueHasTime = true
+            } else {
+                due = wp.date.atTime(23, 59)
+                dueHasTime = false
+            }
+        }
         changes +=
             Change.Add(
                 Task(
@@ -691,6 +866,10 @@ fun buildQuickTasks(
                     parentId = parentIdx?.let { ids[it] },
                     sortOrder = order,
                     source = Source.MANUAL,
+                    blockStart = blockStart,
+                    blockMinutes = blockMinutes,
+                    remindMinutes = ov?.remind,
+                    repeat = ov?.repeat,
                 ),
             )
     }

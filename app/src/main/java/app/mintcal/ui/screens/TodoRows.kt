@@ -342,10 +342,13 @@ internal fun InlineSubAdd(
         actions.commit(Edits.save(snap, sub, ctx.getString(R.string.add_task_desc, title), System.currentTimeMillis()))
         text = ""
     }
+    // 和子任务行同一列：卡片缩进 40 + 内边距 8 + 勾选框 48 = 96dp 的文字列
+    // （TextField 带 leadingIcon 时文字自身还有约 2dp 内缩，所以这里给 46）
     TextField(
         text,
         { text = it },
-        modifier.fillMaxWidth().padding(start = 28.dp),
+        modifier.fillMaxWidth().padding(start = 46.dp),
+        leadingIcon = { Spacer(Modifier.width(48.dp)) },
         placeholder = { Text(stringResource(R.string.add_subtask), style = MaterialTheme.typography.bodyMedium) },
         singleLine = true,
         shape = RoundedCornerShape(12.dp),
@@ -356,7 +359,7 @@ internal fun InlineSubAdd(
     )
 }
 
-/** 分区标题：点击折叠；右侧「＋」把新增默认落到该分区。 */
+/** 分区标题：点击折叠；右侧「＋」把新增默认落到该分区；[action] 是分区级动作（如逾期整理）。 */
 @Composable
 internal fun SectionHeader(
     bucket: Bucket,
@@ -365,6 +368,7 @@ internal fun SectionHeader(
     onToggle: () -> Unit,
     onAdd: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    action: (@Composable () -> Unit)? = null,
 ) {
     val rot by animateFloatAsState(if (collapsed) -90f else 0f, MintTheme.spec(), label = "section-chevron")
     val colors = MintTheme.colors
@@ -406,6 +410,9 @@ internal fun SectionHeader(
             style = MaterialTheme.typography.labelMedium,
             color = pillFg,
         )
+        if (action != null) {
+            action()
+        }
         if (onAdd != null) {
             IconButton(onClick = onAdd, Modifier.size(48.dp)) {
                 Icon(Icons.Rounded.Add, stringResource(R.string.todo_add_here), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -453,9 +460,6 @@ internal fun NextUpCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (up.tasks.isEmpty()) {
-                    Text(stringResource(R.string.todo_next_up_none), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
                 up.tasks.take(3).forEach { t -> NextUpTask(t, snap, now) }
             } else if (urgent != null) {
                 NextUpTask(urgent, snap, now)
@@ -484,23 +488,6 @@ private fun NextUpTask(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-    }
-}
-
-/** 逾期整理入口。 */
-@Composable
-internal fun OverdueCard(
-    count: Int,
-    onTidy: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MintTheme.colors.removed.copy(alpha = 0.12f)) {
-        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.ErrorOutline, null, tint = MintTheme.colors.removed)
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.todo_overdue_card, count), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MintTheme.colors.removed)
-            TextButton(onClick = onTidy) { Text(stringResource(R.string.todo_tidy)) }
-        }
     }
 }
 

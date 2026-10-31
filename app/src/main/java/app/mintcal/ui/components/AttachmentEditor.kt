@@ -164,7 +164,7 @@ private fun AttachmentChip(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) {
+            IconButton(onClick = onRemove) {
                 Icon(Icons.Rounded.Close, stringResource(R.string.remove_attachment), Modifier.size(16.dp))
             }
         }

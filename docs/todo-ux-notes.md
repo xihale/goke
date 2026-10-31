@@ -189,3 +189,15 @@
 验证：Robolectric `ScreensSmokeTest` 全量 27 屏渲染 + 三项行为回归（快速添加两条、草稿时长、删除返回）通过；另以一次性测试渲染深色空态四主屏确认空态与深色优先级色（用后已删）。`spotlessApply` 修复本轮与存量格式违规后 `spotlessCheck`、`scripts/check_strings.py` 通过。真机复验未完成：WiFi adb 中途掉线（设备离线），待重连后补真机走查；动画帧率未测。真机截图对比基线为 `app/build/shots-baseline/`（改动前）与 `app/build/shots/`（改动后）。
 
 本轮明确不做（结构性，留待之后）：TodoEdit 顶栏 56dp 与 MintScreen 64dp 骨架统一（含内联标题输入）；ChangeList diff 排版与摘要截断；附件删除 48dp 触控与撤销；EventTimeSheet 自绘 sheet 改 ModalBottomSheet；课表硬编码字符串的 i18n。
+
+## 11. 2026-10-31 周历：去掉当前时间线，冲突改叠放
+
+- 当前时间线（2dp primary 横线 + 左端圆点）撤掉：7 天网格一列只有 40 来 dp，横线穿在一整列色块上只是噪声；今天靠星期头的 `primaryContainer` 色块指认。`WeekGrid` 里的 `now` 参数一并删掉。
+- 冲突摆放重做（旧版把一列按重叠数等分，两道时每道 ~21dp，标题被挤成竖排碎片、课程名直接消失）：
+  - 每道 ≥ `MinLaneW`(30dp) 才并排分道，平板 / 横屏仍是主流日历的并排；
+  - 再窄就叠放——课程优先当正面卡（固定的锚），其余只在右侧露 6dp 一道边（取被压住那条的底色），卡片底栏红字写「N 项」；
+  - 点正面卡弹出「这段时间有 N 项安排」，按开始时间列出全部（课程 / 待办各带时段），点哪条进哪条的详情。对应 `layoutSlots` / `SlotSheet`，字符串 `conflict_count`、`conflict_slot_title`。
+
+- 课程卡恢复教室 / 老师：之前两行被 `maxWidth >= 64dp` 挡成「只有宽卡才显示」，手机竖屏一列 48dp 永远不显示。现在一律显示，窄卡降到 8sp 一行放完（9sp 的「教3-204」会折成「教 / 3-204」），「@」前缀只留给宽卡；标题按块高收到 2 行（单节）/ 4 行（两节以上），老师行需要两节以上的高度 + 设置里的「显示老师」开关。
+
+验证：真机注入三条与课程重叠的待办复现旧版碎片，改后竖屏为叠放、横屏（列 ~116dp）仍并排；点卡 → 抽屉 → 点行进任务编辑页；`scripts/check_strings.py`、`testDebugUnitTest`、`core:test` 通过。测试数据已从设备数据库撤掉并恢复原库。

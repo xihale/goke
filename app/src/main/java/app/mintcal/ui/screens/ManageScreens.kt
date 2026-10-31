@@ -286,7 +286,8 @@ fun ParcelScreen(onBack: () -> Unit) {
                         if (r.company.isNotBlank()) Text(stringResource(R.string.parcel_company, r.company), style = MaterialTheme.typography.bodyMedium)
                         r.deadline?.let { Text(stringResource(R.string.parcel_deadline, it.format(STAMP)), style = MaterialTheme.typography.bodyMedium) }
                         Button(onClick = {
-                            actions.commit(Edits.save(snap, ParcelTasks.build(ctx, r), ctx.getString(R.string.parcel_op_desc), System.currentTimeMillis()), ctx.getString(R.string.saved_toast))
+                            val desc = ctx.getString(R.string.parcel_op_desc)
+                            actions.commit(Edits.save(snap, ParcelTasks.build(ctx, r), desc, System.currentTimeMillis()), desc)
                         }, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.parcel_add_task)) }
                     }
                 }

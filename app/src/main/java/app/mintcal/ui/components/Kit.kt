@@ -1,6 +1,7 @@
 package app.mintcal.ui.components
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -16,6 +17,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,7 +26,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -50,17 +51,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CalendarViewWeek
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -81,14 +86,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -100,7 +111,10 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
+import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /** 通用页面骨架：状态栏避让 + 顶栏（返回 / 标题 / 右侧操作）。 */
 @Composable
@@ -272,8 +286,8 @@ fun NavRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
-            Box(Modifier.size(40.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(22.dp))
+            Box(Modifier.size(40.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
             }
             Spacer(Modifier.width(14.dp))
         }
@@ -287,9 +301,10 @@ fun NavRow(
 }
 
 /**
- * 浮动胶囊底栏，Telegram 风格：岛是中性色，选中项是一块中性浅色圆角块，
- * 图标文字切主题强调色（不是整块 primaryContainer 的大色块）。尺寸放大一档，
- * 选中块不顶满格子、四周留白。匀速补间滑动不过冲；按下不画高亮，反馈靠色块滑动 + 触感。
+ * 浮动胶囊底栏。岛和选中块是同一套胶囊：选中块四周等距内缩，
+ * 端头圆弧和岛同心，贴在首尾也不会露出一圈对不上的月牙。
+ * 滑动用无回弹弹簧，行进中选中块朝目标拉长再收回，而不是一块刚体平移。
+ * 按下不画高亮，反馈靠色块滑动、图标轻压和触感。
  */
 @Composable
 fun FloatingNavBar(
@@ -313,60 +328,76 @@ fun FloatingNavBar(
     val reduce = LocalReduceMotion.current
     val haptics = LocalHapticFeedback.current
     val travel = remember { Animatable(selectedIndex.toFloat()) }
+    // 这次滑动的起点。选中项一变就记下来，用来算行进中段的拉长，而不是速度猜。
+    val flightFrom = remember(selectedIndex) { travel.value }
     LaunchedEffect(selectedIndex, reduce) {
         if (reduce) {
             travel.snapTo(selectedIndex.toFloat())
         } else {
-            // 定速补间：色块跟手滑到目标，不拖尾也不过冲
-            travel.animateTo(selectedIndex.toFloat(), tween(durationMillis = 200, easing = FastOutSlowInEasing))
+            travel.animateTo(
+                selectedIndex.toFloat(),
+                spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+            )
         }
     }
     val index = travel.value
+    val span = abs(selectedIndex - flightFrom).coerceAtLeast(0.001f)
+    val progress = (1f - abs(selectedIndex - index) / span).coerceIn(0f, 1f)
+    // 两头为 0、中段为 1：刚体滑过去会显机械，中段拉长再收回才像同一块东西被带走
+    val stretch = if (reduce) 0f else sin(progress * PI.toFloat())
+    val scheme = MaterialTheme.colorScheme
+    val dark = scheme.background.luminance() < 0.5f
+    val bar = if (dark) scheme.surfaceContainerHigh else scheme.surfaceContainer
+    // 深色里 surfaceContainerHighest 和岛几乎同色，选中块会糊成一块污渍；往文字色混一档，仍是中性色
+    val thumb = if (dark) lerp(bar, scheme.onSurface, 0.16f) else scheme.surfaceContainerHighest
     Surface(
         modifier = modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth(),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shadowElevation = 1.dp,
+        color = bar,
+        shadowElevation = 3.dp,
     ) {
-        BoxWithConstraints(Modifier.fillMaxWidth().height(68.dp).padding(4.dp)) {
-            val itemWidth = maxWidth / items.size
-            Box(
-                Modifier
-                    // 用浮点位移，别用 offset{IntOffset(round)}：行程每帧只走 1~2px，
-                    // 取整会变成一格一格挪，看着就是抖
-                    .graphicsLayer {
-                        translationX = index * itemWidth.toPx() + 6.dp.toPx()
-                        translationY = ((maxHeight - 56.dp).toPx() / 2).coerceAtLeast(0f)
-                    }
-                    // 不顶满格子：左右各留 6dp，高度 56dp，四周透气
-                    .width(itemWidth - 12.dp)
-                    .height(56.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-            )
+        Box(Modifier.fillMaxWidth().height(68.dp)) {
+            Canvas(Modifier.fillMaxSize()) {
+                val inset = 4.dp.toPx()
+                val slot = size.width / items.size
+                val base = slot - inset * 2
+                val extra = slot * 0.32f * stretch
+                val movingLeft = selectedIndex.toFloat() < index
+                var left = index * slot + inset - if (movingLeft) extra else 0f
+                val width = base + extra
+                val minLeft = inset
+                val maxLeft = size.width - inset - width
+                if (left < minLeft) left = minLeft
+                if (left > maxLeft) left = maxLeft
+                val top = inset
+                val height = size.height - inset * 2
+                drawRoundRect(
+                    color = thumb,
+                    topLeft = Offset(left, top),
+                    size = Size(width, height),
+                    cornerRadius = CornerRadius(height / 2f, height / 2f),
+                )
+            }
             Row(Modifier.fillMaxSize()) {
                 items.forEach { item ->
                     val selected = item.tab == tab
                     val interaction = remember { MutableInteractionSource() }
                     val fg by animateColorAsState(
-                        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        if (selected) scheme.primary else scheme.onSurfaceVariant,
                         if (reduce) snap() else tween(durationMillis = 180, easing = FastOutSlowInEasing),
                         label = "nav-fg",
                     )
                     val pressed by interaction.collectIsPressedAsState()
                     val pressScale by animateFloatAsState(
-                        if (pressed) 0.92f else 1f,
-                        if (reduce) snap() else tween(durationMillis = 140, easing = FastOutSlowInEasing),
+                        if (pressed) 0.96f else 1f,
+                        if (reduce) snap() else tween(durationMillis = 80, easing = FastOutSlowInEasing),
                         label = "nav-press",
                     )
                     Column(
                         Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .graphicsLayer {
-                                scaleX = pressScale
-                                scaleY = pressScale
-                            }.clip(CircleShape)
+                            .clip(CircleShape)
                             .selectable(
                                 selected = selected,
                                 interactionSource = interaction,
@@ -383,9 +414,19 @@ fun FloatingNavBar(
                         verticalArrangement = Arrangement.Center,
                     ) {
                         Box(Modifier.height(26.dp), contentAlignment = Alignment.Center) {
-                            Icon(item.icon, null, tint = fg, modifier = Modifier.size(26.dp))
+                            Icon(
+                                item.icon,
+                                null,
+                                tint = fg,
+                                modifier =
+                                    Modifier
+                                        .graphicsLayer {
+                                            scaleX = pressScale
+                                            scaleY = pressScale
+                                        }.size(24.dp),
+                            )
                         }
-                        Spacer(Modifier.height(3.dp))
+                        Spacer(Modifier.height(2.dp))
                         Text(stringResource(item.label), style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1)
                     }
                 }
@@ -539,10 +580,11 @@ fun Modifier.mintClickable(
         }.then(gesture)
 }
 
-/** 一次可撤销操作：撤销按钮显示期间持有对应变更集。 */
+/** 一次可撤销操作：条还在时持有对应变更集和当时的说明。 */
 data class UndoPrompt(
     val csId: String,
     val seq: Long,
+    val text: String,
 )
 
 /** 空状态：图标圆底 + 标题 +（可选）说明与操作按钮；出现/消失由调用方用 AnimatedVisibility 包裹。 */
@@ -554,6 +596,8 @@ fun EmptyState(
     icon: ImageVector = Icons.Rounded.Inbox,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
+    secondaryLabel: String? = null,
+    onSecondary: (() -> Unit)? = null,
 ) {
     Column(modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
@@ -567,7 +611,63 @@ fun EmptyState(
         }
         if (actionLabel != null && onAction != null) {
             Spacer(Modifier.height(12.dp))
-            TextButton(onClick = onAction) { Text(actionLabel) }
+            if (secondaryLabel != null && onSecondary != null) {
+                // 用 primary 实心按钮：secondaryContainer 在本主题里偏棕，和整体强调色不是一家
+                Button(onClick = onAction) { Text(actionLabel) }
+                TextButton(onClick = onSecondary) { Text(secondaryLabel) }
+            } else {
+                TextButton(onClick = onAction) { Text(actionLabel) }
+            }
         }
+    }
+}
+
+/** 悬浮添加键：出现 / 消失带缩放和淡入，条件渲染时不再凭空蹦出或瞬间消失。 */
+@Composable
+fun MintFab(
+    visible: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    description: String = stringResource(R.string.shortcut_add_task),
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(MintTheme.spec()) + scaleIn(initialScale = 0.6f, animationSpec = MintTheme.spec()),
+        exit = fadeOut(MintTheme.spec()) + scaleOut(targetScale = 0.6f, animationSpec = MintTheme.spec()),
+        modifier = modifier,
+    ) {
+        FloatingActionButton(
+            onClick = onClick,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        ) {
+            Icon(Icons.Rounded.Add, description)
+        }
+    }
+}
+
+/**
+ * 冲突卡：「时间冲突」类提示的统一形态——警示图标 + 标题 + 可点行，
+ * 底色用 conflictBg，编辑页 / 待办编辑页共用同一套视觉。
+ */
+@Composable
+fun ConflictCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    rows: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MintTheme.colors.conflictBg)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Rounded.Warning, null, tint = MintTheme.colors.removed, modifier = Modifier.size(16.dp))
+            Text(title, style = MaterialTheme.typography.labelLarge, color = MintTheme.colors.removed, fontWeight = FontWeight.Bold)
+        }
+        rows()
     }
 }

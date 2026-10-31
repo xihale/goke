@@ -7,8 +7,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,9 +28,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Alarm
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DateRange
+import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,7 +46,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -54,9 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -91,32 +91,67 @@ internal data class WhenPick(
     val end: LocalTime? get() = start?.let { it.plusMinutes(minutes.toLong()) }
 }
 
+/** 面板结果：日期/时间段 + 提醒 + 重复一次带出；[whenPick] 为 null 表示清掉时间。 */
+internal data class WhenPanelResult(
+    val whenPick: WhenPick?,
+    val remindMinutes: Int? = null,
+    val freq: Freq? = null,
+    val interval: Int = 1,
+    val until: LocalDate? = null,
+)
+
 /**
- * 时间设置：上面「日期 | 时间段」两个页签，日期页是月历，时间段页是半小时块状图（长按拖动=框选，
- * 点一下=按默认时长排块）。时间用「开始 / 结束」两个精确选择器，不吸附到半小时。
- * 提醒 / 重复在编辑页里直接选（带全部可见选项），这里只管哪天、几点到几点。
+ * 「日期 | 时间段」面板，快捷添加条和编辑页共用：
+ * 日期页 = 快捷芯片（今天/明天/下周一/今天晚上）+ 月历 + 时间（截止时刻）/ 提醒 / 重复；
+ * 时间段页 = 开始 / 结束 / 时长。底部固定 清除 · 取消 · 确定，一眼看到所有可选项。
  */
 @Composable
-internal fun EventTimeSheet(
+internal fun WhenPanel(
     initial: WhenPick?,
     defaultDate: LocalDate,
     defaultMinutes: Int,
+    initialRemind: Int? = null,
+    initialFreq: Freq? = null,
+    initialInterval: Int = 1,
+    initialUntil: LocalDate? = null,
     onDismiss: () -> Unit,
-    onPick: (WhenPick?) -> Unit,
+    onPick: (WhenPanelResult) -> Unit,
 ) {
     val ctx = LocalContext.current
     var date by remember { mutableStateOf(initial?.date ?: defaultDate) }
     var startMin by remember { mutableIntStateOf(initial?.start?.let { it.hour * 60 + it.minute } ?: -1) }
     var endMin by remember { mutableIntStateOf(initial?.let { p -> p.start?.let { it.hour * 60 + it.minute + p.minutes } } ?: -1) }
-    var block by remember { mutableStateOf(initial?.block ?: true) }
-    var tab by remember { mutableIntStateOf(0) }
+    var tab by remember { mutableIntStateOf(if (initial?.block == true && initial.start != null) 1 else 0) }
     var month by remember { mutableStateOf(YearMonth.from(date)) }
+    var remind by remember { mutableStateOf(initialRemind) }
+    var freq by remember { mutableStateOf(initialFreq) }
+    var interval by remember { mutableIntStateOf(initialInterval) }
+    var until by remember { mutableStateOf(initialUntil) }
     var startDlg by remember { mutableStateOf(false) }
     var endDlg by remember { mutableStateOf(false) }
     var dateDlg by remember { mutableStateOf(false) }
-    val start = if (startMin >= 0) LocalTime.of(startMin / 60, startMin % 60) else null
-    val duration = (endMin - startMin).takeIf { startMin >= 0 && endMin > startMin } ?: defaultMinutes
-    val result = WhenPick(date, start, duration.coerceIn(1, 24 * 60), block)
+    var remindDlg by remember { mutableStateOf(false) }
+    var repeatDlg by remember { mutableStateOf(false) }
+    val today = LocalDate.now()
+    val start = if (startMin >= 0) LocalTime.of(startMin / 60 % 24, startMin % 60) else null
+    val end = if (endMin >= 0) LocalTime.of(endMin / 60 % 24, endMin % 60) else null
+    val duration = (endMin - startMin).takeIf { startMin >= 0 && endMin > startMin }?.coerceIn(1, 24 * 60) ?: defaultMinutes
+    val result =
+        if (tab == 1) {
+            WhenPick(date, start, duration, block = true)
+        } else {
+            WhenPick(date, start, defaultMinutes, block = false)
+        }
+
+    fun close(whenPick: WhenPick?) {
+        onPick(WhenPanelResult(whenPick, remind, freq, interval, if (freq == null) null else until))
+    }
+    val timeLabel =
+        when {
+            start == null -> stringResource(R.string.none)
+            tab == 1 -> "${start.hm()} – ${end?.hm().orEmpty()}"
+            else -> start.hm()
+        }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
@@ -126,88 +161,77 @@ internal fun EventTimeSheet(
                 shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             ) {
                 Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
-                    // 顶部：✕ / 页签 / ✓
-                    Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, stringResource(R.string.cancel)) }
-                        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center) {
-                            TabText(stringResource(R.string.tab_date), tab == 0) { tab = 0 }
-                            Spacer(Modifier.width(18.dp))
-                            TabText(stringResource(R.string.tab_range), tab == 1) { tab = 1 }
-                        }
-                        IconButton(onClick = { onPick(result) }) { Icon(Icons.Rounded.Check, stringResource(R.string.ok)) }
+                    Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.Center) {
+                        TabText(stringResource(R.string.tab_date), tab == 0) { tab = 0 }
+                        Spacer(Modifier.width(18.dp))
+                        TabText(stringResource(R.string.tab_range), tab == 1) { tab = 1 }
                     }
                     if (tab == 0) {
-                        Column(Modifier.weight(1f)) {
-                            MonthHeader(month, onClick = { month = month.minusMonths(1) }, onNext = { month = month.plusMonths(1) })
-                            MonthGrid(selected = date, month = month) { d ->
-                                date = d
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                                QuickChip(Icons.Rounded.CalendarToday, stringResource(R.string.today), date == today && start == null, Modifier.weight(1f)) {
+                                    date = today
+                                }
+                                QuickChip(Icons.Rounded.WbSunny, stringResource(R.string.tomorrow), date == today.plusDays(1) && start == null, Modifier.weight(1f)) {
+                                    date = today.plusDays(1)
+                                }
+                                QuickChip(Icons.Rounded.DateRange, stringResource(R.string.date_next_monday), date == nextMonday(today) && start == null, Modifier.weight(1f)) {
+                                    date = nextMonday(today)
+                                }
+                                QuickChip(Icons.Rounded.Bedtime, stringResource(R.string.tonight), date == today && startMin == 20 * 60, Modifier.weight(1f)) {
+                                    date = today
+                                    startMin = 20 * 60
+                                    endMin = 21 * 60
+                                }
                             }
-                            Spacer(Modifier.weight(1f))
-                            Spacer(Modifier.height(10.dp))
+                            MonthHeader(month, onClick = { month = month.minusMonths(1) }, onNext = { month = month.plusMonths(1) })
+                            MonthGrid(selected = date, month = month) { d -> date = d }
+                            Spacer(Modifier.height(6.dp))
+                            SettingRow(Icons.Rounded.Schedule, stringResource(R.string.label_time), timeLabel, start != null, onClear = {
+                                startMin = -1
+                                endMin = -1
+                            }) { startDlg = true }
+                            SettingRow(Icons.Rounded.Alarm, stringResource(R.string.label_remind), remindLabel(remind), remind != null, onClear = { remind = null }) { remindDlg = true }
+                            SettingRow(Icons.Rounded.Repeat, stringResource(R.string.label_repeat), freqLabel(freq, until, interval), freq != null, onClear = {
+                                freq = null
+                                until = null
+                            }) { repeatDlg = true }
+                        }
+                    } else {
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                            Spacer(Modifier.height(6.dp))
                             Text(
                                 ctx.monthDayWeekday(date),
-                                style = MaterialTheme.typography.bodyMedium,
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { dateDlg = true }
+                                    .padding(vertical = 8.dp),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            SettingRow(Icons.Rounded.Schedule, stringResource(R.string.field_start), start?.hm() ?: stringResource(R.string.none), start != null, onClear = { startMin = -1 }) { startDlg = true }
+                            SettingRow(Icons.Rounded.Schedule, stringResource(R.string.field_end), end?.hm() ?: stringResource(R.string.none), end != null, onClear = { endMin = -1 }) { endDlg = true }
+                            Text(
+                                stringResource(R.string.label_duration) + " · " +
+                                    if (duration % 60 == 0) stringResource(R.string.dur_h, duration / 60) else stringResource(R.string.minutes_n, duration),
+                                Modifier.padding(top = 4.dp, start = 32.dp),
+                                style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Spacer(Modifier.height(8.dp))
-                            TimeRangeRow(
-                                start = start,
-                                end = result.end,
-                                showEnd = block,
-                                nextDay = endMin >= 24 * 60,
-                                onPickStart = { startDlg = true },
-                                onPickEnd = { endDlg = true },
-                                onClear = {
-                                    startMin = -1
-                                    endMin = -1
-                                },
-                            )
-                            Spacer(Modifier.weight(1f))
-                            TextButton(onClick = { onPick(null) }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                                Text(stringResource(R.string.clear_time), color = MaterialTheme.colorScheme.error)
-                            }
-                            Spacer(Modifier.height(12.dp))
+                            SettingRow(Icons.Rounded.Alarm, stringResource(R.string.label_remind), remindLabel(remind), remind != null, onClear = { remind = null }) { remindDlg = true }
+                            SettingRow(Icons.Rounded.Repeat, stringResource(R.string.label_repeat), freqLabel(freq, until, interval), freq != null, onClear = {
+                                freq = null
+                                until = null
+                            }) { repeatDlg = true }
                         }
-                    } else {
-                        Column(Modifier.weight(1f)) {
-                            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = { date = date.minusDays(1) }) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, null) }
-                                Text(
-                                    when {
-                                        start == null -> stringResource(R.string.pick_time_first)
-                                        block -> "${start.hm()} – ${result.end?.hm().orEmpty()}"
-                                        else -> start.hm()
-                                    },
-                                    modifier = Modifier.weight(1f).clickable { dateDlg = true },
-                                    style = MaterialTheme.typography.titleMedium,
-                                    textAlign = TextAlign.Center,
-                                )
-                                IconButton(onClick = { date = date.plusDays(1) }) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) }
-                            }
-                            Text(
-                                stringResource(R.string.detail_settings_grid_hint, defaultMinutes),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            HalfHourGrid(
-                                startMin = startMin,
-                                endMin = endMin,
-                                defaultMinutes = defaultMinutes,
-                                modifier = Modifier.weight(1f).fillMaxWidth(),
-                                onChange = { s, e ->
-                                    startMin = s
-                                    endMin = e
-                                    block = true
-                                },
-                            )
-                            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                TextButton(onClick = { onPick(null) }) { Text(stringResource(R.string.clear_time), color = MaterialTheme.colorScheme.error) }
-                                Spacer(Modifier.weight(1f))
-                                TextButton(onClick = {
-                                    startMin = -1
-                                    endMin = -1
-                                }) { Text(stringResource(R.string.only_date)) }
-                            }
+                    }
+                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { close(null) }) { Text(stringResource(R.string.clear_time), color = MaterialTheme.colorScheme.error) }
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        TextButton(onClick = { close(result) }, enabled = tab == 0 || start != null) {
+                            Text(stringResource(R.string.ok), color = if (tab == 0 || start != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -223,7 +247,7 @@ internal fun EventTimeSheet(
         }
     }
     if (endDlg) {
-        TimePickerDlg(result.end ?: LocalTime.of(19, 0), { endDlg = false }) { t ->
+        TimePickerDlg(end ?: start?.plusMinutes(duration.toLong()) ?: LocalTime.of(19, 0), { endDlg = false }) { t ->
             val newEnd = t.hour * 60 + t.minute
             endMin = if (startMin >= 0 && newEnd <= startMin) newEnd + 24 * 60 else newEnd
         }
@@ -231,66 +255,48 @@ internal fun EventTimeSheet(
     if (dateDlg) {
         DatePickerDlg(date, { dateDlg = false }) { date = it }
     }
-}
-
-/** 「时间」一行：开始 / 结束各自精确选择，设了时间就能一眼看到、一键清除。截止模式（不占时间块）不显示结束。 */
-@Composable
-private fun TimeRangeRow(
-    start: LocalTime?,
-    end: LocalTime?,
-    showEnd: Boolean,
-    nextDay: Boolean,
-    onPickStart: () -> Unit,
-    onPickEnd: () -> Unit,
-    onClear: () -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Rounded.Schedule, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(12.dp))
-        Text(stringResource(R.string.sheet_time), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        if (start == null) {
-            Text(
-                stringResource(R.string.pick_time_first),
-                Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onPickStart).padding(horizontal = 8.dp, vertical = 6.dp),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            TimeSegment(stringResource(R.string.detail_editor_start), start.hm(), onPickStart)
-            if (showEnd) {
-                Spacer(Modifier.width(4.dp))
-                Text(stringResource(R.string.detail_editor_to), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.width(4.dp))
-                TimeSegment(stringResource(if (nextDay) R.string.time_end_next_day else R.string.detail_editor_end), end?.hm().orEmpty(), onPickEnd)
-            }
-            IconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Rounded.Close, stringResource(R.string.clear_time), Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-            }
+    if (remindDlg) {
+        RemindPickDialog(remind, { remindDlg = false }) {
+            remind = it
+            remindDlg = false
+        }
+    }
+    if (repeatDlg) {
+        RepeatPickDialog(freq, interval, until, { repeatDlg = false }) { f, i, u ->
+            freq = f
+            interval = i
+            until = if (f == null) null else u
+            repeatDlg = false
         }
     }
 }
 
+/** 下一个周一（今天就是周一则顺延一周）。 */
+private fun nextMonday(today: LocalDate): LocalDate {
+    val m = today.with(DayOfWeek.MONDAY)
+    return if (m.isAfter(today)) m else m.plusWeeks(1)
+}
+
+/** 快捷芯片：图标在上、文字在下，选中染主题色。 */
 @Composable
-private fun TimeSegment(
+private fun QuickChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    value: String,
+    active: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Column(
-        Modifier
-            .clip(RoundedCornerShape(10.dp))
+        modifier
+            .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+            .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+        Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.height(6.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = tint)
     }
 }
 
@@ -414,8 +420,8 @@ internal fun SettingRow(
             color = if (set) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (set) {
-            IconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Rounded.Close, stringResource(R.string.clear_time), Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+            IconButton(onClick = onClear) {
+                Icon(Icons.Rounded.Close, stringResource(R.string.clear_time), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
             Spacer(Modifier.width(8.dp))
@@ -621,8 +627,8 @@ internal fun RepeatPickDialog(
                                 color = MaterialTheme.colorScheme.primary,
                             )
                             if (until != null) {
-                                IconButton(onClick = { until = null }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Rounded.Close, stringResource(R.string.clear_time), Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                IconButton(onClick = { until = null }) {
+                                    Icon(Icons.Rounded.Close, stringResource(R.string.clear_time), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
@@ -642,82 +648,3 @@ internal fun RepeatPickDialog(
         DatePickerDlg(until ?: LocalDate.now().plusMonths(3), { untilDlg = false }) { until = it }
     }
 }
-
-/** 半小时一格的纵向时间块图：长按拖动=框选；点一下=从该半点起排一个默认时长的块（分钟数不被吸附）。 */
-@Composable
-private fun HalfHourGrid(
-    startMin: Int,
-    endMin: Int,
-    defaultMinutes: Int,
-    onChange: (Int, Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val slotH = 26.dp
-    val scroll = rememberScrollState()
-    val density = LocalDensity.current
-    val haptics = LocalHapticFeedback.current
-    val primary = MaterialTheme.colorScheme.primary
-    val outline = MaterialTheme.colorScheme.outlineVariant
-    LaunchedEffect(Unit) {
-        val focusMin = if (startMin >= 0) startMin else LocalTime.now().hour * 60
-        val idx = (focusMin / SLOT_MIN - 4).coerceAtLeast(0)
-        scroll.scrollTo(with(density) { (slotH * idx).roundToPx() })
-    }
-    Column(
-        modifier
-            .verticalScroll(scroll)
-            .pointerInput(Unit) {
-                val slotPx = slotH.toPx()
-                detectTapGestures { off ->
-                    val s = (off.y / slotPx).toInt().coerceIn(0, SLOTS - 1)
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onChange(s * SLOT_MIN, s * SLOT_MIN + defaultMinutes)
-                }
-            }.pointerInput(Unit) {
-                val slotPx = slotH.toPx()
-
-                fun slotAt(y: Float): Int = (y / slotPx).toInt().coerceIn(0, SLOTS - 1)
-                var anchor = 0
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { off ->
-                        anchor = slotAt(off.y)
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onChange(anchor * SLOT_MIN, (anchor + 1) * SLOT_MIN)
-                    },
-                    onDrag = { change, _ ->
-                        change.consume()
-                        val s = slotAt(change.position.y)
-                        onChange(minOf(anchor, s) * SLOT_MIN, (maxOf(anchor, s) + 1) * SLOT_MIN)
-                    },
-                )
-            },
-    ) {
-        for (i in 0 until SLOTS) {
-            val a = i * SLOT_MIN
-            val b = a + SLOT_MIN
-            val on = startMin >= 0 && startMin < b && endMin > a
-            val shape =
-                RoundedCornerShape(
-                    topStart = if (on && startMin >= a) 14.dp else 0.dp,
-                    topEnd = if (on && startMin >= a) 14.dp else 0.dp,
-                    bottomStart = if (on && endMin <= b) 14.dp else 0.dp,
-                    bottomEnd = if (on && endMin <= b) 14.dp else 0.dp,
-                )
-            Box(Modifier.fillMaxWidth().height(slotH).background(if (on) primary.copy(alpha = 0.16f) else Color.Transparent, shape)) {
-                if (i % 2 == 0) {
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(outline.copy(alpha = 0.5f)))
-                    Text(
-                        "${i / 2}:00",
-                        modifier = Modifier.padding(start = 14.dp, top = 3.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (on) primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-    }
-}
-
-private const val SLOT_MIN = 30
-private const val SLOTS = 24 * 60 / SLOT_MIN

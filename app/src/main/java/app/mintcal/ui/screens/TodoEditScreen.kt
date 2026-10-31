@@ -1,6 +1,11 @@
 package app.mintcal.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -28,7 +33,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
@@ -36,10 +40,8 @@ import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.UploadFile
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -84,6 +86,7 @@ import app.mintcal.R
 import app.mintcal.core.change.ChangeSet
 import app.mintcal.core.change.Edits
 import app.mintcal.core.change.clashesOf
+import app.mintcal.core.model.Freq
 import app.mintcal.core.model.Recurrence
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
@@ -97,6 +100,7 @@ import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Tab
 import app.mintcal.ui.components.AttachmentEditor
 import app.mintcal.ui.components.ConfirmDialog
+import app.mintcal.ui.components.ConflictCard
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintCheck
 import app.mintcal.ui.components.pasteFromClipboard
@@ -116,7 +120,8 @@ import java.time.LocalDateTime
 
 /**
  * 唯一的编辑页：新建和修改都是它。内容区保持 TickTick 详情页式的直排（标题 → 安排 → 子任务 →
- * 备注与附件展示），清单 / 优先级 / 图片 / 文件 / 粘贴全收进底部工具栏，右端是实心保存按钮。
+ * 备注与附件展示），清单 / 优先级 / 图片 / 文件 / 粘贴全收进底部工具栏；没有保存键——
+ * 返回即静默落盘，空标题等于放弃这条。
  * 标题里识别到的日期时间就地高亮，点一下表示认错了；已有截止时间与时间块分别保存。
  */
 @Composable
@@ -187,12 +192,9 @@ fun TodoEditScreen(
     var priority by remember { mutableIntStateOf(existing?.priority ?: 0) }
     var ignored by remember { mutableStateOf(setOf<String>()) }
     var timeSheet by remember { mutableStateOf(false) }
-    var remindDlg by remember { mutableStateOf(false) }
-    var repeatDlg by remember { mutableStateOf(false) }
     var newSub by remember { mutableStateOf("") }
     var subReset by remember { mutableIntStateOf(0) }
     var confirmDelete by remember { mutableStateOf(false) }
-    var confirmDiscard by remember { mutableStateOf(false) }
     var listMenu by remember { mutableStateOf(false) }
     var priorityMenu by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
@@ -229,16 +231,14 @@ fun TodoEditScreen(
         whenPick?.date != initialWhen?.date || whenPick?.start != initialWhen?.start ||
             (whenPick?.start != null && (whenPick.block != initialWhen?.block || (whenPick.block && whenPick.minutes != initialWhen?.minutes)))
     val hasChanges =
-        text != (existing?.title ?: textDraft.orEmpty()) || note != existing?.note.orEmpty() ||
+        // 新建时草稿就是内容本身：带着草稿进来点返回也该落成一条，不能当作「没改过」
+        (existing == null && text.isNotBlank()) || text != existing?.title.orEmpty() || note != existing?.note.orEmpty() ||
             attachments != existing?.attachments.orEmpty() || listId != existing?.listId || priority != (existing?.priority ?: 0) ||
             remind != existing?.remindMinutes || freq != existing?.repeat?.freq ||
             (freq != null && (interval != (existing?.repeat?.interval ?: 1) || until != existing?.repeat?.until)) ||
             whenChanged || newSub.isNotBlank()
 
-    fun requestBack() {
-        if (hasChanges) confirmDiscard = true else onBack()
-    }
-    BackHandler { requestBack() }
+    // 退出即保存：有内容且有改动就静默落盘；空标题等于放弃这条
     val ranges =
         remember(text, tokens, ignored) {
             if (text.isEmpty()) {
@@ -346,7 +346,7 @@ fun TodoEditScreen(
                 }
         val feedback =
             when {
-                existing != null -> resources.getString(R.string.saved_toast)
+                existing != null -> desc
                 changes.size > 1 -> resources.getString(R.string.todo_batch_toast, changes.size)
                 w != null -> resources.getString(R.string.detail_editor_added_date, ctx.dueLabel(w.date.atStartOfDay(), false, today))
                 else -> resources.getString(R.string.detail_editor_added_inbox)
@@ -354,6 +354,12 @@ fun TodoEditScreen(
         actions.commit(ChangeSet(Ids.next(), desc, Source.MANUAL, ms, changes.flatMap { it.changes }), feedback)
         onBack()
     }
+
+    // 返回 / 手势退出都自动保存；空标题等于放弃这条
+    fun requestBack() {
+        if (title.isNotEmpty() && hasChanges) commit() else onBack()
+    }
+    BackHandler { requestBack() }
 
     Column(
         Modifier
@@ -376,40 +382,28 @@ fun TodoEditScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
         ) {
-            // ── 任务内容 ──
-            SmartTitle(field, { field = it }, ranges, titleFocus) { range ->
-                ignored = ignored + text.substring(range.first, range.last + 1)
-            }
-            // ── 安排：时间 / 提醒 / 重复收进一张卡，图标行自解释，不再靠文字小标题 ──
-            Spacer(Modifier.height(10.dp))
+            // ── 日期&重复：TickTick 详情页式，一行常驻在标题上方，点开同一个面板 ──
             MintCard(Modifier.fillMaxWidth()) {
-                WhenRow(whenPick, today, onClear = {
+                WhenRow(whenPick, today, remind, freq, interval, until, onClear = {
                     picked = null
                     cleared = true
                     remind = null
                     freq = null
                     until = null
                 }) { timeSheet = true }
-                if (whenPick != null) {
-                    CardDivider()
-                    SettingRow(Icons.Rounded.Alarm, stringResource(R.string.label_remind), remindLabel(remind), remind != null, onClear = { remind = null }) { remindDlg = true }
-                    CardDivider()
-                    SettingRow(Icons.Rounded.Repeat, stringResource(R.string.label_repeat), freqLabel(freq, until, interval), freq != null, onClear = {
-                        freq = null
-                        until = null
-                    }) { repeatDlg = true }
-                }
             }
-            if (clashes.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.28f))
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
+            Spacer(Modifier.height(6.dp))
+            // ── 任务内容 ──
+            SmartTitle(field, { field = it }, ranges, titleFocus) { range ->
+                ignored = ignored + text.substring(range.first, range.last + 1)
+            }
+            // 冲突提示：与课程 / 其它待办撞时间的实例，点行跳课表对应那天查看（先保存再跳）
+            AnimatedVisibility(
+                visible = clashes.isNotEmpty(),
+                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+            ) {
+                ConflictCard(title = stringResource(R.string.conflict_title), modifier = Modifier.padding(top = 6.dp)) {
                     clashes.forEach { c ->
                         Row(
                             Modifier
@@ -431,17 +425,16 @@ fun TodoEditScreen(
                                 ),
                                 Modifier.weight(1f),
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
                             )
                             Text(
                                 ctx.monthDayWeekday(c.at.toLocalDate()),
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Icon(
                                 Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                                 null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp),
                             )
                         }
@@ -460,15 +453,25 @@ fun TodoEditScreen(
                             IconButton(onClick = {
                                 actions.commit(
                                     Edits.delete(snap, s, ctx.getString(R.string.delete_desc, s.title), System.currentTimeMillis()),
-                                    ctx.getString(R.string.deleted_toast),
+                                    ctx.getString(R.string.delete_desc, s.title),
                                 )
                             }) { Icon(Icons.Rounded.Delete, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp)) }
                         }
                     }
                     if (subs.isNotEmpty()) CardDivider()
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                        FlatField(newSub, stringResource(R.string.add_subtask), onChange = { newSub = it }, reset = subReset)
+                        // 有子任务时让位给勾选框那 48dp（占位符跟子任务标题同一竖线）；
+                        // 还没有子任务时回到「图标 20 + 12」的普通文字列，别自作主张缩进去
+                        if (subs.isEmpty()) {
+                            Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(12.dp))
+                        } else {
+                            Box(Modifier.width(48.dp), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                        // weight：输入框不能把「添加」按钮挤出卡片外
+                        FlatField(newSub, stringResource(R.string.add_subtask), onChange = { newSub = it }, reset = subReset, modifier = Modifier.weight(1f))
                         if (newSub.isNotBlank()) {
                             TextButton(
                                 onClick = {
@@ -485,9 +488,12 @@ fun TodoEditScreen(
             // ── 备注与附件：附件只做展示，添加动作在底部工具栏 ──
             Spacer(Modifier.height(10.dp))
             MintCard(Modifier.fillMaxWidth()) {
-                FlatField(note, stringResource(R.string.label_note), onChange = { note = it }, singleLine = false)
-                Spacer(Modifier.height(4.dp))
-                AttachmentEditor(attachments, onChange = { attachments = it })
+                // 备注文字也落在同一条文字列上（卡片内边距 16 + 32 = 上面各行的标签位置）
+                Column(Modifier.padding(start = 32.dp)) {
+                    FlatField(note, stringResource(R.string.label_note), onChange = { note = it }, singleLine = false)
+                    Spacer(Modifier.height(4.dp))
+                    AttachmentEditor(attachments, onChange = { attachments = it })
+                }
             }
             Spacer(Modifier.height(16.dp))
         }
@@ -576,20 +582,22 @@ fun TodoEditScreen(
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                Button(onClick = { commit() }, enabled = title.isNotEmpty(), shape = RoundedCornerShape(20.dp)) {
-                    Text(stringResource(R.string.save))
-                }
             }
         }
     }
 
     if (timeSheet) {
-        EventTimeSheet(
+        WhenPanel(
             initial = whenPick,
             defaultDate = whenPick?.date ?: argDate ?: today,
             defaultMinutes = settings.defaultBlockMinutes,
+            initialRemind = remind,
+            initialFreq = freq,
+            initialInterval = interval,
+            initialUntil = until,
             onDismiss = { timeSheet = false },
-            onPick = { wp ->
+            onPick = { r ->
+                val wp = r.whenPick
                 if (wp == null) {
                     picked = null
                     cleared = true
@@ -599,46 +607,13 @@ fun TodoEditScreen(
                 } else {
                     picked = wp
                     cleared = false
+                    remind = r.remindMinutes
+                    freq = r.freq
+                    interval = r.interval
+                    until = r.until
                 }
                 timeSheet = false
             },
-        )
-    }
-    if (remindDlg) {
-        RemindPickDialog(
-            initial = remind,
-            onDismiss = { remindDlg = false },
-            onPick = {
-                remind = it
-                remindDlg = false
-            },
-        )
-    }
-    if (repeatDlg) {
-        RepeatPickDialog(
-            freqInitial = freq,
-            intervalInitial = interval,
-            untilInitial = until,
-            onDismiss = { repeatDlg = false },
-            onPick = { f, i, u ->
-                freq = f
-                interval = i
-                until = if (f == null) null else u
-                repeatDlg = false
-            },
-        )
-    }
-    if (confirmDiscard) {
-        ConfirmDialog(
-            stringResource(R.string.detail_editor_discard_title),
-            stringResource(R.string.detail_editor_discard_desc),
-            stringResource(R.string.detail_editor_discard),
-            onConfirm = {
-                confirmDiscard = false
-                onBack()
-            },
-            onDismiss = { confirmDiscard = false },
-            danger = true,
         )
     }
     if (confirmDelete && existing != null) {
@@ -649,7 +624,7 @@ fun TodoEditScreen(
             onConfirm = {
                 actions.commit(
                     Edits.delete(snap, existing, ctx.getString(R.string.delete_desc, existing.title), System.currentTimeMillis()),
-                    ctx.getString(R.string.deleted_toast),
+                    ctx.getString(R.string.delete_desc, existing.title),
                 )
                 onBack()
             },
@@ -743,20 +718,24 @@ private class TokenPaint(
     override fun hashCode(): Int = ranges.hashCode() * 31 + color.hashCode()
 }
 
-/** 已有截止时刻与时间块分别显示，只有日期的待办不占时间段。 */
+/** 一行「日期&重复」：时间 + 重复 + 提醒合成一句，点开同一个面板。 */
 @Composable
 private fun WhenRow(
     whenPick: WhenPick?,
     today: LocalDate,
+    remind: Int?,
+    freq: Freq?,
+    interval: Int,
+    until: LocalDate?,
     onClear: () -> Unit,
     onClick: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val start = whenPick?.start
-    val label =
+    val dateLabel =
         when {
             whenPick == null -> {
-                stringResource(R.string.add_date)
+                null
             }
 
             start == null -> {
@@ -773,6 +752,18 @@ private fun WhenRow(
                 "${ctx.dueLabel(whenPick.date.atTime(start), true, today)} – $endLabel"
             }
         }
+    val extras =
+        buildList {
+            if (freq != null) add(freqLabel(freq, until, interval))
+            if (remind != null) add(remindLabel(remind))
+        }
+    val empty = dateLabel == null && extras.isEmpty()
+    val label =
+        when {
+            empty -> stringResource(R.string.date_and_repeat)
+            dateLabel == null -> extras.joinToString(" · ")
+            else -> (listOf(dateLabel) + extras).joinToString(" · ")
+        }
     Row(
         Modifier
             .fillMaxWidth()
@@ -784,17 +775,17 @@ private fun WhenRow(
         Icon(
             Icons.Rounded.Schedule,
             null,
-            tint = if (whenPick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (empty) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(20.dp),
         )
         Spacer(Modifier.width(12.dp))
         Text(
             label,
             style = MaterialTheme.typography.bodyLarge,
-            color = if (whenPick == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+            color = if (empty) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
-        if (whenPick != null) {
+        if (!empty) {
             Text(
                 stringResource(R.string.detail_editor_clear_plan),
                 Modifier
@@ -818,9 +809,10 @@ private fun FlatField(
     singleLine: Boolean = true,
     /** 变化时清空输入（如添加子任务后）。 */
     reset: Any? = null,
+    modifier: Modifier = Modifier,
 ) {
     var v by remember(reset) { mutableStateOf(TextFieldValue(value)) }
-    Box(Modifier.fillMaxWidth().heightIn(min = 44.dp)) {
+    Box(modifier.fillMaxWidth().heightIn(min = 44.dp)) {
         BasicTextField(
             value = v,
             onValueChange = {

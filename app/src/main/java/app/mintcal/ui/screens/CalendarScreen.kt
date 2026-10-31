@@ -2,12 +2,14 @@ package app.mintcal.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -37,9 +39,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -87,12 +87,14 @@ import app.mintcal.core.agenda.BlockItem
 import app.mintcal.core.agenda.CourseItem
 import app.mintcal.core.agenda.EventItem
 import app.mintcal.core.agenda.TaskItem
+import app.mintcal.core.todo.Bucket
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
 import app.mintcal.ui.components.AgendaRow
 import app.mintcal.ui.components.DatePickerDlg
 import app.mintcal.ui.components.EmptyState
+import app.mintcal.ui.components.MintFab
 import app.mintcal.ui.fullDate
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDayWeekday
@@ -170,6 +172,7 @@ fun CalendarScreen() {
     }
 
     var showPicker by remember { mutableStateOf(false) }
+    var quickAddOpen by rememberSaveable { mutableStateOf(false) }
     var previewDate by remember { mutableStateOf<LocalDate?>(null) }
 
     // 翻到哪一页，选中日期就跟到那个月/周的同名日子（不打断下面列表的语义）
@@ -232,8 +235,7 @@ fun CalendarScreen() {
                     ) {
                         Text(
                             title,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.titleMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
@@ -277,7 +279,9 @@ fun CalendarScreen() {
                         val monthOf = anchor.plusMonths((page - PAGE_CENTER).toLong())
                         val rows =
                             if (mode == CalMode.MONTH) {
-                                ChronoUnit.WEEKS.between(start, monthOf.plusMonths(1).with(TemporalAdjusters.previousOrSame(first))).toInt()
+                                // 覆盖整月：从本月 1 号所在的周一，到月末所在的周日，按天数除以 7
+                                val end = monthOf.with(TemporalAdjusters.lastDayOfMonth()).with(TemporalAdjusters.nextOrSame(first.plus(6)))
+                                ((ChronoUnit.DAYS.between(start, end) + 1) / 7).toInt()
                             } else {
                                 1
                             }
@@ -331,24 +335,24 @@ fun CalendarScreen() {
                 }
             }
             item(key = "h-day") {
-                Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(ctx.monthDayWeekday(selected), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                    AnimatedVisibility(visible = selected != today, enter = fadeIn(MintTheme.spec()), exit = fadeOut(MintTheme.spec())) {
-                        Text(
-                            stringResource(R.string.back_today),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier =
-                                Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                    ) {
-                                        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                                        goto(today)
-                                    }.padding(horizontal = 12.dp, vertical = 12.dp),
-                        )
+                Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(ctx.monthDayWeekday(selected), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        AnimatedVisibility(visible = selected != today, enter = fadeIn(MintTheme.spec()), exit = fadeOut(MintTheme.spec())) {
+                            Text(
+                                stringResource(R.string.back_today),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier =
+                                    Modifier
+                                        .heightIn(min = 48.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable(role = Role.Button) {
+                                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                            goto(today)
+                                        }.padding(horizontal = 12.dp, vertical = 12.dp),
+                            )
+                        }
                     }
                     Text(
                         stringResource(
@@ -377,13 +381,23 @@ fun CalendarScreen() {
                 )
             }
         }
-        FloatingActionButton(
-            onClick = { nav.push(Route.TodoEdit(null, selected.toString())) },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 108.dp),
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            shape = MaterialTheme.shapes.medium,
-        ) { Icon(Icons.Rounded.Add, stringResource(R.string.new_entry)) }
+        MintFab(
+            visible = !quickAddOpen && previewDate == null,
+            onClick = { quickAddOpen = true },
+            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = 92.dp),
+        )
+        QuickAddSheet(
+            snap = snap,
+            now = now,
+            listFilter = null,
+            defaultBucket = if (selected == today) Bucket.TODAY else null,
+            focusSignal = 0,
+            visible = quickAddOpen,
+            onDismiss = { quickAddOpen = false },
+            anchorDate = selected,
+            acceptShare = false,
+            modifier = Modifier.align(Alignment.TopCenter).fillMaxSize(),
+        )
         if (showPicker) {
             DatePickerDlg(selected, { showPicker = false }) {
                 showPicker = false
@@ -467,36 +481,52 @@ private fun ModeSwitch(
     mode: CalMode,
     onChange: (CalMode) -> Unit,
 ) {
-    Row(
+    // 与底栏同款的滑动色块：选中块从当前项滑到目标项，而不是两边各自淡入淡出
+    val sel = if (mode == CalMode.MONTH) 0 else 1
+    val travel = remember { Animatable(sel.toFloat()) }
+    val spec = MintTheme.spec<Float>()
+    LaunchedEffect(sel) { travel.animateTo(sel.toFloat(), spec) }
+    val pill = MaterialTheme.colorScheme.primaryContainer
+    Box(
         Modifier
             .clip(CircleShape)
             .background(MintTheme.card)
             .padding(3.dp)
             .selectableGroup(),
     ) {
-        CalMode.entries.forEach { m ->
-            val sel = m == mode
-            val bg by animateColorAsState(if (sel) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, MintTheme.spec(), label = "mode-bg")
-            val fg by animateColorAsState(if (sel) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, MintTheme.spec(), label = "mode-fg")
-            Text(
-                stringResource(if (m == CalMode.MONTH) R.string.mode_month else R.string.mode_week),
-                modifier =
-                    Modifier
-                        .clip(CircleShape)
-                        .background(bg)
-                        .selectable(
-                            selected = sel,
-                            role = Role.Tab,
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) {
-                            if (!sel) {
-                                onChange(m)
-                            }
-                        }.padding(horizontal = 16.dp, vertical = 14.dp),
-                style = MaterialTheme.typography.labelLarge,
-                color = fg,
+        Canvas(Modifier.matchParentSize()) {
+            val slot = size.width / CalMode.entries.size
+            drawRoundRect(
+                color = pill,
+                topLeft = Offset(travel.value * slot, 0f),
+                size = Size(slot, size.height),
+                cornerRadius = CornerRadius(size.height / 2f),
             )
+        }
+        Row {
+            CalMode.entries.forEach { m ->
+                val isSel = m == mode
+                val fg by animateColorAsState(if (isSel) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, MintTheme.spec(), label = "mode-fg")
+                Text(
+                    stringResource(if (m == CalMode.MONTH) R.string.mode_month else R.string.mode_week),
+                    modifier =
+                        Modifier
+                            .heightIn(min = 36.dp)
+                            .clip(CircleShape)
+                            .selectable(
+                                selected = isSel,
+                                role = Role.Tab,
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) {
+                                if (!isSel) {
+                                    onChange(m)
+                                }
+                            }.padding(horizontal = 18.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = fg,
+                )
+            }
         }
     }
 }
@@ -523,9 +553,7 @@ private fun DayCell(
         when {
             selected -> MaterialTheme.colorScheme.primary
 
-            // 今天给淡 primaryContainer 圆底，靠填充而不是描边
-            today -> MaterialTheme.colorScheme.primaryContainer
-
+            // 今天是描边圈，选中是实心圈：两者都填色就分不出哪一个是「今天」
             else -> Color.Transparent
         },
         MintTheme.spec(),
@@ -572,7 +600,8 @@ private fun DayCell(
             Modifier
                 .size(28.dp)
                 .clip(CircleShape)
-                .background(discBg),
+                .background(discBg)
+                .let { if (today && !selected) it.border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape) else it },
             contentAlignment = Alignment.Center,
         ) {
             Text("${d.dayOfMonth}", color = fg, fontWeight = if (today || selected) FontWeight.Bold else FontWeight.Normal, style = MaterialTheme.typography.bodyMedium)
@@ -613,28 +642,33 @@ private fun CalendarIndicators(
     modifier: Modifier = Modifier,
 ) {
     val schedule = MaterialTheme.colorScheme.primary.copy(alpha = if (inPeriod) 1f else 0.45f)
-    // 待办与日程同族主色，靠形状区分：pending 空心环，done 实心灰点
     val pending = MaterialTheme.colorScheme.primary.copy(alpha = if (inPeriod) 1f else 0.45f)
     val done = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (inPeriod) 0.85f else 0.4f)
+    // 形状编码：实心短条=有课，空心环=还有待办，小实心点=已完成。
+    // （之前三种都是同样的小胶囊，缩到 3dp 高以后完全分不出来）
     Canvas(modifier.size(width = 36.dp, height = 9.dp)) {
-        val scheduledWidth = if (marks.scheduled > 0) (3 + minOf(marks.scheduled, 3) * 3).dp.toPx() else 0f
-        val taskSlots = minOf(marks.pending + marks.done, 3)
-        val tasksWidth = if (taskSlots > 0) taskSlots * 7.dp.toPx() - 1.dp.toPx() else 0f
-        val gap = if (scheduledWidth > 0 && tasksWidth > 0) 3.dp.toPx() else 0f
-        var x = (size.width - scheduledWidth - tasksWidth - gap) / 2f
-        if (scheduledWidth > 0) {
-            drawRoundRect(schedule, Offset(x, 3.5.dp.toPx()), Size(scheduledWidth, 2.dp.toPx()), CornerRadius(1.dp.toPx()))
-            x += scheduledWidth + gap
-        }
-        repeat(taskSlots) { index ->
-            val center = Offset(x + 3.dp.toPx(), size.height / 2f)
-            if (index < marks.pending) {
-                drawCircle(pending, 2.5.dp.toPx(), center, style = Stroke(1.5.dp.toPx()))
-            } else {
-                // 已完成用实心灰点
-                drawCircle(done, 2.5.dp.toPx(), center)
+        val barW = 6.dp.toPx()
+        val barH = 3.dp.toPx()
+        val ringR = 2.6.dp.toPx()
+        val dotR = 2.dp.toPx()
+        val gap = 3.dp.toPx()
+        val items = ArrayList<Int>(3) // 0=日程 1=待办 2=已完成
+        if (marks.scheduled > 0) items.add(0)
+        repeat(minOf(marks.pending, 3 - items.size)) { items.add(1) }
+        repeat(minOf(marks.done, 3 - items.size)) { items.add(2) }
+        if (items.isEmpty()) return@Canvas
+
+        fun widthOf(k: Int) = if (k == 0) barW else (if (k == 1) ringR * 2 else dotR * 2)
+        val total = items.sumOf { widthOf(it).toDouble() }.toFloat() + gap * (items.size - 1)
+        var x = (size.width - total) / 2f
+        val midY = size.height / 2f
+        items.forEach { k ->
+            when (k) {
+                0 -> drawRoundRect(schedule, Offset(x, midY - barH / 2f), Size(barW, barH), CornerRadius(barH / 2f))
+                1 -> drawCircle(pending, ringR, Offset(x + ringR, midY), style = Stroke(1.dp.toPx()))
+                else -> drawCircle(done, dotR, Offset(x + dotR, midY))
             }
-            x += 7.dp.toPx()
+            x += widthOf(k) + gap
         }
     }
 }

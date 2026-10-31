@@ -3,25 +3,29 @@ package app.mintcal.ui
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Undo
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -34,14 +38,25 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -54,6 +69,7 @@ import app.mintcal.DeepLink
 import app.mintcal.MintCalApp
 import app.mintcal.R
 import app.mintcal.ui.components.FloatingNavBar
+import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.screens.AboutScreen
 import app.mintcal.ui.screens.AdvancedFullScreen
 import app.mintcal.ui.screens.AiSettingsScreen
@@ -75,10 +91,8 @@ import app.mintcal.ui.screens.TodayScreen
 import app.mintcal.ui.screens.TodoEditScreen
 import app.mintcal.ui.screens.TodoScreen
 import app.mintcal.ui.screens.TrashScreen
+import app.mintcal.ui.theme.LocalReduceMotion
 import app.mintcal.ui.theme.MintTheme
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import java.time.LocalDateTime
 
 @Composable
 fun MintCalRoot(
@@ -91,12 +105,10 @@ fun MintCalRoot(
     val actions = remember { Actions(app, scope, nav) }
     val ready by app.repo.ready.collectAsState()
 
-    // 悬浮撤销按钮：出现后 5 秒自动收起；新操作会把计时重置
-    LaunchedEffect(actions.undo?.seq) {
-        val prompt = actions.undo ?: return@LaunchedEffect
-        delay(5_000)
-        actions.timeout(prompt.seq)
-    }
+    // 可撤销的说明条留到下一次操作，或用户自己关掉。不按秒数收起。
+    val undoPrompt = actions.undo
+    var undoShown by remember { mutableStateOf(undoPrompt) }
+    if (undoPrompt != null) undoShown = undoPrompt
 
     // 是否在压栈页（Tab 层 = home 目的地）。转场与返回栈由标准 navigation-compose 接管。
     val backStack by nav.controller.currentBackStackEntryAsState()
@@ -160,46 +172,49 @@ fun MintCalRoot(
 
     CompositionLocalProvider(LocalApp provides app, LocalActions provides actions, LocalNav provides nav) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            if (ready) {
-                NavHost(
-                    nav.controller,
-                    startDestination = HOME,
-                    modifier = Modifier.fillMaxSize(),
-                    // 标准 M3 方向性转场：enter/exit = 推入（新页右入 1/3，底层左让位）；
-                    // popEnter/popExit = 返回（顶层右出淡出，底层原位揭露）。
-                    // 开启预测性返回后，库按手势进度逐帧 seek pop 组转场。
-                    enterTransition = { slideInHorizontally(slide) { it / 3 } + fadeIn(fade) },
-                    exitTransition = { slideOutHorizontally(slide) { -it / 10 } },
-                    popEnterTransition = { slideInHorizontally(slide) { -it / 10 } },
-                    popExitTransition = { slideOutHorizontally(slide) { it / 3 } + fadeOut(fade) },
-                ) {
-                    composable(HOME) { Tabs(nav) }
-                    mintDestinations(nav, back)
+            // 首屏内容从启动屏底下淡出浮现：ready 后不再是一帧硬切
+            AnimatedVisibility(
+                visible = ready,
+                enter =
+                    fadeIn(tween(durationMillis = 220, easing = FastOutSlowInEasing)) +
+                        scaleIn(initialScale = 0.985f, animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)),
+            ) {
+                if (ready) {
+                    NavHost(
+                        nav.controller,
+                        startDestination = HOME,
+                        modifier = Modifier.fillMaxSize(),
+                        // 标准 M3 方向性转场：enter/exit = 推入（新页右入 1/3，底层左让位）；
+                        // popEnter/popExit = 返回（顶层右出淡出，底层原位揭露）。
+                        // 开启预测性返回后，库按手势进度逐帧 seek pop 组转场。
+                        enterTransition = { slideInHorizontally(slide) { it / 3 } + fadeIn(fade) },
+                        exitTransition = { slideOutHorizontally(slide) { -it / 10 } },
+                        popEnterTransition = { slideInHorizontally(slide) { -it / 10 } },
+                        popExitTransition = { slideOutHorizontally(slide) { it / 3 } + fadeOut(fade) },
+                    ) {
+                        composable(HOME) { Tabs(nav) }
+                        mintDestinations(nav, back)
+                    }
                 }
             }
-            // TickTick 式悬浮撤销：可撤销操作不再弹提示条，改为左下角一颗圆形按钮
+            // 撤销：左下角一个圆钮，3 秒后自己消失。放左边就不和右下角的添加键打架，
+            // 也不用一条通栏横条去盖列表内容。
             AnimatedVisibility(
-                visible = actions.undo != null,
-                enter = scaleIn(MintTheme.spec(), initialScale = 0.6f) + fadeIn(MintTheme.spec()),
-                exit = scaleOut(MintTheme.spec(), targetScale = 0.6f) + fadeOut(MintTheme.spec()),
+                visible = undoPrompt != null && !nav.composerOpen,
+                enter = fadeIn(MintTheme.spec()) + scaleIn(initialScale = 0.8f, animationSpec = MintTheme.spec()),
+                exit = fadeOut(MintTheme.spec()) + scaleOut(targetScale = 0.8f, animationSpec = MintTheme.spec()),
                 modifier =
                     Modifier
                         .align(Alignment.BottomStart)
-                        .zIndex(2f)
-                        // 键盘弹起时跟快速添加栏一起浮到键盘上方，否则会被压在键盘底下
+                        .zIndex(3f)
                         .imePadding()
                         .navigationBarsPadding()
-                        .padding(start = 20.dp)
-                        .padding(bottom = if (!onRoute) 152.dp else 88.dp),
+                        .padding(start = 16.dp)
+                        .padding(bottom = if (!onRoute) 92.dp else 16.dp),
             ) {
-                FloatingActionButton(
-                    onClick = { actions.undoNow() },
-                    shape = CircleShape,
-                    containerColor = MaterialTheme.colorScheme.tertiary,
-                    contentColor = MaterialTheme.colorScheme.onTertiary,
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp),
-                ) {
-                    Icon(Icons.AutoMirrored.Rounded.Undo, stringResource(R.string.undo))
+                val prompt = undoShown
+                if (prompt != null) {
+                    UndoButton(prompt.text, prompt.seq, onUndo = { actions.undoNow() }, onTimeout = { actions.dismissUndo() })
                 }
             }
         }
@@ -235,38 +250,116 @@ fun NavGraphBuilder.mintDestinations(
     }
 }
 
+/**
+ * 撤销圆钮：一个没文字的图标，3 秒内点就撤销，超时自己消失。
+ * 外圈那道弧是剩下的时间——不用读秒，扫一眼就知道还剩多少。
+ */
+@Composable
+private fun UndoButton(
+    label: String,
+    token: Long,
+    onUndo: () -> Unit,
+    onTimeout: () -> Unit,
+) {
+    val reduce = LocalReduceMotion.current
+    val haptics = LocalHapticFeedback.current
+    val remain = remember(token) { Animatable(1f) }
+    LaunchedEffect(token) {
+        remain.snapTo(1f)
+        if (reduce) {
+            remain.snapTo(0f)
+            onTimeout()
+        } else {
+            remain.animateTo(0f, tween(durationMillis = UNDO_MS, easing = LinearEasing))
+            onTimeout()
+        }
+    }
+    Box(
+        Modifier
+            .size(52.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .mintClickable {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onUndo()
+            }.semantics {
+                contentDescription = label
+                role = Role.Button
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        val ring = MaterialTheme.colorScheme.primary
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = 2.dp.toPx()
+            val inset = stroke / 2 + 1.dp.toPx()
+            val arcRect = Size(size.width - inset * 2, size.height - inset * 2)
+            drawArc(
+                color = ring,
+                startAngle = -90f,
+                sweepAngle = 360f * remain.value,
+                useCenter = false,
+                topLeft = Offset(inset, inset),
+                size = arcRect,
+                style = Stroke(width = stroke, cap = StrokeCap.Round),
+            )
+        }
+        Icon(
+            Icons.AutoMirrored.Rounded.Undo,
+            null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp),
+        )
+    }
+}
+
+private const val UNDO_MS = 3000
+
 @Composable
 private fun Tabs(nav: Nav) {
-    // 全部 Tab 常驻组合：切换只动绘制层（零重组，滚动/筛选/翻页状态永不丢），
-    // 且四个页在启动时一次性组装——这帧重活落在启动屏底下，之后任何切换都不再有首访组装尖刺。
+    // 首帧只组装当前 Tab，其余三个在首帧之后的空闲帧补齐：冷启动首帧从四屏重活降到一屏，
+    // 之后仍然全部常驻——切换只动绘制层（零重组，滚动/筛选/翻页状态不丢），切过去也没有首访尖刺。
     // 切页本身不做任何位移/淡入：内容瞬切、底栏色块滑过去。位移过渡需要在新页首帧之后才把
     // 偏移打进去（一帧跳出去再滑回来），线框多的课表/日历上看着就是抖——平台惯例也是瞬切。
-    val visited = remember { Tab.entries.toList() }
+    var staged by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos {}
+        staged = true
+    }
     val focusManager = LocalFocusManager.current
     LaunchedEffect(nav.tab) { focusManager.clearFocus(force = true) }
     Box(Modifier.fillMaxSize()) {
-        visited.forEach { tab ->
+        Tab.entries.forEach { tab ->
             key(tab) {
                 val current = tab == nav.tab
-                Box(
-                    Modifier
-                        .zIndex(if (current) 1f else 0f)
-                        .fillMaxSize()
-                        .graphicsLayer { alpha = if (current) 1f else 0f }
-                        .then(if (current) Modifier else Modifier.clearAndSetSemantics {})
-                        .blockPointer(!current),
-                ) {
-                    when (tab) {
-                        Tab.TODAY -> TodayScreen()
-                        Tab.TIMETABLE -> TimetableScreen()
-                        Tab.CALENDAR -> CalendarScreen()
-                        Tab.TODO -> TodoScreen()
+                if (current || staged) {
+                    Box(
+                        Modifier
+                            .zIndex(if (current) 1f else 0f)
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = if (current) 1f else 0f }
+                            .then(if (current) Modifier else Modifier.clearAndSetSemantics {})
+                            .blockPointer(!current),
+                    ) {
+                        when (tab) {
+                            Tab.TODAY -> TodayScreen()
+                            Tab.TIMETABLE -> TimetableScreen()
+                            Tab.CALENDAR -> CalendarScreen()
+                            Tab.TODO -> TodoScreen()
+                        }
                     }
                 }
             }
         }
-        // zIndex(2f)：底栏必须压在所有 Tab 绘制层之上，否则被全屏 Tab 层挡住点击
-        FloatingNavBar(nav.tab, nav::select, Modifier.align(Alignment.BottomCenter).zIndex(2f))
+        // zIndex(2f)：底栏必须压在所有 Tab 绘制层之上，否则被全屏 Tab 层挡住点击。
+        // 快速添加浮层是模态层：浮层展开时底栏淡出，别让它压住输入框底部。
+        AnimatedVisibility(
+            visible = !nav.composerOpen,
+            enter = fadeIn(MintTheme.spec()) + slideInVertically(MintTheme.spec()) { it / 2 },
+            exit = fadeOut(MintTheme.spec()) + slideOutVertically(MintTheme.spec()) { it / 2 },
+            modifier = Modifier.align(Alignment.BottomCenter).zIndex(2f),
+        ) {
+            FloatingNavBar(nav.tab, nav::select, Modifier.align(Alignment.BottomCenter))
+        }
     }
 }
 

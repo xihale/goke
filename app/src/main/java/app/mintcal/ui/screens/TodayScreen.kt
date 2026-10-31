@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -26,14 +27,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.WbSunny
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +52,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,15 +66,16 @@ import app.mintcal.core.agenda.EventItem
 import app.mintcal.core.agenda.TaskItem
 import app.mintcal.core.change.Edits
 import app.mintcal.core.time.SemesterCalendar
+import app.mintcal.core.todo.Bucket
 import app.mintcal.core.todo.SmartList
 import app.mintcal.core.todo.TaskLogic
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
-import app.mintcal.ui.Tab
 import app.mintcal.ui.components.AgendaRow
 import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.MintCard
+import app.mintcal.ui.components.MintFab
 import app.mintcal.ui.components.SectionLabel
 import app.mintcal.ui.components.TaskRow
 import app.mintcal.ui.hm
@@ -122,7 +120,7 @@ fun TodayScreen() {
                     }
                 }.orEmpty()
         }
-    var menu by remember { mutableStateOf(false) }
+    var quickAddOpen by rememberSaveable { mutableStateOf(false) }
 
     // 做完的收在后面一栏，默认折叠：时间线只留还没做的
     fun isDone(i: app.mintcal.core.agenda.AgendaItem): Boolean = (i is TaskItem && i.task.done) || (i is BlockItem && i.task.done)
@@ -130,13 +128,15 @@ fun TodayScreen() {
     val doneItems = remember(timeline) { timeline.filter { isDone(it) } }
     var showDone by rememberSaveable { mutableStateOf(false) }
     val courseCount = items.count { it is CourseItem }
-    val taskTotal = items.count { it is TaskItem || it is BlockItem }
+    // 今天的 + 已逾期的都算「手上的待办」，进度环和文案用同一个基数，别再说两个数
+    val taskTotal = items.count { it is TaskItem || it is BlockItem } + overdue.size
+    val taskDone = items.count { (it is TaskItem && it.task.done) || (it is BlockItem && it.task.done) }
+    val taskProgress = if (taskTotal == 0) 0f else taskDone.toFloat() / taskTotal
     val doneCount = items.count { (it is CourseItem && it.occ.end.isBefore(now)) || (it is EventItem && !it.allDay && it.end.isBefore(now)) || (it is TaskItem && it.task.done) || (it is BlockItem && it.task.done) }
-    val progress = if (items.isEmpty()) 0f else doneCount.toFloat() / items.size
-    val pendingTasks = pendingItems.count { it is TaskItem || it is BlockItem } + overdue.size
     val next = items.firstOrNull { it is CourseItem && it.occ.end.isAfter(now) } as? CourseItem
-    // 只用于 hero 的完成判定：逾期未清就不算全部完成
+    // 完成判定含已下课的课；进度环只计待办。没有安排时不画这张卡片。
     val allDone = items.isNotEmpty() && doneCount == items.size && overdue.isEmpty()
+    val dayEmpty = timeline.isEmpty() && overdue.isEmpty()
 
     val reduce = reduceMotion()
     val listState = rememberLazyListState()
@@ -158,75 +158,57 @@ fun TodayScreen() {
                         Text(ctx.monthDayWeekday(today), style = MaterialTheme.typography.titleLarge)
                         Text(weekLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Box {
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
-                        DropdownMenu(menu, { menu = false }) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.new_course)) }, onClick = {
-                                menu = false
-                                nav.push(Route.CourseEdit(null))
-                            })
-                        }
-                    }
                     IconButton(onClick = { nav.push(Route.Settings) }) { Icon(Icons.Rounded.Settings, stringResource(R.string.settings)) }
                 }
             }
-            item {
-                MintCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ProgressRing(progress, Modifier.size(56.dp))
-                        Spacer(Modifier.width(16.dp))
-                        Column(Modifier.weight(1f)) {
-                            AnimatedContent(
-                                when {
-                                    timeline.isEmpty() && overdue.isEmpty() -> stringResource(R.string.today_empty_title)
-                                    allDone -> stringResource(R.string.today_all_done_title)
-                                    else -> stringResource(R.string.today_summary, courseCount, taskTotal)
-                                },
-                                transitionSpec = {
-                                    (fadeIn(fadeSpec) + slideInVertically(slideSpec) { it / 3 }) togetherWith
-                                        (fadeOut(fadeSpec) + slideOutVertically(slideSpec) { -it / 3 })
-                                },
-                                label = "today-summary",
-                            ) { t ->
-                                Text(t, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                            }
-                            if (!allDone) {
-                                AnimatedContent(
-                                    next,
-                                    transitionSpec = {
-                                        (fadeIn(fadeSpec) + slideInVertically(slideSpec) { it / 3 }) togetherWith
-                                            (fadeOut(fadeSpec) + slideOutVertically(slideSpec) { -it / 3 })
-                                    },
-                                    label = "today-next",
-                                ) { n ->
-                                    // 空天时 hero 只留标题，说明与入口交给下方空态，同一文案不出现两次
-                                    val sub =
+            if (!dayEmpty) {
+                item {
+                    MintCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                if (next != null && !allDone) {
+                                    Text(next.occ.start.hm(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(next.occ.course.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    if (next.occ.room.isNotBlank()) {
+                                        Text(next.occ.room, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Text(
+                                        stringResource(R.string.today_summary, courseCount, taskTotal),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                } else {
+                                    AnimatedContent(
                                         when {
-                                            n != null -> stringResource(R.string.today_next_class, n.occ.start.hm(), n.occ.course.name, n.occ.room)
-
-                                            pendingTasks > 0 -> stringResource(R.string.today_remaining, pendingTasks)
-
-                                            timeline.isEmpty() && overdue.isEmpty() -> null
-
-                                            // 没课没待办但还有没结束的日程：报实际当天概览
+                                            allDone -> stringResource(R.string.today_all_done_title)
                                             else -> stringResource(R.string.today_summary, courseCount, taskTotal)
+                                        },
+                                        transitionSpec = {
+                                            (fadeIn(fadeSpec) + slideInVertically(slideSpec) { it / 3 }) togetherWith
+                                                (fadeOut(fadeSpec) + slideOutVertically(slideSpec) { -it / 3 })
+                                        },
+                                        label = "today-summary",
+                                    ) { t ->
+                                        Text(t, style = MaterialTheme.typography.titleMedium)
+                                    }
+                                    if (allDone) {
+                                        TextButton(
+                                            onClick = { nav.push(Route.TodoEdit(null, today.plusDays(1).toString())) },
+                                            contentPadding = PaddingValues(0.dp),
+                                        ) {
+                                            Text(stringResource(R.string.plan_tomorrow))
                                         }
-                                    if (sub != null) {
-                                        Text(
-                                            sub,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
                                     }
                                 }
                             }
-                            if (allDone) {
-                                TextButton(
-                                    onClick = { nav.push(Route.TodoEdit(null, today.plusDays(1).toString())) },
-                                    contentPadding = PaddingValues(0.dp),
-                                ) {
-                                    Text(stringResource(R.string.plan_tomorrow))
-                                }
+                            if (taskTotal > 0) {
+                                Spacer(Modifier.width(12.dp))
+                                ProgressRing(
+                                    taskProgress,
+                                    "$taskDone/$taskTotal",
+                                    stringResource(R.string.today_task_progress, taskDone, taskTotal),
+                                    Modifier.size(44.dp),
+                                )
                             }
                         }
                     }
@@ -244,7 +226,9 @@ fun TodayScreen() {
                     )
                 }
             }
-            if (pendingItems.isNotEmpty()) item(key = "h-timeline") { SectionLabel(stringResource(R.string.timeline)) }
+            if (pendingItems.isNotEmpty()) {
+                item(key = "h-timeline") { SectionLabel(stringResource(R.string.timeline) + " · " + pendingItems.size) }
+            }
             items(pendingItems, key = { itemKey(it) }, contentType = { agendaType(it) }) { item ->
                 AgendaRow(
                     item,
@@ -297,25 +281,39 @@ fun TodayScreen() {
                     }
                 }
             }
-            if (timeline.isEmpty() && overdue.isEmpty()) {
+            if (dayEmpty) {
                 item(key = "empty") {
-                    EmptyState(
-                        title = stringResource(R.string.today_empty_hint),
-                        modifier = Modifier.padding(top = 16.dp),
-                        icon = Icons.Rounded.WbSunny,
-                        actionLabel = stringResource(R.string.go_todo),
-                        onAction = { nav.tab = Tab.TODO },
-                    )
+                    // 空状态放视口中间，而不是顶着标题留一大片空白
+                    Box(Modifier.fillParentMaxHeight(0.6f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        EmptyState(
+                            title = stringResource(R.string.today_empty_title),
+                            hint = stringResource(R.string.today_empty_hint),
+                            modifier = Modifier.padding(top = 16.dp),
+                            icon = Icons.Rounded.WbSunny,
+                            actionLabel = stringResource(R.string.shortcut_add_task),
+                            onAction = { quickAddOpen = true },
+                        )
+                    }
                 }
             }
         }
-        FloatingActionButton(
-            onClick = { nav.push(Route.TodoEdit(null, today.toString())) },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 108.dp),
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            shape = MaterialTheme.shapes.large,
-        ) { Icon(Icons.Rounded.Add, stringResource(R.string.new_entry)) }
+        MintFab(
+            visible = !quickAddOpen && !dayEmpty,
+            onClick = { quickAddOpen = true },
+            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = 92.dp),
+        )
+        QuickAddSheet(
+            snap = snap,
+            now = now,
+            listFilter = null,
+            defaultBucket = Bucket.TODAY,
+            focusSignal = 0,
+            visible = quickAddOpen,
+            onDismiss = { quickAddOpen = false },
+            anchorDate = today,
+            acceptShare = false,
+            modifier = Modifier.align(Alignment.TopCenter).fillMaxSize(),
+        )
     }
 }
 
@@ -351,16 +349,14 @@ fun toggle(
 @Composable
 fun ProgressRing(
     progress: Float,
+    center: String,
+    description: String,
     modifier: Modifier = Modifier,
 ) {
     val p by animateFloatAsState(progress.coerceIn(0f, 1f), MintTheme.spec(), label = "ring")
-    // 文字只在目标百分比变化时切换，不跟随动画每一帧重定向
-    val pctTarget = (progress.coerceIn(0f, 1f) * 100).toInt()
-    val slideSpec = MintTheme.spec<IntOffset>()
-    val fadeSpec = MintTheme.spec<Float>()
     val track = MaterialTheme.colorScheme.surfaceContainerHighest
-    val bar = MaterialTheme.colorScheme.primary
-    Box(modifier, contentAlignment = Alignment.Center) {
+    val bar = MaterialTheme.colorScheme.onSurfaceVariant
+    Box(modifier.semantics { contentDescription = description }, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val stroke = 4.dp.toPx()
             val inset = stroke / 2
@@ -368,15 +364,6 @@ fun ProgressRing(
             drawArc(track, 0f, 360f, false, Offset(inset, inset), sz, style = Stroke(stroke))
             drawArc(bar, -90f, 360f * p.coerceIn(0f, 1f), false, Offset(inset, inset), sz, style = Stroke(stroke, cap = StrokeCap.Round))
         }
-        AnimatedContent(
-            targetState = pctTarget,
-            transitionSpec = {
-                (slideInVertically(slideSpec) { it / 2 } + fadeIn(fadeSpec)) togetherWith
-                    (slideOutVertically(slideSpec) { -it / 2 } + fadeOut(fadeSpec))
-            },
-            label = "ring-pct",
-        ) { pct ->
-            Text("$pct%", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
-        }
+        Text(center, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }

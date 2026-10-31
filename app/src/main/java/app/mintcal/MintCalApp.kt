@@ -57,8 +57,11 @@ class MintCalApp : Application() {
         advanced = AdvancedController(this)
         sync = SyncManager(repo, SyncStore(this, secrets), scope)
         jxfw = JxfwManager(this, repo, secrets)
-        Notifications.ensureChannels(this)
-        DeepLinks.publishShortcuts(this)
+        // 通知渠道 / 桌面快捷方式都是 Binder IPC，不挡 Application 主线程的首帧
+        scope.launch(Dispatchers.Default) {
+            Notifications.ensureChannels(this@MintCalApp)
+            DeepLinks.publishShortcuts(this@MintCalApp)
+        }
         scope.launch {
             repo.load()
             // 一次性迁移：日程并进待办（「有时间的待办」），此后不再产生日程记录
