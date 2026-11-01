@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -34,12 +35,12 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Flag
-import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Image
-import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.DropdownMenu
@@ -47,8 +48,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -81,6 +82,8 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import app.mintcal.core.change.ChangeSet
@@ -91,6 +94,7 @@ import app.mintcal.core.model.Recurrence
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
 import app.mintcal.core.recurrence.RecurrenceEngine
+import app.mintcal.core.time.SemesterCalendar
 import app.mintcal.core.todo.QuickAdd
 import app.mintcal.core.todo.QuickTokenKind
 import app.mintcal.core.todo.TaskLogic
@@ -101,9 +105,7 @@ import app.mintcal.ui.Tab
 import app.mintcal.ui.components.AttachmentEditor
 import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.ConflictCard
-import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintCheck
-import app.mintcal.ui.components.pasteFromClipboard
 import app.mintcal.ui.components.rememberFileAttachmentPicker
 import app.mintcal.ui.components.rememberImageAttachmentPicker
 import app.mintcal.ui.dueLabel
@@ -119,10 +121,11 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 
 /**
- * 唯一的编辑页：新建和修改都是它。内容区保持 TickTick 详情页式的直排（标题 → 安排 → 子任务 →
- * 备注与附件展示），清单 / 优先级 / 图片 / 文件 / 粘贴全收进底部工具栏；没有保存键——
- * 返回即静默落盘，空标题等于放弃这条。
- * 标题里识别到的日期时间就地高亮，点一下表示认错了；已有截止时间与时间块分别保存。
+ * 唯一的编辑页：新建和修改都是它。版式对齐 TickTick 详情：
+ * 勾选在顶栏右侧，标题从左缘起，日期、备注、附件依次全宽铺在页面里。
+ * 底部左侧是清单名，右侧是子任务、优先级、图片和附件；子任务点清单图标在栏上方展开。
+ * 返回即保存，空标题等于放弃。
+ * 标题里识别到的日期时间就地高亮，点一下表示认错了。
  */
 @Composable
 fun TodoEditScreen(
@@ -185,22 +188,24 @@ fun TodoEditScreen(
     var picked by remember { mutableStateOf(initWhen) }
     var cleared by remember { mutableStateOf(false) }
     var remind by remember { mutableStateOf(existing?.remindMinutes) }
+    var persistent by remember { mutableStateOf(existing?.remindPersistent == true) }
     var freq by remember { mutableStateOf(existing?.repeat?.freq) }
     var interval by remember { mutableIntStateOf(existing?.repeat?.interval ?: 1) }
     var until by remember { mutableStateOf(existing?.repeat?.until) }
+    var byDays by remember { mutableStateOf(existing?.repeat?.byDays ?: emptySet<Int>()) }
     var listId by remember { mutableStateOf(existing?.listId) }
     var priority by remember { mutableIntStateOf(existing?.priority ?: 0) }
     var ignored by remember { mutableStateOf(setOf<String>()) }
     var timeSheet by remember { mutableStateOf(false) }
     var newSub by remember { mutableStateOf("") }
     var subReset by remember { mutableIntStateOf(0) }
+    var subsOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var listMenu by remember { mutableStateOf(false) }
     var priorityMenu by remember { mutableStateOf(false) }
-    var moreMenu by remember { mutableStateOf(false) }
     val titleFocus = remember { FocusRequester() }
     LaunchedEffect(existing == null) { if (existing == null) titleFocus.requestFocus() }
-    // 附件添加入口：图片在工具栏直接进，文件 / 粘贴收在「更多」里
+    // 附件：图片和文件都在工具栏上，点了直接选
     val pickImage = rememberImageAttachmentPicker { a -> attachments = attachments + a }
     val pickFile = rememberFileAttachmentPicker { a -> attachments = attachments + a }
 
@@ -234,8 +239,8 @@ fun TodoEditScreen(
         // 新建时草稿就是内容本身：带着草稿进来点返回也该落成一条，不能当作「没改过」
         (existing == null && text.isNotBlank()) || text != existing?.title.orEmpty() || note != existing?.note.orEmpty() ||
             attachments != existing?.attachments.orEmpty() || listId != existing?.listId || priority != (existing?.priority ?: 0) ||
-            remind != existing?.remindMinutes || freq != existing?.repeat?.freq ||
-            (freq != null && (interval != (existing?.repeat?.interval ?: 1) || until != existing?.repeat?.until)) ||
+            remind != existing?.remindMinutes || persistent != (existing?.remindPersistent == true) || freq != existing?.repeat?.freq ||
+            (freq != null && (interval != (existing?.repeat?.interval ?: 1) || until != existing?.repeat?.until || byDays != (existing?.repeat?.byDays ?: emptySet<Int>()))) ||
             whenChanged || newSub.isNotBlank()
 
     // 退出即保存：有内容且有改动就静默落盘；空标题等于放弃这条
@@ -317,9 +322,15 @@ fun TodoEditScreen(
                 due = dueAt,
                 dueHasTime = hasTime,
                 remindMinutes = remind,
+                remindPersistent = remind != null && persistent,
                 repeat =
                     freq?.let { f ->
-                        (base.repeat?.takeIf { it.freq == f } ?: Recurrence(f)).copy(freq = f, interval = interval.coerceAtLeast(1), until = until)
+                        (base.repeat?.takeIf { it.freq == f } ?: Recurrence(f)).copy(
+                            freq = f,
+                            interval = interval.coerceAtLeast(1),
+                            byDays = if (f == Freq.WEEKLY) byDays else emptySet(),
+                            until = until,
+                        )
                     },
             )
         // 周历上框选的其它日期：同一时间段各建一条（重复规则一致）
@@ -361,6 +372,7 @@ fun TodoEditScreen(
     }
     BackHandler { requestBack() }
 
+    var pageMenu by remember { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxSize()
@@ -373,44 +385,50 @@ fun TodoEditScreen(
             Spacer(Modifier.weight(1f))
             if (existing != null) {
                 MintCheck(existing.done, { d -> toggle(actions, snap, existing, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, existing.title)) })
-                IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Rounded.Delete, stringResource(R.string.delete)) }
+                Box {
+                    IconButton(onClick = { pageMenu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
+                    DropdownMenu(pageMenu, { pageMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.delete)) },
+                            leadingIcon = { Icon(Icons.Rounded.Delete, null) },
+                            onClick = {
+                                pageMenu = false
+                                confirmDelete = true
+                            },
+                        )
+                    }
+                }
             }
         }
         Column(
             Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = 16.dp),
         ) {
-            // ── 日期&重复：TickTick 详情页式，一行常驻在标题上方，点开同一个面板 ──
-            MintCard(Modifier.fillMaxWidth()) {
-                WhenRow(whenPick, today, remind, freq, interval, until, onClear = {
-                    picked = null
-                    cleared = true
-                    remind = null
-                    freq = null
-                    until = null
-                }) { timeSheet = true }
-            }
-            Spacer(Modifier.height(6.dp))
-            // ── 任务内容 ──
-            SmartTitle(field, { field = it }, ranges, titleFocus) { range ->
+            SmartTitle(field, { field = it }, ranges, titleFocus, done = existing?.done == true) { range ->
                 ignored = ignored + text.substring(range.first, range.last + 1)
             }
-            // 冲突提示：与课程 / 其它待办撞时间的实例，点行跳课表对应那天查看（先保存再跳）
+            WhenRow(whenPick, today, remind, freq, interval, until, byDays, onClear = {
+                picked = null
+                cleared = true
+                remind = null
+                freq = null
+                until = null
+                byDays = emptySet()
+            }) { timeSheet = true }
             AnimatedVisibility(
                 visible = clashes.isNotEmpty(),
                 enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
                 exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
             ) {
-                ConflictCard(title = stringResource(R.string.conflict_title), modifier = Modifier.padding(top = 6.dp)) {
+                ConflictCard(title = stringResource(R.string.conflict_title), modifier = Modifier.padding(top = 4.dp)) {
                     clashes.forEach { c ->
                         Row(
                             Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
                                 .clickable {
-                                    // 先保存再看：跳过去只是查看，别把刚改的丢了
                                     nav.focusDate = c.at.toLocalDate()
                                     nav.tab = Tab.TIMETABLE
                                     if (title.isNotEmpty()) commit() else onBack()
@@ -441,36 +459,50 @@ fun TodoEditScreen(
                     }
                 }
             }
-            // ── 子任务：加号引导的输入行，已有子任务列在上方 ──
-            if (existing != null) {
-                val subs = TaskLogic.subtasks(snap.tasks, existing.id)
-                Spacer(Modifier.height(10.dp))
-                MintCard(Modifier.fillMaxWidth()) {
+            Spacer(Modifier.height(8.dp))
+            FlatField(note, stringResource(R.string.label_note), onChange = { note = it }, singleLine = false)
+            if (attachments.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                AttachmentEditor(attachments, onChange = { attachments = it })
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+        if (existing != null) {
+            val subs = TaskLogic.subtasks(snap.tasks, existing.id)
+            AnimatedVisibility(
+                visible = subsOpen,
+                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 280.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp),
+                ) {
                     subs.forEach { s ->
-                        Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                             MintCheck(s.done, { d -> toggle(actions, snap, s, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, s.title)) })
-                            Text(s.title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                s.title,
+                                Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyLarge,
+                                textDecoration = if (s.done) TextDecoration.LineThrough else null,
+                                color = if (s.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                            )
                             IconButton(onClick = {
                                 actions.commit(
                                     Edits.delete(snap, s, ctx.getString(R.string.delete_desc, s.title), System.currentTimeMillis()),
                                     ctx.getString(R.string.delete_desc, s.title),
                                 )
-                            }) { Icon(Icons.Rounded.Delete, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp)) }
+                            }) { Icon(Icons.Rounded.Close, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp)) }
                         }
                     }
-                    if (subs.isNotEmpty()) CardDivider()
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        // 有子任务时让位给勾选框那 48dp（占位符跟子任务标题同一竖线）；
-                        // 还没有子任务时回到「图标 20 + 12」的普通文字列，别自作主张缩进去
-                        if (subs.isEmpty()) {
+                        Box(Modifier.width(48.dp), contentAlignment = Alignment.Center) {
                             Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(12.dp))
-                        } else {
-                            Box(Modifier.width(48.dp), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                            }
                         }
-                        // weight：输入框不能把「添加」按钮挤出卡片外
                         FlatField(newSub, stringResource(R.string.add_subtask), onChange = { newSub = it }, reset = subReset, modifier = Modifier.weight(1f))
                         if (newSub.isNotBlank()) {
                             TextButton(
@@ -485,104 +517,96 @@ fun TodoEditScreen(
                     }
                 }
             }
-            // ── 备注与附件：附件只做展示，添加动作在底部工具栏 ──
-            Spacer(Modifier.height(10.dp))
-            MintCard(Modifier.fillMaxWidth()) {
-                // 备注文字也落在同一条文字列上（卡片内边距 16 + 32 = 上面各行的标签位置）
-                Column(Modifier.padding(start = 32.dp)) {
-                    FlatField(note, stringResource(R.string.label_note), onChange = { note = it }, singleLine = false)
-                    Spacer(Modifier.height(4.dp))
-                    AttachmentEditor(attachments, onChange = { attachments = it })
-                }
-            }
-            Spacer(Modifier.height(16.dp))
         }
-
-        // ── 底部工具栏：清单 / 旗子 / 图片 / 更多，保存移到右端实心按钮（TickTick 详情页样式） ──
-        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        Surface(color = MintTheme.card) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box {
-                    IconButton(onClick = { listMenu = true }) {
-                        Icon(
-                            Icons.Rounded.FolderOpen,
-                            stringResource(R.string.label_list),
-                            tint = if (listId != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    DropdownMenu(listMenu, { listMenu = false }) {
+        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(start = 8.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val currentList = snap.lists.firstOrNull { it.id == listId }
+            val listTint = currentList?.let { MintTheme.colors.fg(it.colorIndex) } ?: MaterialTheme.colorScheme.outline
+            Box {
+                Row(
+                    Modifier
+                        .widthIn(max = 180.dp)
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { listMenu = true }
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(listTint))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        currentList?.name ?: stringResource(R.string.bucket_inbox),
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                DropdownMenu(listMenu, { listMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.bucket_inbox)) },
+                        leadingIcon = {
+                            Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                                Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.outline))
+                            }
+                        },
+                        trailingIcon = { if (listId == null) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) },
+                        onClick = {
+                            listMenu = false
+                            listId = null
+                        },
+                    )
+                    snap.lists.sortedBy { it.sort }.forEach { l ->
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.none)) },
-                            trailingIcon = { if (listId == null) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) },
+                            text = { Text(l.name) },
+                            leadingIcon = {
+                                Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                                    Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(MintTheme.colors.fg(l.colorIndex)))
+                                }
+                            },
+                            trailingIcon = { if (listId == l.id) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) },
                             onClick = {
                                 listMenu = false
-                                listId = null
-                            },
-                        )
-                        snap.lists.sortedBy { it.sort }.forEach { l ->
-                            DropdownMenuItem(
-                                text = { Text(l.name) },
-                                trailingIcon = { if (listId == l.id) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) },
-                                onClick = {
-                                    listMenu = false
-                                    listId = l.id
-                                },
-                            )
-                        }
-                    }
-                }
-                Box {
-                    IconButton(onClick = { priorityMenu = true }) {
-                        Icon(
-                            Icons.Rounded.Flag,
-                            stringResource(R.string.label_priority),
-                            tint = priorityColor(priority),
-                        )
-                    }
-                    // 旗子菜单：每行彩色旗子 + 文字，选「无优先级」即清零
-                    DropdownMenu(priorityMenu, { priorityMenu = false }) {
-                        listOf(3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1, 0 to R.string.priority_0).forEach { (v, label) ->
-                            DropdownMenuItem(
-                                text = { Text(stringResource(label)) },
-                                leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = priorityColor(v), modifier = Modifier.size(18.dp)) },
-                                onClick = {
-                                    priorityMenu = false
-                                    priority = v
-                                },
-                            )
-                        }
-                    }
-                }
-                IconButton(onClick = pickImage) { Icon(Icons.Rounded.Image, stringResource(R.string.attach_image)) }
-                Box {
-                    IconButton(onClick = { moreMenu = true }) { Icon(Icons.Rounded.MoreHoriz, stringResource(R.string.more_options)) }
-                    DropdownMenu(moreMenu, { moreMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.attach_file)) },
-                            leadingIcon = { Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)) },
-                            onClick = {
-                                moreMenu = false
-                                pickFile()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.attach_paste)) },
-                            leadingIcon = { Icon(Icons.Rounded.ContentCopy, null, Modifier.size(18.dp)) },
-                            onClick = {
-                                moreMenu = false
-                                pasteFromClipboard(ctx, actions, { a -> attachments = attachments + a }, { t -> note = if (note.isBlank()) t else "$note\n$t" })
+                                listId = l.id
                             },
                         )
                     }
                 }
-                Spacer(Modifier.weight(1f))
             }
+            Spacer(Modifier.weight(1f))
+            if (existing != null) {
+                IconButton(onClick = { subsOpen = !subsOpen }) {
+                    Icon(
+                        Icons.Rounded.Checklist,
+                        stringResource(R.string.add_subtask),
+                        tint = if (subsOpen) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                    )
+                }
+            }
+            Box {
+                IconButton(onClick = { priorityMenu = true }) {
+                    Icon(Icons.Rounded.Flag, stringResource(R.string.label_priority), tint = priorityColor(priority))
+                }
+                DropdownMenu(priorityMenu, { priorityMenu = false }) {
+                    listOf(3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1, 0 to R.string.priority_0).forEach { (v, label) ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(label)) },
+                            leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = priorityColor(v), modifier = Modifier.size(18.dp)) },
+                            onClick = {
+                                priorityMenu = false
+                                priority = v
+                            },
+                        )
+                    }
+                }
+            }
+            IconButton(onClick = pickImage) { Icon(Icons.Rounded.Image, stringResource(R.string.attach_image)) }
+            IconButton(onClick = pickFile) { Icon(Icons.Rounded.UploadFile, stringResource(R.string.attach_file)) }
         }
     }
 
@@ -592,9 +616,12 @@ fun TodoEditScreen(
             defaultDate = whenPick?.date ?: argDate ?: today,
             defaultMinutes = settings.defaultBlockMinutes,
             initialRemind = remind,
+            initialPersistent = persistent,
             initialFreq = freq,
             initialInterval = interval,
             initialUntil = until,
+            initialByDays = byDays,
+            semesterEnd = snap.currentSemester?.let { SemesterCalendar(it).weekEnd(it.totalWeeks) },
             onDismiss = { timeSheet = false },
             onPick = { r ->
                 val wp = r.whenPick
@@ -602,15 +629,19 @@ fun TodoEditScreen(
                     picked = null
                     cleared = true
                     remind = null
+                    persistent = false
                     freq = null
                     until = null
+                    byDays = emptySet()
                 } else {
                     picked = wp
                     cleared = false
                     remind = r.remindMinutes
+                    persistent = r.remindPersistent
                     freq = r.freq
                     interval = r.interval
                     until = r.until
+                    byDays = r.byDays
                 }
                 timeSheet = false
             },
@@ -641,12 +672,13 @@ private fun SmartTitle(
     onChange: (TextFieldValue) -> Unit,
     ranges: List<IntRange>,
     focus: FocusRequester,
+    done: Boolean = false,
     onCancelRange: (IntRange) -> Unit,
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val haptics = LocalHapticFeedback.current
     var layoutState by remember { mutableStateOf<TextLayoutResult?>(null) }
-    Box(Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
         BasicTextField(
             value = value,
             onValueChange = onChange,
@@ -669,9 +701,10 @@ private fun SmartTitle(
                         }
                     }.padding(vertical = 12.dp),
             textStyle =
-                MaterialTheme.typography.headlineSmall.copy(
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Medium,
+                MaterialTheme.typography.titleLarge.copy(
+                    color = if (done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Normal,
+                    textDecoration = if (done) TextDecoration.LineThrough else null,
                 ),
             cursorBrush = SolidColor(accent),
             visualTransformation = TokenPaint(ranges, accent),
@@ -682,9 +715,9 @@ private fun SmartTitle(
                 stringResource(R.string.entry_hint),
                 modifier = Modifier.padding(vertical = 12.dp),
                 style =
-                    MaterialTheme.typography.headlineSmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        fontWeight = FontWeight.Medium,
+                    MaterialTheme.typography.titleLarge.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Normal,
                     ),
             )
         }
@@ -727,6 +760,7 @@ private fun WhenRow(
     freq: Freq?,
     interval: Int,
     until: LocalDate?,
+    byDays: Set<Int>,
     onClear: () -> Unit,
     onClick: () -> Unit,
 ) {
@@ -754,49 +788,45 @@ private fun WhenRow(
         }
     val extras =
         buildList {
-            if (freq != null) add(freqLabel(freq, until, interval))
+            if (freq != null) add(freqLabel(freq, until, interval, byDays, whenPick?.date))
             if (remind != null) add(remindLabel(remind))
         }
     val empty = dateLabel == null && extras.isEmpty()
-    val label =
+    val primaryLine =
         when {
             empty -> stringResource(R.string.date_and_repeat)
-            dateLabel == null -> extras.joinToString(" · ")
-            else -> (listOf(dateLabel) + extras).joinToString(" · ")
+            dateLabel != null -> dateLabel
+            else -> extras.joinToString(" · ")
         }
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            Icons.Rounded.Schedule,
-            null,
-            tint = if (empty) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (empty) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
+    val secondary = if (dateLabel != null && extras.isNotEmpty()) extras.joinToString(" · ") else null
+    val accent = MaterialTheme.colorScheme.primary
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.weight(1f).heightIn(min = 48.dp).clickable(onClick = onClick),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Rounded.Schedule, null, tint = if (empty) muted else accent, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    primaryLine,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (empty) muted else accent,
+                    fontWeight = if (empty) FontWeight.Normal else FontWeight.Medium,
+                )
+                if (secondary != null) {
+                    Text(secondary, style = MaterialTheme.typography.bodySmall, color = muted)
+                }
+            }
+        }
         if (!empty) {
-            Text(
-                stringResource(R.string.detail_editor_clear_plan),
-                Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable(onClick = onClear)
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            Box(
+                Modifier.width(36.dp).heightIn(min = 48.dp).clickable(onClick = onClear),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Icon(Icons.Rounded.Close, stringResource(R.string.detail_editor_clear_plan), tint = muted, modifier = Modifier.size(20.dp))
+            }
         }
     }
 }
@@ -829,16 +859,10 @@ private fun FlatField(
                 placeholder,
                 modifier = Modifier.padding(vertical = 8.dp),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
-}
-
-/** 卡片内行分隔线：细、半透明，只做分组不抢注意。 */
-@Composable
-private fun CardDivider() {
-    HorizontalDivider(Modifier.padding(vertical = 4.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 }
 
 /**

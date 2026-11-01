@@ -87,8 +87,8 @@ import app.mintcal.ui.screens.TimetableScreen
 import app.mintcal.ui.screens.TodayScreen
 import app.mintcal.ui.screens.TodoEditScreen
 import app.mintcal.ui.screens.TodoScreen
-import app.mintcal.ui.screens.WhenPanel
 import app.mintcal.ui.screens.TrashScreen
+import app.mintcal.ui.screens.WhenPanel
 import app.mintcal.ui.theme.MintCalTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -292,7 +292,10 @@ class ScreensSmokeTest {
             }
         }
         rule.runOnIdle { nav.openTask(task.id) }
-        rule.onNodeWithContentDescription("删除").performClick()
+        rule.onNodeWithContentDescription("更多选项").performClick()
+        rule.onNodeWithText("删除").performClick()
+        rule.waitForIdle()
+        // 确认对话框的删除按钮
         rule.onNodeWithText("删除").performClick()
         rule.waitUntil(5_000) {
             app.repo.snapshot.value.tasks

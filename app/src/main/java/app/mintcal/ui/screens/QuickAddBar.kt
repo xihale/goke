@@ -102,6 +102,7 @@ import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
 import app.mintcal.core.model.TaskList
+import app.mintcal.core.time.SemesterCalendar
 import app.mintcal.core.todo.Bucket
 import app.mintcal.core.todo.QuickAdd
 import app.mintcal.core.todo.QuickBatchItem
@@ -152,9 +153,11 @@ internal fun QuickAddSheet(
     var whenPanel by remember { mutableStateOf(false) }
     var panelWhen by remember { mutableStateOf<WhenPick?>(null) }
     var panelRemind by remember { mutableStateOf<Int?>(null) }
+    var panelPersistent by remember { mutableStateOf(false) }
     var panelFreq by remember { mutableStateOf<Freq?>(null) }
     var panelInterval by remember { mutableIntStateOf(1) }
     var panelUntil by remember { mutableStateOf<LocalDate?>(null) }
+    var panelByDays by remember { mutableStateOf(emptySet<Int>()) }
     val settings = settingsState()
     // 工具栏弹出的菜单都不抢焦点：键盘保持打开，浮层不跟着上下跳
     val noFocusPopup = remember { PopupProperties(focusable = false) }
@@ -259,7 +262,8 @@ internal fun QuickAddSheet(
                 QuickOverride(
                     whenPick = panelWhen,
                     remind = panelRemind,
-                    repeat = panelFreq?.let { f -> Recurrence(f, panelInterval.coerceAtLeast(1), until = panelUntil) },
+                    persistent = panelPersistent,
+                    repeat = panelFreq?.let { f -> Recurrence(f, panelInterval.coerceAtLeast(1), if (f == Freq.WEEKLY) panelByDays else emptySet(), panelUntil) },
                 )
             } else {
                 null
@@ -274,8 +278,10 @@ internal fun QuickAddSheet(
         text = ""
         panelWhen = null
         panelRemind = null
+        panelPersistent = false
         panelFreq = null
         panelUntil = null
+        panelByDays = emptySet()
         focus.requestFocus()
     }
 
@@ -639,12 +645,13 @@ internal fun QuickAddSheet(
                                 }
                                 if (panelFreq != null) {
                                     Tag(
-                                        freqLabel(panelFreq, panelUntil, panelInterval) + " ×",
+                                        freqLabel(panelFreq, panelUntil, panelInterval, panelByDays, panelWhen?.date) + " ×",
                                         MaterialTheme.colorScheme.tertiaryContainer,
                                         MaterialTheme.colorScheme.onTertiaryContainer,
                                         Modifier.clickable {
                                             panelFreq = null
                                             panelUntil = null
+                                            panelByDays = emptySet()
                                         },
                                     )
                                 }
@@ -671,16 +678,21 @@ internal fun QuickAddSheet(
             defaultDate = now.toLocalDate(),
             defaultMinutes = settings.defaultBlockMinutes,
             initialRemind = panelRemind,
+            initialPersistent = panelPersistent,
             initialFreq = panelFreq,
             initialInterval = panelInterval,
             initialUntil = panelUntil,
+            initialByDays = panelByDays,
+            semesterEnd = snap.currentSemester?.let { SemesterCalendar(it).weekEnd(it.totalWeeks) },
             onDismiss = { whenPanel = false },
             onPick = { r ->
                 panelWhen = r.whenPick
                 panelRemind = r.remindMinutes
+                panelPersistent = r.remindPersistent
                 panelFreq = r.freq
                 panelInterval = r.interval
                 panelUntil = r.until
+                panelByDays = r.byDays
                 whenPanel = false
             },
         )
@@ -772,6 +784,7 @@ internal fun matchCourse(
 internal data class QuickOverride(
     val whenPick: WhenPick?,
     val remind: Int?,
+    val persistent: Boolean = false,
     val repeat: Recurrence?,
 )
 
@@ -869,6 +882,7 @@ internal fun buildQuickTasks(
                     blockStart = blockStart,
                     blockMinutes = blockMinutes,
                     remindMinutes = ov?.remind,
+                    remindPersistent = ov?.persistent == true && ov.remind != null,
                     repeat = ov?.repeat,
                 ),
             )

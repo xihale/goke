@@ -22,12 +22,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.snapping.SnapPosition
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -43,6 +46,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -63,7 +69,6 @@ import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -73,15 +78,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -99,7 +103,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -107,10 +114,12 @@ import app.mintcal.R
 import app.mintcal.ui.Tab
 import app.mintcal.ui.theme.LocalReduceMotion
 import app.mintcal.ui.theme.MintTheme
-import java.time.Instant
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.ZoneOffset
+import java.time.YearMonth
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -467,31 +476,30 @@ fun DatePickerDlg(
     onDismiss: () -> Unit,
     onPick: (LocalDate) -> Unit,
 ) {
-    val state =
-        rememberDatePickerState(
-            initialSelectedDateMillis = (initial ?: LocalDate.now()).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
-        )
+    var picked by remember { mutableStateOf(initial ?: LocalDate.now()) }
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = {
-                state.selectedDateMillis?.let { onPick(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()) }
+                onPick(picked)
                 onDismiss()
             }) { Text(stringResource(R.string.ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     ) {
-        Row(Modifier.padding(start = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = {
-                onPick(LocalDate.now())
-                onDismiss()
-            }) { Text(stringResource(R.string.today)) }
-            TextButton(onClick = {
-                onPick(LocalDate.now().plusDays(1))
-                onDismiss()
-            }) { Text(stringResource(R.string.tomorrow)) }
+        Column {
+            Row(Modifier.padding(start = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = {
+                    onPick(LocalDate.now())
+                    onDismiss()
+                }) { Text(stringResource(R.string.today)) }
+                TextButton(onClick = {
+                    onPick(LocalDate.now().plusDays(1))
+                    onDismiss()
+                }) { Text(stringResource(R.string.tomorrow)) }
+            }
+            MonthPager(selected = picked, initial = YearMonth.from(initial ?: LocalDate.now()), onPick = { picked = it })
         }
-        DatePicker(state = state)
     }
 }
 
@@ -501,24 +509,131 @@ fun TimePickerDlg(
     onDismiss: () -> Unit,
     onPick: (LocalTime) -> Unit,
 ) {
-    // 只留圆盘：不给键盘输入入口，时间一律在盘上拨
-    val state = rememberTimePickerState(initial.hour, initial.minute, is24Hour = true)
+    var hour by remember { mutableIntStateOf(initial.hour) }
+    var minute by remember { mutableIntStateOf(initial.minute) }
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = {
-                onPick(LocalTime.of(state.hour, state.minute))
+                onPick(LocalTime.of(hour, minute))
                 onDismiss()
             }) { Text(stringResource(R.string.ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-        text = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                TimePicker(state = state)
-            }
-        },
+        text = { TimeWheels(hour, minute, { hour = it }, { minute = it }) },
         shape = RoundedCornerShape(28.dp),
     )
+}
+
+/**
+ * 时刻滚轮：时、分两列，中间一行是当前值。
+ * 不用 Material 圆盘——24 小时双环挤在一个表盘上，读数和拨动都差。
+ */
+@Composable
+fun TimeWheels(
+    hour: Int,
+    minute: Int,
+    onHour: (Int) -> Unit,
+    onMinute: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier.fillMaxWidth().height(WHEEL_ITEM * WHEEL_VISIBLE), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp)
+                .height(WHEEL_ITEM)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            WheelColumn(24, hour.coerceIn(0, 23), stringResource(R.string.dial_hours), onHour)
+            Text(
+                ":",
+                modifier = Modifier.padding(horizontal = 8.dp),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            WheelColumn(60, minute.coerceIn(0, 59), stringResource(R.string.dial_minutes), onMinute)
+        }
+    }
+}
+
+private val WHEEL_ITEM = 36.dp
+private const val WHEEL_VISIBLE = 5
+private const val WHEEL_LOOPS = 40
+
+@Composable
+private fun WheelColumn(
+    count: Int,
+    selected: Int,
+    label: String,
+    onSelect: (Int) -> Unit,
+) {
+    val selectedCoerced = selected.coerceIn(0, count - 1)
+    val anchor = WHEEL_LOOPS / 2 * count + selectedCoerced
+    val state = rememberLazyListState(initialFirstVisibleItemIndex = anchor)
+    val haptics = LocalHapticFeedback.current
+    LaunchedEffect(state) {
+        snapshotFlow { wheelCenter(state) }
+            .distinctUntilChanged()
+            .drop(1)
+            .collect { haptics.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+    }
+    LaunchedEffect(state) {
+        snapshotFlow { state.isScrollInProgress to wheelCenter(state) }
+            .filter { (scrolling, _) -> !scrolling }
+            .collect { (_, idx) ->
+                val value = idx?.let { it % count }
+                if (value != null && value != selectedCoerced) onSelect(value)
+            }
+    }
+    LaunchedEffect(selectedCoerced) {
+        val center = wheelCenter(state)
+        if (center == null || center % count != selectedCoerced) state.scrollToItem(anchor)
+    }
+    LazyColumn(
+        state = state,
+        modifier =
+            Modifier
+                .width(72.dp)
+                .height(WHEEL_ITEM * WHEEL_VISIBLE)
+                .semantics { contentDescription = "$label $selectedCoerced" },
+        flingBehavior = rememberSnapFlingBehavior(state, SnapPosition.Center),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        contentPadding = PaddingValues(vertical = WHEEL_ITEM * (WHEEL_VISIBLE / 2)),
+    ) {
+        items(WHEEL_LOOPS * count) { i ->
+            val value = i % count
+            val raw = abs(value - selectedCoerced)
+            val dist = if (raw > count / 2) count - raw else raw
+            Box(Modifier.fillMaxWidth().height(WHEEL_ITEM), contentAlignment = Alignment.Center) {
+                Text(
+                    "%02d".format(value),
+                    textAlign = TextAlign.Center,
+                    style =
+                        (if (dist == 0) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge).copy(
+                            fontFeatureSettings = "tnum",
+                        ),
+                    fontWeight = if (dist == 0) FontWeight.Medium else FontWeight.Normal,
+                    color =
+                        when {
+                            dist == 0 -> MaterialTheme.colorScheme.onSurface
+                            dist == 1 -> MaterialTheme.colorScheme.onSurfaceVariant
+                            else -> MaterialTheme.colorScheme.outline
+                        },
+                )
+            }
+        }
+    }
+}
+
+private fun wheelCenter(state: LazyListState): Int? {
+    val info = state.layoutInfo
+    val visible = info.visibleItemsInfo
+    if (visible.isEmpty()) return null
+    val center = (info.viewportStartOffset + info.viewportEndOffset) / 2
+    return visible.minByOrNull { abs((it.offset + it.size / 2) - center) }?.index
 }
 
 /** 统一按压反馈：按下轻微缩放 + 长按触觉；不做背景高亮。用于自绘可点击块（课程格、格子等）。 */
