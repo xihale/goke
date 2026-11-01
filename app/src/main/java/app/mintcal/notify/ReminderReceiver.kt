@@ -13,7 +13,15 @@ class ReminderReceiver : BroadcastReceiver() {
         val text = intent.getStringExtra(EXTRA_TEXT).orEmpty()
         val id = intent.getIntExtra(EXTRA_ID, title.hashCode())
         Notifications.ensureChannels(context)
-        Notifications.post(context, id, Notifications.CHANNEL_REMINDER, title, text, intent.getStringExtra(EXTRA_TASK_ID))
+        Notifications.post(
+            context,
+            id,
+            Notifications.CHANNEL_REMINDER,
+            title,
+            text,
+            intent.getStringExtra(EXTRA_TASK_ID),
+            intent.getBooleanExtra(EXTRA_PERSISTENT, false),
+        )
     }
 
     companion object {
@@ -21,5 +29,6 @@ class ReminderReceiver : BroadcastReceiver() {
         const val EXTRA_TEXT = "text"
         const val EXTRA_ID = "id"
         const val EXTRA_TASK_ID = "task_id"
+        const val EXTRA_PERSISTENT = "persistent"
     }
 }

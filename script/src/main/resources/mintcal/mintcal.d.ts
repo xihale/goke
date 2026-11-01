@@ -36,6 +36,7 @@ interface Task {
   id: string; title: string; note: string; listId: string | null; tags: string[]; priority: 0 | 1 | 2 | 3;
   startDate: string | null; due: string | null; dueHasTime: boolean; estimateMinutes: number | null;
   done: boolean; parentId: string | null; repeat: Recurrence | null; remindMinutes: number | null;
+  remindPersistent: boolean;
   courseId: string | null; dueBeforeNextClass: boolean; blockStart: string | null; blockMinutes: number | null;
 }
 type TaskInput = Partial<Omit<Task, 'id'>> & { title: string };

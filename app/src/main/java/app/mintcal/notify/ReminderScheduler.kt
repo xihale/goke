@@ -29,6 +29,8 @@ data class Reminder(
     val key: String,
     /** 待办提醒才有：通知上显示「完成 / 稍后」按钮、点击直达该待办。 */
     val taskId: String? = null,
+    /** 持续提醒：同一条通知的铃声循环，直到完成、稍后或关掉。 */
+    val persistent: Boolean = false,
 )
 
 /**
@@ -46,16 +48,19 @@ class ReminderScheduler(
         now: LocalDateTime = LocalDateTime.now(),
     ) {
         cancelAll()
+        stopLingering(snap)
         val list = compute(ctx, snap, st, now).take(MAX)
         val zone = ZoneId.systemDefault()
         val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
         list.forEachIndexed { i, r ->
+            val notifId = if (r.persistent && r.taskId != null) persistentNotifId(r.taskId, r.key.startsWith("b")) else r.key.hashCode()
             val intent =
                 Intent(ctx, ReminderReceiver::class.java)
                     .putExtra(ReminderReceiver.EXTRA_TITLE, r.title)
                     .putExtra(ReminderReceiver.EXTRA_TEXT, r.text)
-                    .putExtra(ReminderReceiver.EXTRA_ID, r.key.hashCode())
+                    .putExtra(ReminderReceiver.EXTRA_ID, notifId)
                     .putExtra(ReminderReceiver.EXTRA_TASK_ID, r.taskId)
+                    .putExtra(ReminderReceiver.EXTRA_PERSISTENT, r.persistent)
             val pi = PendingIntent.getBroadcast(ctx, i, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             val at =
                 r.triggerAt
@@ -132,6 +137,17 @@ class ReminderScheduler(
         }
     }
 
+    /** 待办已完成、删掉或关掉持续提醒时，停掉还在循环的铃声。 */
+    private fun stopLingering(snap: Snapshot) {
+        val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
+        for (t in snap.tasks) {
+            if (t.done || t.deletedAt != null || !t.remindPersistent || t.remindMinutes == null) {
+                nm.cancel(persistentNotifId(t.id, false))
+                nm.cancel(persistentNotifId(t.id, true))
+            }
+        }
+    }
+
     private fun cancelMutes() {
         for (i in 0 until MAX_MUTE_PAIRS * 2) {
             val pi =
@@ -194,6 +210,12 @@ class ReminderScheduler(
         const val TEST_ID = 9001
         private val ALL_DAY_REMIND_AT = LocalTime.of(9, 0)
 
+        /** 持续提醒的通知号。完成或关掉之后靠这个号停掉铃声，不跟触发时间走。 */
+        fun persistentNotifId(
+            taskId: String,
+            block: Boolean,
+        ): Int = ("nag:$taskId:${if (block) 1 else 0}").hashCode()
+
         /** 纯计算：未来 7 天内、晚于 now 的提醒，按触发时间排序。 */
         fun compute(
             ctx: Context,
@@ -252,7 +274,7 @@ class ReminderScheduler(
                             val minutes = t.remindMinutes
                             if (minutes != null && st.remindTask && !t.done) {
                                 val base = if (item.hasTime) item.due else date.atTime(ALL_DAY_REMIND_AT)
-                                out += Reminder(base.minusMinutes(minutes.toLong()), t.title, ctx.getString(R.string.remind_task_text), "t${t.id}${item.due}", t.id)
+                                out += Reminder(base.minusMinutes(minutes.toLong()), t.title, ctx.getString(R.string.remind_task_text), "t${t.id}${item.due}", t.id, t.remindPersistent)
                             }
                         }
 
@@ -260,7 +282,7 @@ class ReminderScheduler(
                             val t = item.task
                             val minutes = t.remindMinutes
                             if (minutes != null && st.remindTask && !t.done) {
-                                out += Reminder(item.start.minusMinutes(minutes.toLong()), t.title, ctx.getString(R.string.remind_task_text), "b${t.id}${item.start}", t.id)
+                                out += Reminder(item.start.minusMinutes(minutes.toLong()), t.title, ctx.getString(R.string.remind_task_text), "b${t.id}${item.start}", t.id, t.remindPersistent)
                             }
                         }
                     }

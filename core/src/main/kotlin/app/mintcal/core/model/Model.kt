@@ -199,6 +199,8 @@ data class Task(
     val parentId: String? = null,
     val repeat: Recurrence? = null,
     val remindMinutes: Int? = null,
+    /** 持续提醒：通知铃声一直循环，直到完成、稍后或关掉这条提醒。 */
+    val remindPersistent: Boolean = false,
     /** 关联课程；与 dueBeforeNextClass 配合，截止为「下节课前」 */
     val courseId: String? = null,
     val dueBeforeNextClass: Boolean = false,

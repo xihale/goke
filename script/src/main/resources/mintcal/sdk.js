@@ -241,6 +241,7 @@ function __createSdk(data, opts) {
         parentId: o.parentId === undefined ? null : o.parentId,
         repeat: o.repeat === undefined ? null : o.repeat,
         remindMinutes: o.remindMinutes === undefined ? null : o.remindMinutes,
+        remindPersistent: !!o.remindPersistent,
         courseId: o.courseId === undefined ? null : o.courseId, dueBeforeNextClass: !!o.dueBeforeNextClass,
         blockStart: o.blockStart === undefined ? null : o.blockStart,
         blockMinutes: o.blockMinutes === undefined ? null : o.blockMinutes,

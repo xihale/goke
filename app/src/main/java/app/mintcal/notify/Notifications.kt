@@ -1,6 +1,7 @@
 package app.mintcal.notify
 
 import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -79,6 +80,7 @@ object Notifications {
         title: String,
         text: String,
         taskId: String? = null,
+        insistent: Boolean = false,
     ) {
         if (!canPost(ctx)) return
         val open =
@@ -117,6 +119,7 @@ object Notifications {
                         .putExtra(TaskActionReceiver.EXTRA_NOTIFICATION_ID, id)
                         .putExtra(ReminderReceiver.EXTRA_TITLE, title)
                         .putExtra(ReminderReceiver.EXTRA_TEXT, text)
+                        .putExtra(ReminderReceiver.EXTRA_PERSISTENT, insistent)
                 val pi = PendingIntent.getBroadcast(ctx, id, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
                 return NotificationCompat.Action.Builder(0, ctx.getString(label), pi).build()
             }
@@ -124,6 +127,7 @@ object Notifications {
             n.addAction(action(TaskActionReceiver.ACTION_SNOOZE, R.string.notif_action_snooze))
         }
         val built = n.build()
+        if (insistent) built.flags = built.flags or Notification.FLAG_INSISTENT
         runCatching { NotificationManagerCompat.from(ctx).notify(id, built) }
     }
 }
