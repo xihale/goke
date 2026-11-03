@@ -158,7 +158,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             FormSection {
                 NavRow(stringResource(R.string.appearance), stringResource(R.string.appearance_desc), Icons.Rounded.Palette) { nav.push(Route.Appearance) }
@@ -324,7 +324,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             FormSection(stringResource(R.string.theme_color)) {
                 ChipChoice(sources, source, { v -> app.settings.update { it.copy(themeSource = v) } })
@@ -461,7 +461,7 @@ fun AiSettingsScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(stringResource(R.string.ai_settings_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FieldText(stringResource(R.string.ai_base_url), baseUrl, { baseUrl = it })
@@ -474,7 +474,7 @@ fun AiSettingsScreen(onBack: () -> Unit) {
                 label = { Text(stringResource(R.string.ai_key)) },
                 placeholder = { Text(if (hasKey) stringResource(R.string.ai_key_saved) else stringResource(R.string.ai_key_none)) },
                 visualTransformation = PasswordVisualTransformation(),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(16.dp),
             )
             Text(stringResource(R.string.ai_key_storage_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -508,7 +508,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             MintCard {
                 Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineSmall)
@@ -659,7 +659,7 @@ private fun MinutesDialog(
                         }
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(16.dp),
                 )
             }
         },
@@ -707,7 +707,7 @@ private fun HexColorDialog(
                             null
                         },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(16.dp),
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

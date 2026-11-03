@@ -184,7 +184,7 @@ private fun ChangeCard(
         Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(MintTheme.card),
     ) {
         Box(Modifier.width(5.dp).fillMaxHeight().background(bar))

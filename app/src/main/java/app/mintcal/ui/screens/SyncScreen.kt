@@ -74,7 +74,7 @@ fun SyncScreen(onBack: () -> Unit) {
                     .padding(horizontal = 16.dp)
                     .navigationBarsPadding()
                     .padding(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 val account = state.account
                 if (account == null) LoginPanel() else AccountPanel(account, state.syncing, state.lastSyncAt, state.lastError)
@@ -107,7 +107,7 @@ private fun LoginPanel() {
                 label = { Text(stringResource(R.string.sync_server)) },
                 placeholder = { Text("https://cal.example.com") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(16.dp),
             )
             if (SyncClient.isInsecure(url.trim().lowercase())) {
                 Text(stringResource(R.string.sync_http_warning), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -121,7 +121,7 @@ private fun LoginPanel() {
                 label = { Text(stringResource(R.string.sync_password)) },
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(16.dp),
             )
             error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             Button(
@@ -246,7 +246,7 @@ private fun ChangePasswordDialog(onDismiss: () -> Unit) {
                     singleLine = true,
                     label = { Text(stringResource(R.string.sync_old_password)) },
                     visualTransformation = PasswordVisualTransformation(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(16.dp),
                 )
                 OutlinedTextField(
                     value = new,
@@ -255,7 +255,7 @@ private fun ChangePasswordDialog(onDismiss: () -> Unit) {
                     label = { Text(stringResource(R.string.sync_new_password)) },
                     supportingText = { Text(stringResource(R.string.sync_password_rule)) },
                     visualTransformation = PasswordVisualTransformation(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(16.dp),
                 )
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }

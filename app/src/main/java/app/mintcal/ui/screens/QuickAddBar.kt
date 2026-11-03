@@ -1,15 +1,5 @@
 package app.mintcal.ui.screens
 
-import android.Manifest
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -30,6 +20,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -38,27 +29,22 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Label
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Inbox
-import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.OpenInFull
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -76,6 +62,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -92,7 +79,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
-import androidx.core.content.ContextCompat
 import app.mintcal.R
 import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
@@ -147,6 +133,7 @@ internal fun QuickAddSheet(
     val actions = LocalActions.current
     val haptics = LocalHapticFeedback.current
     var text by rememberSaveable { mutableStateOf("") }
+    var note by rememberSaveable { mutableStateOf("") }
     var listMenu by remember { mutableStateOf(false) }
     var priorityMenu by remember { mutableStateOf(false) }
     // 日期面板：日期/时间段 + 提醒 + 重复一次选好；设了就压过文本里识别出的日期
@@ -268,13 +255,18 @@ internal fun QuickAddSheet(
             } else {
                 null
             }
-        actions.commit(buildQuickTasks(snap, placed, listFilter, defaultBucket, now, desc, ov), msg)
+        actions.commit(buildQuickTasks(snap, placed, listFilter, defaultBucket, now, desc, ov, note), msg)
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        note = ""
     }
 
-    fun save() {
-        val p = parsed ?: return
-        commitItems(listOf(QuickBatchItem(p, null)))
+    /** 收起即结算：写了内容直接添加，没写就是取消；不设确认键。 */
+    fun finish() {
+        if (parsed == null) {
+            onDismiss()
+            return
+        }
+        commitItems(listOf(QuickBatchItem(parsed, null)))
         text = ""
         panelWhen = null
         panelRemind = null
@@ -282,7 +274,7 @@ internal fun QuickAddSheet(
         panelFreq = null
         panelUntil = null
         panelByDays = emptySet()
-        focus.requestFocus()
+        onDismiss()
     }
 
     /** 外部来的文字（粘贴 / 分享）：多行进批量预览，单行放进输入框。 */
@@ -308,84 +300,14 @@ internal fun QuickAddSheet(
         }
     }
 
-    // 直接用系统识别服务在应用内出结果：不跳 Google 语音服务的界面，也没有它的安装/确认提示
-    var listening by remember { mutableStateOf(false) }
-    val recognizer = remember { if (SpeechRecognizer.isRecognitionAvailable(ctx)) SpeechRecognizer.createSpeechRecognizer(ctx) else null }
-    DisposableEffect(recognizer) { onDispose { recognizer?.destroy() } }
-    LaunchedEffect(recognizer) {
-        recognizer?.setRecognitionListener(
-            object : RecognitionListener {
-                override fun onResults(results: Bundle) {
-                    listening = false
-                    val said = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                    if (!said.isNullOrBlank()) {
-                        text = (text + " " + said).trim()
-                        focus.requestFocus()
-                    }
-                }
-
-                override fun onError(error: Int) {
-                    listening = false
-                    if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
-                        actions.toast(ctx.getString(R.string.todo_voice_unavailable))
-                    }
-                }
-
-                override fun onReadyForSpeech(params: Bundle?) {}
-
-                override fun onBeginningOfSpeech() {}
-
-                override fun onRmsChanged(rmsdB: Float) {}
-
-                override fun onBufferReceived(buffer: ByteArray?) {}
-
-                override fun onEndOfSpeech() {}
-
-                override fun onPartialResults(partialResults: Bundle?) {}
-
-                override fun onEvent(
-                    eventType: Int,
-                    params: Bundle?,
-                ) {}
-            },
-        )
-    }
-
-    fun listen() {
-        val sr = recognizer
-        if (sr == null) {
-            actions.toast(ctx.getString(R.string.todo_voice_unavailable))
-            return
-        }
-        sr.cancel()
-        listening = true
-        sr.startListening(
-            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1),
-        )
-    }
-
-    /** 录音权限给了才开始听。 */
-    val micPermission =
-        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) listen() else actions.toast(ctx.getString(R.string.todo_voice_unavailable))
-        }
-
-    fun startVoice() {
-        if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            listen()
-        } else {
-            micPermission.launch(Manifest.permission.RECORD_AUDIO)
-        }
-    }
-
     fun openDetail() {
         val draft = text.ifBlank { null }
+        val draftNote = note.ifBlank { null }
         // 草稿移交编辑页：浮层清空收起，回来不残留旧文字
         text = ""
+        note = ""
         onDismiss()
-        nav.push(Route.TodoEdit(text = draft))
+        nav.push(Route.TodoEdit(text = draft, note = draftNote))
     }
     val daySet = parsed?.due != null || defaultBucket != null || anchorDate != null || panelWhen != null
     val panelWhenLabel =
@@ -409,7 +331,7 @@ internal fun QuickAddSheet(
                 Modifier
                     .matchParentSize()
                     .background(Color.Black.copy(alpha = 0.2f))
-                    .pointerInput(Unit) { detectTapGestures { onDismiss() } },
+                    .pointerInput(Unit) { detectTapGestures { finish() } },
             )
             Surface(
                 modifier =
@@ -417,59 +339,69 @@ internal fun QuickAddSheet(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shadowElevation = 6.dp,
             ) {
-                Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        // 输入框：细描边的胶囊,不再是一整块灰色方块;正文 16sp 常规字重
-                        OutlinedTextField(
-                            text,
-                            { text = it },
-                            Modifier.weight(1f).focusRequester(focus),
-                            textStyle = MaterialTheme.typography.bodyLarge,
-                            placeholder = {
-                                Text(
-                                    stringResource(R.string.quick_add_prompt),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                            singleLine = true,
-                            shape = RoundedCornerShape(28.dp),
-                            trailingIcon = {
-                                IconButton(onClick = { startVoice() }) {
-                                    Icon(
-                                        Icons.Rounded.Mic,
-                                        stringResource(R.string.todo_voice),
-                                        tint = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            },
-                            colors =
-                                OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = Color.Transparent,
-                                    unfocusedContainerColor = Color.Transparent,
-                                    focusedBorderColor = MaterialTheme.colorScheme.outline,
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 8.dp)) {
+                    // 标题：详细编辑同款素面大字输入
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp),
+                    ) {
+                        BasicTextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focus)
+                                    .padding(vertical = 12.dp),
+                            textStyle =
+                                MaterialTheme.typography.titleLarge.copy(
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Normal,
                                 ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            singleLine = true,
                             visualTransformation = highlight,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = { save() }),
+                            keyboardActions = KeyboardActions(onDone = { finish() }),
                         )
-                        Spacer(Modifier.width(10.dp))
-                        // 主动作只有一个：输入框右侧的圆形确认键
-                        FilledIconButton(
-                            onClick = { save() },
-                            enabled = text.isNotBlank(),
-                            modifier = Modifier.size(48.dp),
-                        ) { Icon(Icons.Rounded.Check, stringResource(R.string.add), modifier = Modifier.size(22.dp)) }
+                        if (text.isEmpty()) {
+                            Text(
+                                stringResource(R.string.quick_add_prompt),
+                                Modifier.padding(vertical = 12.dp),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Normal),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    // 备注：详细编辑同款素面输入，可留空
+                    Box(Modifier.fillMaxWidth()) {
+                        BasicTextField(
+                            value = note,
+                            onValueChange = { note = it },
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        )
+                        if (note.isEmpty()) {
+                            Text(
+                                stringResource(R.string.field_note),
+                                Modifier.padding(vertical = 8.dp),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { whenPanel = true }, modifier = Modifier.size(40.dp)) {
+                        IconButton(onClick = { whenPanel = true }) {
                             Icon(
                                 Icons.Rounded.Event,
                                 stringResource(R.string.detail_editor_pick_date),
@@ -477,7 +409,7 @@ internal fun QuickAddSheet(
                             )
                         }
                         Box {
-                            IconButton(onClick = { priorityMenu = true }, modifier = Modifier.size(40.dp)) {
+                            IconButton(onClick = { priorityMenu = true }) {
                                 Icon(
                                     Icons.Rounded.Flag,
                                     stringResource(R.string.label_priority),
@@ -510,7 +442,7 @@ internal fun QuickAddSheet(
                             }
                         }
                         Box {
-                            IconButton(onClick = { tagMenu = true }, modifier = Modifier.size(40.dp)) {
+                            IconButton(onClick = { tagMenu = true }) {
                                 Icon(
                                     Icons.AutoMirrored.Rounded.Label,
                                     stringResource(R.string.field_tags),
@@ -535,7 +467,7 @@ internal fun QuickAddSheet(
                         }
                         if (snap.lists.isNotEmpty()) {
                             Box {
-                                IconButton(onClick = { listMenu = true }, modifier = Modifier.size(40.dp)) {
+                                IconButton(onClick = { listMenu = true }) {
                                     Icon(Icons.Rounded.Inbox, stringResource(R.string.label_list), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 DropdownMenu(listMenu, { listMenu = false }, properties = noFocusPopup) {
@@ -549,7 +481,7 @@ internal fun QuickAddSheet(
                             }
                         }
                         Spacer(Modifier.weight(1f))
-                        IconButton(onClick = { openDetail() }, modifier = Modifier.size(40.dp)) {
+                        IconButton(onClick = { openDetail() }) {
                             Icon(Icons.Rounded.OpenInFull, stringResource(R.string.detail_editor_full_edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
@@ -673,7 +605,7 @@ internal fun QuickAddSheet(
         WhenPanel(
             initial =
                 panelWhen ?: parsed?.due?.let { d ->
-                    WhenPick(d.toLocalDate(), if (parsed.dueHasTime) d.toLocalTime() else null, settings.defaultBlockMinutes, block = false)
+                    WhenPick(d.toLocalDate(), if (parsed.dueHasTime) d.toLocalTime() else null)
                 },
             defaultDate = now.toLocalDate(),
             defaultMinutes = settings.defaultBlockMinutes,
@@ -800,6 +732,7 @@ internal fun buildQuickTasks(
     now: LocalDateTime,
     desc: String,
     override: QuickOverride? = null,
+    note: String = "",
 ): ChangeSet {
     val changes = mutableListOf<Change>()
     val newLists = mutableMapOf<String, TaskList>()
@@ -849,11 +782,12 @@ internal fun buildQuickTasks(
         var blockStart: LocalDateTime? = null
         var blockMinutes: Int? = null
         if (wp != null) {
+            val dur = wp.minutes
             if (wp.start != null) {
-                if (wp.block) {
+                if (dur != null) {
                     blockStart = LocalDateTime.of(wp.date, wp.start)
-                    blockMinutes = wp.minutes
-                    due = blockStart.plusMinutes(wp.minutes.toLong())
+                    blockMinutes = dur
+                    due = blockStart.plusMinutes(dur.toLong())
                 } else {
                     due = LocalDateTime.of(wp.date, wp.start)
                 }
@@ -868,6 +802,7 @@ internal fun buildQuickTasks(
                 Task(
                     id,
                     p.title,
+                    note = if (i == 0 && parentIdx == null) note else "",
                     listId = listId,
                     tags = p.tags,
                     priority = p.priority,

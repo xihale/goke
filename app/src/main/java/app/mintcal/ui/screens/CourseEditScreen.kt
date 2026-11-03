@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -269,18 +270,23 @@ fun ColorPicker(
     onSelect: (Int) -> Unit,
 ) {
     val colors = MintTheme.colors
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         for (i in 0 until 8) {
             val sel = i == selected
-            Box(
-                Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(colors.bg(i))
-                    .border(if (sel) 2.5.dp else 1.dp, if (sel) colors.fg(i) else MaterialTheme.colorScheme.outlineVariant, CircleShape)
-                    .clickable { onSelect(i) },
-                contentAlignment = Alignment.Center,
-            ) { if (sel) Icon(Icons.Rounded.Check, null, tint = colors.fg(i), modifier = Modifier.size(18.dp)) }
+            Box(Modifier.size(48.dp).clickable { onSelect(i) }, contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(colors.bg(i))
+                        .border(if (sel) 2.5.dp else 1.dp, if (sel) colors.fg(i) else MaterialTheme.colorScheme.outlineVariant, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { if (sel) Icon(Icons.Rounded.Check, null, tint = colors.fg(i), modifier = Modifier.size(18.dp)) }
+            }
         }
     }
 }

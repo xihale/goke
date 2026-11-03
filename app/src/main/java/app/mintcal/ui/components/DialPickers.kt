@@ -10,15 +10,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -44,15 +47,15 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * 圆形时间表盘：与编辑页 TimePickerDlg 的 M3 圆盘同构——大数字读数（激活段高亮）、
- * 时 / 分切换、圆盘上拨选，选完小时自动进入分钟。
+ * 圆形时间表盘：M3 时钟样式——大数字读数（激活段高亮）、时 / 分切换、圆盘上拨选，
+ * 选完小时自动进入分钟；以应用统一的底部弹层呈现。
  * [MinutesDialSheet] 选时长（小时+分钟 → 总分钟数），[TimeDialSheet] 选时刻。
  */
 private const val DIAL_SIZE = 260
 
-/** 24 小时制双环数字：外环 12 起头，内环 0 与 13–23，下标即表盘 30° 一格的位置。 */
-private val HOUR_OUTER = intArrayOf(12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
-private val HOUR_INNER = intArrayOf(0, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23)
+/** 24 小时制双环数字：外环 0 与 13-23，内环 12 起头，下标即表盘 30° 一格的位置。 */
+private val HOUR_OUTER = intArrayOf(0, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23)
+private val HOUR_INNER = intArrayOf(12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
 
 private enum class DialMode {
     HOUR,
@@ -140,35 +143,39 @@ private fun DialDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.ok)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-        shape = RoundedCornerShape(28.dp),
-        text = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    Modifier.semantics { contentDescription = a11y },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Digit("%02d".format(hours), mode == DialMode.HOUR) { onMode(DialMode.HOUR) }
-                    Text(":", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Digit("%02d".format(minutes), mode == DialMode.MINUTE) { onMode(DialMode.MINUTE) }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ModePill(stringResource(R.string.dial_hours), mode == DialMode.HOUR) { onMode(DialMode.HOUR) }
-                    ModePill(stringResource(R.string.dial_minutes), mode == DialMode.MINUTE) { onMode(DialMode.MINUTE) }
-                }
-                DialFace(
-                    mode = mode,
-                    selected = if (mode == DialMode.HOUR) hours else minutes,
-                    onSelect = { v -> if (mode == DialMode.HOUR) onHours(v) else onMinutes(v) },
-                    onSelectDone = { if (mode == DialMode.HOUR) onHourPicked() },
-                )
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    ) {
+        Column(
+            Modifier.navigationBarsPadding().fillMaxWidth().padding(bottom = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                Modifier.semantics { contentDescription = a11y },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Digit("%02d".format(hours), mode == DialMode.HOUR) { onMode(DialMode.HOUR) }
+                Text(":", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Digit("%02d".format(minutes), mode == DialMode.MINUTE) { onMode(DialMode.MINUTE) }
             }
-        },
-    )
+            DialFace(
+                mode = mode,
+                selected = if (mode == DialMode.HOUR) hours else minutes,
+                onSelect = { if (mode == DialMode.HOUR) onHours(it) else onMinutes(it) },
+                onSelectDone = onHourPicked,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.cancel), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                TextButton(onClick = onConfirm) { Text(stringResource(R.string.ok), style = MaterialTheme.typography.bodyLarge) }
+            }
+        }
+    }
 }
 
 @Composable
@@ -183,26 +190,6 @@ private fun Digit(
         style = MaterialTheme.typography.displaySmall,
         color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
     )
-}
-
-@Composable
-private fun ModePill(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Text(
-            text,
-            Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
-            style = MaterialTheme.typography.labelLarge,
-            color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
 }
 
 /** 表盘本体：背景圆 + 指针 + 数字（选中数字套主题色圆）。点按与拖动都拨盘，拖动结束回调。 */
@@ -244,18 +231,6 @@ private fun DialFace(
             val c = center
             val r = this.size.width / 2f
             drawCircle(cs.surfaceContainerHighest, radius = r, center = c)
-            if (mode == DialMode.MINUTE) {
-                // 分钟面：每分钟的刻度点（5 的倍数画数字，不画点）
-                for (s in 0..59) {
-                    if (s % 5 != 0) {
-                        drawCircle(
-                            cs.onSurfaceVariant.copy(alpha = 0.5f),
-                            radius = 1.dp.toPx(),
-                            center = polar(s * 6.0, labelR.toPx(), c),
-                        )
-                    }
-                }
-            }
             val pos =
                 when (mode) {
                     DialMode.HOUR -> {

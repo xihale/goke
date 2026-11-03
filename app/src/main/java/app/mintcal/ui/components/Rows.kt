@@ -91,7 +91,7 @@ fun AgendaRow(
         }
 
         is TaskItem -> {
-            TaskRow(item.task, onToggleTask, onOpenTask, subtitle = if (item.hasTime) item.due.hm() else stringResource(R.string.time_unscheduled), modifier = modifier)
+            TaskRow(item.task, onToggleTask, onOpenTask, subtitle = if (item.hasTime) item.due.hm() else null, modifier = modifier)
         }
 
         is BlockItem -> {

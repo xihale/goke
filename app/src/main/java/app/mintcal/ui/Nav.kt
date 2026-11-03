@@ -12,6 +12,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import app.mintcal.MintCalApp
 import app.mintcal.R
+import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
 import app.mintcal.ui.components.UndoPrompt
 import kotlinx.coroutines.CoroutineScope
@@ -70,6 +71,8 @@ sealed interface Route {
         val start: String? = null,
         val end: String? = null,
         val text: String? = null,
+        /** 快速添加带过来的备注草稿。 */
+        val note: String? = null,
         /** 从课程页「加一条待办」带过来的关联课程。 */
         val courseId: String? = null,
         /** 周历上框选了几天：其余日期（ISO，逗号分隔）跟着一起建。 */
@@ -140,7 +143,9 @@ class Actions(
     ) {
         scope.launch {
             app.repo.commit(cs)
-            if (message != null && !cs.isEmpty) {
+            // 撤回条只在动了删除时出现；纯新增/修改不打扰
+            val removes = cs.changes.any { it is Change.Remove }
+            if (message != null && !cs.isEmpty && removes) {
                 undo = UndoPrompt(cs.id, System.currentTimeMillis(), message)
             }
         }

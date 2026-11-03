@@ -66,7 +66,7 @@ fun JxfwScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (state.loggedIn) AccountPanel(state) else LoginPanel(state)
         }
@@ -107,7 +107,7 @@ private fun LoginPanel(state: JxfwState) {
                 label = { Text(stringResource(R.string.jxfw_password)) },
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(16.dp),
             )
             Text(stringResource(R.string.jxfw_privacy), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             errorText(state.lastErrorKind, state.lastError)?.let {

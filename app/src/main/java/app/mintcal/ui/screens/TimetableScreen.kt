@@ -120,6 +120,7 @@ import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
 import app.mintcal.ui.components.EmptyState
+import app.mintcal.ui.components.NavListInset
 import app.mintcal.ui.components.mintPressable
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
@@ -466,7 +467,7 @@ private fun WeekGrid(
             Modifier
                 .weight(1f)
                 .verticalScroll(scroll)
-                .padding(bottom = 176.dp),
+                .padding(bottom = NavListInset),
         ) {
             // 长按空白处拖动框选：横跨几天、纵跨几节 → 一次建多条（重复/冲突在编辑页里定）
             var box by remember { mutableStateOf<BoxSel?>(null) }

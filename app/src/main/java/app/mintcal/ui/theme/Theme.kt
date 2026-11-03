@@ -2,9 +2,7 @@ package app.mintcal.ui.theme
 
 import android.os.Build
 import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.IndicationNodeFactory
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.FocusInteraction
@@ -13,6 +11,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -56,7 +55,7 @@ enum class Preset(
     val seed: Color,
     val label: Int,
 ) {
-    MINT("mint", Color(0xFF4FA796), R.string.preset_mint),
+    MINT("mint", Color(0xFF2E776C), R.string.preset_mint),
     PEACH("peach", Color(0xFFE8836B), R.string.preset_peach),
     LAVENDER("lavender", Color(0xFF7A6CC4), R.string.preset_lavender),
     SKY("sky", Color(0xFF4A90D9), R.string.preset_sky),
@@ -119,7 +118,7 @@ fun mintColors(dark: Boolean): MintColors {
         added = Color(0xFF46A171),
         modified = Color(0xFFD5A03B),
         onModified = if (dark) Color(0xFFF1CF8A) else Color(0xFF9A6B12),
-        removed = Color(0xFFE56458),
+        removed = if (dark) Color(0xFFE56458) else Color(0xFFB23E50),
         conflictBg = if (dark) Color(0xFF4A2A27) else Color(0xFFFCE9E7),
         success = Color(0xFF46A171),
         // 低=中性灰绿（安静），中=金（提醒），高=红（同 removed/错误族）
@@ -127,7 +126,7 @@ fun mintColors(dark: Boolean): MintColors {
             if (dark) {
                 listOf(Color(0xFF93A39E), Color(0xFFE0B45C), Color(0xFFFF8F84))
             } else {
-                listOf(Color(0xFF64756F), Color(0xFFB07F1E), Color(0xFFE56458))
+                listOf(Color(0xFF5E6F69), Color(0xFFB07F1E), Color(0xFFB23E50))
             },
         dark = dark,
     )
@@ -207,14 +206,17 @@ object MintTheme {
         @Composable @ReadOnlyComposable
         get() = MaterialTheme.colorScheme.surfaceContainerLow
 
-    /** 弹簧动效（阻尼 0.7）；系统「移除动画」时直接切换。 */
+    /**
+     * 位移、尺寸、颜色共用 M3 standard 的 spatial spring（阻尼 0.9 / 刚度 700）。
+     * 旧的阻尼 0.7、低刚度会在底栏和分段上冲过再弹回。系统「移除动画」时直接切换。
+     */
     @Composable
-    fun <T> spec(): FiniteAnimationSpec<T> = if (LocalReduceMotion.current) snap() else spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow)
+    fun <T> spec(): FiniteAnimationSpec<T> = if (LocalReduceMotion.current) snap() else MaterialTheme.motionScheme.defaultSpatialSpec()
 }
 
 private fun brandLight() =
     lightColorScheme(
-        primary = Color(0xFF4FA796),
+        primary = Color(0xFF2E776C),
         onPrimary = Color.White,
         primaryContainer = Color(0xFFCDEBE3),
         onPrimaryContainer = Color(0xFF1B473F),
@@ -231,8 +233,8 @@ private fun brandLight() =
         surface = Color(0xFFFFFFFF),
         onSurface = Color(0xFF24312D),
         surfaceVariant = Color(0xFFE9F1EE),
-        // #7B8B86 在白卡上只有 3.58:1，而它承担副标题/说明等正文级文字；加深到 4.9:1
-        onSurfaceVariant = Color(0xFF64756F),
+        // 副文同时落在白卡和页面底上。#5E6F69 在 #F2F7F5 上 4.91:1，在白上 5.31:1
+        onSurfaceVariant = Color(0xFF5E6F69),
         surfaceContainerLowest = Color(0xFFFFFFFF),
         surfaceContainerLow = Color(0xFFFFFFFF),
         surfaceContainer = Color(0xFFFFFFFF),
@@ -240,7 +242,7 @@ private fun brandLight() =
         surfaceContainerHighest = Color(0xFFE9F1EE),
         outline = Color(0xFF9AABA6),
         outlineVariant = Color(0xFFE4ECE9),
-        error = Color(0xFFE56458),
+        error = Color(0xFFB23E50),
         onError = Color.White,
         errorContainer = Color(0xFFFCE9E7),
         onErrorContainer = Color(0xFF7A2A22),
@@ -353,7 +355,7 @@ fun MintCalTheme(
         LocalMintColors provides mintColors(dark),
         LocalReduceMotion provides reduce,
     ) {
-        MaterialTheme(colorScheme = scheme, shapes = MintShapes, typography = MintTypography) {
+        MaterialTheme(colorScheme = scheme, motionScheme = MotionScheme.standard(), shapes = MintShapes, typography = MintTypography) {
             CompositionLocalProvider(LocalIndication provides remember(scheme.primary) { FocusRingIndication(scheme.primary) }) {
                 // 提供默认内容色：没有 Surface 包裹时文字会是黑色，深色模式下看不见
                 androidx.compose.material3.Surface(color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground, content = content)

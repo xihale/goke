@@ -4,8 +4,9 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -69,6 +70,7 @@ import app.mintcal.DeepLink
 import app.mintcal.MintCalApp
 import app.mintcal.R
 import app.mintcal.ui.components.FloatingNavBar
+import app.mintcal.ui.components.NavClearance
 import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.screens.AboutScreen
 import app.mintcal.ui.screens.AdvancedFullScreen
@@ -162,9 +164,17 @@ fun MintCalRoot(
         }
     }
 
-    // 转场用定长补间，不能用主题里的低刚度 spring：整页滑入过冲再弹回就是肉眼可见的抖
-    val slide = tween<IntOffset>(durationMillis = 260, easing = FastOutSlowInEasing)
-    val fade = tween<Float>(durationMillis = 200, easing = FastOutSlowInEasing)
+    // 整页位移用定长补间：预测性返回要按手势进度 seek，弹簧没有固定时长。
+    // 进入 emphasized decelerate，离开 emphasized accelerate。减少动效时直接切。
+    val reduce = LocalReduceMotion.current
+    val enterEase = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+    val exitEase = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
+    val slideIn = if (reduce) snap<IntOffset>() else tween<IntOffset>(durationMillis = 260, easing = enterEase)
+    val slideOut = if (reduce) snap<IntOffset>() else tween<IntOffset>(durationMillis = 200, easing = exitEase)
+    val fadeInSpec = if (reduce) snap<Float>() else tween<Float>(durationMillis = 200, easing = enterEase)
+    val fadeOutSpec = if (reduce) snap<Float>() else tween<Float>(durationMillis = 150, easing = exitEase)
+    val splash = if (reduce) snap<Float>() else tween<Float>(durationMillis = 220, easing = enterEase)
+    val splashScale = if (reduce) snap<Float>() else tween<Float>(durationMillis = 280, easing = enterEase)
     val back: () -> Unit = {
         nav.pop()
         Unit
@@ -175,9 +185,7 @@ fun MintCalRoot(
             // 首屏内容从启动屏底下淡出浮现：ready 后不再是一帧硬切
             AnimatedVisibility(
                 visible = ready,
-                enter =
-                    fadeIn(tween(durationMillis = 220, easing = FastOutSlowInEasing)) +
-                        scaleIn(initialScale = 0.985f, animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)),
+                enter = fadeIn(splash) + scaleIn(initialScale = 0.985f, animationSpec = splashScale),
             ) {
                 if (ready) {
                     NavHost(
@@ -187,10 +195,10 @@ fun MintCalRoot(
                         // 标准 M3 方向性转场：enter/exit = 推入（新页右入 1/3，底层左让位）；
                         // popEnter/popExit = 返回（顶层右出淡出，底层原位揭露）。
                         // 开启预测性返回后，库按手势进度逐帧 seek pop 组转场。
-                        enterTransition = { slideInHorizontally(slide) { it / 3 } + fadeIn(fade) },
-                        exitTransition = { slideOutHorizontally(slide) { -it / 10 } },
-                        popEnterTransition = { slideInHorizontally(slide) { -it / 10 } },
-                        popExitTransition = { slideOutHorizontally(slide) { it / 3 } + fadeOut(fade) },
+                        enterTransition = { slideInHorizontally(slideIn) { it / 3 } + fadeIn(fadeInSpec) },
+                        exitTransition = { slideOutHorizontally(slideOut) { -it / 10 } },
+                        popEnterTransition = { slideInHorizontally(slideIn) { -it / 10 } },
+                        popExitTransition = { slideOutHorizontally(slideOut) { it / 3 } + fadeOut(fadeOutSpec) },
                     ) {
                         composable(HOME) { Tabs(nav) }
                         mintDestinations(nav, back)
@@ -210,7 +218,7 @@ fun MintCalRoot(
                         .imePadding()
                         .navigationBarsPadding()
                         .padding(start = 16.dp)
-                        .padding(bottom = if (!onRoute) 92.dp else 16.dp),
+                        .padding(bottom = if (!onRoute) NavClearance else 16.dp),
             ) {
                 val prompt = undoShown
                 if (prompt != null) {
@@ -244,7 +252,7 @@ fun NavGraphBuilder.mintDestinations(
     composable<Route.CourseEdit> { e -> CourseEditScreen(e.toRoute<Route.CourseEdit>().id, back) }
     composable<Route.TodoEdit> { e ->
         val r = e.toRoute<Route.TodoEdit>()
-        TodoEditScreen(r.id, r.date, r.start, r.end, r.text, r.courseId, r.extraDates) {
+        TodoEditScreen(r.id, r.date, r.start, r.end, r.text, r.courseId, r.extraDates, r.note) {
             if (nav.controller.currentBackStackEntry == e) back()
         }
     }

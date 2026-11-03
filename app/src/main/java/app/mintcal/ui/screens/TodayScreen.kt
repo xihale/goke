@@ -76,6 +76,8 @@ import app.mintcal.ui.components.AgendaRow
 import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintFab
+import app.mintcal.ui.components.NavClearance
+import app.mintcal.ui.components.NavListInset
 import app.mintcal.ui.components.SectionLabel
 import app.mintcal.ui.components.TaskRow
 import app.mintcal.ui.hm
@@ -149,7 +151,7 @@ fun TodayScreen() {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 176.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = NavListInset),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
@@ -300,7 +302,7 @@ fun TodayScreen() {
         MintFab(
             visible = !quickAddOpen && !dayEmpty,
             onClick = { quickAddOpen = true },
-            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = 92.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = NavClearance),
         )
         QuickAddSheet(
             snap = snap,

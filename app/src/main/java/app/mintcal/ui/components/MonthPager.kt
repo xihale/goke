@@ -133,16 +133,18 @@ private fun MonthGrid(
                     val d = first.plusDays((r * 7 + c).toLong())
                     val sel = d == selected
                     val inMonth = YearMonth.from(d) == month
-                    Box(Modifier.weight(1f).height(42.dp), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier.weight(1f).height(48.dp).clickable {
+                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            onPick(d)
+                        },
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Box(
                             Modifier
                                 .size(34.dp)
                                 .clip(CircleShape)
-                                .background(if (sel) MaterialTheme.colorScheme.primary else Color.Transparent)
-                                .clickable {
-                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                                    onPick(d)
-                                },
+                                .background(if (sel) MaterialTheme.colorScheme.primary else Color.Transparent),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(

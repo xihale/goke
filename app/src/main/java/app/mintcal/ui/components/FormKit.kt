@@ -15,6 +15,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -80,7 +81,17 @@ fun <T> ChipChoice(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         options.forEach { (v, label) ->
-            FilterChip(selected = v == selected, onClick = { onSelect(v) }, label = { Text(label) }, shape = RoundedCornerShape(12.dp))
+            FilterChip(
+                selected = v == selected,
+                onClick = { onSelect(v) },
+                label = { Text(label) },
+                shape = RoundedCornerShape(12.dp),
+                colors =
+                    FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
+            )
         }
     }
 }

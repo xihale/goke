@@ -4,13 +4,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -112,7 +106,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import app.mintcal.ui.Tab
-import app.mintcal.ui.theme.LocalReduceMotion
 import app.mintcal.ui.theme.MintTheme
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
@@ -120,10 +113,8 @@ import kotlinx.coroutines.flow.filter
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
-import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 /** 通用页面骨架：状态栏避让 + 顶栏（返回 / 标题 / 右侧操作）。 */
 @Composable
@@ -309,11 +300,15 @@ fun NavRow(
     }
 }
 
+/** 底栏岛高 68，上下各 12，浮层让位 92；列表再多留 84，末行才能滚到岛上方。 */
+val NavIslandHeight = 68.dp
+val NavIslandPadding = 12.dp
+val NavClearance = NavIslandHeight + NavIslandPadding * 2
+val NavListInset = NavClearance + 84.dp
+
 /**
  * 浮动胶囊底栏。岛和选中块是同一套胶囊：选中块四周等距内缩，
- * 端头圆弧和岛同心，贴在首尾也不会露出一圈对不上的月牙。
- * 滑动用无回弹弹簧，行进中选中块朝目标拉长再收回，而不是一块刚体平移。
- * 按下不画高亮，反馈靠色块滑动、图标轻压和触感。
+ * 端头圆弧和岛同心。选中块滑动，按下只缩放图标。
  */
 @Composable
 fun FloatingNavBar(
@@ -334,50 +329,30 @@ fun FloatingNavBar(
             Item(Tab.TODO, Icons.Rounded.CheckCircle, R.string.tab_todo),
         )
     val selectedIndex = items.indexOfFirst { it.tab == tab }.coerceAtLeast(0)
-    val reduce = LocalReduceMotion.current
     val haptics = LocalHapticFeedback.current
     val travel = remember { Animatable(selectedIndex.toFloat()) }
-    // 这次滑动的起点。选中项一变就记下来，用来算行进中段的拉长，而不是速度猜。
-    val flightFrom = remember(selectedIndex) { travel.value }
-    LaunchedEffect(selectedIndex, reduce) {
-        if (reduce) {
-            travel.snapTo(selectedIndex.toFloat())
-        } else {
-            travel.animateTo(
-                selectedIndex.toFloat(),
-                spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
-            )
-        }
+    val spec = MintTheme.spec<Float>()
+    LaunchedEffect(selectedIndex) {
+        travel.animateTo(selectedIndex.toFloat(), spec)
     }
     val index = travel.value
-    val span = abs(selectedIndex - flightFrom).coerceAtLeast(0.001f)
-    val progress = (1f - abs(selectedIndex - index) / span).coerceIn(0f, 1f)
-    // 两头为 0、中段为 1：刚体滑过去会显机械，中段拉长再收回才像同一块东西被带走
-    val stretch = if (reduce) 0f else sin(progress * PI.toFloat())
     val scheme = MaterialTheme.colorScheme
     val dark = scheme.background.luminance() < 0.5f
     val bar = if (dark) scheme.surfaceContainerHigh else scheme.surfaceContainer
     // 深色里 surfaceContainerHighest 和岛几乎同色，选中块会糊成一块污渍；往文字色混一档，仍是中性色
     val thumb = if (dark) lerp(bar, scheme.onSurface, 0.16f) else scheme.surfaceContainerHighest
     Surface(
-        modifier = modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth(),
+        modifier = modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = NavIslandPadding).fillMaxWidth(),
         shape = CircleShape,
         color = bar,
         shadowElevation = 3.dp,
     ) {
-        Box(Modifier.fillMaxWidth().height(68.dp)) {
+        Box(Modifier.fillMaxWidth().height(NavIslandHeight)) {
             Canvas(Modifier.fillMaxSize()) {
                 val inset = 4.dp.toPx()
                 val slot = size.width / items.size
-                val base = slot - inset * 2
-                val extra = slot * 0.32f * stretch
-                val movingLeft = selectedIndex.toFloat() < index
-                var left = index * slot + inset - if (movingLeft) extra else 0f
-                val width = base + extra
-                val minLeft = inset
-                val maxLeft = size.width - inset - width
-                if (left < minLeft) left = minLeft
-                if (left > maxLeft) left = maxLeft
+                val width = slot - inset * 2
+                val left = index * slot + inset
                 val top = inset
                 val height = size.height - inset * 2
                 drawRoundRect(
@@ -393,13 +368,13 @@ fun FloatingNavBar(
                     val interaction = remember { MutableInteractionSource() }
                     val fg by animateColorAsState(
                         if (selected) scheme.primary else scheme.onSurfaceVariant,
-                        if (reduce) snap() else tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                        MintTheme.spec(),
                         label = "nav-fg",
                     )
                     val pressed by interaction.collectIsPressedAsState()
                     val pressScale by animateFloatAsState(
                         if (pressed) 0.96f else 1f,
-                        if (reduce) snap() else tween(durationMillis = 80, easing = FastOutSlowInEasing),
+                        MintTheme.spec(),
                         label = "nav-press",
                     )
                     Column(
@@ -774,7 +749,7 @@ fun ConflictCard(
     Column(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(MintTheme.colors.conflictBg)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),

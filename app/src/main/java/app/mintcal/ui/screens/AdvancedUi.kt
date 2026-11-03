@@ -261,7 +261,7 @@ private fun FailureCard(o: ScriptOutcome.Failure) {
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(MintTheme.colors.conflictBg)
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -281,7 +281,7 @@ private fun WarningsAndLogs(
         Column(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(MintTheme.colors.conflictBg)
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -411,7 +411,7 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                                     minLines = 12,
                                     textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp),
                                     placeholder = { Text("// mc.courses.query(...)") },
-                                    shape = RoundedCornerShape(18.dp),
+                                    shape = RoundedCornerShape(16.dp),
                                 )
                                 if (st.codeSource == Source.AI && st.code.isNotBlank()) Text(stringResource(R.string.code_from_ai), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

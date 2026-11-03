@@ -13,7 +13,7 @@ enum class DarkMode { SYSTEM, LIGHT, DARK }
 data class Settings(
     val themeSource: ThemeSource = ThemeSource.DYNAMIC,
     val preset: String = "mint",
-    val seedColor: Int = 0xFF4FA796.toInt(),
+    val seedColor: Int = 0xFF2E776C.toInt(),
     val darkMode: DarkMode = DarkMode.SYSTEM,
     val showTeacher: Boolean = false,
     val defaultBlockMinutes: Int = 30,

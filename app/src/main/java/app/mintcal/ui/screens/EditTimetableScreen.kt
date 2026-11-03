@@ -115,7 +115,7 @@ fun EditTimetableScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             FormSection(stringResource(R.string.section_semester)) {
                 FieldText(stringResource(R.string.label_semester_name), name, { name = it })
@@ -135,7 +135,7 @@ fun EditTimetableScreen(onBack: () -> Unit) {
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(18.dp))
+                            .clip(RoundedCornerShape(16.dp))
                             .background(MintTheme.card)
                             .clickable { nav.push(Route.CourseEdit(c.id)) }
                             .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -269,7 +269,7 @@ fun PeriodsScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(stringResource(R.string.periods_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FormSection {

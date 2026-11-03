@@ -103,8 +103,8 @@
     <string name="done_toast">已完成「%1$s」</string>
     <string name="go_todo">去待办看看</string>
     <string name="block_subtitle_short">%1$s – %2$s</string>
-    <string name="tab_date">日期</string>
-    <string name="tab_range">时间段</string>
+    <string name="label_lasting">持续</string>
+    <string name="duration_hint">留空为待办；填写后排入日历为日程</string>
     <string name="month_n">%1$d月</string>
     <string name="sheet_time">时间</string>
     <string name="repeat_until_short">有结束</string>
@@ -143,7 +143,6 @@
     <string name="label_priority">优先级</string>
     <string name="label_repeat">重复</string>
     <string name="label_time">时间</string>
-    <string name="label_duration">时长</string>
     <string name="tonight">今天晚上</string>
     <string name="date_and_repeat">日期&amp;重复</string>
     <string name="label_list">清单</string>
@@ -191,6 +190,9 @@
     <string name="repeat_weekdays">每周工作日</string>
     <string name="repeat_weekdays_span">周一至周五</string>
     <string name="repeat_custom">自定义重复</string>
+    <string name="repeat_every">每</string>
+    <string name="repeat_interval_up">增大间隔</string>
+    <string name="repeat_interval_down">减小间隔</string>
     <string name="repeat_semester">本学期的每%1$s</string>
     <string name="repeat_end">结束重复</string>
     <string name="repeat_end_never">永不结束</string>
@@ -579,8 +581,6 @@
     <string name="todo_bulk_delete_desc">批量删除 %1$d 项待办</string>
     <string name="todo_bulk_toast">已处理 %1$d 项</string>
     <string name="todo_add_to">添加到：%1$s</string>
-    <string name="todo_voice">语音输入</string>
-    <string name="todo_voice_unavailable">这台设备没有可用的语音输入</string>
     <string name="todo_batch_title">一次添加 %1$d 条待办？</string>
     <string name="todo_batch_add_all">全部添加</string>
     <string name="todo_batch_desc">批量添加 %1$d 条待办</string>
@@ -691,7 +691,6 @@
     <string name="detail_editor_date_token">%1$d月%2$d日</string>
     <string name="time_end_next_day">结束 · 次日</string>
     <string name="time_next_day">次日 %1$s</string>
-    <string name="time_unscheduled">未定时</string>
     <string name="detail_editor_discard_title">放弃未保存的修改？</string>
     <string name="detail_editor_discard_desc">返回后，本次未保存的内容会丢失。</string>
     <string name="detail_editor_discard">放弃修改</string>

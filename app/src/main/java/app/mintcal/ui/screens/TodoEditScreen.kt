@@ -136,6 +136,7 @@ fun TodoEditScreen(
     textDraft: String? = null,
     courseArg: String? = null,
     extraDatesArg: String? = null,
+    noteDraft: String? = null,
     onBack: () -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -160,10 +161,10 @@ fun TodoEditScreen(
                 val b = t.blockStart
                 when {
                     // 排入日历的时间块：开始 + 时长原样读回（精确到分）
-                    b != null -> WhenPick(b.toLocalDate(), b.toLocalTime(), t.blockMinutes ?: settings.defaultBlockMinutes, block = true)
+                    b != null -> WhenPick(b.toLocalDate(), b.toLocalTime(), t.blockMinutes ?: settings.defaultBlockMinutes)
 
-                    // 旧待办的具体截止时刻：不丢时分，也不悄悄变成时间块
-                    t.due != null -> WhenPick(t.due!!.toLocalDate(), t.due!!.toLocalTime().takeIf { t.dueHasTime }, block = false)
+                    // 旧待办的具体截止时刻：不丢时分，持续留空保持待办
+                    t.due != null -> WhenPick(t.due!!.toLocalDate(), t.due!!.toLocalTime().takeIf { t.dueHasTime })
 
                     else -> null
                 }
@@ -183,7 +184,7 @@ fun TodoEditScreen(
         }
 
     var field by remember { mutableStateOf(TextFieldValue(existing?.title ?: textDraft.orEmpty())) }
-    var note by remember { mutableStateOf(existing?.note.orEmpty()) }
+    var note by remember { mutableStateOf(existing?.note ?: noteDraft.orEmpty()) }
     var attachments by remember { mutableStateOf(existing?.attachments.orEmpty()) }
     var picked by remember { mutableStateOf(initWhen) }
     var cleared by remember { mutableStateOf(false) }
@@ -220,8 +221,8 @@ fun TodoEditScreen(
         }
     val kept = remember(masked, now) { if (masked.isBlank()) null else QuickAdd.parse(masked, now) }
     val textWhen =
-        remember(kept, settings.defaultBlockMinutes) {
-            kept?.due?.let { WhenPick(it.toLocalDate(), if (kept.dueHasTime) it.toLocalTime() else null, settings.defaultBlockMinutes) }
+        remember(kept) {
+            kept?.due?.let { WhenPick(it.toLocalDate(), if (kept.dueHasTime) it.toLocalTime() else null) }
         }
     val whenPick =
         when {
@@ -233,8 +234,7 @@ fun TodoEditScreen(
         }
     val initialWhen = remember { whenPick }
     val whenChanged =
-        whenPick?.date != initialWhen?.date || whenPick?.start != initialWhen?.start ||
-            (whenPick?.start != null && (whenPick.block != initialWhen?.block || (whenPick.block && whenPick.minutes != initialWhen?.minutes)))
+        whenPick?.date != initialWhen?.date || whenPick?.start != initialWhen?.start || whenPick?.minutes != initialWhen?.minutes
     val hasChanges =
         // 新建时草稿就是内容本身：带着草稿进来点返回也该落成一条，不能当作「没改过」
         (existing == null && text.isNotBlank()) || text != existing?.title.orEmpty() || note != existing?.note.orEmpty() ||
@@ -290,18 +290,19 @@ fun TodoEditScreen(
                 sortOrder = (snap.tasks.maxOfOrNull { it.sortOrder } ?: 0) + 1,
             )
         val w = whenPick
-        // 时间块：blockStart + blockMinutes；截止时刻：只写 due（带时分）；仅日期：当天 23:59、不带时间
+        // 日程：blockStart + blockMinutes；待办带时刻：只写 due（带时分）；仅日期：当天 23:59、不带时间
         var blockStartAt: LocalDateTime? = null
         var dueAt: LocalDateTime? = null
         var blockMinutes: Int? = null
         var hasTime = false
         if (w != null) {
+            val dur = w.minutes
             if (w.start != null) {
                 val at = LocalDateTime.of(w.date, w.start)
-                if (w.block) {
+                if (dur != null) {
                     blockStartAt = at
-                    blockMinutes = w.minutes
-                    dueAt = at.plusMinutes(w.minutes.toLong())
+                    blockMinutes = dur
+                    dueAt = at.plusMinutes(dur.toLong())
                 } else {
                     dueAt = at
                 }
@@ -345,12 +346,13 @@ fun TodoEditScreen(
                 extras.mapNotNull { d ->
                     val ww = w
                     if (ww == null || !ww.block || ww.start == null) return@mapNotNull null
+                    val dur = ww.minutes ?: return@mapNotNull null
                     val s = LocalDateTime.of(d, ww.start)
                     val t2 =
                         next.copy(
                             id = Ids.next(),
                             blockStart = s,
-                            due = s.plusMinutes(ww.minutes.toLong()),
+                            due = s.plusMinutes(dur.toLong()),
                             sortOrder = next.sortOrder + 1,
                         )
                     Edits.save(snap, t2, ctx.getString(R.string.add_task_desc, t2.title), ms)
@@ -384,7 +386,7 @@ fun TodoEditScreen(
             IconButton(onClick = { requestBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
             Spacer(Modifier.weight(1f))
             if (existing != null) {
-                MintCheck(existing.done, { d -> toggle(actions, snap, existing, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, existing.title)) })
+                MintCheck(existing.done, { d -> toggle(actions, snap, existing, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, existing.title)) }, Modifier, 18.dp)
                 Box {
                     IconButton(onClick = { pageMenu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
                     DropdownMenu(pageMenu, { pageMenu = false }) {
@@ -776,13 +778,14 @@ private fun WhenRow(
                 ctx.dueLabel(whenPick.date.atStartOfDay(), false, today)
             }
 
-            !whenPick.block -> {
+            whenPick.minutes == null -> {
                 "${ctx.dueLabel(whenPick.date.atTime(start), true, today)} · ${stringResource(R.string.detail_editor_deadline)}"
             }
 
             else -> {
+                val dur = whenPick.minutes ?: 0
                 val end = whenPick.end?.hm().orEmpty()
-                val endLabel = if (start.hour * 60 + start.minute + whenPick.minutes >= 24 * 60) stringResource(R.string.time_next_day, end) else end
+                val endLabel = if (start.hour * 60 + start.minute + dur >= 24 * 60) stringResource(R.string.time_next_day, end) else end
                 "${ctx.dueLabel(whenPick.date.atTime(start), true, today)} – $endLabel"
             }
         }

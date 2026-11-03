@@ -25,6 +25,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasImeAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -35,6 +36,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -222,17 +224,17 @@ class ScreensSmokeTest {
         assertTrue("渲染失败的页面：\n" + failures.joinToString("\n"), failures.isEmpty())
     }
 
-    /** 快速添加：点右下角加号开浮层，回车即入库并清空输入，可直接接着录下一条。 */
+    /** 快速添加：点右下角加号开浮层，回车即入库并收起浮层；再开浮层录入下一条。 */
     @Test
-    fun quickAddAddsAndKeepsTyping() {
+    fun quickAddImeCommitsAndCloses() {
         rule.setContent { Host { TodoScreen() } }
         // 右下角 + 打开快速添加浮层（静息时唯一带「添加」描述的节点就是这颗 FAB）
         rule.onNodeWithContentDescription(app.getString(R.string.add)).performClick()
         rule.waitForIdle()
-        rule.onNode(hasSetTextAction()).performTextInput("交实验报告 !高 #学习")
+        rule.onNode(hasSetTextAction() and hasImeAction(ImeAction.Done)).performTextInput("交实验报告 !高 #学习")
         rule.waitForIdle()
         shot("todo_typing")
-        rule.onNode(hasSetTextAction()).performImeAction()
+        rule.onNode(hasSetTextAction() and hasImeAction(ImeAction.Done)).performImeAction()
         rule.waitUntil(5_000) {
             app.repo.snapshot.value.tasks
                 .any { it.title == "交实验报告" }
@@ -242,19 +244,22 @@ class ScreensSmokeTest {
                 .first { it.title == "交实验报告" }
         assertEquals(3, task.priority)
         rule.waitForIdle()
-        // 输入框已清空：带标记的原文不应再出现在任何节点（提示条已改为悬浮撤销按钮，不再有文字节点）
+        // 收起即结算：提交后浮层关闭，原文不再出现在任何节点
         rule.onAllNodesWithText("交实验报告 !高 #学习").assertCountEquals(0)
-        rule.onNode(hasSetTextAction()).performTextInput("买牛奶")
-        rule.onNode(hasSetTextAction()).performImeAction()
+        // 没有确认键：再开浮层，键盘完成直接提交第二条
+        rule.onNodeWithContentDescription(app.getString(R.string.add)).performClick()
+        rule.waitForIdle()
+        rule.onNode(hasSetTextAction() and hasImeAction(ImeAction.Done)).performTextInput("买牛奶")
+        rule.onNode(hasSetTextAction() and hasImeAction(ImeAction.Done)).performImeAction()
         rule.waitUntil(5_000) {
             app.repo.snapshot.value.tasks
                 .any { it.title == "买牛奶" }
         }
     }
 
-    /** 「更多选项」把快速添加解析出来的内容带进编辑页。 */
+    /** 「更多选项」把快速添加解析出来的内容带进编辑页：文本里的时刻是待办截止，不带持续。 */
     @Test
-    fun quickAddDraftUsesChosenDuration() {
+    fun quickAddDraftTimeStaysTodo() {
         val existingIds =
             app.repo.snapshot.value.tasks
                 .map { it.id }
@@ -274,9 +279,11 @@ class ScreensSmokeTest {
         val task =
             app.repo.snapshot.value.tasks
                 .first { it.id !in existingIds }
-        assertEquals(LocalDate.now().plusDays(1).atTime(18, 0), task.blockStart)
-        assertEquals(37, task.blockMinutes)
-        assertEquals(task.blockStart!!.plusMinutes(37), task.due)
+        // 持续留空 = todo：只有截止时刻，不排进日历
+        assertEquals(LocalDate.now().plusDays(1).atTime(18, 0), task.due)
+        assertTrue(task.dueHasTime)
+        assertEquals(null, task.blockStart)
+        assertEquals(null, task.blockMinutes)
     }
 
     @Test

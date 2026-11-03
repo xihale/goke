@@ -95,6 +95,8 @@ import app.mintcal.ui.components.AgendaRow
 import app.mintcal.ui.components.DatePickerDlg
 import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.MintFab
+import app.mintcal.ui.components.NavClearance
+import app.mintcal.ui.components.NavListInset
 import app.mintcal.ui.fullDate
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDayWeekday
@@ -219,7 +221,7 @@ fun CalendarScreen() {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 176.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = NavListInset),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item(key = "header") {
@@ -384,7 +386,7 @@ fun CalendarScreen() {
         MintFab(
             visible = !quickAddOpen && previewDate == null,
             onClick = { quickAddOpen = true },
-            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = 92.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = NavClearance),
         )
         QuickAddSheet(
             snap = snap,
@@ -511,7 +513,7 @@ private fun ModeSwitch(
                     stringResource(if (m == CalMode.MONTH) R.string.mode_month else R.string.mode_week),
                     modifier =
                         Modifier
-                            .heightIn(min = 36.dp)
+                            .heightIn(min = 48.dp)
                             .clip(CircleShape)
                             .selectable(
                                 selected = isSel,

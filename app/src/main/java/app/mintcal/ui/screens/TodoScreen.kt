@@ -82,6 +82,7 @@ import app.mintcal.ui.Route
 import app.mintcal.ui.Tab
 import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.MintFab
+import app.mintcal.ui.components.NavClearance
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
@@ -431,7 +432,7 @@ fun TodoScreen() {
                 addTarget = null
                 quickAddOpen = true
             },
-            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = 92.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 16.dp, bottom = NavClearance),
             description = stringResource(R.string.add),
         )
         if (selecting) {
