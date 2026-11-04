@@ -351,8 +351,10 @@ fun MintCalTheme(
     }
     val scheme = resolveColorScheme(settings, dark)
     // 按下不闪浅底。焦点环用主题色，键盘和 TalkBack 仍能看见当前位置。
+    // MintColors 是 4 个列表 + 20 个 Color 的对象：按明暗 remember，主题重组不再每次重建
+    val colors = remember(dark) { mintColors(dark) }
     CompositionLocalProvider(
-        LocalMintColors provides mintColors(dark),
+        LocalMintColors provides colors,
         LocalReduceMotion provides reduce,
     ) {
         MaterialTheme(colorScheme = scheme, motionScheme = MotionScheme.standard(), shapes = MintShapes, typography = MintTypography) {

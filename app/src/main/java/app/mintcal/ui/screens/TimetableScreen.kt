@@ -124,6 +124,7 @@ import app.mintcal.ui.components.NavListInset
 import app.mintcal.ui.components.mintPressable
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
+import app.mintcal.ui.rememberToday
 import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
 import app.mintcal.ui.settingsState
@@ -166,7 +167,8 @@ fun TimetableScreen() {
     val actions = LocalActions.current
     val snap = liveSnapshot()
     val settings = settingsState()
-    val now by rememberNow()
+    // today 走 structural equality 的派生态：30 秒时钟跳变不再让整张周网格跟着重组
+    val today = rememberToday().value
     val adv by app.advanced.state.collectAsState()
     val sem = snap.currentSemester
     // 还没建学期：保留 64dp 头部骨架，给一个入口引导去课表设置
@@ -190,7 +192,6 @@ fun TimetableScreen() {
         return
     }
     val cal = remember(sem) { SemesterCalendar(sem) }
-    val today = now.toLocalDate()
     val currentWeek = cal.weekOf(today)
     val startPage = (currentWeek.coerceIn(1, sem.totalWeeks)) - 1
     val pager = rememberPagerState(initialPage = startPage, pageCount = { sem.totalWeeks })
@@ -631,19 +632,22 @@ private fun WeekGrid(
                     val top = periodTop(o.startPeriod.coerceAtMost(n), n) + 2.dp
                     val bottom = periodTop(o.endPeriod.coerceIn(o.startPeriod, n), n) + RowH - 2.dp
                     val laneW = (colW - 3.dp) / slot.lanes
+                    // 块宽在这里算一次：传给 Modifier.width 和 CourseBlock 的 wide 判定（省掉每块一个子组合）
+                    val blockW =
+                        when {
+                            slot.lanes > 1 -> laneW - 2.dp
+                            slot.stacked -> laneW - PeekW - PeekGap
+                            else -> laneW
+                        }
                     CourseBlock(
                         cell,
                         showTeacher,
                         slot.overlap,
+                        blockW >= 64.dp,
                         Modifier
                             .absoluteOffset(TimeColW + colW * (o.date.dayOfWeek.value - 1) + 1.5.dp + laneW * slot.lane, top)
-                            .width(
-                                when {
-                                    slot.lanes > 1 -> laneW - 2.dp
-                                    slot.stacked -> laneW - PeekW - PeekGap
-                                    else -> laneW
-                                },
-                            ).height(bottom - top),
+                            .width(blockW)
+                            .height(bottom - top),
                         onClick = { if (slot.overlap > 1) onSlotClick(slotEntries[ci].orEmpty()) else onClick(cell) },
                     )
                 }
@@ -1083,6 +1087,9 @@ private fun CourseBlock(
     showTeacher: Boolean,
     /** 同时段块数；>1 时卡片底部写「N 项」，点开由这张正面卡列出全部。 */
     overlap: Int,
+    /** 块宽是否 ≥64dp（宽列加「@」前缀区分教室）。由调用方按已知的块宽传入，
+     *  不再每个块起一个 BoxWithConstraints 子组合（一页 30 块 = 30 次 subcompose）。 */
+    wide: Boolean,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
@@ -1103,7 +1110,7 @@ private fun CourseBlock(
     val cellBg by animateColorAsState(if (cell.kind == CellKind.REMOVED) colors.conflictBg else bg, MintTheme.spec(), label = "cell-kind-bg")
     val cellAlpha by animateFloatAsState(if (cell.kind == CellKind.REMOVED) 0.6f else 1f, MintTheme.spec(), label = "cell-kind-alpha")
     val shape = RoundedCornerShape(12.dp)
-    BoxWithConstraints(
+    Box(
         modifier
             .mintPressable(pressedScale = 0.97f) { onClick() }
             .alpha(cellAlpha)
@@ -1113,7 +1120,6 @@ private fun CourseBlock(
     ) {
         // 一列就 40dp 出头：教室 / 老师照样要显示，靠换行和省略号交代；
         // 把信息藏起来比截断更糟。宽卡片（平板 / 横屏）才加「@」前缀区分教室，窄列里多这一个字符就没地方了。
-        val wide = this.maxWidth >= 64.dp
         Column(Modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 6.dp)) {
             val strike = if (cell.kind == CellKind.REMOVED) TextDecoration.LineThrough else null
             // 字号统一走 typography token 局部 copy；时间/教室数字用 tnum

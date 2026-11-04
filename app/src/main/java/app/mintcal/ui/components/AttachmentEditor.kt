@@ -49,6 +49,7 @@ import app.mintcal.data.Attachments
 import app.mintcal.ui.Actions
 import app.mintcal.ui.LocalActions
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -79,15 +80,17 @@ fun AttachmentEditor(
     }
 }
 
-/** 选中的内容复制进私有目录并回调；失败时提示。 */
+/** 选中的内容复制进私有目录并回调；失败时提示。复制是 IO，挂后台后回调（回调里改 Compose 状态，回到主线程）。 */
 fun importAttachment(
     ctx: Context,
     uri: Uri,
     actions: Actions,
     onAdded: (Attachment) -> Unit,
 ) {
-    val a = Attachments.import(ctx, uri)
-    if (a == null) actions.toast(ctx.getString(R.string.attachment_failed)) else onAdded(a)
+    actions.scope.launch {
+        val a = Attachments.import(ctx, uri)
+        if (a == null) actions.toast(ctx.getString(R.string.attachment_failed)) else onAdded(a)
+    }
 }
 
 /** 从剪贴板取内容：URI 当附件导入，纯文字交给备注。 */

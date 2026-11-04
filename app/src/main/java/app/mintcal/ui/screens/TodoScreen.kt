@@ -84,6 +84,8 @@ import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.MintFab
 import app.mintcal.ui.components.NavClearance
 import app.mintcal.ui.liveSnapshot
+import app.mintcal.ui.rememberNowGated
+import app.mintcal.ui.rememberToday
 import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
 import app.mintcal.ui.settingsState
@@ -109,7 +111,7 @@ fun TodoScreen() {
     val focusManager = LocalFocusManager.current
     val snap = liveSnapshot()
     val settings = settingsState()
-    val now by rememberNow()
+    val now = rememberNowGated()
     val today = now.toLocalDate()
 
     var listFilter by rememberSaveable { mutableStateOf<String?>(null) }
@@ -136,7 +138,7 @@ fun TodoScreen() {
         }.coerceAtLeast(if (selecting) 96.dp else 160.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
 
     val q = remember(queryText) { TodoSearch.parse(queryText) }
-    val visible =
+    val filtered =
         remember(snap, listFilter, priorityFilter, q) {
             snap.tasks.filter { t ->
                 t.deletedAt == null && t.parentId == null && (listFilter == null || t.listId == listFilter) &&
@@ -145,10 +147,12 @@ fun TodoScreen() {
             }
         }
     val sections =
-        remember(snap, visible, now) {
-            TaskLogic.timeline(visible, now) { TaskLogic.effectiveDue(it, snap.currentSemester, snap.courses, snap.exceptions, now) }
+        remember(snap, filtered, now) {
+            TaskLogic.timeline(filtered, now) { TaskLogic.effectiveDue(it, snap.currentSemester, snap.courses, snap.exceptions, now) }
         }
     val taskById = remember(snap) { snap.tasks.associateBy { it.id } }
+    // 行级索引：progress/due/清单/课程一次算好，整页行共享（原来每行各自全量扫描）
+    val todoIndex = remember(snap, now) { todoIndexOf(snap, now) }
     val bucketOfTask = remember(sections) { sections.flatMap { s -> s.tasks.map { it.id to s.bucket } }.toMap() }
     val overdueTasks = sections.firstOrNull { it.bucket == Bucket.OVERDUE }?.tasks.orEmpty()
     val nextUp = remember(snap, now) { NextUps.find(snap, now) }
@@ -237,6 +241,7 @@ fun TodoScreen() {
                         }
                     },
                     onSwipeLeft = { rescheduleFor = listOf(t.id) },
+                    index = todoIndex,
                     modifier = anim(),
                 )
             }

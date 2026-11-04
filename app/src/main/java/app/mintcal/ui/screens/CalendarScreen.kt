@@ -99,6 +99,8 @@ import app.mintcal.ui.components.NavClearance
 import app.mintcal.ui.components.NavListInset
 import app.mintcal.ui.fullDate
 import app.mintcal.ui.liveSnapshot
+import app.mintcal.ui.rememberNowGated
+import app.mintcal.ui.rememberToday
 import app.mintcal.ui.monthDayWeekday
 import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
@@ -126,7 +128,7 @@ fun CalendarScreen() {
     val actions = LocalActions.current
     val snap = liveSnapshot()
     val settings = settingsState()
-    val now by rememberNow()
+    val now = rememberNowGated()
     val today = now.toLocalDate()
     var mode by rememberSaveable { mutableStateOf(CalMode.MONTH) }
     var selectedStr by rememberSaveable { mutableStateOf(today.toString()) }
@@ -200,22 +202,6 @@ fun CalendarScreen() {
     }
 
     val dayItems = remember(snap, selected, settings.defaultBlockMinutes) { Agenda.forDay(snap, selected, settings.defaultBlockMinutes) }
-    val title =
-        when (mode) {
-            CalMode.MONTH -> {
-                ctx.yearMonth(anchor.plusMonths((pager.currentPage - PAGE_CENTER).toLong()))
-            }
-
-            CalMode.WEEK -> {
-                val s = periodStart(pager.currentPage)
-                val e = s.plusDays(6)
-                if (s.month == e.month) {
-                    stringResource(R.string.week_range_same_month, s.monthValue, s.dayOfMonth, e.dayOfMonth)
-                } else {
-                    stringResource(R.string.week_range, s.monthValue, s.dayOfMonth, e.monthValue, e.dayOfMonth)
-                }
-            }
-        }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -235,12 +221,13 @@ fun CalendarScreen() {
                             .padding(end = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            title,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
+                        CalendarTitle(
+                            mode,
+                            anchor,
+                            first,
+                            pager,
+                            { periodStart(it) },
+                            Modifier.weight(1f, fill = false),
                         )
                         Icon(Icons.Rounded.ExpandMore, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -370,7 +357,7 @@ fun CalendarScreen() {
             if (dayItems.isEmpty()) {
                 item(key = "empty-day") { EmptyState(stringResource(R.string.day_empty)) }
             }
-            items(dayItems, key = { agendaKey(it) }, contentType = { it::class.simpleName }) { item ->
+            items(dayItems, key = { agendaKey(it) }, contentType = { agendaType(it) }) { item ->
                 AgendaRow(
                     item,
                     now,
@@ -429,7 +416,7 @@ fun CalendarScreen() {
                     )
                     LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (entries.isEmpty()) item { EmptyState(stringResource(R.string.day_empty)) }
-                        items(entries, key = { agendaKey(it) }) { entry ->
+                        items(entries, key = { agendaKey(it) }, contentType = { agendaType(it) }) { entry ->
                             AgendaRow(
                                 entry,
                                 now,
@@ -476,6 +463,15 @@ private fun agendaKey(i: app.mintcal.core.agenda.AgendaItem): String =
         is EventItem -> "e-${i.event.id}-${i.start}"
         is TaskItem -> "t-${i.task.id}"
         is BlockItem -> "b-${i.task.id}"
+    }
+
+/** 异构行的复用类型：滚动时同类型行直接复用组合，不跨类型重建。 */
+private fun agendaType(i: app.mintcal.core.agenda.AgendaItem): String =
+    when (i) {
+        is CourseItem -> "course"
+        is EventItem -> "event"
+        is TaskItem -> "task"
+        is BlockItem -> "block"
     }
 
 @Composable
@@ -637,6 +633,39 @@ private data class CalendarMarks(
     }
 }
 
+/**
+ * 月份/周标题。pager 当前页在这里面读：翻页停稳只重组这一小块文本，
+ * 不再让整个 CalendarScreen body（含三页月网格）跟着每页落定重跑。
+ */
+@Composable
+private fun CalendarTitle(
+    mode: CalMode,
+    anchor: LocalDate,
+    first: DayOfWeek,
+    pager: androidx.compose.foundation.pager.PagerState,
+    periodStart: (Int) -> LocalDate,
+    modifier: Modifier = Modifier,
+) {
+    val ctx = LocalContext.current
+    val title =
+        when (mode) {
+            CalMode.MONTH -> {
+                ctx.yearMonth(anchor.plusMonths((pager.currentPage - PAGE_CENTER).toLong()))
+            }
+
+            CalMode.WEEK -> {
+                val s = periodStart(pager.currentPage)
+                val e = s.plusDays(6)
+                if (s.month == e.month) {
+                    stringResource(R.string.week_range_same_month, s.monthValue, s.dayOfMonth, e.dayOfMonth)
+                } else {
+                    stringResource(R.string.week_range, s.monthValue, s.dayOfMonth, e.monthValue, e.dayOfMonth)
+                }
+            }
+        }
+    Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
+}
+
 @Composable
 private fun CalendarIndicators(
     marks: CalendarMarks,
@@ -648,16 +677,21 @@ private fun CalendarIndicators(
     val done = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (inPeriod) 0.85f else 0.4f)
     // 形状编码：实心短条=有课，空心环=还有待办，小实心点=已完成。
     // （之前三种都是同样的小胶囊，缩到 3dp 高以后完全分不出来）
+    // 序列在组合期算好（marks 变化才重算），draw 里不再分配
+    val items =
+        remember(marks.scheduled, marks.pending, marks.done) {
+            buildList {
+                if (marks.scheduled > 0) add(0)
+                repeat(minOf(marks.pending, 3 - size)) { add(1) }
+                repeat(minOf(marks.done, 3 - size)) { add(2) }
+            }
+        }
     Canvas(modifier.size(width = 36.dp, height = 9.dp)) {
         val barW = 6.dp.toPx()
         val barH = 3.dp.toPx()
         val ringR = 2.6.dp.toPx()
         val dotR = 2.dp.toPx()
         val gap = 3.dp.toPx()
-        val items = ArrayList<Int>(3) // 0=日程 1=待办 2=已完成
-        if (marks.scheduled > 0) items.add(0)
-        repeat(minOf(marks.pending, 3 - items.size)) { items.add(1) }
-        repeat(minOf(marks.done, 3 - items.size)) { items.add(2) }
         if (items.isEmpty()) return@Canvas
 
         fun widthOf(k: Int) = if (k == 0) barW else (if (k == 1) ringR * 2 else dotR * 2)

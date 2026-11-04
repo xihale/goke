@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -108,9 +109,12 @@ fun MintCalRoot(
     val ready by app.repo.ready.collectAsState()
 
     // 可撤销的说明条留到下一次操作，或用户自己关掉。不按秒数收起。
+    // 旧实现「undoPrompt != null 时 undoShown = undoPrompt」是在组合期写状态（多一次根重组）；
+    // 改成 SideEffect 提交，淡出动画期间内容仍保持最后一次的提示。
     val undoPrompt = actions.undo
-    var undoShown by remember { mutableStateOf(undoPrompt) }
-    if (undoPrompt != null) undoShown = undoPrompt
+    val undoShownState = remember { mutableStateOf(undoPrompt) }
+    SideEffect { if (undoPrompt != null) undoShownState.value = undoPrompt }
+    val undoShown = undoShownState.value
 
     // 是否在压栈页（Tab 层 = home 目的地）。转场与返回栈由标准 navigation-compose 接管。
     val backStack by nav.controller.currentBackStackEntryAsState()
@@ -175,10 +179,9 @@ fun MintCalRoot(
     val fadeOutSpec = if (reduce) snap<Float>() else tween<Float>(durationMillis = 150, easing = exitEase)
     val splash = if (reduce) snap<Float>() else tween<Float>(durationMillis = 220, easing = enterEase)
     val splashScale = if (reduce) snap<Float>() else tween<Float>(durationMillis = 280, easing = enterEase)
-    val back: () -> Unit = {
-        nav.pop()
-        Unit
-    }
+    // back 与整张 destination 表都 remember：NavHost 内部按 builder 的函数 identity 记忆图，
+    // 每次 MintCalRoot 重组都传新 lambda 会让整张导航图被替换重建
+    val back = remember(nav) { { nav.pop(); Unit } }
 
     CompositionLocalProvider(LocalApp provides app, LocalActions provides actions, LocalNav provides nav) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -188,6 +191,14 @@ fun MintCalRoot(
                 enter = fadeIn(splash) + scaleIn(initialScale = 0.985f, animationSpec = splashScale),
             ) {
                 if (ready) {
+                    // HOME 目的地 + 压栈页都在这张表里；表本身 remember，转场参数也在闭包里
+                    val graph: NavGraphBuilder.() -> Unit =
+                        remember(nav, back, slideIn, slideOut, fadeInSpec, fadeOutSpec) {
+                            {
+                                composable(HOME) { Tabs(nav) }
+                                mintDestinations(nav, back)
+                            }
+                        }
                     NavHost(
                         nav.controller,
                         startDestination = HOME,
@@ -199,10 +210,8 @@ fun MintCalRoot(
                         exitTransition = { slideOutHorizontally(slideOut) { -it / 10 } },
                         popEnterTransition = { slideInHorizontally(slideIn) { -it / 10 } },
                         popExitTransition = { slideOutHorizontally(slideOut) { it / 3 } + fadeOut(fadeOutSpec) },
-                    ) {
-                        composable(HOME) { Tabs(nav) }
-                        mintDestinations(nav, back)
-                    }
+                        builder = graph,
+                    )
                 }
             }
             // 撤销：左下角一个圆钮，3 秒后自己消失。放左边就不和右下角的添加键打架，
@@ -348,11 +357,15 @@ private fun Tabs(nav: Nav) {
                             .then(if (current) Modifier else Modifier.clearAndSetSemantics {})
                             .blockPointer(!current),
                     ) {
-                        when (tab) {
-                            Tab.TODAY -> TodayScreen()
-                            Tab.TIMETABLE -> TimetableScreen()
-                            Tab.CALENDAR -> CalendarScreen()
-                            Tab.TODO -> TodoScreen()
+                        // 可见性走动态 CompositionLocal，只在 liveSnapshot/rememberNowGated 内部被读：
+                        // 翻转只重组这两个小助手；数据没变时切页零重算，隐藏页也不订阅数据与 30 秒时钟
+                        CompositionLocalProvider(LocalTabVisible provides current) {
+                            when (tab) {
+                                Tab.TODAY -> TodayScreen()
+                                Tab.TIMETABLE -> TimetableScreen()
+                                Tab.CALENDAR -> CalendarScreen()
+                                Tab.TODO -> TodoScreen()
+                            }
                         }
                     }
                 }

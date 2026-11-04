@@ -82,6 +82,12 @@ kotlin {
     }
 }
 
+// :core 是纯 Kotlin 模块，Compose 编译器跨模块推断不到稳定性，其模型一律按 unstable 处理。
+// 这份配置把不可变模型声明为 stable，strong skipping 才能按值跳过重组。
+composeCompiler {
+    stabilityConfigurationFiles.set(listOf(layout.projectDirectory.file("../compose_stability.conf")))
+}
+
 dependencies {
     implementation(project(":core"))
     implementation(project(":script"))

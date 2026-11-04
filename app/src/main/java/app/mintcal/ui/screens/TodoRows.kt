@@ -83,6 +83,27 @@ import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.theme.priorityColor
 import java.time.LocalDateTime
 
+/** 行级查询索引：每页待办只建一次，行内不再对全量任务/清单/课程做线性扫描（200 条待办 × 10 可见行 ≈ 2000 次全扫 → 0）。 */
+class TodoIndex(
+    val progress: Map<String, Pair<Int, Int>>,
+    val due: Map<String, LocalDateTime?>,
+    val listById: Map<String, app.mintcal.core.model.TaskList>,
+    val courseById: Map<String, app.mintcal.core.model.Course>,
+)
+
+fun todoIndexOf(
+    snap: Snapshot,
+    now: LocalDateTime,
+): TodoIndex {
+    val sem = snap.currentSemester
+    return TodoIndex(
+        snap.tasks.associate { t -> t.id to TaskLogic.progress(snap.tasks, t.id) },
+        snap.tasks.associate { t -> t.id to TaskLogic.effectiveDue(t, sem, snap.courses, snap.exceptions, now) },
+        snap.lists.associateBy { it.id },
+        snap.courses.associateBy { it.id },
+    )
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TodoLine(
@@ -90,6 +111,8 @@ fun TodoLine(
     snap: Snapshot,
     now: LocalDateTime,
     modifier: Modifier = Modifier,
+    /** 预构建的行级索引（见 [todoIndexOf]）；空则按旧路径逐行扫描（小列表场景）。 */
+    index: TodoIndex? = null,
     selectMode: Boolean = false,
     selected: Boolean = false,
     /** 有子任务时：null 不显示展开箭头；否则显示并反映当前展开状态。 */
@@ -103,11 +126,11 @@ fun TodoLine(
     val nav = LocalNav.current
     val actions = LocalActions.current
     val colors = MintTheme.colors
-    val due = TaskLogic.effectiveDue(task, snap.currentSemester, snap.courses, snap.exceptions, now)
+    val due = index?.due?.get(task.id) ?: TaskLogic.effectiveDue(task, snap.currentSemester, snap.courses, snap.exceptions, now)
     val overdue = TaskLogic.isOverdue(task, now)
-    val (done, total) = TaskLogic.progress(snap.tasks, task.id)
-    val list = snap.lists.firstOrNull { it.id == task.listId }
-    val course = snap.courses.firstOrNull { it.id == task.courseId }
+    val (done, total) = index?.progress?.get(task.id) ?: TaskLogic.progress(snap.tasks, task.id)
+    val list = index?.listById?.get(task.listId) ?: snap.lists.firstOrNull { it.id == task.listId }
+    val course = index?.courseById?.get(task.courseId) ?: snap.courses.firstOrNull { it.id == task.courseId }
     val titleColor by animateColorAsState(if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface, MintTheme.spec(), label = "todo-title")
     // 圈色 = 清单色，圈粗 = 优先级：不占一整行也能一眼分辨
     val ring =
@@ -219,6 +242,7 @@ internal fun TodoRow(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     onSwipeLeft: () -> Unit,
+    index: TodoIndex? = null,
     modifier: Modifier = Modifier,
 ) {
     val ctx = LocalContext.current
@@ -281,6 +305,7 @@ internal fun TodoRow(
             now,
             selectMode = selectMode,
             selected = selected,
+            index = index,
             expanded = expanded,
             onToggleExpand = onToggleExpand,
             onClick = onClick,

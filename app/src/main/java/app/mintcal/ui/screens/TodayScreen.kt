@@ -82,6 +82,8 @@ import app.mintcal.ui.components.SectionLabel
 import app.mintcal.ui.components.TaskRow
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
+import app.mintcal.ui.rememberNowGated
+import app.mintcal.ui.rememberToday
 import app.mintcal.ui.monthDayWeekday
 import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
@@ -96,7 +98,7 @@ fun TodayScreen() {
     val actions = LocalActions.current
     val snap = liveSnapshot()
     val settings = settingsState()
-    val now by rememberNow()
+    val now = rememberNowGated()
     val today = now.toLocalDate()
     val items = remember(snap, today, settings.defaultBlockMinutes) { Agenda.forDay(snap, today, settings.defaultBlockMinutes) }
     val overdue = remember(snap, now) { TaskLogic.filter(snap.tasks, SmartList.OVERDUE, now) }

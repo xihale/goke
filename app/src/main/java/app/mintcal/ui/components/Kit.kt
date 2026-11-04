@@ -306,28 +306,28 @@ val NavIslandPadding = 12.dp
 val NavClearance = NavIslandHeight + NavIslandPadding * 2
 val NavListInset = NavClearance + 84.dp
 
-/**
- * 浮动胶囊底栏。岛和选中块是同一套胶囊：选中块四周等距内缩，
- * 端头圆弧和岛同心。选中块滑动，按下只缩放图标。
- */
+/** 浮动胶囊底栏。岛和选中块是同一套胶囊：选中块四周等距内缩，端头圆弧和岛同心。选中块滑动，按下只缩放图标。 */
+private data class NavItem(
+    val tab: Tab,
+    val icon: ImageVector,
+    val label: Int,
+)
+
+private val NAV_ITEMS =
+    listOf(
+        NavItem(Tab.TODAY, Icons.Rounded.WbSunny, R.string.tab_today),
+        NavItem(Tab.TIMETABLE, Icons.Rounded.CalendarViewWeek, R.string.tab_timetable),
+        NavItem(Tab.CALENDAR, Icons.Rounded.CalendarMonth, R.string.tab_calendar),
+        NavItem(Tab.TODO, Icons.Rounded.CheckCircle, R.string.tab_todo),
+    )
+
 @Composable
 fun FloatingNavBar(
     tab: Tab,
     onTab: (Tab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    data class Item(
-        val tab: Tab,
-        val icon: ImageVector,
-        val label: Int,
-    )
-    val items =
-        listOf(
-            Item(Tab.TODAY, Icons.Rounded.WbSunny, R.string.tab_today),
-            Item(Tab.TIMETABLE, Icons.Rounded.CalendarViewWeek, R.string.tab_timetable),
-            Item(Tab.CALENDAR, Icons.Rounded.CalendarMonth, R.string.tab_calendar),
-            Item(Tab.TODO, Icons.Rounded.CheckCircle, R.string.tab_todo),
-        )
+    val items = NAV_ITEMS
     val selectedIndex = items.indexOfFirst { it.tab == tab }.coerceAtLeast(0)
     val haptics = LocalHapticFeedback.current
     val travel = remember { Animatable(selectedIndex.toFloat()) }
@@ -335,7 +335,6 @@ fun FloatingNavBar(
     LaunchedEffect(selectedIndex) {
         travel.animateTo(selectedIndex.toFloat(), spec)
     }
-    val index = travel.value
     val scheme = MaterialTheme.colorScheme
     val dark = scheme.background.luminance() < 0.5f
     val bar = if (dark) scheme.surfaceContainerHigh else scheme.surfaceContainer
@@ -349,6 +348,8 @@ fun FloatingNavBar(
     ) {
         Box(Modifier.fillMaxWidth().height(NavIslandHeight)) {
             Canvas(Modifier.fillMaxSize()) {
+                // travel 只在 draw 里读：滑动动画每帧只重绘 Canvas，不再让整条底栏逐帧重组
+                val index = travel.value
                 val inset = 4.dp.toPx()
                 val slot = size.width / items.size
                 val width = slot - inset * 2
