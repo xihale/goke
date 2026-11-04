@@ -1,6 +1,6 @@
 # 薄荷日程 MintCal
 
-开源、本地优先的 Android 日程软件：**课程表 + 日历 + 待办** 三合一，支持「高级修改」（一句话 / 代码批量修改日程，先 Dry Run 预览再应用）。
+开源、本地优先的 Android 日程软件：**课程表 + 日历 + 待办** 三合一，支持「高级修改」（代码批量修改日程，先 Dry Run 预览再应用）。不内置 AI：外部 AI 助手（Claude 等任意 MCP 客户端）通过自建同步服务的 MCP 接口管理日程，见 [server/README.md](server/README.md)。
 
 > 状态：M1–M5、自建同步（S010）、Web（S011）及教务同步（S012）已实现；在线分享未开始。今日、日历、待办主流程已在 Android 10 真机走查，提醒、小组件、教务等功能仍需专项验证。实际验证范围与待调整项见 `docs/todo-ux-notes.md`；设计文档在项目的 Notion 页面中维护，Spec 见 `docs/specs`。
 
@@ -15,7 +15,7 @@
 - 日历日期下的短线表示日程数量，实心 / 空心圆点区分未完成 / 已完成待办；长按日期可原地预览、勾选或进入编辑
 - 设置保留常用预设，也支持自定义时间块时长、课程提醒提前量、每日摘要时刻与备份保留份数；自定义主题可调色相 / 饱和度 / 明度或输入 HEX 颜色
 - 手动编辑 + 导入（Excel、ICS（含 WakeUp 课程表导出），教务系统后续）
-- 高级修改：自然语言（自带 OpenAI 兼容 API）或 JavaScript 代码（QuickJS 沙箱），Dry Run 预览变更后再应用，可撤销
+- 高级修改：JavaScript 代码（QuickJS 沙箱）批量修改，Dry Run 预览变更后再应用，可撤销；外部 AI 助手经 MCP 生成代码或直接管理日程
 - 完全本地可用，不依赖后端；可选自建同步服务（Go，见 `server/`）：管理员创建账号，登录后多设备同步，不登录就是本地模式
 - 快递提醒（可选，通知使用权识别取件码）
 
@@ -33,13 +33,13 @@ python3 scripts/check_strings.py --unused  # 字符串资源检查
 ./gradlew spotlessCheck                  # ktlint 格式检查；spotlessApply 自动格式化（规则见 .editorconfig）
 ```
 
-`scripts/xbuild.sh <任务>` 用于在远程构建机后台运行 Gradle 并写日志。字体目前使用系统默认，圆润标题字体待定（见 `docs/adr/0004-defaults.md`）。AI 功能需在「设置 → AI」自行填写 API Key，Key 仅保存在本机。
+`scripts/xbuild.sh <任务>` 用于在远程构建机后台运行 Gradle 并写日志。字体目前使用系统默认，圆润标题字体待定（见 `docs/adr/0004-defaults.md`）。
 
 今日、日历与待办的细节精修已在 Android 10 真机上走查，包含新增读回、日期导航、搜索 / 多选返回、浅深色与放大字体。具体改动、验证范围及现有 Lint 问题见 [待办 UX 记录](docs/todo-ux-notes.md#7-2026-10-25-真机细节精修)。
 
 ## 自建同步服务
 
-见 [server/README.md](server/README.md)：Go + SQLite，单二进制 / Docker，管理员后台创建用户，没有开放注册和邮箱。App 里「设置 → 账号与同步」填写服务器地址登录。端到端测试：`bash scripts/sync-e2e.sh`。
+见 [server/README.md](server/README.md)：Go + SQLite，单二进制 / Docker，管理员后台创建用户，没有开放注册和邮箱。App 里「设置 → 账号与同步」填写服务器地址登录；登录状态下每 15 分钟后台同步一次（外部改动——包括经 [MCP](server/README.md#mcp外部-ai-助手管理日程) 写入的内容——由此到达本机）。端到端测试：`bash scripts/sync-e2e.sh`。
 
 ## 许可证
 
