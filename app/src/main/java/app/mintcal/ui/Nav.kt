@@ -32,6 +32,9 @@ sealed interface Route {
 
     @Serializable data object Settings : Route
 
+    /** 权限统一入口：通知 / 精确闹钟 / 自启 / 后台，一页管完。 */
+    @Serializable data object Permission : Route
+
     @Serializable data object Trash : Route
 
     @Serializable data object History : Route
@@ -43,8 +46,6 @@ sealed interface Route {
     @Serializable data object Periods : Route
 
     @Serializable data object About : Route
-
-    @Serializable data object AiSettings : Route
 
     @Serializable data object Data : Route
 

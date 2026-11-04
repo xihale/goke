@@ -36,15 +36,12 @@ data class Settings(
     val autoBackup: Boolean = false,
     val backupKeep: Int = 7,
     val parcelEnabled: Boolean = false,
-    val parcelAiFallback: Boolean = false,
-    val aiBaseUrl: String = "https://api.openai.com/v1",
-    val aiModel: String = "gpt-4o-mini",
     val weekStartsMonday: Boolean = true,
     /** 一次性迁移标记：日程已并入待办。 */
     val unifiedTasks: Boolean = false,
 )
 
-/** 轻量设置存储（SharedPreferences + StateFlow）。AI Key 另存于 [SecretStore]，不进此处。 */
+/** 轻量设置存储（SharedPreferences + StateFlow）。同步令牌等敏感值另存于 [SecretStore]，不进此处。 */
 class SettingsStore(
     context: Context,
 ) {
@@ -75,9 +72,6 @@ class SettingsStore(
             autoBackup = sp.getBoolean("autoBackup", d.autoBackup),
             backupKeep = sp.getInt("backupKeep", d.backupKeep),
             parcelEnabled = sp.getBoolean("parcelEnabled", d.parcelEnabled),
-            parcelAiFallback = sp.getBoolean("parcelAiFallback", d.parcelAiFallback),
-            aiBaseUrl = sp.getString("aiBaseUrl", d.aiBaseUrl)!!,
-            aiModel = sp.getString("aiModel", d.aiModel)!!,
             weekStartsMonday = sp.getBoolean("weekStartsMonday", d.weekStartsMonday),
             unifiedTasks = sp.getBoolean("unifiedTasks", d.unifiedTasks),
         )
@@ -106,9 +100,6 @@ class SettingsStore(
             .putBoolean("autoBackup", n.autoBackup)
             .putInt("backupKeep", n.backupKeep)
             .putBoolean("parcelEnabled", n.parcelEnabled)
-            .putBoolean("parcelAiFallback", n.parcelAiFallback)
-            .putString("aiBaseUrl", n.aiBaseUrl)
-            .putString("aiModel", n.aiModel)
             .putBoolean("weekStartsMonday", n.weekStartsMonday)
             .putBoolean("unifiedTasks", n.unifiedTasks)
             .apply()

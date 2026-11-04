@@ -17,11 +17,16 @@ interface SyncTokenVault {
     fun setSyncToken(plain: String)
 }
 
-/** 用 Android Keystore 里的 AES-GCM 密钥加密保存 AI Key 与同步令牌；明文永远不落盘、不进备份与日志。 */
+/** 用 Android Keystore 里的 AES-GCM 密钥加密保存同步令牌与教务密码；明文永远不落盘、不进备份与日志。 */
 class SecretStore(
     context: Context,
 ) : SyncTokenVault {
     private val sp = context.getSharedPreferences("secrets", Context.MODE_PRIVATE)
+
+    init {
+        // 清掉历史版本遗留的 AI Key（内置 AI 已移除，改用自建服务的 MCP 入口）
+        sp.edit().remove("ai").apply()
+    }
 
     private fun key(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -63,12 +68,6 @@ class SecretStore(
         }.getOrNull()
     }
 
-    fun setAiKey(plain: String) = put("ai", plain)
-
-    fun hasAiKey(): Boolean = sp.contains("ai")
-
-    fun aiKey(): String? = get("ai")
-
     /** 同步服务器的设备令牌（登录后由服务器签发，退出登录时清除）。 */
     override fun setSyncToken(plain: String) = put("sync_token", plain)
 
@@ -80,6 +79,7 @@ class SecretStore(
     fun jxfwPassword(): String? = get("jxfw_password")
 
     companion object {
+        // 历史命名（曾是 AI Key 的别名）；换名会生成新密钥，导致旧密文（同步令牌/教务密码）无法解密
         private const val ALIAS = "mintcal_ai_key"
     }
 }

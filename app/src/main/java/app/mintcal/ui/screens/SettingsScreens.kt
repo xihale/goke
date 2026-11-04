@@ -37,7 +37,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.DeleteSweep
@@ -49,6 +49,7 @@ import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.SwapVert
+import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
@@ -77,7 +78,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -122,33 +122,9 @@ fun SettingsScreen(onBack: () -> Unit) {
     fun ensureNotifPermission() {
         if (Build.VERSION.SDK_INT >= 33 && !Notifications.canPost(ctx)) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
-    // 从系统设置回来后重算权限/闹钟状态，避免提示挂着不消失
-    var notifOk by remember { mutableStateOf(Build.VERSION.SDK_INT < 33 || Notifications.canPost(ctx)) }
-    var exactOk by remember { mutableStateOf(Build.VERSION.SDK_INT < 31 || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()) }
-    val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
-    var batteryOk by remember { mutableStateOf(pm.isIgnoringBatteryOptimizations(ctx.packageName)) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        notifOk = Build.VERSION.SDK_INT < 33 || Notifications.canPost(ctx)
-        exactOk = Build.VERSION.SDK_INT < 31 || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
-        batteryOk = pm.isIgnoringBatteryOptimizations(ctx.packageName)
-    }
-
-    // 开机自启没有公开 API 可检测，只能按厂商尝试专页，失败落到应用详情页
-    fun openAutoStart() {
-        val pages =
-            listOf(
-                Intent().setClassName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"),
-                Intent().setClassName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"),
-                Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")),
-            )
-        for (page in pages) {
-            runCatching {
-                ctx.startActivity(page.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                return
-            }
-        }
-    }
-    val needExact = !exactOk
+    // 权限入口行要实时状态：从系统设置回来后重算
+    var permOkCount by remember { mutableStateOf(permGrantedCount(ctx)) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { permOkCount = permGrantedCount(ctx) }
 
     MintScreen(title = stringResource(R.string.settings), onBack = onBack) {
         Column(
@@ -176,12 +152,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
             FormSection(stringResource(R.string.section_reminders)) {
-                if (!notifOk) {
-                    Text(stringResource(R.string.notif_blocked_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
-                    TextButton(onClick = {
-                        runCatching { ctx.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                    }) { Text(stringResource(R.string.notif_grant)) }
-                }
                 SwitchRow(stringResource(R.string.remind_courses), stringResource(R.string.remind_courses_desc), st.remindCourse) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(remindCourse = v) }
@@ -253,35 +223,15 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                     app.settings.update { it.copy(autoMute = v) }
                 }
-                AnimatedVisibility(
-                    visible = needExact,
-                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-                ) {
-                    Column {
-                        Text(stringResource(R.string.exact_alarm_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
-                        TextButton(onClick = {
-                            runCatching { ctx.startActivity(Intent(AndroidSettings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                        }) { Text(stringResource(R.string.exact_alarm_grant)) }
-                    }
-                }
             }
-            FormSection(stringResource(R.string.settings_perm_title)) {
-                NavRow(stringResource(R.string.settings_autostart), stringResource(R.string.settings_autostart_desc), Icons.Rounded.RestartAlt) { openAutoStart() }
-                NavRow(
-                    stringResource(R.string.settings_battery),
-                    stringResource(if (batteryOk) R.string.settings_battery_ok else R.string.settings_battery_bad),
-                    Icons.Rounded.BatterySaver,
-                ) {
-                    if (!batteryOk) {
-                        runCatching {
-                            ctx.startActivity(
-                                Intent(AndroidSettings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}"))
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                            )
-                        }
+            FormSection {
+                val permDesc =
+                    if (permOkCount == 3) {
+                        stringResource(R.string.settings_perm_desc_ok)
+                    } else {
+                        stringResource(R.string.settings_perm_desc_n, 3 - permOkCount)
                     }
-                }
+                NavRow(stringResource(R.string.settings_perm_title), permDesc, Icons.Rounded.VerifiedUser) { nav.push(Route.Permission) }
             }
             FormSection(stringResource(R.string.section_more)) {
                 NavRow(
@@ -291,12 +241,96 @@ fun SettingsScreen(onBack: () -> Unit) {
                 ) { nav.push(Route.Sync) }
                 NavRow(stringResource(R.string.jxfw_title), stringResource(R.string.jxfw_row_desc), Icons.Rounded.School) { nav.push(Route.Jxfw) }
                 NavRow(stringResource(R.string.reliability_title), stringResource(R.string.reliability_row_desc), Icons.Rounded.NotificationsActive) { nav.push(Route.Reliability) }
-                NavRow(stringResource(R.string.ai_settings), stringResource(R.string.ai_settings_desc), Icons.Rounded.AutoAwesome) { nav.push(Route.AiSettings) }
                 NavRow(stringResource(R.string.data_title), stringResource(R.string.data_desc), Icons.Rounded.SwapVert) { nav.push(Route.Data) }
                 NavRow(stringResource(R.string.parcel_title), stringResource(R.string.parcel_row_desc), Icons.Rounded.LocalShipping) { nav.push(Route.Parcel) }
                 NavRow(stringResource(R.string.history_title), null, Icons.Rounded.History) { nav.push(Route.History) }
                 NavRow(stringResource(R.string.trash_title), stringResource(R.string.trash_row_desc), Icons.Rounded.DeleteSweep) { nav.push(Route.Trash) }
                 NavRow(stringResource(R.string.about_title), null, Icons.Rounded.Info) { nav.push(Route.About) }
+            }
+        }
+    }
+}
+
+/** 可检测的三项权限（通知 / 精确闹钟 / 电池优化）；自启没有公开 API，不计数。 */
+private fun permGrantedCount(ctx: Context): Int {
+    val notif = Build.VERSION.SDK_INT < 33 || Notifications.canPost(ctx)
+    val exact = Build.VERSION.SDK_INT < 31 || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
+    val battery = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName)
+    return listOf(notif, exact, battery).count { it }
+}
+
+/** 开机自启没有公开 API 可检测，只能按厂商尝试专页，失败落到应用详情页。 */
+private fun openAutoStart(ctx: Context) {
+    val pages =
+        listOf(
+            Intent().setClassName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"),
+            Intent().setClassName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"),
+            Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")),
+        )
+    for (page in pages) {
+        runCatching {
+            ctx.startActivity(page.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return
+        }
+    }
+}
+
+/** 权限页：提醒送达相关的授权与厂商后台限制，逐项显示状态，点按跳转授权。 */
+@Composable
+fun PermissionScreen(onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
+    var notifOk by remember { mutableStateOf(Build.VERSION.SDK_INT < 33 || Notifications.canPost(ctx)) }
+    var exactOk by remember { mutableStateOf(Build.VERSION.SDK_INT < 31 || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()) }
+    var batteryOk by remember { mutableStateOf(pm.isIgnoringBatteryOptimizations(ctx.packageName)) }
+    // 从系统设置回来后重算，避免状态挂着不消失
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        notifOk = Build.VERSION.SDK_INT < 33 || Notifications.canPost(ctx)
+        exactOk = Build.VERSION.SDK_INT < 31 || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
+        batteryOk = pm.isIgnoringBatteryOptimizations(ctx.packageName)
+    }
+
+    fun open(intent: Intent) {
+        runCatching { ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    MintScreen(title = stringResource(R.string.settings_perm_title), onBack = onBack) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            FormSection(stringResource(R.string.settings_perm_section_alerts)) {
+                NavRow(
+                    stringResource(R.string.reliability_notif),
+                    stringResource(if (notifOk) R.string.settings_perm_allowed else R.string.reliability_notif_desc),
+                    Icons.Rounded.NotificationsActive,
+                ) {
+                    open(Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(AndroidSettings.EXTRA_APP_PACKAGE, ctx.packageName))
+                }
+                NavRow(
+                    stringResource(R.string.reliability_exact),
+                    stringResource(if (exactOk) R.string.settings_perm_allowed else R.string.reliability_exact_desc),
+                    Icons.Rounded.Alarm,
+                ) {
+                    open(Intent(AndroidSettings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${ctx.packageName}")))
+                }
+            }
+            FormSection(stringResource(R.string.settings_perm_section_system)) {
+                NavRow(stringResource(R.string.settings_autostart), stringResource(R.string.settings_autostart_desc), Icons.Rounded.RestartAlt) { openAutoStart(ctx) }
+                NavRow(
+                    stringResource(R.string.settings_battery),
+                    stringResource(if (batteryOk) R.string.settings_battery_ok else R.string.settings_battery_bad),
+                    Icons.Rounded.BatterySaver,
+                ) {
+                    if (!batteryOk) {
+                        open(Intent(AndroidSettings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")))
+                    }
+                }
             }
         }
     }
@@ -437,62 +471,6 @@ fun AppearanceScreen(onBack: () -> Unit) {
                     st.darkMode,
                     { v -> app.settings.update { it.copy(darkMode = v) } },
                 )
-            }
-        }
-    }
-}
-
-@Composable
-fun AiSettingsScreen(onBack: () -> Unit) {
-    val ctx = LocalContext.current
-    val app = LocalApp.current
-    val actions = LocalActions.current
-    val st = settingsState()
-    var baseUrl by remember { mutableStateOf(st.aiBaseUrl) }
-    var model by remember { mutableStateOf(st.aiModel) }
-    var key by remember { mutableStateOf("") }
-    var hasKey by remember { mutableStateOf(app.secrets.hasAiKey()) }
-
-    MintScreen(title = stringResource(R.string.ai_settings), onBack = onBack) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .navigationBarsPadding()
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(stringResource(R.string.ai_settings_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            FieldText(stringResource(R.string.ai_base_url), baseUrl, { baseUrl = it })
-            FieldText(stringResource(R.string.ai_model), model, { model = it })
-            androidx.compose.material3.OutlinedTextField(
-                value = key,
-                onValueChange = { key = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text(stringResource(R.string.ai_key)) },
-                placeholder = { Text(if (hasKey) stringResource(R.string.ai_key_saved) else stringResource(R.string.ai_key_none)) },
-                visualTransformation = PasswordVisualTransformation(),
-                shape = RoundedCornerShape(16.dp),
-            )
-            Text(stringResource(R.string.ai_key_storage_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = {
-                    app.settings.update { it.copy(aiBaseUrl = baseUrl.trim().trimEnd('/'), aiModel = model.trim()) }
-                    if (key.isNotBlank()) {
-                        app.secrets.setAiKey(key.trim())
-                        key = ""
-                        hasKey = true
-                    }
-                    actions.toast(ctx.getString(R.string.saved_toast))
-                }) { Text(stringResource(R.string.save)) }
-                if (hasKey) {
-                    OutlinedButton(onClick = {
-                        app.secrets.setAiKey("")
-                        hasKey = false
-                    }) { Text(stringResource(R.string.ai_key_clear)) }
-                }
             }
         }
     }

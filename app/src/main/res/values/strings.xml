@@ -23,8 +23,6 @@
     <string name="edit">编辑</string>
     <string name="add">添加</string>
     <string name="undo">撤销</string>
-    <string name="notif_blocked_hint">通知权限未开启，提醒不会弹出</string>
-    <string name="notif_grant">去系统设置开启</string>
     <string name="none">无</string>
     <string name="yes">是</string>
     <string name="no">否</string>
@@ -34,7 +32,6 @@
     <string name="coming_soon">即将推出</string>
     <string name="never">永不</string>
     <string name="more_options">更多选项</string>
-    <string name="saved_toast">已保存</string>
     <string name="deleted_toast">已删除</string>
     <string name="undone_toast">已撤销</string>
     <string name="redone_toast">已重做</string>
@@ -252,8 +249,7 @@
     <string name="add_period">增加一节</string>
     <string name="remove_last_period">删除最后一节</string>
     <string name="advanced_title">高级修改</string>
-    <string name="advanced_row_desc">一句话或一段代码批量修改，先预览再应用</string>
-    <string name="advanced_hint">例如：把所有「教3」的课教室改成「教三」</string>
+    <string name="advanced_row_desc">一段代码批量修改，先预览再应用</string>
     <string name="preview_then_apply">先预览再应用</string>
     <string name="example_room">统一教室名</string>
     <string name="example_room_desc">把「教3」改成「教三」</string>
@@ -264,10 +260,6 @@
     <string name="example_remind">实验课加提醒</string>
     <string name="example_remind_desc">课前 30 分钟提醒</string>
     <string name="examples">示例</string>
-    <string name="ai_generate">用 AI 生成代码</string>
-    <string name="ai_setup">设置 AI 后使用</string>
-    <string name="ai_no_key">还没有设置 AI Key，请先到「设置 → AI」里填写。</string>
-    <string name="ai_privacy_note">发送给 AI 的是课程、日程、待办的摘要和你的描述，请求直接发往你配置的服务地址。</string>
     <string name="write_code">自己写代码</string>
     <string name="view_edit_code">查看/编辑代码</string>
     <string name="changes_count">%1$d 项修改</string>
@@ -279,14 +271,12 @@
     <string name="discard">放弃</string>
     <string name="script_error">脚本出错</string>
     <string name="at_line">（第 %1$d 行）</string>
-    <string name="seg_describe">描述</string>
     <string name="seg_code">代码</string>
     <string name="seg_preview">预览</string>
     <string name="dry_run">预览运行</string>
     <string name="api_reference">接口说明</string>
-    <string name="code_from_ai">代码由 AI 生成，请预览确认后再应用</string>
     <string name="return_value">返回值：%1$s</string>
-    <string name="preview_empty_hint">描述需求或写好代码后，点「预览运行」查看会改动什么。</string>
+    <string name="preview_empty_hint">写好代码后，点「预览运行」查看会改动什么。</string>
     <string name="show_more_changes">展开其余 %1$d 项</string>
     <string name="op_add">新增</string>
     <string name="op_modify">修改</string>
@@ -346,18 +336,6 @@
     <string name="remind_events">日程提醒</string>
     <string name="remind_course_text">%1$s 开课 · %2$s</string>
     <string name="remind_task_text">待办到时间了</string>
-    <string name="exact_alarm_hint">系统限制了精确闹钟，提醒可能晚几分钟。可在系统设置里允许「闹钟和提醒」。</string>
-    <string name="exact_alarm_grant">去授权</string>
-    <string name="ai_settings">AI 设置</string>
-    <string name="ai_settings_desc">服务地址、模型与 Key</string>
-    <string name="ai_settings_hint">支持任何 OpenAI 兼容的服务。Key 只保存在本机，用于「高级修改」里让 AI 生成代码。</string>
-    <string name="ai_base_url">服务地址（Base URL）</string>
-    <string name="ai_model">模型</string>
-    <string name="ai_key">API Key</string>
-    <string name="ai_key_saved">已保存（留空则不修改）</string>
-    <string name="ai_key_none">尚未设置</string>
-    <string name="ai_key_storage_note">Key 使用系统密钥库加密保存，不会写入备份或导出文件。</string>
-    <string name="ai_key_clear">清除 Key</string>
     <string name="data_title">数据与备份</string>
     <string name="data_desc">导入、导出、备份与恢复</string>
     <string name="parcel_title">快递取件</string>
@@ -736,6 +714,11 @@
     <string name="priority_none">无优先级</string>
     <!-- settings-agent -->
     <string name="settings_perm_title">权限</string>
+    <string name="settings_perm_desc_ok">提醒与后台权限均已就绪</string>
+    <string name="settings_perm_desc_n">%1$d 项待授权</string>
+    <string name="settings_perm_allowed">已允许</string>
+    <string name="settings_perm_section_alerts">通知与闹钟</string>
+    <string name="settings_perm_section_system">系统限制</string>
     <string name="settings_autostart">开机自启</string>
     <string name="settings_autostart_desc">请在系统设置中允许自启动，否则重启后提醒不会恢复</string>
     <string name="settings_battery">后台运行</string>

@@ -2,7 +2,7 @@ package app.mintcal
 
 import android.app.Application
 import android.content.Context
-import app.mintcal.ai.AdvancedController
+import app.mintcal.advanced.AdvancedController
 import app.mintcal.core.change.Unify
 import app.mintcal.data.AutoBackup
 import app.mintcal.data.MintDb

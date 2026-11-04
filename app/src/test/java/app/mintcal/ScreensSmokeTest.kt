@@ -69,7 +69,6 @@ import app.mintcal.ui.rememberNav
 import app.mintcal.ui.screens.AboutScreen
 import app.mintcal.ui.screens.AdvancedFullScreen
 import app.mintcal.ui.screens.AdvancedSheet
-import app.mintcal.ui.screens.AiSettingsScreen
 import app.mintcal.ui.screens.AppearanceScreen
 import app.mintcal.ui.screens.CalendarScreen
 import app.mintcal.ui.screens.CourseEditScreen
@@ -193,7 +192,6 @@ class ScreensSmokeTest {
                 "periods" to { PeriodsScreen {} },
                 "appearance" to { AppearanceScreen {} },
                 "settings" to { SettingsScreen {} },
-                "ai_settings" to { AiSettingsScreen {} },
                 "data" to { DataScreen {} },
                 "sync" to { SyncScreen {} },
                 "jxfw" to { JxfwScreen {} },

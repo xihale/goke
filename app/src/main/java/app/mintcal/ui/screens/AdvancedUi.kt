@@ -37,7 +37,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -71,8 +70,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.mintcal.R
-import app.mintcal.ai.AdvancedController
-import app.mintcal.core.model.Source
 import app.mintcal.script.ScriptOutcome
 import app.mintcal.script.ScriptSdk
 import app.mintcal.ui.LocalActions
@@ -125,7 +122,6 @@ fun AdvancedSheet(onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val snap = liveSnapshot()
     val st by app.advanced.state.collectAsState()
-    val hasKey = remember(st.generating) { app.secrets.hasAiKey() }
     val cs = st.changeSet
 
     ModalBottomSheet(onDismissRequest = onDismiss, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
@@ -140,18 +136,10 @@ fun AdvancedSheet(onDismiss: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.AutoAwesome, null, tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Rounded.Code, null, tint = MaterialTheme.colorScheme.primary)
                 Text(stringResource(R.string.advanced_title), Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.titleLarge)
                 Tag(stringResource(R.string.preview_then_apply), MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
             }
-            OutlinedTextField(
-                st.description,
-                app.advanced::setDescription,
-                Modifier.fillMaxWidth(),
-                minLines = 3,
-                placeholder = { Text(stringResource(R.string.advanced_hint)) },
-                shape = RoundedCornerShape(22.dp),
-            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                 EXAMPLES.forEach { ex ->
                     Text(
@@ -160,7 +148,6 @@ fun AdvancedSheet(onDismiss: () -> Unit) {
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                             .clickable {
-                                app.advanced.setDescription(ctx.getString(ex.desc))
                                 app.advanced.setCode(ex.code)
                                 app.advanced.dryRun()
                             }.padding(horizontal = 14.dp, vertical = 7.dp),
@@ -171,21 +158,11 @@ fun AdvancedSheet(onDismiss: () -> Unit) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Button(onClick = {
-                    if (hasKey) {
-                        app.advanced.generate()
-                    } else {
-                        onDismiss()
-                        nav.push(Route.AiSettings)
-                    }
-                }, enabled = !st.generating && st.description.isNotBlank() || !hasKey) {
-                    Text(stringResource(if (hasKey) R.string.ai_generate else R.string.ai_setup))
-                }
-                OutlinedButton(onClick = {
                     onDismiss()
                     nav.push(Route.AdvancedFull)
                 }) { Text(stringResource(R.string.write_code)) }
                 AnimatedVisibility(
-                    visible = st.generating || st.running,
+                    visible = st.running,
                     enter = scaleIn(MintTheme.spec()) + fadeIn(MintTheme.spec()),
                     exit = scaleOut(MintTheme.spec()) + fadeOut(MintTheme.spec()),
                 ) {
@@ -251,7 +228,7 @@ private fun AdvancedMessage(message: String?) {
         enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
         exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
     ) {
-        val text = if (message == AdvancedController.MSG_NO_KEY) stringResource(R.string.ai_no_key) else message
+        val text = message
         if (text != null) Text(text, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
     }
 }
@@ -314,9 +291,8 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
     val snap = liveSnapshot()
     val st by app.advanced.state.collectAsState()
-    var seg by remember { mutableIntStateOf(1) }
+    var seg by remember { mutableIntStateOf(0) }
     var showApi by remember { mutableStateOf(false) }
-    val hasKey = remember(st.generating) { app.secrets.hasAiKey() }
     val cs = st.changeSet
     val haptics = LocalHapticFeedback.current
     val slideSpec = MintTheme.spec<IntOffset>()
@@ -336,7 +312,7 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                     .background(MintTheme.card)
                     .padding(4.dp),
             ) {
-                listOf(R.string.seg_describe, R.string.seg_code, R.string.seg_preview).forEachIndexed { i, label ->
+                listOf(R.string.seg_code, R.string.seg_preview).forEachIndexed { i, label ->
                     val pillBg by animateColorAsState(if (seg == i) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, MintTheme.spec(), label = "seg-bg")
                     val pillFg by animateColorAsState(if (seg == i) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, MintTheme.spec(), label = "seg-fg")
                     Text(
@@ -373,37 +349,6 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         when (s) {
                             0 -> {
-                                OutlinedTextField(st.description, app.advanced::setDescription, Modifier.fillMaxWidth(), minLines = 5, placeholder = { Text(stringResource(R.string.advanced_hint)) }, shape = RoundedCornerShape(22.dp))
-                                Text(stringResource(R.string.examples), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                EXAMPLES.forEach { ex ->
-                                    Text(
-                                        stringResource(ex.desc),
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .background(MintTheme.card)
-                                            .clickable {
-                                                app.advanced.setDescription(ctx.getString(ex.desc))
-                                                app.advanced.setCode(ex.code)
-                                                seg = 1
-                                            }.padding(14.dp),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                }
-                                Button(onClick = {
-                                    if (hasKey) {
-                                        app.advanced.generate()
-                                        seg = 1
-                                    } else {
-                                        nav.push(Route.AiSettings)
-                                    }
-                                }, enabled = !st.generating) {
-                                    Text(stringResource(if (hasKey) R.string.ai_generate else R.string.ai_setup))
-                                }
-                                Text(stringResource(R.string.ai_privacy_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-
-                            1 -> {
                                 OutlinedTextField(
                                     st.code,
                                     app.advanced::setCode,
@@ -413,15 +358,14 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                                     placeholder = { Text("// mc.courses.query(...)") },
                                     shape = RoundedCornerShape(16.dp),
                                 )
-                                if (st.codeSource == Source.AI && st.code.isNotBlank()) Text(stringResource(R.string.code_from_ai), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Button(onClick = {
                                         app.advanced.dryRun()
-                                        seg = 2
+                                        seg = 1
                                     }, enabled = st.code.isNotBlank() && !st.running) { Text(stringResource(R.string.dry_run)) }
                                     OutlinedButton(onClick = { showApi = true }) { Text(stringResource(R.string.api_reference)) }
                                     AnimatedVisibility(
-                                        visible = st.running || st.generating,
+                                        visible = st.running,
                                         enter = scaleIn(MintTheme.spec()) + fadeIn(MintTheme.spec()),
                                         exit = scaleOut(MintTheme.spec()) + fadeOut(MintTheme.spec()),
                                     ) {
@@ -429,12 +373,28 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                                     }
                                 }
                                 AdvancedMessage(st.message)
+                                Text(stringResource(R.string.examples), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                EXAMPLES.forEach { ex ->
+                                    Text(
+                                        stringResource(ex.desc),
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(MintTheme.card)
+                                            .clickable {
+                                                app.advanced.setCode(ex.code)
+                                                app.advanced.dryRun()
+                                                seg = 1
+                                            }.padding(14.dp),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
                             }
 
                             else -> {
                                 AdvancedMessage(st.message)
                                 AnimatedVisibility(
-                                    visible = st.running || st.generating,
+                                    visible = st.running,
                                     enter = scaleIn(MintTheme.spec()) + fadeIn(MintTheme.spec()),
                                     exit = scaleOut(MintTheme.spec()) + fadeOut(MintTheme.spec()),
                                 ) {
@@ -442,7 +402,7 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                                 }
                                 when (val o = st.outcome) {
                                     null -> {
-                                        if (!st.running && !st.generating) Text(stringResource(R.string.preview_empty_hint), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        if (!st.running) Text(stringResource(R.string.preview_empty_hint), color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
 
                                     is ScriptOutcome.Failure -> {

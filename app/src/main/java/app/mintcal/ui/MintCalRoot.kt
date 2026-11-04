@@ -74,7 +74,6 @@ import app.mintcal.ui.components.NavClearance
 import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.screens.AboutScreen
 import app.mintcal.ui.screens.AdvancedFullScreen
-import app.mintcal.ui.screens.AiSettingsScreen
 import app.mintcal.ui.screens.AppearanceScreen
 import app.mintcal.ui.screens.CalendarScreen
 import app.mintcal.ui.screens.CourseEditScreen
@@ -85,6 +84,7 @@ import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.JxfwScreen
 import app.mintcal.ui.screens.ParcelScreen
 import app.mintcal.ui.screens.PeriodsScreen
+import app.mintcal.ui.screens.PermissionScreen
 import app.mintcal.ui.screens.ReliabilityScreen
 import app.mintcal.ui.screens.SettingsScreen
 import app.mintcal.ui.screens.SyncScreen
@@ -237,13 +237,13 @@ fun NavGraphBuilder.mintDestinations(
     composable<Route.EditTimetable> { EditTimetableScreen(back) }
     composable<Route.Appearance> { AppearanceScreen(back) }
     composable<Route.Settings> { SettingsScreen(back) }
+    composable<Route.Permission> { PermissionScreen(back) }
     composable<Route.Trash> { TrashScreen(back) }
     composable<Route.History> { HistoryScreen(back) }
     composable<Route.Parcel> { ParcelScreen(back) }
     composable<Route.AdvancedFull> { AdvancedFullScreen(back) }
     composable<Route.Periods> { PeriodsScreen(back) }
     composable<Route.About> { AboutScreen(back) }
-    composable<Route.AiSettings> { AiSettingsScreen(back) }
     composable<Route.Data> { DataScreen(back) }
     composable<Route.Sync> { SyncScreen(back) }
     composable<Route.Jxfw> { JxfwScreen(back) }
