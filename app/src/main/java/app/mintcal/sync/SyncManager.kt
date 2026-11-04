@@ -5,6 +5,7 @@ import app.mintcal.core.sync.SyncCodec
 import app.mintcal.core.sync.SyncPlanner
 import app.mintcal.data.Repository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 data class SyncUiState(
     val account: SyncAccount? = null,
@@ -98,10 +100,13 @@ class SyncManager(
     /** 立即同步。返回从服务器写入本地的记录数；失败抛出 [SyncException]（同时记录到状态里）。 */
     suspend fun syncNow(): Int =
         mutex.withLock {
-            val acct = store.account.value ?: return 0
-            val token = store.token() ?: return 0
-            publish(syncing = true)
-            try {
+            // UI 入口（requestSync）跑在 Main.immediate：编解码与规划是纯 CPU 的几百条 JSON 往返，
+            // 统一下沉到 Default，只让 publish() 的状态更新自然回到调用方
+            withContext(Dispatchers.Default) {
+                val acct = store.account.value ?: return@withContext 0
+                val token = store.token() ?: return@withContext 0
+                publish(syncing = true)
+                try {
                 val client = SyncClient(acct.serverUrl, token)
                 var applied = 0
 
@@ -149,10 +154,11 @@ class SyncManager(
                 store.lastError = null
                 publish()
                 applied
-            } catch (e: SyncException) {
-                store.lastError = if (e.unauthorized) "登录已失效，请重新登录" else e.message
-                publish()
-                throw e
+                } catch (e: SyncException) {
+                    store.lastError = if (e.unauthorized) "登录已失效，请重新登录" else e.message
+                    publish()
+                    throw e
+                }
             }
         }
 

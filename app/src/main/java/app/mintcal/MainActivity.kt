@@ -59,7 +59,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        mintApp.sync.requestSync(500)
+        // 前台会话开始：网络同步与教务抓取由 uiActive 收集器触发（后台拉起的进程不碰网络）
+        mintApp.uiActive.value = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        mintApp.uiActive.value = false
     }
 
     override fun onResume() {

@@ -7,6 +7,7 @@ import app.mintcal.R
 import app.mintcal.core.change.Edits
 import app.mintcal.core.model.Source
 import app.mintcal.mintApp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
@@ -27,8 +28,10 @@ class ParcelListenerService : NotificationListenerService() {
                 ex.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: ex.getCharSequence(Notification.EXTRA_TEXT),
             ).joinToString("，") { it.toString() }
         if (text.isBlank()) return
-        val info = app.parcelRules.value.parse(text, LocalDateTime.now()) ?: return
-        app.scope.launch {
+        // 全系统每条通知都会进到这里：识别（逐条规则的正则）与查重都丢到 Default，
+        // 回调线程（服务的 Main）只做文本提取，高频通知不再挤住监听服务
+        app.scope.launch(Dispatchers.Default) {
+            val info = app.parcelRules.value.parse(text, LocalDateTime.now()) ?: return@launch
             app.repo.ready.first { it }
             val snap =
                 app.repo.snapshot.value

@@ -7,12 +7,16 @@ import android.content.Intent
 import android.os.Build
 import app.mintcal.R
 import app.mintcal.core.agenda.Agenda
+import app.mintcal.core.agenda.AgendaItem
 import app.mintcal.core.agenda.BlockItem
 import app.mintcal.core.agenda.CourseItem
 import app.mintcal.core.agenda.EventItem
 import app.mintcal.core.agenda.TaskItem
 import app.mintcal.core.model.Snapshot
 import app.mintcal.data.Settings
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
@@ -42,16 +46,39 @@ class ReminderScheduler(
 ) {
     private val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-    fun reschedule(
+    /** 一次完整排期：提醒列表 + 静音槽位 + 精确闹钟权限。与上次相同则完全不动 AlarmManager。 */
+    private data class Schedule(
+        val reminders: List<Reminder>,
+        val mutes: List<Pair<LocalDateTime, LocalDateTime>>,
+        val canExact: Boolean,
+    )
+
+    @Volatile
+    private var lastSchedule: Schedule? = null
+
+    /**
+     * 数据 / 设置变化后重新排期。挂起：整个函数跑在 [Dispatchers.Default]，
+     * Agenda 展开（每门课 × 每周 occurrences）与约 200+ 次 Binder 调用不再挤主线程。
+     * 计划没变时（改了与提醒无关的内容）零 Binder 调用。
+     */
+    suspend fun reschedule(
         snap: Snapshot,
         st: Settings,
         now: LocalDateTime = LocalDateTime.now(),
-    ) {
-        cancelAll()
-        stopLingering(snap)
-        val list = compute(ctx, snap, st, now).take(MAX)
+    ) = withContext(Dispatchers.Default) {
+        val from = now.toLocalDate()
+        // Agenda 展开只做一次：提醒与静音槽共用（旧实现 compute 和 scheduleMutes 各展开一遍 8 天）
+        val days = Agenda.range(snap, from, from.plusDays(8), st.defaultBlockMinutes, includeDoneTasks = false)
         val zone = ZoneId.systemDefault()
         val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
+        val list = compute(ctx, days, snap, st, now).take(MAX)
+        val mutes = muteSlots(days, st, now)
+        val schedule = Schedule(list, mutes, canExact)
+        if (schedule == lastSchedule) return@withContext
+        val hadMutes = !lastSchedule?.mutes.isNullOrEmpty()
+        lastSchedule = schedule
+        cancelAll()
+        stopLingering(snap)
         list.forEachIndexed { i, r ->
             val notifId = if (r.persistent && r.taskId != null) persistentNotifId(r.taskId, r.key.startsWith("b")) else r.key.hashCode()
             val intent =
@@ -62,11 +89,7 @@ class ReminderScheduler(
                     .putExtra(ReminderReceiver.EXTRA_TASK_ID, r.taskId)
                     .putExtra(ReminderReceiver.EXTRA_PERSISTENT, r.persistent)
             val pi = PendingIntent.getBroadcast(ctx, i, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-            val at =
-                r.triggerAt
-                    .atZone(zone)
-                    .toInstant()
-                    .toEpochMilli()
+            val at = r.triggerAt.atZone(zone).toInstant().toEpochMilli()
             runCatching {
                 if (canExact) {
                     am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
@@ -75,40 +98,38 @@ class ReminderScheduler(
                 }
             }
         }
-        scheduleMutes(snap, st, now, canExact)
+        // 旧静音槽只有在上次排过（或这次要排）时才需要取消；autoMute 关闭时走这条路径清干净
+        if (hadMutes || mutes.isNotEmpty()) cancelMutes()
+        mutes.forEachIndexed { i, (start, end) ->
+            val startPi = mutePi(ACTION_PREFIX_MUTE + i, MuteReceiver.ACTION_MUTE, MUTE_BASE + 2 * i)
+            val endPi = mutePi(ACTION_PREFIX_MUTE + i, MuteReceiver.ACTION_UNMUTE, MUTE_BASE + 2 * i + 1)
+            runCatching {
+                if (start.isAfter(now)) setAlarm(start, zone, canExact, startPi)
+                setAlarm(end, zone, canExact, endPi)
+            }
+        }
     }
 
     /**
-     * 上课自动静音：每节课一对闹钟（上课切勿扰 / 下课恢复）。
+     * 上课自动静音：每节课一对闹钟（上课切勿扰 / 下课恢复）的纯计算部分。
      * 请求码 [MUTE_BASE] 起与提醒区间隔离；最多 [MAX_MUTE_PAIRS] 对，只排未来时段。
      */
-    private fun scheduleMutes(
-        snap: Snapshot,
+    private fun muteSlots(
+        days: Map<LocalDate, List<AgendaItem>>,
         st: Settings,
         now: LocalDateTime,
-        canExact: Boolean,
-    ) {
-        cancelMutes()
-        if (!st.autoMute) return
-        val zone = ZoneId.systemDefault()
-        var i = 0
-        val from = now.toLocalDate()
-        outer@ for ((_, items) in Agenda.range(snap, from, from.plusDays(8), st.defaultBlockMinutes)) {
+    ): List<Pair<LocalDateTime, LocalDateTime>> {
+        if (!st.autoMute) return emptyList()
+        val out = ArrayList<Pair<LocalDateTime, LocalDateTime>>()
+        outer@ for ((_, items) in days) {
             for (item in items) {
                 if (item !is CourseItem) continue
-                if (i >= MAX_MUTE_PAIRS) break@outer
+                if (out.size >= MAX_MUTE_PAIRS) break@outer
                 val o = item.occ
-                if (o.end.isAfter(now)) {
-                    val startPi = mutePi(ACTION_PREFIX_MUTE + i, MuteReceiver.ACTION_MUTE, MUTE_BASE + 2 * i)
-                    val endPi = mutePi(ACTION_PREFIX_MUTE + i, MuteReceiver.ACTION_UNMUTE, MUTE_BASE + 2 * i + 1)
-                    runCatching {
-                        if (o.start.isAfter(now)) setAlarm(o.start, zone, canExact, startPi)
-                        setAlarm(o.end, zone, canExact, endPi)
-                    }
-                    i++
-                }
+                if (o.end.isAfter(now)) out += o.start to o.end
             }
         }
+        return out
     }
 
     private fun mutePi(
@@ -224,7 +245,17 @@ class ReminderScheduler(
             now: LocalDateTime,
         ): List<Reminder> {
             val from = now.toLocalDate()
-            val days = Agenda.range(snap, from, from.plusDays(8), st.defaultBlockMinutes, includeDoneTasks = false)
+            return compute(ctx, Agenda.range(snap, from, from.plusDays(8), st.defaultBlockMinutes, includeDoneTasks = false), snap, st, now)
+        }
+
+        /** 同上，但接受已展开的 8 天日程（调用方要与静音槽共用同一次展开时用这个）。 */
+        fun compute(
+            ctx: Context,
+            days: Map<LocalDate, List<AgendaItem>>,
+            snap: Snapshot,
+            st: Settings,
+            now: LocalDateTime,
+        ): List<Reminder> {
             val out = mutableListOf<Reminder>()
             for ((date, items) in days) {
                 if (st.dailyDigest) {

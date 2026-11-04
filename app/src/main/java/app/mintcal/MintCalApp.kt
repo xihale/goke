@@ -26,6 +26,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** 应用级容器：数据仓库、设置、密钥、提醒调度、高级修改控制器。open 仅为测试子类（SmokeTestApp）服务。 */
@@ -51,6 +53,10 @@ open class MintCalApp : Application() {
     /** 外部入口（通知 / 小组件 / 快捷方式 / 分享）待处理的动作，由根组合消费后清空。 */
     val links = MutableStateFlow<DeepLink?>(null)
 
+    /** 有 Activity 在前台时为 true。小组件 tick / 开机 / 通知监听拉起的进程为 false：
+     *  这些进程只需要读库刷新小组件与提醒，不需要网络同步和教务抓取。 */
+    val uiActive = MutableStateFlow(false)
+
     @OptIn(FlowPreview::class)
     override fun onCreate() {
         super.onCreate()
@@ -75,13 +81,27 @@ open class MintCalApp : Application() {
                 Unify.changeSet(snap, System.currentTimeMillis())?.let { repo.commit(it) }
                 settings.update { it.copy(unifiedTasks = true) }
             }
-            sync.requestSync(1000)
             jxfw.ensureAlarm()
-            launch { jxfw.catchUp() }
-            // 登录状态下排后台周期同步（MCP / 其他设备的写入由此到达本机），退出登录自动取消
-            launch { sync.state.collect { PeriodicSync.follow(this@MintCalApp, it.account != null) } }
-            // 本地数据有变化（含从服务器写入的）后，登录状态下稍后同步一次；未登录时 requestSync 什么都不做
-            launch { repo.snapshot.collect { sync.requestSync() } }
+            // 回到前台才做网络同步与教务抓取；后台拉起的进程（小组件 tick / 开机）不碰网络
+            launch {
+                uiActive.collect { active ->
+                    if (active) {
+                        sync.requestSync(1000)
+                        launch { jxfw.catchUp() }
+                    }
+                }
+            }
+            // 登录状态下排后台周期同步（MCP / 其他设备的写入由此到达本机），退出登录自动取消。
+            // 登录状态只在真正变化时才触发（发布/订阅流的中间态不再反复 enqueue WorkManager）
+            launch {
+                sync.state
+                    .map { it.account != null }
+                    .distinctUntilChanged()
+                    .collect { PeriodicSync.follow(this@MintCalApp, it) }
+            }
+            // 本地数据有变化（含从服务器写入的）后，登录状态下稍后同步一次；未登录时 requestSync 什么都不做。
+            // 后台进程里改数据（小组件勾选等）不触发网络，等下次前台会话或 15 分钟周期同步兜底
+            launch { repo.snapshot.collect { if (uiActive.value) sync.requestSync() } }
             // 数据或设置变化后重新排提醒并刷新小组件（防抖，避免连续编辑时反复调度）
             combine(repo.snapshot, settings.flow) { s, st -> s to st }
                 .debounce(800)
@@ -91,9 +111,13 @@ open class MintCalApp : Application() {
                     if (st.quickAddNotif) Notifications.postQuickAdd(this@MintCalApp) else Notifications.cancelQuickAdd(this@MintCalApp)
                     // 自动备份：节流为每天一次，失败静默
                     launch(kotlinx.coroutines.Dispatchers.IO) { AutoBackup.maybeRun(this@MintCalApp, snap, st) }
-                    TodayWidgetProvider.refreshAll(this@MintCalApp, snap, st)
-                    TodoWidgetProvider.refreshAll(this@MintCalApp)
-                    ScheduleWidgetProvider.refreshAll(this@MintCalApp, snap, st)
+                    // 小组件：RemoteViews 构建（含课程/待办展开）与 Binder 刷新移出主线程，
+                    // 编辑后的防抖回调不再在 Main 上连做三次整套刷新
+                    launch(Dispatchers.Default) {
+                        TodayWidgetProvider.refreshAll(this@MintCalApp, snap, st)
+                        TodoWidgetProvider.refreshAll(this@MintCalApp)
+                        ScheduleWidgetProvider.refreshAll(this@MintCalApp, snap, st)
+                    }
                 }
         }
     }

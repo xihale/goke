@@ -23,14 +23,43 @@ class SecretStore(
 ) : SyncTokenVault {
     private val sp = context.getSharedPreferences("secrets", Context.MODE_PRIVATE)
 
+    // Keystore 的 load + getKey 与解密结果按进程缓存：冷启动路径上只做一次加解密，
+    // 之后 syncToken()/jxfwPassword() 的重复调用（同步、教务、状态流重建）零开销。
+    @Volatile
+    private var cachedKey: SecretKey? = null
+
+    @Volatile
+    private var cache: MutableMap<String, String?>? = null
+
+    private fun cacheGet(name: String): String? {
+        cache?.let { return it[name] }
+        synchronized(this) {
+            if (cache == null) cache = HashMap()
+            return cache!![name]
+        }
+    }
+
+    private fun cachePut(
+        name: String,
+        value: String?,
+    ) {
+        synchronized(this) {
+            (cache ?: HashMap<String, String?>().also { cache = it })[name] = value
+        }
+    }
+
     init {
         // 清掉历史版本遗留的 AI Key（内置 AI 已移除，改用自建服务的 MCP 入口）
         sp.edit().remove("ai").apply()
     }
 
     private fun key(): SecretKey {
+        cachedKey?.let { return it }
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }
+        (ks.getKey(ALIAS, null) as? SecretKey)?.let {
+            cachedKey = it
+            return it
+        }
         val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         gen.init(
             KeyGenParameterSpec
@@ -40,7 +69,7 @@ class SecretStore(
                 .setKeySize(256)
                 .build(),
         )
-        return gen.generateKey()
+        return gen.generateKey().also { cachedKey = it }
     }
 
     private fun put(
@@ -49,6 +78,7 @@ class SecretStore(
     ) {
         if (plain.isBlank()) {
             sp.edit().remove(name).apply()
+            cachePut(name, null)
             return
         }
         val c = Cipher.getInstance("AES/GCM/NoPadding")
@@ -56,16 +86,18 @@ class SecretStore(
         val enc = c.doFinal(plain.toByteArray(Charsets.UTF_8))
         val packed = c.iv + enc
         sp.edit().putString(name, Base64.encodeToString(packed, Base64.NO_WRAP)).apply()
+        cachePut(name, plain)
     }
 
     private fun get(name: String): String? {
+        cacheGet(name)?.let { return it }
         val s = sp.getString(name, null) ?: return null
         return runCatching {
             val bytes = Base64.decode(s, Base64.NO_WRAP)
             val c = Cipher.getInstance("AES/GCM/NoPadding")
             c.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
             String(c.doFinal(bytes.copyOfRange(12, bytes.size)), Charsets.UTF_8)
-        }.getOrNull()
+        }.getOrNull().also { cachePut(name, it) }
     }
 
     /** 同步服务器的设备令牌（登录后由服务器签发，退出登录时清除）。 */

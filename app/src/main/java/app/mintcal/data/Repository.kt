@@ -7,10 +7,15 @@ import app.mintcal.core.change.canRedo
 import app.mintcal.core.change.canUndo
 import app.mintcal.core.change.record
 import app.mintcal.core.change.undo
+import app.mintcal.core.model.Course
+import app.mintcal.core.model.CourseException
+import app.mintcal.core.model.Event
 import app.mintcal.core.model.GdutPeriods
 import app.mintcal.core.model.Record
 import app.mintcal.core.model.Semester
 import app.mintcal.core.model.Snapshot
+import app.mintcal.core.model.Task
+import app.mintcal.core.model.TaskList
 import app.mintcal.core.sync.SyncPlanner
 import app.mintcal.core.util.IdGenerator
 import app.mintcal.core.util.Ids
@@ -37,6 +42,20 @@ class Repository(
     private val _history = MutableStateFlow<List<OpRow>>(emptyList())
     val history: StateFlow<List<OpRow>> = _history.asStateFlow()
 
+    /** 操作历史按需加载：从未打开过历史页就不读 oplog（冷启动路径上省掉 100 条大 JSON 的解析）。 */
+    private var historyLoaded = false
+
+    /** 打开历史页（或撤销页）时调用；之后每次提交都会刷新内存中的历史。 */
+    suspend fun ensureHistoryLoaded() =
+        withContext(Dispatchers.IO) {
+            lock.withLock {
+                if (!historyLoaded) {
+                    _history.value = db.ops(100)
+                    historyLoaded = true
+                }
+            }
+        }
+
     private val _ready = MutableStateFlow(false)
     val ready: StateFlow<Boolean> = _ready.asStateFlow()
 
@@ -46,19 +65,36 @@ class Repository(
         withContext(Dispatchers.IO) {
             lock.withLock {
                 val records = db.loadRecords()
-                var snap = Snapshot()
-                for (r in records) snap = snap.put(r)
+                // 一次性分组构建快照（旧实现逐条 put()：每条都全表线性查重 + 整表复制，O(N²)）
+                val semesters = ArrayList<Semester>()
+                val courses = ArrayList<Course>()
+                val exceptions = ArrayList<CourseException>()
+                val events = ArrayList<Event>()
+                val tasks = ArrayList<Task>()
+                val lists = ArrayList<TaskList>()
                 val now = clock()
-                // 自动清理 30 天前删除的回收站内容
+                // 30 天前删除的回收站内容顺带清理（物理删除，与旧行为一致）
                 val cutoff = now - TRASH_DAYS * 24L * 3600_000L
-                val expired = snap.allRecords().filter { (it.deletedAt ?: Long.MAX_VALUE) < cutoff }
-                if (expired.isNotEmpty()) {
-                    db.write(emptyList(), expired.map { it.id })
-                    for (r in expired) snap = snap.purge(r)
+                val expiredIds = ArrayList<String>()
+                for (r in records) {
+                    if ((r.deletedAt ?: Long.MAX_VALUE) < cutoff) {
+                        expiredIds.add(r.id)
+                        continue
+                    }
+                    when (r) {
+                        is Semester -> semesters.add(r)
+                        is Course -> courses.add(r)
+                        is CourseException -> exceptions.add(r)
+                        is Event -> events.add(r)
+                        is Task -> tasks.add(r)
+                        is TaskList -> lists.add(r)
+                    }
                 }
+                if (expiredIds.isNotEmpty()) db.write(emptyList(), expiredIds)
+                var snap = Snapshot(semesters, courses, exceptions, events, tasks, lists)
                 snap = withDefaultSemester(snap, now)
                 _snapshot.value = snap
-                _history.value = db.ops(100)
+                // 历史不在这里读：ensureHistoryLoaded() 由历史页首次进入时触发
                 _ready.value = true
             }
         }
@@ -125,7 +161,8 @@ class Repository(
                 db.write(upserts, emptyList(), op)
                 if (op != null) db.trimOps()
                 _snapshot.value = next
-                if (op != null) _history.value = db.ops(100)
+                // 历史从未被加载过就不再回读 oplog：编辑路径上省掉一次 100 条大 JSON 的查询+解析
+                if (op != null && historyLoaded) _history.value = db.ops(100)
                 cs
             }
         }
@@ -156,7 +193,7 @@ class Repository(
                 val tombstones = if (trackPurges) cs.changes.filterIsInstance<Change.Add>().map { it.after.withMeta(now, now) } else emptyList()
                 db.write(upserts, deletes, null, opId to now, tombstones)
                 _snapshot.value = next
-                _history.value = db.ops(100)
+                if (historyLoaded) _history.value = db.ops(100)
                 true
             }
         }
@@ -177,7 +214,7 @@ class Repository(
                         .mapNotNull { next.find(it) }
                 db.write(upserts, emptyList(), null, opId to null)
                 _snapshot.value = next
-                _history.value = db.ops(100)
+                if (historyLoaded) _history.value = db.ops(100)
                 true
             }
         }

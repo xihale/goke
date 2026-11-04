@@ -165,6 +165,8 @@ fun HistoryScreen(onBack: () -> Unit) {
     val app = LocalApp.current
     val actions = LocalActions.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // oplog 按需加载：冷启动不再读 100 条大 JSON，进入本页时才读
+    androidx.compose.runtime.LaunchedEffect(Unit) { app.repo.ensureHistoryLoaded() }
     val history by app.repo.history.collectAsState()
     val snapshot by app.repo.snapshot.collectAsState()
 

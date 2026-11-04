@@ -20,15 +20,29 @@ data class Snapshot(
             semesters.firstOrNull { it.isCurrent && it.deletedAt == null }
                 ?: semesters.firstOrNull { it.deletedAt == null }
 
+    /** 无墓碑时 [live] 直接返回自身，避免每次调用都复制 6 个列表。按实例缓存（copy 后重算）。 */
+    private val hasDeleted: Boolean by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        semesters.any { it.deletedAt != null } ||
+            courses.any { it.deletedAt != null } ||
+            exceptions.any { it.deletedAt != null } ||
+            events.any { it.deletedAt != null } ||
+            tasks.any { it.deletedAt != null } ||
+            lists.any { it.deletedAt != null }
+    }
+
     fun live(): Snapshot =
-        Snapshot(
-            semesters.filter { it.deletedAt == null },
-            courses.filter { it.deletedAt == null },
-            exceptions.filter { it.deletedAt == null },
-            events.filter { it.deletedAt == null },
-            tasks.filter { it.deletedAt == null },
-            lists.filter { it.deletedAt == null },
-        )
+        if (!hasDeleted) {
+            this
+        } else {
+            Snapshot(
+                semesters.filter { it.deletedAt == null },
+                courses.filter { it.deletedAt == null },
+                exceptions.filter { it.deletedAt == null },
+                events.filter { it.deletedAt == null },
+                tasks.filter { it.deletedAt == null },
+                lists.filter { it.deletedAt == null },
+            )
+        }
 
     fun allRecords(): List<Record> = semesters + courses + exceptions + events + tasks + lists
 

@@ -16,7 +16,9 @@ class SemesterCalendar(
     private val base: LocalDate = semester.week1Monday.with(DayOfWeek.MONDAY)
 
     val totalWeeks: Int get() = semester.totalWeeks
-    val periods: List<PeriodTime> get() = semester.periods.sortedBy { it.index }
+
+    // 排序一次缓存：period()/startTime() 在每次课程展开里逐节调用，原来每口都重新 sortedBy
+    val periods: List<PeriodTime> = semester.periods.sortedBy { it.index }
 
     /** 日期所在周次，学期开始前为 ≤0。 */
     fun weekOf(date: LocalDate): Int = Math.floorDiv(ChronoUnit.DAYS.between(base, date), 7L).toInt() + 1
