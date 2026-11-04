@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xihale/mintcal/server/internal/mcp"
 	"github.com/xihale/mintcal/server/internal/store"
 )
 
@@ -32,6 +33,7 @@ type Options struct {
 }
 
 func New(st *store.Store, opt Options) *Server {
+	mcp.Warmup() // 工具 Schema 有错时启动即失败，而不是等第一个请求
 	s := &Server{st: st, limiter: newLoginLimiter(8, 10*time.Minute), trustProxy: opt.TrustProxy, mux: http.NewServeMux()}
 	s.routes()
 	return s
@@ -50,6 +52,10 @@ func (s *Server) routes() {
 
 	m.Handle("GET /api/v1/sync/pull", s.auth(false, s.handlePull))
 	m.Handle("POST /api/v1/sync/push", s.auth(false, s.handlePush))
+
+	// MCP（Model Context Protocol）：外部 AI 助手经 Streamable HTTP 操作本账号的日程，
+	// 写入与 push 同一条 LWW 落库路径，设备下次拉取即得。见 docs/specs/015-mcp.md。
+	m.Handle("POST /mcp", s.auth(false, s.handleMCP))
 
 	m.Handle("GET /api/v1/admin/users", s.auth(true, s.handleListUsers))
 	m.Handle("POST /api/v1/admin/users", s.auth(true, s.handleCreateUser))

@@ -244,6 +244,47 @@ func (s *Store) DeleteUserTokens(userID int64) error {
 
 // ---------- 同步 ----------
 
+// Record 按 id 取单条记录（含墓碑）。
+func (s *Store) Record(userID int64, id string) (Record, error) {
+	r, err := scanRecord(s.db.QueryRow(`SELECT id, kind, data, updated_at, deleted_at, seq FROM records WHERE user_id=? AND id=?`, userID, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Record{}, ErrNotFound
+	}
+	return r, err
+}
+
+// RecordsByKind 返回用户指定 kind 的全部记录；includeDeleted 为 false 时不含墓碑，按 updated_at 升序。
+func (s *Store) RecordsByKind(userID int64, kinds []string, includeDeleted bool) ([]Record, error) {
+	q := `SELECT id, kind, data, updated_at, deleted_at, seq FROM records WHERE user_id=? AND kind IN (`
+	args := []any{userID}
+	for i, k := range kinds {
+		if i > 0 {
+			q += ","
+		}
+		q += "?"
+		args = append(args, k)
+	}
+	if !includeDeleted {
+		q += ") AND deleted_at IS NULL ORDER BY updated_at"
+	} else {
+		q += ") ORDER BY updated_at"
+	}
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Record{}
+	for rows.Next() {
+		r, err := scanRecord(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) Cursor(userID int64) (int64, error) {
 	var c int64
 	err := s.db.QueryRow(`SELECT seq FROM users WHERE id=?`, userID).Scan(&c)

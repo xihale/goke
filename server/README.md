@@ -25,7 +25,45 @@ cd server && go run ./cmd/mintcal-server
 
 ## Web 端
 
-浏览器打开 `http://服务器:8080/`，用与 App 相同的账号登录，就能在手机或电脑上查看 / 编辑课表、日历、日程和待办（窄屏是手机布局，宽屏是电脑布局），数据与 App 双向同步。手机浏览器里可以「添加到主屏幕」。它内嵌在服务端二进制里，不需要额外部署；不含导入、AI / 脚本修改、快递识别与分享（这些仍在 App 里）。令牌保存在浏览器里，公网使用务必加 HTTPS。设计见 [S011](../docs/specs/011-web-client.md) 与 [ADR-0006](../docs/adr/0006-web-client-vanilla-esm.md)。
+浏览器打开 `http://服务器:8080/`，用与 App 相同的账号登录，就能在手机或电脑上查看 / 编辑课表、日历、日程和待办（窄屏是手机布局，宽屏是电脑布局），数据与 App 双向同步。手机浏览器里可以「添加到主屏幕」。它内嵌在服务端二进制里，不需要额外部署；不含导入、脚本修改、快递识别与分享（这些仍在 App 里）。令牌保存在浏览器里，公网使用务必加 HTTPS。设计见 [S011](../docs/specs/011-web-client.md) 与 [ADR-0006](../docs/adr/0006-web-client-vanilla-esm.md)。
+
+## MCP：外部 AI 助手管理日程
+
+服务端内嵌 MCP（Model Context Protocol）端点：`POST /mcp`，Streamable HTTP 传输（无状态、JSON 响应）。任何 MCP 客户端（Claude、Claude Code、其他助手）都能用你的账号令牌读写日程——App 不内置 AI，AI 能力在这里。
+
+**拿令牌**：用任意账号登录一次即可（`deviceName` 起个能认出来的名字，管理员后台可以单独注销它）：
+
+```bash
+curl -s https://cal.example.com/api/v1/login -d '{"username":"alice","password":"…","deviceName":"MCP"}' -H 'Content-Type: application/json'
+# → {"token":"…","user":{…}}
+```
+
+**客户端配置**：
+
+```bash
+# Claude Code
+claude mcp add --transport http mintcal https://cal.example.com/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+```json
+// 其他支持远程 MCP 的客户端（自定义连接器 / mcpServers）
+{ "mintcal": { "url": "https://cal.example.com/mcp", "headers": { "Authorization": "Bearer <token>" } } }
+```
+
+**工具一览**（输入输出为中文描述的 JSON）：
+
+| 工具 | 说明 |
+| --- | --- |
+| `list_lists` / `create_list` | 待办清单及数量 / 新建清单 |
+| `get_task` / `search_tasks` | 按 id 读取 / 按关键词、清单、状态、日期范围搜索待办 |
+| `create_task` | 新建待办；只有日期是待办，带时刻即日程 |
+| `update_task` / `complete_task` / `delete_task` | 改字段 / 完成、重开、「不做了」/ 删除（墓碑） |
+| `get_agenda` | 一段时间内安排了什么，按时间排序 |
+| `search_events` | 旧版日程记录（只读；日程已并入待办） |
+| `list_courses` | 学期与每周课程表 |
+
+**语义**：写入与 App 的 push 走同一条记录同步路径（updatedAt 后写者胜，冲突时重读重试），设备端打开 App、本地有变化或后台周期同步（约 15 分钟）时到达；删除幂等并级联删除子任务，留墓碑与其他端一致；新增待办按 App 的追加规则排序；服务端产生的记录 `source` 为 `CODE`。提醒由 App 在同步后调度。设计见 [S015](../docs/specs/015-mcp.md)。
 
 ## 管理后台
 
@@ -54,6 +92,6 @@ cd server
 go vet ./... && go test ./...
 ```
 
-Web 端的前端逻辑测试需要 Node ≥ 20：`cd server && node --test webtest/*.test.mjs`（默认用内置模拟服务）；`bash scripts/web-e2e.sh` 会启动真实服务端再跑一遍同步测试。`node webtest/mock.mjs 8099` 可起一个带演示数据的模拟服务（账号 demo / demopassword），配合 `webtest/shots.mjs` 截图检查布局。
+Web 端的前端逻辑测试需要 Node ≥ 20：`cd server && node --test webtest/*.test.mjs`（默认用内置模拟服务）；`bash scripts/web-e2e.sh` 会启动真实服务端再跑一遍同步测试（含 `webtest/mcp.test.mjs` 的 MCP 端到端）。`node webtest/mock.mjs 8099` 可起一个带演示数据的模拟服务（账号 demo / demopassword），配合 `webtest/shots.mjs` 截图检查布局。
 
 仓库根目录的 `scripts/sync-e2e.sh` 会启动一个临时服务端，用两台「设备」（Robolectric 里的两份本地数据库）跑端到端同步测试。
