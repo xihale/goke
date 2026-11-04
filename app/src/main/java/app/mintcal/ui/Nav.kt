@@ -88,7 +88,7 @@ sealed interface Route {
 class Nav(
     val controller: NavHostController,
 ) {
-    var tab by mutableStateOf(Tab.TODAY)
+    var tab by mutableStateOf(Tab.TIMETABLE)
 
     /** 外部分享来的多行文字，待办页的快速添加接手并给出批量预览。 */
     var pendingAddText by mutableStateOf<String?>(null)
@@ -119,7 +119,7 @@ class Nav(
     /** 关闭全部压栈页，回到 Tab 层（如「预览到课表」）。 */
     fun clearToRoot(): Boolean = controller.popBackStack(HOME, inclusive = false)
 
-    fun back(): Boolean = pop() || (tab != Tab.TODAY).also { if (it) tab = Tab.TODAY }
+    fun back(): Boolean = pop() || (tab != Tab.TIMETABLE).also { if (it) tab = Tab.TIMETABLE }
 }
 
 @Composable

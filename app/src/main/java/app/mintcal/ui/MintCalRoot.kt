@@ -116,8 +116,8 @@ fun MintCalRoot(
     val backStack by nav.controller.currentBackStackEntryAsState()
     val onRoute = backStack?.destination?.route != HOME
 
-    // Tab 层：非今日 Tab 返回回今日。压栈页的返回交给 NavHost 默认处理。
-    BackHandler(enabled = ready && !onRoute && nav.tab != Tab.TODAY) { nav.back() }
+    // Tab 层：非默认 Tab（周历）返回回周历。压栈页的返回交给 NavHost 默认处理。
+    BackHandler(enabled = ready && !onRoute && nav.tab != Tab.TIMETABLE) { nav.back() }
     // 压栈页兜底：显式注册返回 = 弹一层，绝不把返回事件漏给系统导致整个应用退出
     // （部分 ROM 的预测性返回会在无人认领事件时直接结束 Activity）。
     BackHandler(enabled = ready && onRoute) { nav.pop() }
