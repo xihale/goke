@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动屏不显示图标：空矢量什么都不画，只留 windowSplashScreenBackground 底色，观感即直接进软件。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- API<31 的 VectorDrawable 要求至少一个 path；全透明即「什么都不画」 -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,0h108v108h-108z" />
+</vector>
