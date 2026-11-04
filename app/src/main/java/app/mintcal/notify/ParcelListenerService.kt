@@ -6,7 +6,6 @@ import android.service.notification.StatusBarNotification
 import app.mintcal.R
 import app.mintcal.core.change.Edits
 import app.mintcal.core.model.Source
-import app.mintcal.core.parcel.ParcelParser
 import app.mintcal.mintApp
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -28,7 +27,7 @@ class ParcelListenerService : NotificationListenerService() {
                 ex.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: ex.getCharSequence(Notification.EXTRA_TEXT),
             ).joinToString("，") { it.toString() }
         if (text.isBlank()) return
-        val info = ParcelParser.parse(text, LocalDateTime.now()) ?: return
+        val info = app.parcelRules.value.parse(text, LocalDateTime.now()) ?: return
         app.scope.launch {
             app.repo.ready.first { it }
             val snap =

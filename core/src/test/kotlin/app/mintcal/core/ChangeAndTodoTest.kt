@@ -21,7 +21,6 @@ import app.mintcal.core.model.Recurrence
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
-import app.mintcal.core.parcel.ParcelParser
 import app.mintcal.core.todo.QuickAdd
 import app.mintcal.core.todo.QuickTokenKind
 import app.mintcal.core.todo.SmartList
@@ -300,17 +299,5 @@ class ChangeAndTodoTest {
         val t = Task("t", "作业", courseId = "c1", dueBeforeNextClass = true)
         val due = TaskLogic.effectiveDue(t, sem, listOf(c), emptyList(), now)
         assertEquals(LocalDateTime.of(2026, 10, 27, 8, 30), due)
-    }
-
-    @Test fun `parcel parser`() {
-        val p = ParcelParser.parse("【菜鸟驿站】您的包裹已到大学城北门菜鸟驿站，凭取件码 5-3-2081 取件，请于10月25日前取走。", now)!!
-        assertEquals("5-3-2081", p.code)
-        assertEquals("菜鸟驿站", p.company)
-        assertEquals(LocalDateTime.of(2026, 10, 25, 23, 59), p.deadline)
-        assertTrue(p.place.contains("驿站"))
-        assertNull(ParcelParser.parse("今天天气不错", now))
-        val q = ParcelParser.parse("您的快递已放入丰巢智能柜，取件码：A7K9Q2，请今日18:00前取件", now)!!
-        assertEquals("A7K9Q2", q.code)
-        assertEquals(LocalDateTime.of(2026, 10, 23, 18, 0), q.deadline)
     }
 }

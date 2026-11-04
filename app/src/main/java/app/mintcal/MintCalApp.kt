@@ -6,6 +6,7 @@ import app.mintcal.ai.AdvancedController
 import app.mintcal.core.change.Unify
 import app.mintcal.data.AutoBackup
 import app.mintcal.data.MintDb
+import app.mintcal.data.ParcelRuleStore
 import app.mintcal.data.Repository
 import app.mintcal.data.SecretStore
 import app.mintcal.data.SettingsStore
@@ -33,6 +34,8 @@ class MintCalApp : Application() {
         private set
     lateinit var settings: SettingsStore
         private set
+    lateinit var parcelRules: ParcelRuleStore
+        private set
     lateinit var secrets: SecretStore
         private set
     lateinit var reminders: ReminderScheduler
@@ -52,6 +55,7 @@ class MintCalApp : Application() {
         super.onCreate()
         repo = Repository(MintDb(this))
         settings = SettingsStore(this)
+        parcelRules = ParcelRuleStore(this)
         secrets = SecretStore(this)
         reminders = ReminderScheduler(this)
         advanced = AdvancedController(this)

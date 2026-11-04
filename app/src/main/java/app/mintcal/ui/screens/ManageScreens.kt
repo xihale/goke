@@ -40,7 +40,10 @@ import app.mintcal.core.model.Record
 import app.mintcal.core.model.Task
 import app.mintcal.core.model.displayTitle
 import app.mintcal.core.model.entityType
-import app.mintcal.core.parcel.ParcelParser
+import app.mintcal.core.parcel.ParcelRule
+import app.mintcal.core.parcel.ParcelRuleEngine
+import app.mintcal.core.parcel.RuleTemplate
+import app.mintcal.core.util.Ids
 import app.mintcal.data.Repository
 import app.mintcal.notify.ParcelTasks
 import app.mintcal.ui.LocalActions
@@ -244,6 +247,7 @@ fun ParcelScreen(onBack: () -> Unit) {
     var sample by remember { mutableStateOf("") }
     var result by remember { mutableStateOf<app.mintcal.core.parcel.ParcelInfo?>(null) }
     var tried by remember { mutableStateOf(false) }
+    var sampleDraft by remember { mutableStateOf<RuleDraft?>(null) }
     val granted = listenerEnabled(ctx)
 
     MintScreen(title = stringResource(R.string.parcel_title), onBack = onBack) {
@@ -274,14 +278,22 @@ fun ParcelScreen(onBack: () -> Unit) {
                 }, singleLine = false, minLines = 3, placeholder = stringResource(R.string.parcel_sample_hint))
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = {
-                    result = ParcelParser.parse(sample, LocalDateTime.now())
+                    result = app.parcelRules.value.parse(sample, LocalDateTime.now())
                     tried = true
                 }, enabled = sample.isNotBlank()) { Text(stringResource(R.string.parcel_recognize)) }
                 val r = result
-                if (tried && r == null) Text(stringResource(R.string.parcel_not_found), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+                if (tried && r == null) {
+                    Text(stringResource(R.string.parcel_not_found), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+                    TextButton(onClick = { sampleDraft = RuleDraft(ParcelRule(Ids.next(), "", RuleTemplate.fromSample(sample)), sample = sample, isNew = true) }) {
+                        Text(stringResource(R.string.parcel_rule_from_sample))
+                    }
+                }
                 if (r != null) {
                     Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(stringResource(R.string.parcel_code, r.code), style = MaterialTheme.typography.titleMedium)
+                        (app.parcelRules.value.user + ParcelRuleEngine.BUILTIN).firstOrNull { it.id == r.ruleId }?.let {
+                            Text(stringResource(R.string.parcel_rule_matched, it.name), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         if (r.place.isNotBlank()) Text(stringResource(R.string.parcel_place, r.place), style = MaterialTheme.typography.bodyMedium)
                         if (r.company.isNotBlank()) Text(stringResource(R.string.parcel_company, r.company), style = MaterialTheme.typography.bodyMedium)
                         r.deadline?.let { Text(stringResource(R.string.parcel_deadline, it.format(STAMP)), style = MaterialTheme.typography.bodyMedium) }
@@ -292,7 +304,9 @@ fun ParcelScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            ParcelRulesSection(app.parcelRules)
             Text(stringResource(R.string.parcel_privacy), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+    sampleDraft?.let { d -> RuleEditSheet(d, app.parcelRules) { sampleDraft = null } }
 }
