@@ -13,6 +13,7 @@ import app.mintcal.data.SettingsStore
 import app.mintcal.jxfw.JxfwManager
 import app.mintcal.notify.Notifications
 import app.mintcal.notify.ReminderScheduler
+import app.mintcal.sync.PeriodicSync
 import app.mintcal.sync.SyncManager
 import app.mintcal.sync.SyncStore
 import app.mintcal.widget.ScheduleWidgetProvider
@@ -27,8 +28,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 
-/** 应用级容器：数据仓库、设置、密钥、提醒调度、高级修改控制器。 */
-class MintCalApp : Application() {
+/** 应用级容器：数据仓库、设置、密钥、提醒调度、高级修改控制器。open 仅为测试子类（SmokeTestApp）服务。 */
+open class MintCalApp : Application() {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     lateinit var repo: Repository
         private set
@@ -77,6 +78,8 @@ class MintCalApp : Application() {
             sync.requestSync(1000)
             jxfw.ensureAlarm()
             launch { jxfw.catchUp() }
+            // 登录状态下排后台周期同步（MCP / 其他设备的写入由此到达本机），退出登录自动取消
+            launch { sync.state.collect { PeriodicSync.follow(this@MintCalApp, it.account != null) } }
             // 本地数据有变化（含从服务器写入的）后，登录状态下稍后同步一次；未登录时 requestSync 什么都不做
             launch { repo.snapshot.collect { sync.requestSync() } }
             // 数据或设置变化后重新排提醒并刷新小组件（防抖，避免连续编辑时反复调度）

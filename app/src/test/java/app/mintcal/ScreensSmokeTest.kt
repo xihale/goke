@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.testing.WorkManagerTestInitHelper
 import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
 import app.mintcal.core.change.Edits
@@ -105,10 +106,22 @@ import java.io.File
 import java.time.LocalDate
 import java.time.LocalDateTime
 
+/**
+ * Robolectric 不执行 androidx.startup 的 ContentProvider，WorkManager 不会像真机上那样
+ * 在 Application.onCreate 之前自动初始化；而应用一启动就排周期同步（MintCalApp.onCreate），
+ * Robolectric 又会在 @Before 之前泵主线程队列，所以必须在 onCreate 里先装好测试实例。
+ */
+class SmokeTestApp : MintCalApp() {
+    override fun onCreate() {
+        WorkManagerTestInitHelper.initializeTestWorkManager(this)
+        super.onCreate()
+    }
+}
+
 /** 在 JVM 上用 Robolectric 渲染每个页面：确认不崩溃，并输出截图到 app/build/shots 供肉眼检查。 */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi", application = MintCalApp::class)
+@Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi", application = SmokeTestApp::class)
 class ScreensSmokeTest {
     @get:Rule val rule = createComposeRule()
 
