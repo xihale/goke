@@ -80,6 +80,7 @@ import app.mintcal.ui.screens.CalendarScreen
 import app.mintcal.ui.screens.CourseEditScreen
 import app.mintcal.ui.screens.DataScreen
 import app.mintcal.ui.screens.EditTimetableScreen
+import app.mintcal.ui.screens.FocusScreen
 import app.mintcal.ui.screens.HistoryScreen
 import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.JxfwScreen
@@ -257,6 +258,7 @@ fun NavGraphBuilder.mintDestinations(
     composable<Route.Sync> { SyncScreen(back) }
     composable<Route.Jxfw> { JxfwScreen(back) }
     composable<Route.Reliability> { ReliabilityScreen(back) }
+    composable<Route.Focus> { e -> FocusScreen(e.toRoute<Route.Focus>().taskId, back) }
     composable<Route.Import> { e -> ImportScreen(e.toRoute<Route.Import>().uri, back) }
     composable<Route.CourseEdit> { e -> CourseEditScreen(e.toRoute<Route.CourseEdit>().id, back) }
     composable<Route.TodoEdit> { e ->
@@ -365,6 +367,7 @@ private fun Tabs(nav: Nav) {
                                 Tab.TIMETABLE -> TimetableScreen()
                                 Tab.CALENDAR -> CalendarScreen()
                                 Tab.TODO -> TodoScreen()
+                                Tab.FOCUS -> FocusScreen(taskId = null, onBack = { nav.back() }, inTab = true)
                             }
                         }
                     }

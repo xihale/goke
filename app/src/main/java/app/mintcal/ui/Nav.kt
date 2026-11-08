@@ -19,9 +19,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
-enum class Tab { TODAY, TIMETABLE, CALENDAR, TODO }
+enum class Tab { TODAY, TIMETABLE, CALENDAR, TODO, FOCUS }
 
-/** Tab 层目的地（四个 Tab 共用的常驻容器），不参与压栈转场。 */
+/** Tab 层目的地（五个 Tab 共用的常驻容器），不参与压栈转场。 */
 const val HOME = "home"
 
 @Serializable
@@ -58,6 +58,11 @@ sealed interface Route {
     /** uri 为空表示先让用户选择文件。 */
     @Serializable data class Import(
         val uri: String?,
+    ) : Route
+
+    /** 专注计时；[taskId] 非空表示从任务详情带来的预选。 */
+    @Serializable data class Focus(
+        val taskId: String? = null,
     ) : Route
 
     @Serializable data class CourseEdit(

@@ -10,6 +10,7 @@ import app.mintcal.core.change.undo
 import app.mintcal.core.model.Course
 import app.mintcal.core.model.CourseException
 import app.mintcal.core.model.Event
+import app.mintcal.core.model.FocusSession
 import app.mintcal.core.model.GdutPeriods
 import app.mintcal.core.model.Record
 import app.mintcal.core.model.Semester
@@ -72,6 +73,7 @@ class Repository(
                 val events = ArrayList<Event>()
                 val tasks = ArrayList<Task>()
                 val lists = ArrayList<TaskList>()
+                val focusSessions = ArrayList<FocusSession>()
                 val now = clock()
                 // 30 天前删除的回收站内容顺带清理（物理删除，与旧行为一致）
                 val cutoff = now - TRASH_DAYS * 24L * 3600_000L
@@ -88,10 +90,11 @@ class Repository(
                         is Event -> events.add(r)
                         is Task -> tasks.add(r)
                         is TaskList -> lists.add(r)
+                        is FocusSession -> focusSessions.add(r)
                     }
                 }
                 if (expiredIds.isNotEmpty()) db.write(emptyList(), expiredIds)
-                var snap = Snapshot(semesters, courses, exceptions, events, tasks, lists)
+                var snap = Snapshot(semesters, courses, exceptions, events, tasks, lists, focusSessions)
                 snap = withDefaultSemester(snap, now)
                 _snapshot.value = snap
                 // 历史不在这里读：ensureHistoryLoaded() 由历史页首次进入时触发

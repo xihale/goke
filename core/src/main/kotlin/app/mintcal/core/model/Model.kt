@@ -222,6 +222,38 @@ data class Task(
     ) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
 }
 
+/**
+ * 专注会话：对某条待办（或不挂任务）的一次专注计时，番茄/正/倒计时统一落成一条记录。
+ * 计时用墙上时钟（UnixMillis），进程被杀也能按时间差恢复；会话结束才落库。
+ */
+@Serializable
+@SerialName("focusSession")
+data class FocusSession(
+    override val id: String,
+    /** 关联待办；null = 自由专注。 */
+    val taskId: String? = null,
+    val startedAt: Long,
+    val endedAt: Long,
+    /** 期间暂停的累计毫秒，不计入专注时长。 */
+    val pausedMillis: Long = 0,
+    /** 倒计时目标分钟；正计时为 null。 */
+    val plannedMinutes: Int? = null,
+    /** 倒计时是否跑满目标；中途结束为 false（时长仍计入统计）。 */
+    val completed: Boolean = false,
+    override val updatedAt: Long = 0,
+    override val deletedAt: Long? = null,
+    override val userId: String? = null,
+) : Record {
+    override fun withMeta(
+        updatedAt: Long,
+        deletedAt: Long?,
+    ) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
+
+    /** 实际专注毫秒：扣除暂停。 */
+    val focusMillis: Long
+        get() = (endedAt - startedAt - pausedMillis).coerceAtLeast(0)
+}
+
 /** 广工节次时间（来自 WakeUp 导出的 ICS，见需求文档 6.2）。 */
 object GdutPeriods {
     val default: List<PeriodTime> =

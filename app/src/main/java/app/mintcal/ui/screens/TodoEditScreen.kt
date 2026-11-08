@@ -45,6 +45,7 @@ import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -89,8 +90,10 @@ import app.mintcal.R
 import app.mintcal.core.change.ChangeSet
 import app.mintcal.core.change.Edits
 import app.mintcal.core.change.clashesOf
+import app.mintcal.core.focus.FocusLogic
 import app.mintcal.core.model.Freq
 import app.mintcal.core.model.Recurrence
+import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
 import app.mintcal.core.recurrence.RecurrenceEngine
@@ -101,14 +104,17 @@ import app.mintcal.core.todo.TaskLogic
 import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
+import app.mintcal.ui.Route
 import app.mintcal.ui.Tab
 import app.mintcal.ui.components.AttachmentEditor
 import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.ConflictCard
+import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintCheck
 import app.mintcal.ui.components.rememberFileAttachmentPicker
 import app.mintcal.ui.components.rememberImageAttachmentPicker
 import app.mintcal.ui.dueLabel
+import app.mintcal.ui.durationLabel
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDayWeekday
@@ -117,14 +123,16 @@ import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.theme.priorityColor
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.LocalDateTime
 
 /**
  * 唯一的编辑页：新建和修改都是它。版式对齐 TickTick 详情：
  * 勾选在顶栏右侧，标题从左缘起，日期、备注、附件依次全宽铺在页面里。
  * 底部左侧是清单名，右侧是子任务、优先级、图片和附件；子任务点清单图标在栏上方展开。
- * 返回即保存，空标题等于放弃。
+ * 修改返回即保存（空标题等于放弃）；新建要点顶栏「确定」才落库，返回 / 手势退出等于丢弃草稿。
  * 标题里识别到的日期时间就地高亮，点一下表示认错了。
  */
 @Composable
@@ -466,6 +474,10 @@ fun TodoEditScreen(
             if (attachments.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 AttachmentEditor(attachments, onChange = { attachments = it })
+            }
+            if (existing != null) {
+                Spacer(Modifier.height(24.dp))
+                FocusSection(snap, existing.id, today)
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -864,6 +876,59 @@ private fun FlatField(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/** 这条待办的专注统计：累计 + 最近几段起止，入口「开始专注」与「查看全部」。 */
+@Composable
+private fun FocusSection(
+    snap: Snapshot,
+    taskId: String,
+    today: LocalDate,
+) {
+    val ctx = LocalContext.current
+    val nav = LocalNav.current
+    val sessions = FocusLogic.ofTask(snap.focusSessions.filter { it.deletedAt == null }, taskId)
+    FormSection(stringResource(R.string.focus_editor_section)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (sessions.isEmpty()) {
+                    stringResource(R.string.focus_empty)
+                } else {
+                    stringResource(R.string.focus_total_all, ctx.durationLabel(FocusLogic.totalMillis(sessions))) +
+                        " · " + stringResource(R.string.focus_session_count, sessions.size)
+                },
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FilledTonalButton(onClick = { nav.push(Route.Focus(taskId = taskId)) }) {
+                Text(stringResource(R.string.focus_editor_start))
+            }
+        }
+        if (sessions.isNotEmpty()) {
+            val zone = ZoneId.systemDefault()
+            sessions.take(8).forEach { s ->
+                val day = Instant.ofEpochMilli(s.startedAt).atZone(zone).toLocalDate()
+                val startAt = Instant.ofEpochMilli(s.startedAt).atZone(zone).toLocalTime()
+                val endAt = Instant.ofEpochMilli(s.endedAt).atZone(zone).toLocalTime()
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${ctx.dueLabel(day.atStartOfDay(), false, today)} ${startAt.hm()}–${endAt.hm()}",
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        ctx.durationLabel(s.focusMillis),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (s.completed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+            if (sessions.size > 8) {
+                TextButton(onClick = { nav.push(Route.Focus(taskId = taskId)) }) { Text(stringResource(R.string.focus_editor_more)) }
+            }
         }
     }
 }

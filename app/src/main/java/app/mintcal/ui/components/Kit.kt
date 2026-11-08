@@ -58,6 +58,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.AlertDialog
@@ -319,6 +320,7 @@ private val NAV_ITEMS =
         NavItem(Tab.TIMETABLE, Icons.Rounded.CalendarViewWeek, R.string.tab_timetable),
         NavItem(Tab.CALENDAR, Icons.Rounded.CalendarMonth, R.string.tab_calendar),
         NavItem(Tab.TODO, Icons.Rounded.CheckCircle, R.string.tab_todo),
+        NavItem(Tab.FOCUS, Icons.Rounded.Timer, R.string.focus_title),
     )
 
 @Composable
@@ -328,7 +330,7 @@ fun FloatingNavBar(
     modifier: Modifier = Modifier,
 ) {
     val items = NAV_ITEMS
-    val selectedIndex = items.indexOfFirst { it.tab == tab }.coerceAtLeast(0)
+    val selectedIndex = items.indexOfFirst { it.tab == tab }
     val haptics = LocalHapticFeedback.current
     val travel = remember { Animatable(selectedIndex.toFloat()) }
     val spec = MintTheme.spec<Float>()

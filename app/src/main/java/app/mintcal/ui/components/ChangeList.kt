@@ -83,6 +83,7 @@ private fun entityLabel(t: EntityType): Int =
         EntityType.TASK -> R.string.entity_task
         EntityType.LIST -> R.string.entity_list
         EntityType.SEMESTER -> R.string.entity_semester
+        EntityType.FOCUS -> R.string.entity_focus
     }
 
 private fun fieldValue(
