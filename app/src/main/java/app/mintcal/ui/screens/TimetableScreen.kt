@@ -120,6 +120,7 @@ import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
 import app.mintcal.ui.components.EmptyState
+import app.mintcal.ui.components.FieldText
 import app.mintcal.ui.components.NavListInset
 import app.mintcal.ui.components.mintPressable
 import app.mintcal.ui.hm
@@ -1298,7 +1299,7 @@ private fun RescheduleDialog(
                 Stepper(stringResource(R.string.week_label), newWeek, 1, cal.totalWeeks) { newWeek = it }
                 Stepper(stringResource(R.string.weekday_label), dow, 1, 7, display = { ctx.weekdayFull(it) }) { dow = it }
                 Stepper(stringResource(R.string.start_period), start, 1, (cal.periods.size - len).coerceAtLeast(1)) { start = it }
-                androidx.compose.material3.OutlinedTextField(room, { room = it }, label = { Text(stringResource(R.string.label_room)) }, singleLine = true)
+                FieldText(stringResource(R.string.label_room), room, { room = it })
             }
         },
         confirmButton = {

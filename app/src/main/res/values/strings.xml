@@ -51,7 +51,6 @@
     <string name="settings">设置</string>
     <string name="new_entry">新建</string>
     <string name="new_course">新建课程</string>
-    <string name="edit_course">编辑课程</string>
     <string name="fmt_month_day">%1$d月%2$d日</string>
     <string name="fmt_month_day_weekday">%1$d月%2$d日 %3$s</string>
     <string name="fmt_year_month">%1$d年%2$d月</string>
@@ -61,7 +60,6 @@
     <string name="week_n">第 %1$d 周</string>
     <string name="week_n_total">%1$d 周</string>
     <string name="weeks_value">第 %1$s 周</string>
-    <string name="weeks_total">共 %1$d 周</string>
     <string name="week_label">周次</string>
     <string name="weekday_label">星期</string>
     <string name="periods_value">第 %1$s 节</string>
@@ -136,7 +134,6 @@
     <string name="label_room">教室</string>
     <string name="label_teacher">教师</string>
     <string name="label_note">备注</string>
-    <string name="label_color">颜色</string>
     <string name="label_priority">优先级</string>
     <string name="label_repeat">重复</string>
     <string name="label_time">时间</string>
@@ -146,14 +143,11 @@
     <string name="label_remind">提醒</string>
     <string name="remind_persistent">持续提醒</string>
     <string name="remind_persistent_desc">一直响，直到完成或关掉</string>
-    <string name="label_weeks">周次</string>
     <string name="label_semester_name">学期名称</string>
     <string name="label_total_weeks">总周数</string>
     <string name="label_week1_monday">第 1 周周一</string>
     <string name="section_courses">课程列表</string>
     <string name="section_semester">学期</string>
-    <string name="section_time">上课时间</string>
-    <string name="section_weeks">周次</string>
     <string name="attach_image">图片</string>
     <string name="attach_file">文件</string>
     <string name="attach_paste">粘贴</string>
@@ -167,8 +161,6 @@
     <string name="section_reminders">提醒</string>
     <string name="section_restore">恢复</string>
     <string name="start_period">开始节次</string>
-    <string name="end_period">结束节次</string>
-    <string name="weeks_hint">例如 1-16 或 1,3,5-9</string>
     <string name="weeks_all">全部周</string>
     <string name="weeks_odd">单周</string>
     <string name="weeks_even">双周</string>
@@ -245,7 +237,6 @@
     <string name="copy_next_semester_desc">带上全部课程，创建新学期</string>
     <string name="copy_semester_desc">复制课表到「%1$s」</string>
     <string name="reset_default">恢复默认</string>
-    <string name="periods_hint">点击时间可修改；最多 16 节。</string>
     <string name="add_period">增加一节</string>
     <string name="remove_last_period">删除最后一节</string>
     <string name="advanced_title">高级修改</string>
@@ -650,6 +641,14 @@
     <string name="auto_backup">每天备份一次</string>
     <string name="auto_backup_desc">数据变化时自动导出完整备份（JSON）到应用目录 backup/，保留最近 %1$d 份</string>
     <string name="course_todos">这门课的待办</string>
+    <string name="course_semester_grid">课表</string>
+    <string name="course_weeks_pick">在哪些周上课</string>
+    <string name="course_weeks_clear">清空</string>
+    <string name="course_weeks_brush_hint">选中的周就是画笔：按住课表空白拖动＝给这些周安排时间；按住已有色块拖动＝把它搬到新位置</string>
+    <string name="course_brush_weeks">画笔：%1$s周</string>
+    <string name="course_block_remove_brush">从选中周移除</string>
+    <string name="course_pattern_delete">删除此时间</string>
+    <string name="course_cancel_badge">停</string>
     <string name="course_todos_add">添加课前待办</string>
     <string name="course_todos_empty">还没有待办</string>
     <string name="clash_row_course">与「%1$s」冲突 · %2$s</string>

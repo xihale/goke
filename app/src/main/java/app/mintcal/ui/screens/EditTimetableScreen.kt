@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -21,12 +22,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,10 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -135,13 +135,11 @@ fun EditTimetableScreen(onBack: () -> Unit) {
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MintTheme.card)
-                            .clickable { nav.push(Route.CourseEdit(c.id)) }
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                            .heightIn(min = 48.dp)
+                            .clickable { nav.push(Route.CourseEdit(c.id)) },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Box(Modifier.size(12.dp).clip(CircleShape).background(MintTheme.colors.fg(c.colorIndex)))
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(MintTheme.colors.fg(c.colorIndex)))
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(c.name, style = MaterialTheme.typography.bodyLarge)
@@ -157,10 +155,13 @@ fun EditTimetableScreen(onBack: () -> Unit) {
                         }
                     }
                 }
-                OutlinedButton(onClick = { nav.push(Route.CourseEdit(null)) }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Rounded.Add, null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.new_course))
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { nav.push(Route.CourseEdit(null)) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text(stringResource(R.string.new_course), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
                 }
             }
 
@@ -181,28 +182,7 @@ fun EditTimetableScreen(onBack: () -> Unit) {
                 NavRow(stringResource(R.string.copy_next_semester), stringResource(R.string.copy_next_semester_desc), Icons.Rounded.ContentCopy) { copyDlg = true }
             }
 
-            val dashColor = MaterialTheme.colorScheme.primary
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
-                    .clickable { showAdvanced = true }
-                    .drawBehind {
-                        drawRoundRect(
-                            dashColor,
-                            cornerRadius = CornerRadius(24.dp.toPx()),
-                            style = Stroke(width = 1.6.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))),
-                        )
-                    }.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Rounded.AutoAwesome, null, tint = dashColor)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.advanced_title), style = MaterialTheme.typography.titleMedium, color = dashColor)
-                    Text(stringResource(R.string.advanced_row_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+            NavRow(stringResource(R.string.advanced_title), stringResource(R.string.advanced_row_desc), Icons.Rounded.AutoAwesome) { showAdvanced = true }
         }
     }
 
@@ -248,18 +228,38 @@ fun PeriodsScreen(onBack: () -> Unit) {
             return
         }
     var periods by remember(sem.id) { mutableStateOf(sem.periods.sortedBy { it.index }) }
-    var editing by remember { mutableStateOf<Pair<Int, Boolean>?>(null) } // (index, isStart)
+    var editing by remember { mutableStateOf<Pair<Int, Boolean>?>(null) }
+    var menu by remember { mutableStateOf(false) }
+    val latest by rememberUpdatedState(periods)
+    val semNow by rememberUpdatedState(sem)
+    val snapNow by rememberUpdatedState(snap)
+    DisposableEffect(sem.id) {
+        onDispose {
+            val next = latest
+            val s = semNow
+            if (next != s.periods) {
+                val desc = ctx.getString(R.string.edit_periods_op)
+                actions.commit(Edits.save(snapNow, s.copy(periods = next), desc, System.currentTimeMillis()), desc)
+            }
+        }
+    }
 
     MintScreen(
         title = stringResource(R.string.edit_periods),
         onBack = onBack,
         actions = {
-            TextButton(onClick = { periods = app.mintcal.core.model.GdutPeriods.default }) { Text(stringResource(R.string.reset_default)) }
-            TextButton(onClick = {
-                val desc = ctx.getString(R.string.edit_periods_op)
-                actions.commit(Edits.save(snap, sem.copy(periods = periods), desc, System.currentTimeMillis()), desc)
-                onBack()
-            }) { Text(stringResource(R.string.save)) }
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
+                DropdownMenu(menu, { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.reset_default)) },
+                        onClick = {
+                            menu = false
+                            periods = app.mintcal.core.model.GdutPeriods.default
+                        },
+                    )
+                }
+            }
         },
     ) {
         Column(
@@ -269,27 +269,41 @@ fun PeriodsScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(stringResource(R.string.periods_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            FormSection {
-                periods.forEachIndexed { i, p ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(ctx.getString(R.string.period_n, p.index), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                        OutlinedButton(onClick = { editing = i to true }) { Text(p.start.hm()) }
-                        Text("–", Modifier.padding(horizontal = 8.dp))
-                        OutlinedButton(onClick = { editing = i to false }) { Text(p.end.hm()) }
-                    }
+            periods.forEachIndexed { i, p ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(ctx.getString(R.string.period_n, p.index), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                    TimeTap(p.start.hm()) { editing = i to true }
+                    Text("–", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TimeTap(p.end.hm()) { editing = i to false }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = {
+            }
+            if (periods.size < 16) {
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable {
                         val last = periods.last()
-                        periods = periods +
-                            app.mintcal.core.model
-                                .PeriodTime(last.index + 1, last.end.plusMinutes(5), last.end.plusMinutes(50))
-                    }, enabled = periods.size < 16) { Text(stringResource(R.string.add_period)) }
-                    OutlinedButton(onClick = { periods = periods.dropLast(1) }, enabled = periods.size > 1) { Text(stringResource(R.string.remove_last_period)) }
+                        periods =
+                            periods +
+                            app.mintcal.core.model.PeriodTime(last.index + 1, last.end.plusMinutes(5), last.end.plusMinutes(50))
+                    },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.add_period), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
                 }
+            }
+            if (periods.size > 1) {
+                Text(
+                    stringResource(R.string.remove_last_period),
+                    modifier =
+                        Modifier
+                            .heightIn(min = 48.dp)
+                            .clickable { periods = periods.dropLast(1) }
+                            .padding(vertical = 12.dp),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         }
     }
@@ -298,5 +312,18 @@ fun PeriodsScreen(onBack: () -> Unit) {
         app.mintcal.ui.components.TimePickerDlg(if (isStart) p.start else p.end, { editing = null }) { t ->
             periods = periods.toMutableList().also { it[i] = if (isStart) p.copy(start = t) else p.copy(end = t) }
         }
+    }
+}
+
+@Composable
+private fun TimeTap(
+    label: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier.heightIn(min = 48.dp).clickable(onClick = onClick).padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
     }
 }
