@@ -36,6 +36,10 @@ data class Settings(
     val autoBackup: Boolean = false,
     val backupKeep: Int = 7,
     val parcelEnabled: Boolean = false,
+    /** 快递取件时段开始（当日分钟数，默认 14:00）：识别出的待办排进每天的这段时间。 */
+    val parcelWindowStart: Int = 14 * 60,
+    /** 取件时段结束（当日分钟数，默认 22:00）。 */
+    val parcelWindowEnd: Int = 22 * 60,
     val weekStartsMonday: Boolean = true,
     /** 一次性迁移标记：日程已并入待办。 */
     val unifiedTasks: Boolean = false,
@@ -72,6 +76,8 @@ class SettingsStore(
             autoBackup = sp.getBoolean("autoBackup", d.autoBackup),
             backupKeep = sp.getInt("backupKeep", d.backupKeep),
             parcelEnabled = sp.getBoolean("parcelEnabled", d.parcelEnabled),
+            parcelWindowStart = sp.getInt("parcelWindowStart", d.parcelWindowStart).coerceIn(0, 24 * 60 - 1),
+            parcelWindowEnd = sp.getInt("parcelWindowEnd", d.parcelWindowEnd).coerceIn(0, 24 * 60),
             weekStartsMonday = sp.getBoolean("weekStartsMonday", d.weekStartsMonday),
             unifiedTasks = sp.getBoolean("unifiedTasks", d.unifiedTasks),
         )
@@ -100,6 +106,8 @@ class SettingsStore(
             .putBoolean("autoBackup", n.autoBackup)
             .putInt("backupKeep", n.backupKeep)
             .putBoolean("parcelEnabled", n.parcelEnabled)
+            .putInt("parcelWindowStart", n.parcelWindowStart)
+            .putInt("parcelWindowEnd", n.parcelWindowEnd)
             .putBoolean("weekStartsMonday", n.weekStartsMonday)
             .putBoolean("unifiedTasks", n.unifiedTasks)
             .apply()

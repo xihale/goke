@@ -410,6 +410,9 @@
     <string name="parcel_need_access">还没有授权通知使用权，识别不会工作。</string>
     <string name="parcel_grant">去授权</string>
     <string name="parcel_access_ok">已授权，收到取件通知时会自动生成待办。</string>
+    <string name="parcel_window_start">时段开始</string>
+    <string name="parcel_window_end">时段结束</string>
+    <string name="parcel_window_desc">快递一般下午/晚上下班后再拿，生成的取件日程自动排进每天的这段时间；过了结束时刻则排到明天。驿站的截止时间仍会保留并提醒。</string>
     <string name="parcel_try">试一试</string>
     <string name="parcel_sample_label">粘贴一条取件通知</string>
     <string name="parcel_sample_hint">【菜鸟驿站】取件码 5-2-1234，请到学校东门驿站取件，今晚 22:00 前有效</string>

@@ -2,6 +2,11 @@ package app.mintcal.ui.screens
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -54,10 +59,14 @@ import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.SwitchRow
+import app.mintcal.ui.components.TimeDialSheet
+import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.settingsState
+import app.mintcal.ui.theme.MintTheme
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import android.provider.Settings as AndroidSettings
@@ -273,6 +282,37 @@ fun ParcelScreen(onBack: () -> Unit) {
                     }) { Text(stringResource(R.string.parcel_grant)) }
                 }
                 if (st.parcelEnabled && granted) Text(stringResource(R.string.parcel_access_ok), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                AnimatedVisibility(
+                    visible = st.parcelEnabled,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    var pickStart by remember { mutableStateOf(false) }
+                    var pickEnd by remember { mutableStateOf(false) }
+                    Column {
+                        ValueRow(
+                            stringResource(R.string.parcel_window_start),
+                            "%02d:%02d".format(st.parcelWindowStart / 60, st.parcelWindowStart % 60),
+                            onClick = { pickStart = true },
+                        )
+                        ValueRow(
+                            stringResource(R.string.parcel_window_end),
+                            "%02d:%02d".format(st.parcelWindowEnd / 60, st.parcelWindowEnd % 60),
+                            onClick = { pickEnd = true },
+                        )
+                        Text(stringResource(R.string.parcel_window_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (pickStart) {
+                            TimeDialSheet(LocalTime.of(st.parcelWindowStart / 60, st.parcelWindowStart % 60), onDismiss = { pickStart = false }) { time ->
+                                app.settings.update { it.copy(parcelWindowStart = time.hour * 60 + time.minute) }
+                            }
+                        }
+                        if (pickEnd) {
+                            TimeDialSheet(LocalTime.of(st.parcelWindowEnd / 60, st.parcelWindowEnd % 60), onDismiss = { pickEnd = false }) { time ->
+                                app.settings.update { it.copy(parcelWindowEnd = time.hour * 60 + time.minute) }
+                            }
+                        }
+                    }
+                }
             }
             FormSection(stringResource(R.string.parcel_try)) {
                 FieldText(stringResource(R.string.parcel_sample_label), sample, {
