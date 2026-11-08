@@ -9,15 +9,12 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -33,8 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import app.mintcal.sync.SyncAccount
@@ -99,30 +94,17 @@ private fun LoginPanel() {
     FormSection(stringResource(R.string.sync_login_section)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.sync_login_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            OutlinedTextField(
-                value = url,
-                onValueChange = { url = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text(stringResource(R.string.sync_server)) },
-                placeholder = { Text("https://cal.example.com") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                shape = RoundedCornerShape(16.dp),
+            FieldText(
+                stringResource(R.string.sync_server),
+                url,
+                { url = it },
+                placeholder = "https://cal.example.com",
             )
             if (SyncClient.isInsecure(url.trim().lowercase())) {
                 Text(stringResource(R.string.sync_http_warning), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
             FieldText(stringResource(R.string.sync_username), user, { user = it })
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text(stringResource(R.string.sync_password)) },
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                shape = RoundedCornerShape(16.dp),
-            )
+            FieldText(stringResource(R.string.sync_password), password, { password = it }, secret = true)
             error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             Button(
                 enabled = !busy && url.isNotBlank() && user.isNotBlank() && password.isNotEmpty(),
@@ -240,22 +222,13 @@ private fun ChangePasswordDialog(onDismiss: () -> Unit) {
         title = { Text(stringResource(R.string.sync_change_password)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = old,
-                    onValueChange = { old = it },
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.sync_old_password)) },
-                    visualTransformation = PasswordVisualTransformation(),
-                    shape = RoundedCornerShape(16.dp),
-                )
-                OutlinedTextField(
-                    value = new,
-                    onValueChange = { new = it },
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.sync_new_password)) },
-                    supportingText = { Text(stringResource(R.string.sync_password_rule)) },
-                    visualTransformation = PasswordVisualTransformation(),
-                    shape = RoundedCornerShape(16.dp),
+                FieldText(stringResource(R.string.sync_old_password), old, { old = it }, secret = true)
+                FieldText(
+                    stringResource(R.string.sync_new_password),
+                    new,
+                    { new = it },
+                    secret = true,
+                    supporting = stringResource(R.string.sync_password_rule),
                 )
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
