@@ -258,9 +258,9 @@ class ScreensSmokeTest {
                 .first { it.title == "交实验报告" }
         assertEquals(3, task.priority)
         rule.waitForIdle()
-        // 收起即结算：提交后浮层关闭，原文不再出现在任何节点
+        // 提交后浮层关闭，原文不再出现在任何节点
         rule.onAllNodesWithText("交实验报告 !高 #学习").assertCountEquals(0)
-        // 没有确认键：再开浮层，键盘完成直接提交第二条
+        // 再开浮层，键盘完成键等价于「确定」，直接提交第二条
         rule.onNodeWithContentDescription(app.getString(R.string.add)).performClick()
         rule.waitForIdle()
         rule.onNode(hasSetTextAction() and hasImeAction(ImeAction.Done)).performTextInput("买牛奶")
@@ -271,7 +271,7 @@ class ScreensSmokeTest {
         }
     }
 
-    /** 「更多选项」把快速添加解析出来的内容带进编辑页：文本里的时刻是待办截止，不带持续。 */
+    /** 「更多选项」把快速添加解析出来的内容带进编辑页：文本里的时刻是待办截止，不带持续。新建：返回丢弃、点「确定」才落库。 */
     @Test
     fun quickAddDraftTimeStaysTodo() {
         val existingIds =
@@ -284,8 +284,12 @@ class ScreensSmokeTest {
                 TodoEditScreen(null, textDraft = "交实验报告 明天 18:00") {}
             }
         }
-        // 编辑页没有独立的保存键：点返回即静默落盘（空标题才等于放弃）
+        // 新建草稿：点返回即丢弃，不落库
         rule.onNodeWithContentDescription("返回").performClick()
+        rule.waitForIdle()
+        assertEquals(existingIds, app.repo.snapshot.value.tasks.map { it.id }.toSet())
+        // 点顶栏「确定」才落库
+        rule.onNodeWithText(app.getString(R.string.confirm)).performClick()
         rule.waitUntil(5_000) {
             app.repo.snapshot.value.tasks
                 .any { it.id !in existingIds }

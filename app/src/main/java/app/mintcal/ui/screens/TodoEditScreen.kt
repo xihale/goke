@@ -376,9 +376,9 @@ fun TodoEditScreen(
         onBack()
     }
 
-    // 返回 / 手势退出都自动保存；空标题等于放弃这条
+    // 修改：返回即保存（有改动就落盘）；新建：只有点「确定」才落库，返回一律丢弃草稿
     fun requestBack() {
-        if (title.isNotEmpty() && hasChanges) commit() else onBack()
+        if (existing != null && title.isNotEmpty() && hasChanges) commit() else onBack()
     }
     BackHandler { requestBack() }
 
@@ -408,6 +408,9 @@ fun TodoEditScreen(
                         )
                     }
                 }
+            } else {
+                // 新建：明确一个「确定」键，返回就是丢弃
+                TextButton(enabled = title.isNotEmpty(), onClick = { commit() }) { Text(stringResource(R.string.confirm)) }
             }
         }
         Column(
@@ -441,7 +444,8 @@ fun TodoEditScreen(
                                 .clickable {
                                     nav.focusDate = c.at.toLocalDate()
                                     nav.tab = Tab.TIMETABLE
-                                    if (title.isNotEmpty()) commit() else onBack()
+                                    // 修改照旧落盘跳转；新建草稿没有「确定」不落库
+                                    if (existing != null && title.isNotEmpty()) commit() else onBack()
                                 }.padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {

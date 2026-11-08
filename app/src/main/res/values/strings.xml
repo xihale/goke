@@ -761,4 +761,5 @@
     <string name="focus_editor_section">专注</string>
     <string name="focus_editor_start">开始专注</string>
     <string name="focus_editor_more">查看全部</string>
+    <string name="confirm">确定</string>
 </resources>

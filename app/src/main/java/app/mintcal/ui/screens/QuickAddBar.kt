@@ -1,5 +1,6 @@
 package app.mintcal.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -29,11 +30,13 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Label
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Inbox
@@ -110,7 +113,8 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 
 /**
- * 快速添加：右下角加号打开，输入区贴在键盘上方（点空白收起，草稿保留）。
+ * 快速添加：右下角加号打开，输入区贴在键盘上方。
+ * 点「确定」（或键盘完成键）才落库；点空白 / 返回收起即丢弃草稿。
  * 日期、优先级、标签、清单在工具条上；详细编辑、粘贴、课程收进更多。
  * [anchorDate] 不写进输入框，只在没写日期时作为这一天的默认落点。
  */
@@ -260,7 +264,23 @@ internal fun QuickAddSheet(
         note = ""
     }
 
-    /** 收起即结算：写了内容直接添加，没写就是取消；不设确认键。 */
+    /** 收起即丢弃：没点「确定」的草稿不落库。 */
+    fun discard() {
+        text = ""
+        note = ""
+        panelWhen = null
+        panelRemind = null
+        panelPersistent = false
+        panelFreq = null
+        panelUntil = null
+        panelByDays = emptySet()
+        onDismiss()
+    }
+
+    // 返回 = 收起并丢弃草稿（只有可见的那个浮层认领返回事件）
+    BackHandler(enabled = visible) { discard() }
+
+    /** 点「确定」（或键盘完成键）：写了内容就落库，没写就是取消。 */
     fun finish() {
         if (parsed == null) {
             onDismiss()
@@ -326,12 +346,12 @@ internal fun QuickAddSheet(
         exit = fadeOut(MintTheme.spec()),
     ) {
         Box(Modifier.fillMaxSize()) {
-            // 遮罩：点空白 = 收起。压浅一点，列表还看得见。
+            // 遮罩：点空白 = 收起并丢弃草稿。压浅一点，列表还看得见。
             Box(
                 Modifier
                     .matchParentSize()
                     .background(Color.Black.copy(alpha = 0.2f))
-                    .pointerInput(Unit) { detectTapGestures { finish() } },
+                    .pointerInput(Unit) { detectTapGestures { discard() } },
             )
             Surface(
                 modifier =
@@ -483,6 +503,29 @@ internal fun QuickAddSheet(
                         Spacer(Modifier.weight(1f))
                         IconButton(onClick = { openDetail() }) {
                             Icon(Icons.Rounded.OpenInFull, stringResource(R.string.detail_editor_full_edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        // 确定：点了才落库；没写内容置灰
+                        val canAdd = parsed != null
+                        Surface(
+                            onClick = { finish() },
+                            enabled = canAdd,
+                            shape = CircleShape,
+                            color = if (canAdd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.padding(start = 4.dp),
+                        ) {
+                            Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Rounded.Check,
+                                    stringResource(R.string.confirm),
+                                    tint =
+                                        if (canAdd) {
+                                            MaterialTheme.colorScheme.onPrimary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
                         }
                     }
                     AnimatedVisibility(
