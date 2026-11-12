@@ -2,4 +2,5 @@
 <full-backup-content>
     <exclude domain="sharedpref" path="secrets.xml" />
     <exclude domain="sharedpref" path="sync.xml" />
+    <exclude domain="sharedpref" path="mcp.xml" />
 </full-backup-content>

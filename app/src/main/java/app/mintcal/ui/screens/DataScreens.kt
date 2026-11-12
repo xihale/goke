@@ -28,9 +28,9 @@ import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -323,7 +323,7 @@ fun ImportScreen(
                 is ImportState.Failed -> {
                     Text(stringResource(R.string.import_failed), style = MaterialTheme.typography.titleMedium)
                     Text(s.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    OutlinedButton(onClick = { state = ImportState.Pick }) { Text(stringResource(R.string.import_pick_again)) }
+                    FilledTonalButton(onClick = { state = ImportState.Pick }) { Text(stringResource(R.string.import_pick_again)) }
                 }
 
                 is ImportState.Ready -> {
@@ -430,7 +430,7 @@ fun ImportScreen(
                             }
                         }
                     }
-                    OutlinedButton(onClick = {
+                    FilledTonalButton(onClick = {
                         state = ImportState.Pick
                         useSuggestedWeek1 = false
                     }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.import_pick_again)) }

@@ -7,7 +7,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -45,11 +44,11 @@ import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -73,6 +72,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -109,8 +109,8 @@ import app.mintcal.ui.Tab
 import app.mintcal.ui.components.AttachmentEditor
 import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.ConflictCard
-import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintCheck
+import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.components.rememberFileAttachmentPicker
 import app.mintcal.ui.components.rememberImageAttachmentPicker
 import app.mintcal.ui.dueLabel
@@ -486,7 +486,7 @@ fun TodoEditScreen(
                             Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable {
+                                .mintClickable(pressedScale = 0.98f) {
                                     nav.focusDate = c.at.toLocalDate()
                                     nav.tab = Tab.TIMETABLE
                                     // 修改照旧落盘跳转；新建草稿没有「确定」不落库
@@ -501,11 +501,11 @@ fun TodoEditScreen(
                                     c.at.hm(),
                                 ),
                                 Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
                             )
                             Text(
                                 ctx.monthDayWeekday(c.at.toLocalDate()),
-                                style = MaterialTheme.typography.labelMedium,
+                                style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Icon(
@@ -577,95 +577,99 @@ fun TodoEditScreen(
                 }
             }
         }
-        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(start = 8.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
         ) {
-            val currentList = snap.lists.firstOrNull { it.id == listId }
-            val listTint = currentList?.let { MintTheme.colors.fg(it.colorIndex) } ?: MaterialTheme.colorScheme.outline
-            Box {
-                Row(
-                    Modifier
-                        .widthIn(max = 180.dp)
-                        .heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { listMenu = true }
-                        .padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(listTint))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        currentList?.name ?: stringResource(R.string.bucket_inbox),
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                DropdownMenu(listMenu, { listMenu = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.bucket_inbox)) },
-                        leadingIcon = {
-                            Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-                                Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.outline))
-                            }
-                        },
-                        trailingIcon = { if (listId == null) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) },
-                        onClick = {
-                            listMenu = false
-                            listId = null
-                        },
-                    )
-                    snap.lists.sortedBy { it.sort }.forEach { l ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(start = 8.dp, end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val currentList = snap.lists.firstOrNull { it.id == listId }
+                val listTint = currentList?.let { MintTheme.colors.fg(it.colorIndex) } ?: MaterialTheme.colorScheme.outline
+                Box {
+                    Row(
+                        Modifier
+                            .widthIn(max = 180.dp)
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .mintClickable(pressedScale = 0.95f, role = Role.Button) { listMenu = true }
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(listTint))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            currentList?.name ?: stringResource(R.string.bucket_inbox),
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    DropdownMenu(listMenu, { listMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text(l.name) },
+                            text = { Text(stringResource(R.string.bucket_inbox)) },
                             leadingIcon = {
                                 Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-                                    Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(MintTheme.colors.fg(l.colorIndex)))
+                                    Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.outline))
                                 }
                             },
-                            trailingIcon = { if (listId == l.id) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) },
+                            trailingIcon = { if (listId == null) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) },
                             onClick = {
                                 listMenu = false
-                                listId = l.id
+                                listId = null
                             },
+                        )
+                        snap.lists.sortedBy { it.sort }.forEach { l ->
+                            DropdownMenuItem(
+                                text = { Text(l.name) },
+                                leadingIcon = {
+                                    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                                        Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(MintTheme.colors.fg(l.colorIndex)))
+                                    }
+                                },
+                                trailingIcon = { if (listId == l.id) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) },
+                                onClick = {
+                                    listMenu = false
+                                    listId = l.id
+                                },
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                if (existing != null) {
+                    IconButton(onClick = { subsOpen = !subsOpen }) {
+                        Icon(
+                            Icons.Rounded.Checklist,
+                            stringResource(R.string.add_subtask),
+                            tint = if (subsOpen) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                         )
                     }
                 }
-            }
-            Spacer(Modifier.weight(1f))
-            if (existing != null) {
-                IconButton(onClick = { subsOpen = !subsOpen }) {
-                    Icon(
-                        Icons.Rounded.Checklist,
-                        stringResource(R.string.add_subtask),
-                        tint = if (subsOpen) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                    )
-                }
-            }
-            Box {
-                IconButton(onClick = { priorityMenu = true }) {
-                    Icon(Icons.Rounded.Flag, stringResource(R.string.label_priority), tint = priorityColor(priority))
-                }
-                DropdownMenu(priorityMenu, { priorityMenu = false }) {
-                    listOf(3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1, 0 to R.string.priority_0).forEach { (v, label) ->
-                        DropdownMenuItem(
-                            text = { Text(stringResource(label)) },
-                            leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = priorityColor(v), modifier = Modifier.size(18.dp)) },
-                            onClick = {
-                                priorityMenu = false
-                                priority = v
-                            },
-                        )
+                Box {
+                    IconButton(onClick = { priorityMenu = true }) {
+                        Icon(Icons.Rounded.Flag, stringResource(R.string.label_priority), tint = priorityColor(priority))
+                    }
+                    DropdownMenu(priorityMenu, { priorityMenu = false }) {
+                        listOf(3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1, 0 to R.string.priority_0).forEach { (v, label) ->
+                            DropdownMenuItem(
+                                text = { Text(stringResource(label)) },
+                                leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = priorityColor(v), modifier = Modifier.size(18.dp)) },
+                                onClick = {
+                                    priorityMenu = false
+                                    priority = v
+                                },
+                            )
+                        }
                     }
                 }
+                IconButton(onClick = pickImage) { Icon(Icons.Rounded.Image, stringResource(R.string.attach_image)) }
+                IconButton(onClick = pickFile) { Icon(Icons.Rounded.UploadFile, stringResource(R.string.attach_file)) }
             }
-            IconButton(onClick = pickImage) { Icon(Icons.Rounded.Image, stringResource(R.string.attach_image)) }
-            IconButton(onClick = pickFile) { Icon(Icons.Rounded.UploadFile, stringResource(R.string.attach_file)) }
         }
     }
 
@@ -879,7 +883,7 @@ private fun WhenRow(
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Row(
-            Modifier.weight(1f).heightIn(min = 48.dp).clickable(onClick = onClick),
+            Modifier.weight(1f).heightIn(min = 48.dp).mintClickable(pressedScale = 0.98f, onClick = onClick),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Rounded.Schedule, null, tint = if (empty) muted else accent, modifier = Modifier.size(18.dp))
@@ -887,18 +891,18 @@ private fun WhenRow(
             Column(Modifier.weight(1f)) {
                 Text(
                     primaryLine,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
                     color = if (empty) muted else accent,
                     fontWeight = if (empty) FontWeight.Normal else FontWeight.Medium,
                 )
                 if (secondary != null) {
-                    Text(secondary, style = MaterialTheme.typography.bodySmall, color = muted)
+                    Text(secondary, style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"), color = muted)
                 }
             }
         }
         if (!empty) {
             Box(
-                Modifier.width(36.dp).heightIn(min = 48.dp).clickable(onClick = onClear),
+                Modifier.width(36.dp).heightIn(min = 48.dp).mintClickable(pressedScale = 0.95f, role = Role.Button, onClick = onClear),
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 Icon(Icons.Rounded.Close, stringResource(R.string.detail_editor_clear_plan), tint = muted, modifier = Modifier.size(20.dp))

@@ -17,10 +17,18 @@ interface SyncTokenVault {
     fun setSyncToken(plain: String)
 }
 
-/** 用 Android Keystore 里的 AES-GCM 密钥加密保存同步令牌与教务密码；明文永远不落盘、不进备份与日志。 */
+/** 本地 MCP 服务鉴权令牌的保管处。 */
+interface McpTokenVault {
+    fun mcpToken(): String?
+
+    fun setMcpToken(plain: String)
+}
+
+/** 用 Android Keystore 里的 AES-GCM 密钥加密保存同步令牌、本地 MCP 令牌与教务密码；明文永远不落盘、不进备份与日志。 */
 class SecretStore(
     context: Context,
-) : SyncTokenVault {
+) : SyncTokenVault,
+    McpTokenVault {
     private val sp = context.getSharedPreferences("secrets", Context.MODE_PRIVATE)
 
     // Keystore 的 load + getKey 与解密结果按进程缓存：冷启动路径上只做一次加解密，
@@ -109,6 +117,11 @@ class SecretStore(
     fun setJxfwPassword(plain: String) = put("jxfw_password", plain)
 
     fun jxfwPassword(): String? = get("jxfw_password")
+
+    /** 本地 MCP 服务的 Bearer 令牌：加密落盘，仅用于本机或局域网 AI Agent 连接鉴权。 */
+    override fun setMcpToken(plain: String) = put("mcp_token", plain)
+
+    override fun mcpToken(): String? = get("mcp_token")
 
     companion object {
         // 历史命名（曾是 AI Key 的别名）；换名会生成新密钥，导致旧密文（同步令牌/教务密码）无法解密

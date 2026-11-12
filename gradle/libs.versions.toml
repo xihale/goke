@@ -27,6 +27,7 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { group = "org.junit.platform", name = "junit-platform-launcher", version.ref = "junit" }
 quickjs-kt = { group = "io.github.dokar3", name = "quickjs-kt", version.ref = "quickjs" }
+quickjs-kt-jvm = { group = "io.github.dokar3", name = "quickjs-kt-jvm", version.ref = "quickjs" }
 
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplash" }

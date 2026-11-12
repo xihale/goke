@@ -1,7 +1,6 @@
 package app.mintcal.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,7 +41,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -70,6 +68,7 @@ import app.mintcal.ui.components.DatePickerDlg
 import app.mintcal.ui.components.MinutesDialSheet
 import app.mintcal.ui.components.MonthPager
 import app.mintcal.ui.components.TimeDialSheet
+import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.hm
 import app.mintcal.ui.monthDayWeekday
 import app.mintcal.ui.theme.MintTheme
@@ -206,14 +205,7 @@ internal fun WhenPanel(
                     date = it
                     datePicked = true
                 })
-                Spacer(Modifier.height(8.dp))
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp)
-                        .height(1.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                )
+                Spacer(Modifier.height(10.dp))
                 SettingRow(Icons.Rounded.Schedule, stringResource(R.string.label_time), timeLabel, start != null, onClear = {
                     startMin = -1
                     minutes = null
@@ -373,7 +365,7 @@ internal fun SettingRow(
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick),
+            .mintClickable(pressedScale = 0.98f, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -393,7 +385,7 @@ internal fun SettingRow(
             value,
             // Close 图标笔画比 20dp 外框内收约 4dp，未设置的值跟着内收，三条右边才齐
             Modifier.padding(end = if (set) 0.dp else 4.dp),
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
             color = if (set) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
         )
         // 清除钮贴右缘，和未设置时的文字同一条边；不用 IconButton，它自带 12dp 内边距，会把这一行撑高、值往左挤
@@ -402,7 +394,7 @@ internal fun SettingRow(
                 Modifier
                     .width(48.dp)
                     .heightIn(min = 48.dp)
-                    .clickable(onClick = onClear),
+                    .mintClickable(pressedScale = 0.92f, role = Role.Button, onClick = onClear),
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 Icon(Icons.Rounded.Close, stringResource(R.string.clear_time), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
@@ -769,7 +761,7 @@ internal fun RepeatPickDialog(
                     Text(
                         every.toString(),
                         Modifier.width(40.dp),
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
                         textAlign = TextAlign.Center,
                     )
                     StepPill(Icons.Rounded.Add, stringResource(R.string.repeat_interval_up), every < 99) { every += 1 }
@@ -805,18 +797,18 @@ internal fun RepeatPickDialog(
                 RemindOption(stringResource(R.string.repeat_yearly_on, anchor.monthValue, anchor.dayOfMonth), preset == RepeatPreset.YEARLY) {
                     onPick(Freq.YEARLY, 1, emptySet(), untilInitial)
                 }
-                Hairline()
+                Spacer(Modifier.height(6.dp))
                 RemindOption(
                     stringResource(R.string.repeat_weekdays) + "（" + stringResource(R.string.repeat_weekdays_span) + "）",
                     preset == RepeatPreset.WORKDAYS,
                 ) { onPick(Freq.WEEKLY, 1, WORKDAYS, untilInitial) }
                 if (semesterOk) {
-                    Hairline()
+                    Spacer(Modifier.height(6.dp))
                     RemindOption(stringResource(R.string.repeat_semester, ctx.weekdayFull(dow)), preset == RepeatPreset.SEMESTER) {
                         onPick(Freq.WEEKLY, 1, emptySet(), semesterEnd)
                     }
                 }
-                Hairline()
+                Spacer(Modifier.height(6.dp))
                 RemindOption(stringResource(R.string.repeat_custom), preset == RepeatPreset.CUSTOM, chevron = true) { customPage = true }
             }
             Row(Modifier.fillMaxWidth().padding(end = 4.dp), horizontalArrangement = Arrangement.End) {
@@ -883,22 +875,11 @@ private fun StepPill(
             .size(48.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = if (enabled) 1f else 0.4f))
-            .clickable(enabled = enabled, onClick = onClick),
+            .mintClickable(enabled = enabled, pressedScale = 0.94f, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, desc, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurface)
     }
-}
-
-@Composable
-internal fun Hairline() {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 4.dp)
-            .height(1.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-    )
 }
 
 @Composable
@@ -913,7 +894,7 @@ private fun DayPill(
             .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest)
-            .clickable(onClick = onClick)
+            .mintClickable(pressedScale = 0.95f, onClick = onClick)
             .padding(horizontal = 4.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {

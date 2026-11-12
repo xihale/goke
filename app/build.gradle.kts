@@ -118,4 +118,11 @@ dependencies {
     testImplementation(libs.androidx.test.core)
     testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.androidx.ui.test.junit4)
+    testImplementation(libs.quickjs.kt.jvm)
+}
+
+// Robolectric 跑在宿主机 JVM 上，无法加载 Android AAR 内的 Bionic libquickjs.so；单测配置切换为宿主 JVM 变体。
+configurations.matching { it.name.contains("UnitTest") }.configureEach {
+    exclude(group = "io.github.dokar3", module = "quickjs-kt")
+    exclude(group = "io.github.dokar3", module = "quickjs-kt-android")
 }

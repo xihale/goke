@@ -13,6 +13,8 @@ import app.mintcal.data.Repository
 import app.mintcal.data.SecretStore
 import app.mintcal.data.SettingsStore
 import app.mintcal.jxfw.JxfwManager
+import app.mintcal.mcp.LocalMcpManager
+import app.mintcal.mcp.McpStore
 import app.mintcal.notify.Notifications
 import app.mintcal.notify.ReminderScheduler
 import app.mintcal.sync.PeriodicSync
@@ -34,7 +36,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-/** 应用级容器：数据仓库、设置、密钥、提醒调度、高级修改控制器。open 仅为测试子类（SmokeTestApp）服务。 */
+/** 应用级容器：数据仓库、设置、密钥、提醒调度、本地 MCP 与高级修改预览控制器。open 仅为测试子类（SmokeTestApp）服务。 */
 open class MintCalApp : Application() {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     lateinit var repo: Repository
@@ -48,6 +50,8 @@ open class MintCalApp : Application() {
     lateinit var reminders: ReminderScheduler
         private set
     lateinit var advanced: AdvancedController
+        private set
+    lateinit var mcp: LocalMcpManager
         private set
     lateinit var sync: SyncManager
         private set
@@ -72,6 +76,7 @@ open class MintCalApp : Application() {
         secrets = SecretStore(this)
         reminders = ReminderScheduler(this)
         advanced = AdvancedController(this)
+        mcp = LocalMcpManager(repo, advanced, McpStore(this, secrets), scope)
         sync = SyncManager(repo, SyncStore(this, secrets), scope)
         calendarSync = SystemCalendarSync(this, repo, settings, CalendarSyncStore(this), scope)
         jxfw = JxfwManager(this, repo, secrets)

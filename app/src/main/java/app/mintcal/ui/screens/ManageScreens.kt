@@ -126,7 +126,11 @@ fun TrashScreen(onBack: () -> Unit) {
                 items(trashed, key = { it.id }) { r ->
                     MintCard {
                         Text(r.displayTitle, style = MaterialTheme.typography.titleMedium)
-                        Text("${entityName(ctx, r)} · ${stamp(r.deletedAt ?: 0)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "${entityName(ctx, r)} · ${stamp(r.deletedAt ?: 0)}",
+                            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                             TextButton(onClick = {
                                 scope.launch {
@@ -204,7 +208,7 @@ fun HistoryScreen(onBack: () -> Unit) {
                             }
                         Text(
                             "${stamp(op.createdAt)} · ${ctx.getString(src)}" + if (op.undoneAt != null) " · " + ctx.getString(R.string.history_undone) else "",
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         val canUndo = app.repo.undoable(op, snapshot)
@@ -273,8 +277,8 @@ fun ParcelScreen(onBack: () -> Unit) {
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // 卡 1：自动识别开关 + 通知使用权状态
-            MintCard {
+            // 段 1：自动识别开关 + 通知使用权状态（无框直落纸底）
+            FormSection {
                 SwitchRow(stringResource(R.string.parcel_enable), null, st.parcelEnabled) { v -> app.settings.update { it.copy(parcelEnabled = v) } }
                 AnimatedVisibility(
                     visible = st.parcelEnabled,
@@ -351,13 +355,13 @@ fun ParcelScreen(onBack: () -> Unit) {
                     }
                     if (r != null) {
                         MintCard {
-                            Text(stringResource(R.string.parcel_code, r.code), style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.parcel_code, r.code), style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"))
                             (rulesCfg.user + ParcelRuleEngine.BUILTIN).firstOrNull { it.id == r.ruleId }?.let {
                                 Text(stringResource(R.string.parcel_rule_matched, it.name), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             if (r.place.isNotBlank()) Text(stringResource(R.string.parcel_place, r.place), style = MaterialTheme.typography.bodyMedium)
                             if (r.company.isNotBlank()) Text(stringResource(R.string.parcel_company, r.company), style = MaterialTheme.typography.bodyMedium)
-                            r.deadline?.let { Text(stringResource(R.string.parcel_deadline, it.format(STAMP)), style = MaterialTheme.typography.bodyMedium) }
+                            r.deadline?.let { Text(stringResource(R.string.parcel_deadline, it.format(STAMP)), style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum")) }
                             Button(
                                 onClick = {
                                     val desc = ctx.getString(R.string.parcel_op_desc)

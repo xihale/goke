@@ -1,7 +1,7 @@
 package app.mintcal.ui.screens
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -31,17 +32,16 @@ import androidx.compose.material.icons.rounded.Today
 import androidx.compose.material.icons.rounded.Upcoming
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material.icons.rounded.Weekend
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,6 +58,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
@@ -67,6 +69,7 @@ import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Task
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.components.DatePickerDlg
+import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.dueLabel
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.theme.priorityColor
@@ -111,17 +114,33 @@ internal fun RescheduleSheet(
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 6.dp))
+            Column(Modifier.padding(horizontal = 8.dp).padding(bottom = 8.dp)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (tasks.size == 1) {
+                    tasks[0].due?.let { due ->
+                        Text(
+                            ctx.dueLabel(due, tasks[0].dueHasTime, today),
+                            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                }
+            }
             SheetOption(Icons.Rounded.Today, stringResource(R.string.today)) { moveTo(today) }
             SheetOption(Icons.Rounded.WbSunny, stringResource(R.string.tomorrow)) { moveTo(today.plusDays(1)) }
             SheetOption(Icons.Rounded.Weekend, stringResource(R.string.date_weekend)) { moveTo(today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY))) }
             SheetOption(Icons.Rounded.Upcoming, stringResource(R.string.date_next_monday)) { moveTo(today.with(TemporalAdjusters.next(DayOfWeek.MONDAY))) }
             SheetOption(Icons.Rounded.CalendarMonth, stringResource(R.string.date_pick)) { pickDate = true }
             SheetOption(Icons.Rounded.Inbox, stringResource(R.string.todo_no_date)) { moveTo(null) }
-            // 普通操作与危险操作隔开
-            Spacer(Modifier.height(8.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Spacer(Modifier.height(8.dp))
+            // 普通操作与危险操作靠纵向留白呼吸隔开
+            Spacer(Modifier.height(12.dp))
             SheetOption(Icons.Rounded.Block, stringResource(R.string.todo_drop)) {
                 finish(
                     Edits.dropTasks(tasks, ctx.getString(R.string.todo_drop_desc, title), System.currentTimeMillis()),
@@ -147,17 +166,18 @@ private fun SheetOption(
     color: Color = MaterialTheme.colorScheme.onSurface,
     onClick: () -> Unit,
 ) {
+    val iconTint = if (color == MaterialTheme.colorScheme.error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 52.dp)
             .clip12()
-            .clickable(onClick = onClick)
+            .mintClickable(pressedScale = 0.98f, onClick = onClick)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Icon(icon, null, tint = color)
+        Icon(icon, null, modifier = Modifier.size(20.dp), tint = iconTint)
         Text(label, style = MaterialTheme.typography.bodyLarge, color = color)
     }
 }
@@ -203,29 +223,105 @@ internal fun MorningSheet(
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
-            Text(stringResource(R.string.todo_tidy_title, tasks.size), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+            Text(
+                stringResource(R.string.todo_tidy_title, tasks.size),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 12.dp),
+            )
             if (tasks.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilledTonalButton(onClick = { move(tasks, today) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.todo_all_to_today)) }
-                    FilledTonalButton(onClick = { drop(tasks) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.todo_all_drop)) }
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    FilledTonalButton(
+                        onClick = { move(tasks, today) },
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        colors =
+                            ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            ),
+                    ) { Text(stringResource(R.string.todo_all_to_today)) }
+                    FilledTonalButton(
+                        onClick = { drop(tasks) },
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        colors =
+                            ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                    ) { Text(stringResource(R.string.todo_all_drop)) }
                 }
             }
             LazyColumn(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(tasks, key = { it.id }) { t ->
-                    Column(Modifier.fillMaxWidth()) {
-                        Text(t.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        t.due?.let {
-                            Text(ctx.dueLabel(it, t.dueHasTime, today), style = MaterialTheme.typography.bodySmall, color = MintTheme.colors.removed)
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            TextButton(onClick = { move(listOf(t), today) }) { Text(stringResource(R.string.today)) }
-                            TextButton(onClick = { move(listOf(t), today.plusDays(1)) }) { Text(stringResource(R.string.tomorrow)) }
-                            TextButton(onClick = { drop(listOf(t)) }) { Text(stringResource(R.string.todo_drop)) }
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
+                            Text(t.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            t.due?.let {
+                                Text(
+                                    ctx.dueLabel(it, t.dueHasTime, today),
+                                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                                    color = MintTheme.colors.removed,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                            }
+                            Row(
+                                Modifier.fillMaxWidth().padding(top = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                TidyActionPill(
+                                    label = stringResource(R.string.today),
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    bold = true,
+                                ) { move(listOf(t), today) }
+                                TidyActionPill(
+                                    label = stringResource(R.string.tomorrow),
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    contentColor = MaterialTheme.colorScheme.onSurface,
+                                ) { move(listOf(t), today.plusDays(1)) }
+                                TidyActionPill(
+                                    label = stringResource(R.string.todo_drop),
+                                    containerColor = Color.Transparent,
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ) { drop(listOf(t)) }
+                            }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TidyActionPill(
+    label: String,
+    containerColor: Color,
+    contentColor: Color,
+    bold: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .heightIn(min = 36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(containerColor)
+                .mintClickable(pressedScale = 0.96f, role = Role.Button, onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (bold) FontWeight.Medium else null,
+            color = contentColor,
+        )
     }
 }
 

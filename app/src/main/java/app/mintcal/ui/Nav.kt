@@ -42,7 +42,7 @@ sealed interface Route {
 
     @Serializable data object Parcel : Route
 
-    @Serializable data object AdvancedFull : Route
+    @Serializable data object Mcp : Route
 
     @Serializable data object Periods : Route
 

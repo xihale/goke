@@ -21,7 +21,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Remove
@@ -117,7 +116,6 @@ fun EditTimetableScreen(onBack: () -> Unit) {
     var week1 by remember(sem.id) { mutableStateOf(sem.week1Monday) }
     var total by remember(sem.id) { mutableIntStateOf(sem.totalWeeks) }
     var pickDate by remember { mutableStateOf(false) }
-    var showAdvanced by remember { mutableStateOf(false) }
     var copyDlg by remember { mutableStateOf(false) }
 
     // 离开页面时自动保存学期信息（有改动才写）
@@ -224,17 +222,11 @@ fun EditTimetableScreen(onBack: () -> Unit) {
                     stringResource(R.string.copy_next_semester_desc),
                     Icons.Rounded.ContentCopy,
                 ) { copyDlg = true }
-                NavRow(
-                    stringResource(R.string.advanced_title),
-                    stringResource(R.string.advanced_row_desc),
-                    Icons.Rounded.AutoAwesome,
-                ) { showAdvanced = true }
             }
         }
     }
 
     if (pickDate) DatePickerDlg(week1, { pickDate = false }) { week1 = it.with(java.time.DayOfWeek.MONDAY) }
-    if (showAdvanced) AdvancedSheet { showAdvanced = false }
     if (copyDlg) {
         var newName by remember { mutableStateOf("") }
         var newStart by remember { mutableStateOf(week1.plusWeeks(total.toLong() + 8)) }

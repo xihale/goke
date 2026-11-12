@@ -71,8 +71,6 @@ import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.mintDestinations
 import app.mintcal.ui.rememberNav
 import app.mintcal.ui.screens.AboutScreen
-import app.mintcal.ui.screens.AdvancedFullScreen
-import app.mintcal.ui.screens.AdvancedSheet
 import app.mintcal.ui.screens.AppearanceScreen
 import app.mintcal.ui.screens.CalendarScreen
 import app.mintcal.ui.screens.CourseEditScreen
@@ -81,6 +79,7 @@ import app.mintcal.ui.screens.EditTimetableScreen
 import app.mintcal.ui.screens.HistoryScreen
 import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.JxfwScreen
+import app.mintcal.ui.screens.McpScreen
 import app.mintcal.ui.screens.MorningSheet
 import app.mintcal.ui.screens.ParcelScreen
 import app.mintcal.ui.screens.PeriodsScreen
@@ -253,8 +252,7 @@ class ScreensSmokeTest {
                 "history" to { HistoryScreen {} },
                 "parcel" to { ParcelScreen {} },
                 "about" to { AboutScreen {} },
-                "advanced_full" to { AdvancedFullScreen {} },
-                "advanced_sheet" to { AdvancedSheet {} },
+                "mcp" to { McpScreen {} },
                 "root_shell" to { MintCalRoot(app, null) {} },
             )
         val idx = mutableIntStateOf(0)

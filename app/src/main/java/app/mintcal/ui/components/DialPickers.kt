@@ -2,7 +2,6 @@ package app.mintcal.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -241,7 +240,7 @@ private fun DialDialog(
                             ) {
                                 Text(
                                     text = label,
-                                    style = MaterialTheme.typography.labelLarge,
+                                    style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
                                     fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
                                 )
                             }
@@ -277,7 +276,7 @@ private fun Digit(
             Modifier
                 .heightIn(min = 48.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .clickable(onClick = onClick)
+                .mintClickable(pressedScale = 0.94f, onClick = onClick)
                 .padding(horizontal = 12.dp, vertical = 4.dp)
                 .semantics {
                     role = Role.Tab
@@ -288,7 +287,7 @@ private fun Digit(
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.displaySmall,
+            style = MaterialTheme.typography.displaySmall.copy(fontFeatureSettings = "tnum"),
             color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         )
     }
@@ -419,7 +418,7 @@ private fun dialLabel(
             .size(36.dp)
             .clip(CircleShape)
             .then(if (selected) Modifier.background(MaterialTheme.colorScheme.primary) else Modifier)
-            .clickable(onClick = onClick)
+            .mintClickable(pressedScale = 0.94f, onClick = onClick)
             .semantics {
                 role = Role.Button
                 this.selected = selected
@@ -429,7 +428,7 @@ private fun dialLabel(
     ) {
         Text(
             text,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
             color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
         )
     }

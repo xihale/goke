@@ -47,9 +47,12 @@ import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Spa
 import androidx.compose.material.icons.rounded.SwapVert
+import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -73,6 +76,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -249,6 +253,13 @@ fun SettingsScreen(onBack: () -> Unit) {
                     Icons.Rounded.School,
                     trailing = jxfwState.username,
                 ) { nav.push(Route.Jxfw) }
+                val mcpState by app.mcp.state.collectAsState()
+                NavRow(
+                    stringResource(R.string.mcp_title),
+                    null,
+                    Icons.Rounded.Terminal,
+                    trailing = stringResource(if (mcpState.running) R.string.mcp_status_on else R.string.mcp_status_off),
+                ) { nav.push(Route.Mcp) }
                 NavRow(stringResource(R.string.reliability_title), null, Icons.Rounded.NotificationsActive, trailing = permStatusDesc(permOkCount)) { nav.push(Route.Reliability) }
                 NavRow(stringResource(R.string.data_title), null, Icons.Rounded.SwapVert) { nav.push(Route.Data) }
                 NavRow(
@@ -515,24 +526,72 @@ fun AboutScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            FormSection {
-                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineSmall)
-                Text("v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Rounded.Spa,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.app_name),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Box(
+                            Modifier
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                        ) {
+                            Text(
+                                "v${BuildConfig.VERSION_NAME}",
+                                style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Text(
+                        stringResource(R.string.about_tagline),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             FormSection {
                 Row(
-                    Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    Modifier.fillMaxWidth().padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         stringResource(R.string.about_license_title),
                         Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        "AGPL-3.0",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Text("AGPL-3.0", style = MaterialTheme.typography.bodyLarge)
                 }
             }
             DemoDataSection()
@@ -570,9 +629,10 @@ private fun DemoDataSection() {
     }
 
     FormSection(stringResource(R.string.demo_data_title)) {
-        TextButton(
+        FilledTonalButton(
             enabled = !busy && semester != null,
             onClick = { if (existing > 0) confirm = true else fill() },
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(if (busy) R.string.demo_data_running else R.string.demo_data_replace))
         }

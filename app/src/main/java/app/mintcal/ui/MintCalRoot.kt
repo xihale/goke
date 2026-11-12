@@ -81,7 +81,6 @@ import app.mintcal.ui.components.FloatingNavBar
 import app.mintcal.ui.components.NavClearance
 import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.screens.AboutScreen
-import app.mintcal.ui.screens.AdvancedFullScreen
 import app.mintcal.ui.screens.AppearanceScreen
 import app.mintcal.ui.screens.CalendarScreen
 import app.mintcal.ui.screens.CourseEditScreen
@@ -90,6 +89,7 @@ import app.mintcal.ui.screens.EditTimetableScreen
 import app.mintcal.ui.screens.HistoryScreen
 import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.JxfwScreen
+import app.mintcal.ui.screens.McpScreen
 import app.mintcal.ui.screens.ParcelScreen
 import app.mintcal.ui.screens.PeriodsScreen
 import app.mintcal.ui.screens.PermissionScreen
@@ -273,7 +273,7 @@ fun NavGraphBuilder.mintDestinations(
     composable<Route.Trash> { TrashScreen(back) }
     composable<Route.History> { HistoryScreen(back) }
     composable<Route.Parcel> { ParcelScreen(back) }
-    composable<Route.AdvancedFull> { AdvancedFullScreen(back) }
+    composable<Route.Mcp> { McpScreen(back) }
     composable<Route.Periods> { PeriodsScreen(back) }
     composable<Route.About> { AboutScreen(back) }
     composable<Route.Data> { DataScreen(back) }
