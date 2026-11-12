@@ -10,7 +10,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -76,7 +75,13 @@ import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
+import app.mintcal.ui.components.MintCard
+import app.mintcal.ui.components.MintCheck
+import app.mintcal.ui.components.ParcelCodeTag
+import app.mintcal.ui.components.Tag
 import app.mintcal.ui.components.mintClickable
+import app.mintcal.ui.components.parcelCode
+import app.mintcal.ui.components.parcelLabel
 import app.mintcal.ui.dueLabel
 import app.mintcal.ui.hm
 import app.mintcal.ui.theme.MintTheme
@@ -178,7 +183,7 @@ fun TodoLine(
                     )
                 }
             } else {
-                app.mintcal.ui.components.MintCheck(
+                MintCheck(
                     task.done,
                     { d -> toggle(actions, snap, task, d, now, ctx.getString(R.string.done_toast, task.title)) },
                     tint = list?.let { colors.fg(it.colorIndex) },
@@ -186,13 +191,22 @@ fun TodoLine(
                 )
             }
             Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
-                Text(
-                    task.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = titleColor,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                // 快递待办：取件码做成胶囊放在标题前，标题只留驿站 / 快递名
+                val code = task.parcelCode()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (code != null) {
+                        ParcelCodeTag(code)
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(
+                        task.parcelLabel() ?: task.title,
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = titleColor,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 if (meta.isNotEmpty()) {
                     Text(meta.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -446,73 +460,47 @@ internal fun SectionHeader(
     }
 }
 
-/** 顶部「下一件事」：下一节课 + 要在课前交的待办；没课时回退为最紧急的一条。 */
+/** 顶部「下一件事」：只报下一节课 + 课前待办的计数胶囊。待办本身在各自分区里出现一次，不在这张卡里重列。 */
 @Composable
 internal fun NextUpCard(
-    up: NextUp?,
-    urgent: Task?,
-    snap: Snapshot,
+    up: NextUp,
     now: LocalDateTime,
     modifier: Modifier = Modifier,
 ) {
     val ctx = LocalContext.current
     val today = now.toLocalDate()
     val nav = LocalNav.current
-    Surface(modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, color = MintTheme.card) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(stringResource(R.string.todo_next_up), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (up != null) {
-                val o = up.occurrence
-                val whenText = (if (o.date == today) "" else ctx.dueLabel(o.date.atStartOfDay(), false, today) + " ") + o.start.hm()
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .mintClickable(role = Role.Button) { nav.push(Route.CourseEdit(o.course.id)) }
-                        .padding(vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        o.course.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        listOfNotNull(whenText, o.room.takeIf { it.isNotBlank() }).joinToString(" · "),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                up.tasks.take(3).forEach { t -> NextUpTask(t, snap, now) }
-            } else if (urgent != null) {
-                NextUpTask(urgent, snap, now)
+    val o = up.occurrence
+    val whenText = (if (o.date == today) "" else ctx.dueLabel(o.date.atStartOfDay(), false, today) + " ") + o.start.hm()
+    MintCard(modifier) {
+        Text(stringResource(R.string.todo_next_up), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .mintClickable(role = Role.Button) { nav.push(Route.CourseEdit(o.course.id)) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    o.course.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    listOfNotNull(whenText, o.room.takeIf { it.isNotBlank() }).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (up.tasks.isNotEmpty()) {
+                Tag(up.tasks.size.toString(), MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
             }
         }
-    }
-}
-
-@Composable
-private fun NextUpTask(
-    t: Task,
-    snap: Snapshot,
-    now: LocalDateTime,
-) {
-    val ctx = LocalContext.current
-    val actions = LocalActions.current
-    val nav = LocalNav.current
-    Row(Modifier.fillMaxWidth().mintClickable { nav.openTask(t.id) }, verticalAlignment = Alignment.CenterVertically) {
-        app.mintcal.ui.components
-            .MintCheck(t.done, { d -> toggle(actions, snap, t, d, now, ctx.getString(R.string.done_toast, t.title)) })
-        Text(
-            t.title,
-            Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 

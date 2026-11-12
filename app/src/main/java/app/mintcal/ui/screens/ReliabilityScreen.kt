@@ -86,7 +86,6 @@ fun ReliabilityScreen(onBack: () -> Unit) {
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(stringResource(R.string.reliability_intro), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (anyIssue) {
                 FormSection(stringResource(R.string.reliability_checks)) {
                     if (!notifOn) {
@@ -120,7 +119,6 @@ fun ReliabilityScreen(onBack: () -> Unit) {
                 TextButton(onClick = { open(appDetails) }) { Text(stringResource(R.string.reliability_open_details)) }
             }
             FormSection(stringResource(R.string.reliability_test)) {
-                Text(stringResource(R.string.reliability_test_desc), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 4.dp))
                 Button(onClick = {
                     val ok = app.reminders.scheduleTest(ctx.getString(R.string.reliability_test_title), ctx.getString(R.string.reliability_test_text), 60)
                     actions.toast(ctx.getString(if (ok) R.string.reliability_test_scheduled else R.string.reliability_test_failed))

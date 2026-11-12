@@ -1,5 +1,7 @@
 package app.mintcal.ui
 
+import android.os.Handler
+import android.os.Looper
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
@@ -12,7 +14,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import app.mintcal.MintCalApp
 import app.mintcal.R
-import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
 import app.mintcal.ui.components.UndoPrompt
 import kotlinx.coroutines.CoroutineScope
@@ -146,13 +147,18 @@ class Actions(
     fun commit(
         cs: ChangeSet,
         message: String? = null,
+        undoable: Boolean = true,
     ) {
         scope.launch {
             app.repo.commit(cs)
-            // 撤回条只在动了删除时出现；纯新增/修改不打扰
-            val removes = cs.changes.any { it is Change.Remove }
-            if (message != null && !cs.isEmpty && removes) {
-                undo = UndoPrompt(cs.id, System.currentTimeMillis(), message)
+            // 说明条 = 4.5s 撤销入口：调用方显式给了 message 就出现（完成、改期、拖拽、批量新增都给退路）。
+            // 单条新增 / 编辑保存不适合一键撤销，调用方传 undoable=false，退化为 Toast——反馈不再被吞掉。
+            if (message != null && !cs.isEmpty) {
+                if (undoable) {
+                    undo = UndoPrompt(cs.id, System.currentTimeMillis(), message)
+                } else {
+                    toast(message)
+                }
             }
         }
     }
@@ -173,7 +179,10 @@ class Actions(
     }
 
     fun toast(message: String) {
-        Toast.makeText(app, message, Toast.LENGTH_SHORT).show()
+        // Toast 必须在带 Looper 的线程上创建；组合协程（含 Robolectric）不保证在主线程，投递过去
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(app, message, Toast.LENGTH_SHORT).show()
+        }
     }
 }
 

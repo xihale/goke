@@ -22,6 +22,12 @@ sealed interface DeepLink {
     data object Today : DeepLink
 
     data object Todo : DeepLink
+
+    data object Timetable : DeepLink
+
+    data object Focus : DeepLink
+
+    data object Parcel : DeepLink
 }
 
 object DeepLinks {
@@ -58,6 +64,27 @@ object DeepLinks {
             .authority("todo")
             .build()
 
+    fun timetableUri(): Uri =
+        Uri
+            .Builder()
+            .scheme(SCHEME)
+            .authority("timetable")
+            .build()
+
+    fun focusUri(): Uri =
+        Uri
+            .Builder()
+            .scheme(SCHEME)
+            .authority("focus")
+            .build()
+
+    fun parcelUri(): Uri =
+        Uri
+            .Builder()
+            .scheme(SCHEME)
+            .authority("parcel")
+            .build()
+
     fun parseUri(uri: Uri): DeepLink? {
         if (uri.scheme != SCHEME) return null
         return when (uri.host) {
@@ -65,6 +92,9 @@ object DeepLinks {
             "add" -> DeepLink.Add(uri.getQueryParameter("text").orEmpty())
             "today" -> DeepLink.Today
             "todo" -> DeepLink.Todo
+            "timetable" -> DeepLink.Timetable
+            "focus" -> DeepLink.Focus
+            "parcel" -> DeepLink.Parcel
             else -> null
         }
     }
@@ -117,6 +147,7 @@ object DeepLinks {
                 listOf(
                     shortcut("add_task", R.string.shortcut_add_task, addUri()),
                     shortcut("today", R.string.shortcut_today, todayUri()),
+                    shortcut("focus", R.string.focus_title, focusUri()),
                 ),
             )
         }

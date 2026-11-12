@@ -322,7 +322,7 @@ object DemoData {
                 priority = 2,
                 due = at(0, LocalTime.of(23, 0)),
                 source = Source.PARCEL,
-                extra = mapOf("pickupCode" to "8-2-3045", "pickupPlace" to "菜鸟驿站（南门）"),
+                extra = mapOf("code" to "8-2-3045", "place" to "菜鸟驿站（南门）"),
                 remind = 30,
             )
         records +=

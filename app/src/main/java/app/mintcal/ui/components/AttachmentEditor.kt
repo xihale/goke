@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,11 +31,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -42,6 +46,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
 import app.mintcal.R
 import app.mintcal.core.model.Attachment
@@ -65,17 +71,53 @@ fun AttachmentEditor(
 ) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
+    var previewFile by remember { mutableStateOf<File?>(null) }
     if (items.isEmpty()) return
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items.forEach { a ->
             AttachmentChip(
                 a,
-                onOpen = { open(ctx, a, actions) },
+                onOpen = {
+                    if (a.mime.startsWith("image/")) {
+                        val f = Attachments.path(ctx, a)
+                        if (f.exists()) previewFile = f else actions.toast(ctx.getString(R.string.attachment_missing))
+                    } else {
+                        open(ctx, a, actions)
+                    }
+                },
                 onRemove = {
                     Attachments.delete(ctx, a)
                     onChange(items - a)
                 },
             )
+        }
+    }
+    previewFile?.let { file ->
+        Dialog(
+            onDismissRequest = { previewFile = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.92f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                val bmp by produceState<ImageBitmap?>(null, file) {
+                    value = withContext(Dispatchers.IO) { decodeSampled(file, 1920)?.asImageBitmap() }
+                }
+                bmp?.let { Image(it, contentDescription = file.name, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit) }
+                IconButton(
+                    onClick = { previewFile = null },
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .statusBarsPadding()
+                            .padding(16.dp),
+                ) {
+                    Icon(Icons.Rounded.Close, stringResource(R.string.close), tint = Color.White)
+                }
+            }
         }
     }
 }

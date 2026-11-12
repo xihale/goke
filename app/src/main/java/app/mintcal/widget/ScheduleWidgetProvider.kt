@@ -7,10 +7,9 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
-import app.mintcal.MainActivity
+import app.mintcal.DeepLinks
 import app.mintcal.R
 import app.mintcal.core.agenda.Agenda
 import app.mintcal.core.agenda.CourseItem
@@ -23,9 +22,8 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 
 /**
- * 「今日课表」小组件：表头 = 学期 / 日期 / 周几，其下按时间列出今天的课，正在上的那节高亮；
- * 没课时显示一句轻松的话。纯 RemoteViews（不依赖 Glance，少一个依赖）。
- * 当前课的高亮靠课程开始 / 结束时刻的一次不精确闹钟刷新，数据变动时由 [app.mintcal.MintCalApp] 防抖刷新。
+ * 「今日课表」小组件：清爽日期 + 周次胶囊表头，按时间列出今天的课，正在上的那节薄荷底高亮；
+ * 没课时显示轻松颜文字提示。
  */
 class ScheduleWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
@@ -54,9 +52,6 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
     companion object {
         const val ACTION_TICK = "app.mintcal.widget.SCHEDULE_TICK"
 
-        private val PALETTE =
-            intArrayOf(0xFF4FA796.toInt(), 0xFF5B8DEF.toInt(), 0xFFE0A030.toInt(), 0xFFD9695F.toInt(), 0xFF9B7BD0.toInt(), 0xFF4DB6D0.toInt(), 0xFFE07FA8.toInt(), 0xFF8AA64A.toInt())
-
         fun refreshAll(
             ctx: Context,
             snap: Snapshot,
@@ -70,7 +65,6 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
             scheduleTick(ctx, snap, st)
         }
 
-        /** 下一个课程开始 / 结束时刻刷新一次，让「正在上」的高亮跟上。 */
         private fun scheduleTick(
             ctx: Context,
             snap: Snapshot,
@@ -84,7 +78,6 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
                     .flatMap { listOf(it.occ.start, it.occ.end) }
                     .filter { it.isAfter(now) }
                     .minOrNull()
-                    // 今天没有更多了：明早 0 点后刷新为明天
                     ?: now
                         .toLocalDate()
                         .plusDays(1)
@@ -109,10 +102,18 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
         ): RemoteViews {
             val views = RemoteViews(ctx.packageName, R.layout.widget_schedule)
             val today = now.toLocalDate()
-            val head = listOfNotNull(snap?.currentSemester?.name?.takeIf { it.isNotBlank() }, ctx.monthDayWeekday(today)).joinToString(" · ")
-            views.setTextViewText(R.id.sched_title, head)
+            val live = snap?.live()
+            views.setTextViewText(R.id.sched_title, ctx.monthDayWeekday(today))
+            val weekBadge = WidgetKit.weekBadge(ctx, live?.currentSemester, today)
+            if (weekBadge != null) {
+                views.setViewVisibility(R.id.sched_week, View.VISIBLE)
+                views.setTextViewText(R.id.sched_week, weekBadge)
+            } else {
+                views.setViewVisibility(R.id.sched_week, View.GONE)
+            }
+
             val courses =
-                snap
+                live
                     ?.let { s ->
                         Agenda.forDay(s, today, st.defaultBlockMinutes).filterIsInstance<CourseItem>()
                     }.orEmpty()
@@ -120,22 +121,18 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
             val bars = intArrayOf(R.id.sched_bar0, R.id.sched_bar1, R.id.sched_bar2, R.id.sched_bar3, R.id.sched_bar4, R.id.sched_bar5)
             val names = intArrayOf(R.id.sched_name0, R.id.sched_name1, R.id.sched_name2, R.id.sched_name3, R.id.sched_name4, R.id.sched_name5)
             val metas = intArrayOf(R.id.sched_meta0, R.id.sched_meta1, R.id.sched_meta2, R.id.sched_meta3, R.id.sched_meta4, R.id.sched_meta5)
+
             if (courses.isEmpty()) {
                 views.setViewVisibility(R.id.sched_empty, View.VISIBLE)
                 views.setTextViewText(R.id.sched_empty, if (snap == null) "" else ctx.getString(R.string.widget_schedule_empty))
             } else {
                 views.setViewVisibility(R.id.sched_empty, View.GONE)
             }
-            // 已经结束的课不占位：优先展示正在上 / 之后的，最多 6 条
+
             val shown = courses.filter { it.occ.end.isAfter(now) }.ifEmpty { courses.takeLast(6) }.take(6)
-            val openToday =
-                PendingIntent.getActivity(
-                    ctx,
-                    0,
-                    Intent(Intent.ACTION_VIEW, Uri.parse("mintcal://today"), ctx, MainActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                )
+            val openTimetable = WidgetKit.mainActivityIntent(ctx, 40, DeepLinks.timetableUri())
+            val openToday = WidgetKit.mainActivityIntent(ctx, 41, DeepLinks.todayUri())
+
             for (i in rows.indices) {
                 val c = shown.getOrNull(i)
                 if (c == null) {
@@ -146,7 +143,7 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
                 val current = !o.start.isAfter(now) && o.end.isAfter(now)
                 views.setViewVisibility(rows[i], View.VISIBLE)
                 views.setInt(rows[i], "setBackgroundResource", if (current) R.drawable.widget_row_now_bg else R.drawable.widget_row_bg)
-                views.setInt(bars[i], "setBackgroundColor", PALETTE[Math.floorMod(o.course.colorIndex, PALETTE.size)])
+                views.setInt(bars[i], "setColorFilter", WidgetKit.courseColor(o.course.colorIndex))
                 views.setTextViewText(names[i], o.course.name)
                 val meta =
                     listOfNotNull(
@@ -155,9 +152,9 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
                         if (current) ctx.getString(R.string.widget_schedule_now) else null,
                     ).joinToString(" · ")
                 views.setTextViewText(metas[i], meta)
-                // 点课行打开 app 的今日视图（RemoteViews 不支持横向滚动，周视图不可行）
                 views.setOnClickPendingIntent(rows[i], openToday)
             }
+
             val remaining = courses.count { it.occ.end.isAfter(now) } - shown.size
             if (remaining > 0) {
                 views.setViewVisibility(R.id.sched_more, View.VISIBLE)
@@ -165,14 +162,9 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
             } else {
                 views.setViewVisibility(R.id.sched_more, View.GONE)
             }
-            val open =
-                PendingIntent.getActivity(
-                    ctx,
-                    1,
-                    Intent(ctx, MainActivity::class.java),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                )
-            views.setOnClickPendingIntent(R.id.widget_root, open)
+
+            views.setOnClickPendingIntent(R.id.sched_header, openTimetable)
+            views.setOnClickPendingIntent(R.id.widget_root, openTimetable)
             return views
         }
     }

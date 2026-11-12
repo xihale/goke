@@ -99,11 +99,11 @@ import app.mintcal.ui.components.NavClearance
 import app.mintcal.ui.components.NavListInset
 import app.mintcal.ui.fullDate
 import app.mintcal.ui.liveSnapshot
-import app.mintcal.ui.rememberNowGated
-import app.mintcal.ui.rememberToday
 import app.mintcal.ui.monthDayWeekday
 import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
+import app.mintcal.ui.rememberNowGated
+import app.mintcal.ui.rememberToday
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.weekdayShort
@@ -306,52 +306,51 @@ fun CalendarScreen() {
                             }
                         }
                     }
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        MarkerLegend(CalendarMarks(1, 0, 0), stringResource(R.string.calendar_mark_schedule))
-                        MarkerLegend(CalendarMarks(0, 1, 0), stringResource(R.string.calendar_mark_pending))
-                        MarkerLegend(CalendarMarks(0, 0, 1), stringResource(R.string.calendar_mark_done))
-                    }
-                    Text(
-                        stringResource(R.string.calendar_preview_hint),
-                        Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
             item(key = "h-day") {
-                Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(ctx.monthDayWeekday(selected), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        AnimatedVisibility(visible = selected != today, enter = fadeIn(MintTheme.spec()), exit = fadeOut(MintTheme.spec())) {
-                            Text(
-                                stringResource(R.string.back_today),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier =
-                                    Modifier
-                                        .heightIn(min = 48.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable(role = Role.Button) {
-                                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                                            goto(today)
-                                        }.padding(horizontal = 12.dp, vertical = 12.dp),
-                            )
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            ctx.monthDayWeekday(selected),
+                            style = MaterialTheme.typography.titleLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (dayItems.isNotEmpty()) {
+                            Box(
+                                Modifier
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                            ) {
+                                Text(
+                                    "${dayItems.size}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                            }
                         }
                     }
-                    Text(
-                        stringResource(
-                            R.string.calendar_day_totals,
-                            dayItems.count { it is CourseItem || it is EventItem },
-                            dayItems.count { it is TaskItem || it is BlockItem },
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    AnimatedVisibility(visible = selected != today, enter = fadeIn(MintTheme.spec()), exit = fadeOut(MintTheme.spec())) {
+                        Text(
+                            stringResource(R.string.back_today),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier =
+                                Modifier
+                                    .heightIn(min = 48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable(role = Role.Button) {
+                                        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                        goto(today)
+                                    }.padding(horizontal = 12.dp, vertical = 12.dp),
+                        )
+                    }
                 }
             }
             if (dayItems.isEmpty()) {
@@ -706,16 +705,5 @@ private fun CalendarIndicators(
             }
             x += widthOf(k) + gap
         }
-    }
-}
-
-@Composable
-private fun MarkerLegend(
-    marks: CalendarMarks,
-    label: String,
-) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        CalendarIndicators(marks, modifier = Modifier.width(14.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

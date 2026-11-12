@@ -9,9 +9,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -123,9 +123,10 @@ fun EditTimetableScreen(onBack: () -> Unit) {
                 Stepper(stringResource(R.string.label_total_weeks), total, 1, 30, { ctx.getString(R.string.week_n_total, it) }) { total = it }
                 val weeksNow = ChronoUnit.WEEKS.between(week1.with(java.time.DayOfWeek.MONDAY), LocalDate.now()) + 1
                 Text(
-                    ctx.getString(R.string.semester_progress_hint, weeksNow.coerceIn(0, 99).toInt()),
+                    if (weeksNow >= 1) stringResource(R.string.week_n, weeksNow.toInt()) else stringResource(R.string.semester_not_started),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
 
@@ -166,23 +167,20 @@ fun EditTimetableScreen(onBack: () -> Unit) {
             }
 
             FormSection(stringResource(R.string.section_import)) {
-                NavRow(stringResource(R.string.import_excel), stringResource(R.string.import_excel_desc), Icons.Rounded.UploadFile) { nav.push(Route.Import(null)) }
-                NavRow(stringResource(R.string.import_ics), stringResource(R.string.import_ics_desc), Icons.Rounded.UploadFile) { nav.push(Route.Import(null)) }
-                Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.import_jw), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(stringResource(R.string.import_jw_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Text(stringResource(R.string.coming_soon), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                NavRow(stringResource(R.string.jxfw_title), icon = Icons.Rounded.UploadFile) { nav.push(Route.Jxfw) }
+                Hairline()
+                NavRow(stringResource(R.string.import_excel), icon = Icons.Rounded.UploadFile) { nav.push(Route.Import(null)) }
+                Hairline()
+                NavRow(stringResource(R.string.import_ics), icon = Icons.Rounded.UploadFile) { nav.push(Route.Import(null)) }
             }
 
             FormSection(stringResource(R.string.section_more)) {
                 NavRow(stringResource(R.string.edit_periods), stringResource(R.string.edit_periods_desc, sem.periods.size), Icons.Rounded.Schedule) { nav.push(Route.Periods) }
+                Hairline()
                 NavRow(stringResource(R.string.copy_next_semester), stringResource(R.string.copy_next_semester_desc), Icons.Rounded.ContentCopy) { copyDlg = true }
+                Hairline()
+                NavRow(stringResource(R.string.advanced_title), stringResource(R.string.advanced_row_desc), Icons.Rounded.AutoAwesome) { showAdvanced = true }
             }
-
-            NavRow(stringResource(R.string.advanced_title), stringResource(R.string.advanced_row_desc), Icons.Rounded.AutoAwesome) { showAdvanced = true }
         }
     }
 
@@ -284,7 +282,8 @@ fun PeriodsScreen(onBack: () -> Unit) {
                         val last = periods.last()
                         periods =
                             periods +
-                            app.mintcal.core.model.PeriodTime(last.index + 1, last.end.plusMinutes(5), last.end.plusMinutes(50))
+                            app.mintcal.core.model
+                                .PeriodTime(last.index + 1, last.end.plusMinutes(5), last.end.plusMinutes(50))
                     },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

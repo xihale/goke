@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -59,6 +60,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -135,6 +137,7 @@ internal fun WhenPanel(
     var interval by remember { mutableIntStateOf(initialInterval) }
     var until by remember { mutableStateOf(initialUntil) }
     var byDays by remember { mutableStateOf(initialByDays) }
+    var datePicked by remember { mutableStateOf(initial != null) }
     var timeDlg by remember { mutableStateOf(false) }
     var durDlg by remember { mutableStateOf(false) }
     var wantDur by remember { mutableStateOf(false) }
@@ -182,68 +185,78 @@ internal fun WhenPanel(
                 Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     QuickChip(Icons.Rounded.CalendarToday, stringResource(R.string.today), date == today && start == null, Modifier.weight(1f)) {
                         date = today
+                        datePicked = true
                     }
                     QuickChip(Icons.Rounded.WbSunny, stringResource(R.string.tomorrow), date == today.plusDays(1) && start == null, Modifier.weight(1f)) {
                         date = today.plusDays(1)
+                        datePicked = true
                     }
                     QuickChip(Icons.Rounded.DateRange, stringResource(R.string.date_next_monday), date == nextMonday(today) && start == null, Modifier.weight(1f)) {
                         date = nextMonday(today)
+                        datePicked = true
                     }
                     QuickChip(Icons.Rounded.Bedtime, stringResource(R.string.tonight), date == today && startMin == 20 * 60 && minutes == null, Modifier.weight(1f)) {
                         date = today
+                        datePicked = true
                         startMin = 20 * 60
                         minutes = null
                     }
                 }
-                MonthPager(selected = date, initial = YearMonth.from(date), onPick = { date = it })
+                MonthPager(selected = date, initial = YearMonth.from(date), onPick = {
+                    date = it
+                    datePicked = true
+                })
                 Spacer(Modifier.height(8.dp))
-            }
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp)
-                    .height(1.dp)
-                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-            )
-            SettingRow(Icons.Rounded.Schedule, stringResource(R.string.label_time), timeLabel, start != null, onClear = {
-                startMin = -1
-                minutes = null
-                timeDlg = false
-            }) { timeDlg = true }
-            // 持续常驻：没选开始时间时点它先弹时刻，选完接着弹时长
-            SettingRow(Icons.Rounded.Timer, stringResource(R.string.label_lasting), durText, minutes != null, onClear = { minutes = null }) {
-                if (start != null) {
-                    durDlg = true
-                } else {
-                    timeDlg = true
-                    wantDur = true
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
+                        .height(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                )
+                SettingRow(Icons.Rounded.Schedule, stringResource(R.string.label_time), timeLabel, start != null, onClear = {
+                    startMin = -1
+                    minutes = null
+                    timeDlg = false
+                }) { timeDlg = true }
+                // 持续常驻：没选开始时间时点它先弹时刻，选完接着弹时长
+                SettingRow(Icons.Rounded.Timer, stringResource(R.string.label_lasting), durText, minutes != null, onClear = { minutes = null }) {
+                    if (start != null) {
+                        durDlg = true
+                    } else {
+                        timeDlg = true
+                        wantDur = true
+                    }
+                }
+                SettingRow(Icons.Rounded.Alarm, stringResource(R.string.label_remind), remindLabel(remind), remind != null, onClear = { remind = null }) { remindDlg = true }
+                SettingRow(
+                    Icons.Rounded.Repeat,
+                    stringResource(R.string.label_repeat),
+                    freqLabel(freq, until, interval, byDays, date, withUntil = false),
+                    freq != null,
+                    onClear = {
+                        freq = null
+                        until = null
+                        byDays = emptySet()
+                        interval = 1
+                    },
+                ) { repeatDlg = true }
+                if (freq != null) {
+                    val endLabel =
+                        when {
+                            until == null -> stringResource(R.string.repeat_end_never)
+                            semesterEnd != null && until == semesterEnd -> stringResource(R.string.repeat_end_semester)
+                            else -> ctx.monthDayWeekday(until ?: date)
+                        }
+                    SettingRow(Icons.Rounded.DateRange, stringResource(R.string.repeat_end), endLabel, until != null, onClear = { until = null }) { endDlg = true }
                 }
             }
-            SettingRow(Icons.Rounded.Alarm, stringResource(R.string.label_remind), remindLabel(remind), remind != null, onClear = { remind = null }) { remindDlg = true }
-            SettingRow(
-                Icons.Rounded.Repeat,
-                stringResource(R.string.label_repeat),
-                freqLabel(freq, until, interval, byDays, date, withUntil = false),
-                freq != null,
-                onClear = {
-                    freq = null
-                    until = null
-                    byDays = emptySet()
-                    interval = 1
-                },
-            ) { repeatDlg = true }
-            if (freq != null) {
-                val endLabel =
-                    when {
-                        until == null -> stringResource(R.string.repeat_end_never)
-                        semesterEnd != null && until == semesterEnd -> stringResource(R.string.repeat_end_semester)
-                        else -> ctx.monthDayWeekday(until ?: date)
-                    }
-                SettingRow(Icons.Rounded.DateRange, stringResource(R.string.repeat_end), endLabel, until != null, onClear = { until = null }) { endDlg = true }
-            }
+            val hasAnySet = datePicked || startMin >= 0 || minutes != null || remind != null || freq != null
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { close(null) }) {
-                    Text(stringResource(R.string.clear_time), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
+                if (hasAnySet) {
+                    TextButton(onClick = { close(null) }) {
+                        Text(stringResource(R.string.clear_time), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
+                    }
                 }
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = onDismiss) {
@@ -317,7 +330,7 @@ private fun QuickChip(
     Column(
         modifier
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .selectable(selected = active, role = Role.Button, onClick = onClick)
             .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -363,15 +376,25 @@ internal fun SettingRow(
             .clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+        Icon(
+            icon,
+            null,
+            tint = if (set) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
         Spacer(Modifier.width(12.dp))
-        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Text(
+            label,
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (set) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Text(
             value,
             // Close 图标笔画比 20dp 外框内收约 4dp，未设置的值跟着内收，三条右边才齐
             Modifier.padding(end = if (set) 0.dp else 4.dp),
             style = MaterialTheme.typography.bodyLarge,
-            color = if (set) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (set) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
         )
         // 清除钮贴右缘，和未设置时的文字同一条边；不用 IconButton，它自带 12dp 内边距，会把这一行撑高、值往左挤
         if (set) {
@@ -618,8 +641,11 @@ private fun RemindOption(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp),
+            .selectable(
+                selected = selected,
+                role = if (chevron) Role.Button else Role.RadioButton,
+                onClick = onClick,
+            ).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -861,7 +887,7 @@ private fun StepPill(
 }
 
 @Composable
-private fun Hairline() {
+internal fun Hairline() {
     Box(
         Modifier
             .fillMaxWidth()

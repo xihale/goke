@@ -26,8 +26,10 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,7 +70,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -95,6 +101,7 @@ import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.ConflictCard
 import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MinutesDialSheet
+import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
@@ -181,8 +188,7 @@ internal object PatternOps {
         patterns: List<PatternDraft>,
         pi: Int,
         brush: Set<Int>,
-    ): List<PatternDraft> =
-        prune(patterns.mapIndexed { i, q -> if (i == pi) q.copy(weeks = q.weeks - brush) else q })
+    ): List<PatternDraft> = prune(patterns.mapIndexed { i, q -> if (i == pi) q.copy(weeks = q.weeks - brush) else q })
 
     /** 删掉整条时间。 */
     fun remove(
@@ -261,7 +267,7 @@ fun CourseEditScreen(
                     .map { PatternDraft(it, it.dayOfWeek, it.startPeriod, it.endPeriod, it.weeks, it.remindMinutes) }
             } else {
                 listOf(PatternDraft(null, 1, 1, 2.coerceAtMost(periodCount), WeekSets.all(totalWeeks), null))
-            }
+            },
         )
     }
     // 周次挪走后，挂在上面的调课/停课记录就成了悬空引用，保存时一并删掉
@@ -274,6 +280,7 @@ fun CourseEditScreen(
     var openBlock by remember { mutableStateOf<Int?>(null) }
     var remindCustom by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmDiscard by remember { mutableStateOf(false) }
     var pageMenu by remember { mutableStateOf(false) }
     val nameFocus = remember { FocusRequester() }
     LaunchedEffect(existing == null) { if (existing == null) nameFocus.requestFocus() }
@@ -426,8 +433,13 @@ fun CourseEditScreen(
                     snap.exceptions.filter { it.deletedAt == null && it.courseId == b.id }.forEach { changes += Change.Remove(it) }
                 }
 
-                c != null && b == null -> changes += Change.Add(c)
-                c != null && b != null && !contentMatches(b, c) -> changes += Change.Modify(b, c)
+                c != null && b == null -> {
+                    changes += Change.Add(c)
+                }
+
+                c != null && b != null && !contentMatches(b, c) -> {
+                    changes += Change.Modify(b, c)
+                }
             }
         }
         dropExceptions.forEach { (bid, w) ->
@@ -448,8 +460,14 @@ fun CourseEditScreen(
     fun requestBack() {
         when {
             name.isBlank() -> onBack()
+
             !valid -> actions.toast(ctx.getString(R.string.weeks_invalid))
+
+            // 新建课程：返回不落库，画过的格子先确认放弃；修改照旧自动保存
+            origin == null && dirty -> confirmDiscard = true
+
             dirty -> persist(leave = true)
+
             else -> onBack()
         }
     }
@@ -461,22 +479,37 @@ fun CourseEditScreen(
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .imePadding(),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { requestBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
-            Spacer(Modifier.weight(1f))
-            if (origin != null) {
-                Box {
-                    IconButton(onClick = { pageMenu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
-                    DropdownMenu(pageMenu, { pageMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.delete)) },
-                            leadingIcon = { Icon(Icons.Rounded.Delete, null) },
-                            onClick = {
-                                pageMenu = false
-                                confirmDelete = true
-                            },
-                        )
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Row(
+                Modifier
+                    .widthIn(max = 680.dp)
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = { requestBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
+                Spacer(Modifier.weight(1f))
+                if (origin == null) {
+                    // 新建：明确一个「确定」键；返回 = 放弃（画过的格子会先确认）
+                    TextButton(enabled = name.isNotBlank() && valid, onClick = { persist(leave = true) }) {
+                        Text(stringResource(R.string.confirm))
+                    }
+                } else {
+                    Box {
+                        IconButton(onClick = { pageMenu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
+                        DropdownMenu(pageMenu, { pageMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.delete)) },
+                                leadingIcon = { Icon(Icons.Rounded.Delete, null) },
+                                onClick = {
+                                    pageMenu = false
+                                    confirmDelete = true
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -484,25 +517,37 @@ fun CourseEditScreen(
         Column(
             Modifier
                 .weight(1f)
+                .widthIn(max = 680.dp)
+                .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
         ) {
-            Box(Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                BasicTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    modifier = Modifier.fillMaxWidth().focusRequester(nameFocus).padding(vertical = 12.dp),
-                    textStyle = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Normal),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                )
-                if (name.isEmpty()) {
-                    Text(
-                        stringResource(R.string.label_course_name),
-                        modifier = Modifier.padding(vertical = 12.dp),
-                        style = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Normal),
-                    )
-                }
-            }
+            val courseNameHint = stringResource(R.string.label_course_name)
+            BasicTextField(
+                value = name,
+                onValueChange = { name = it },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .focusRequester(nameFocus)
+                        .semantics { contentDescription = courseNameHint }
+                        .padding(vertical = 12.dp),
+                textStyle = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Normal),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (name.isEmpty()) {
+                            Text(
+                                courseNameHint,
+                                modifier = Modifier.clearAndSetSemantics {},
+                                style = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Normal),
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
+            )
             FlatLine(room, stringResource(R.string.label_room)) { room = it }
             FlatLine(teacher, stringResource(R.string.label_teacher)) { teacher = it }
 
@@ -512,11 +557,6 @@ fun CourseEditScreen(
                     totalWeeks = totalWeeks,
                     currentWeek = remember(cal) { cal.currentWeek(LocalDate.now()) },
                     onChange = { brush = it },
-                )
-                Text(
-                    stringResource(R.string.course_weeks_brush_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -608,6 +648,16 @@ fun CourseEditScreen(
         }
     }
 
+    if (confirmDiscard) {
+        ConfirmDialog(
+            stringResource(R.string.detail_editor_discard_title),
+            stringResource(R.string.detail_editor_discard_desc),
+            stringResource(R.string.detail_editor_discard),
+            onConfirm = { onBack() },
+            onDismiss = { confirmDiscard = false },
+            danger = true,
+        )
+    }
     if (confirmDelete && origin != null) {
         ConfirmDialog(
             stringResource(R.string.delete_course_title, origin.name),
@@ -648,17 +698,21 @@ private fun WeekPicker(
             stringResource(R.string.weeks_even) to WeekSets.even(totalWeeks),
             stringResource(R.string.course_weeks_clear) to emptySet(),
         ).forEach { (label, weeks) ->
+            val sel = brush == weeks
             Text(
                 label,
                 modifier =
                     Modifier
-                        .heightIn(min = 36.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(if (brush == weeks) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-                        .mintClickable { onChange(weeks) }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(if (sel) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                        .mintClickable(
+                            role = Role.Button,
+                            selected = sel,
+                        ) { onChange(weeks) }
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                 style = MaterialTheme.typography.labelLarge,
-                color = if (brush == weeks) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.primary,
+                color = if (sel) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.primary,
             )
         }
     }
@@ -667,20 +721,38 @@ private fun WeekPicker(
         for (w in 1..totalWeeks) {
             val on = w in brush
             val today = w == currentWeek
-            Text(
-                "$w",
+            val weekDesc = "${stringResource(R.string.week_n, w)}${if (today) "，本周" else ""}"
+            Box(
                 modifier =
                     Modifier
-                        .size(34.dp, 30.dp)
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-                        .border(if (today && !on) 1.5.dp else 0.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(9.dp))
-                        .mintClickable { onChange(if (on) brush - w else brush + w) },
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.labelMedium,
-                color = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = if (today) FontWeight.Bold else FontWeight.Normal,
-            )
+                        .sizeIn(minWidth = 36.dp, minHeight = 48.dp)
+                        .mintClickable(
+                            role = Role.Checkbox,
+                            selected = on,
+                        ) { onChange(if (on) brush - w else brush + w) }
+                        .semantics {
+                            contentDescription = weekDesc
+                        },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(34.dp, 30.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                            .border(if (today && !on) 1.5.dp else 0.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(9.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "$w",
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = if (today) FontWeight.Bold else FontWeight.Normal,
+                    )
+                }
+            }
         }
     }
     Spacer(Modifier.height(6.dp))
@@ -803,9 +875,10 @@ private fun EditorGrid(
                         day: Int,
                         slot: Int,
                     ): Int? =
-                        patterns.indexOfFirst { p ->
-                            p.dow == day && p.sp <= slot && p.ep >= slot && (p.weeks intersect brush).isNotEmpty()
-                        }.takeIf { it >= 0 }
+                        patterns
+                            .indexOfFirst { p ->
+                                p.dow == day && p.sp <= slot && p.ep >= slot && (p.weeks intersect brush).isNotEmpty()
+                            }.takeIf { it >= 0 }
 
                     var anchorDay = 1
                     var anchorSlot = 1
@@ -869,7 +942,7 @@ private fun EditorGrid(
                     Text("${p.index}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     Text(
                         p.start.hm(),
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontFeatureSettings = "tnum"),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontFeatureSettings = "tnum"),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -916,7 +989,7 @@ private fun EditorGrid(
                             .semantics {
                                 contentDescription =
                                     ctx.weekdayFull(b.dow) + " " + ctx.periodSpan(b.sp, b.ep) +
-                                        (b.text.takeIf { it.isNotEmpty() }?.let { " $it" } ?: "")
+                                    (b.text.takeIf { it.isNotEmpty() }?.let { " $it" } ?: "")
                             },
                 )
             }
@@ -942,8 +1015,7 @@ private fun cancelledCount(
     exceptions: List<app.mintcal.core.model.CourseException>,
     bid: String,
     weeks: Set<Int>,
-): Int =
-    exceptions.count { it.courseId == bid && it.type == app.mintcal.core.model.ExceptionType.CANCEL && it.week in weeks }
+): Int = exceptions.count { it.courseId == bid && it.type == app.mintcal.core.model.ExceptionType.CANCEL && it.week in weeks }
 
 /** 网格里的一格：pi 非空 = 自己的时间（pi 是 patterns 下标），空 = 别人的课（背景层）。 */
 private data class EditorGridCell(
@@ -999,7 +1071,7 @@ private fun CourseCell(
                 Text(
                     stringResource(R.string.course_cancel_badge),
                     color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -1020,6 +1092,7 @@ private fun BlockSheet(
 ) {
     val ctx = LocalContext.current
     var alarm by remember(pattern.base?.id, pattern.dow, pattern.sp) { mutableStateOf(pattern.remind) }
+    var remindDlg by remember { mutableStateOf(false) }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -1039,40 +1112,22 @@ private fun BlockSheet(
             )
             Text(
                 stringResource(R.string.label_weeks_value, WeekSets.format(pattern.weeks)) +
-                    WeekSets.format(pattern.weeks intersect brush)
+                    WeekSets
+                        .format(pattern.weeks intersect brush)
                         .takeIf { (pattern.weeks intersect brush).isNotEmpty() }
                         ?.let { " · " + stringResource(R.string.course_brush_weeks, it) }
                         .orEmpty(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            HorizontalDivider(Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
-            Text(stringResource(R.string.label_remind), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            val presets = listOf<Int?>(null, 0, 5, 10, 15, 30, 60)
-            val shown = if (alarm != null && alarm !in presets) presets + alarm else presets
-            FlowRow(Modifier.fillMaxWidth()) {
-                shown.forEach { m ->
-                    val on = m == alarm
-                    val label =
-                        when (m) {
-                            null -> stringResource(R.string.remind_default)
-                            0 -> stringResource(R.string.settings_remind_at_start)
-                            else -> stringResource(R.string.settings_remind_early_n, m)
-                        }
-                    Text(
-                        label,
-                        modifier =
-                            Modifier
-                                .heightIn(min = 40.dp)
-                                .mintClickable { onRemind(m); alarm = m }
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = if (on) FontWeight.Medium else FontWeight.Normal,
-                    )
-                }
-            }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+            Hairline()
+            ValueRow(
+                label = stringResource(R.string.label_remind),
+                value = remindLabel(alarm),
+                onClick = { remindDlg = true },
+                valueColor = if (alarm != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Hairline()
             Row {
                 TextButton(onClick = onRemoveBrush) {
                     Text(stringResource(R.string.course_block_remove_brush), color = MaterialTheme.colorScheme.error)
@@ -1084,6 +1139,18 @@ private fun BlockSheet(
             Spacer(Modifier.height(12.dp))
         }
     }
+    if (remindDlg) {
+        RemindPickDialog(
+            initial = alarm,
+            hasTime = true,
+            initialPersistent = false,
+            onDismiss = { remindDlg = false },
+        ) { minutes, _ ->
+            alarm = minutes
+            onRemind(minutes)
+            remindDlg = false
+        }
+    }
 }
 
 @Composable
@@ -1093,24 +1160,32 @@ private fun FlatLine(
     singleLine: Boolean = true,
     onChange: (String) -> Unit,
 ) {
-    Box(Modifier.fillMaxWidth().heightIn(min = 44.dp)) {
-        BasicTextField(
-            value = value,
-            onValueChange = onChange,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            singleLine = singleLine,
-        )
-        if (value.isEmpty()) {
-            Text(
-                placeholder,
-                modifier = Modifier.padding(vertical = 8.dp),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+    BasicTextField(
+        value = value,
+        onValueChange = onChange,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .semantics { contentDescription = placeholder }
+                .padding(vertical = 8.dp),
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        singleLine = singleLine,
+        decorationBox = { innerTextField ->
+            Box {
+                if (value.isEmpty()) {
+                    Text(
+                        placeholder,
+                        modifier = Modifier.clearAndSetSemantics {},
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                innerTextField()
+            }
+        },
+    )
 }
 
 @Composable
@@ -1126,9 +1201,14 @@ fun ColorPicker(
             Box(
                 Modifier
                     .weight(1f)
-                    .height(44.dp)
-                    .semantics { contentDescription = name }
-                    .mintClickable { onSelect(i) },
+                    .heightIn(min = 48.dp)
+                    .mintClickable(
+                        role = Role.RadioButton,
+                        selected = sel,
+                    ) { onSelect(i) }
+                    .semantics {
+                        contentDescription = name
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 Box(

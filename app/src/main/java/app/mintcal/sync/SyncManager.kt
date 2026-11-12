@@ -107,53 +107,53 @@ class SyncManager(
                 val token = store.token() ?: return@withContext 0
                 publish(syncing = true)
                 try {
-                val client = SyncClient(acct.serverUrl, token)
-                var applied = 0
+                    val client = SyncClient(acct.serverUrl, token)
+                    var applied = 0
 
-                // 首次同步：服务器已有数据而本地只有自动创建的默认学期时，丢弃本地默认学期，避免出现两个学期。
-                if (store.cursor == 0L && client.me().cursor > 0 && SyncPlanner.isPristine(repo.snapshot.value)) {
-                    repo.discardAllLocal()
-                }
+                    // 首次同步：服务器已有数据而本地只有自动创建的默认学期时，丢弃本地默认学期，避免出现两个学期。
+                    if (store.cursor == 0L && client.me().cursor > 0 && SyncPlanner.isPristine(repo.snapshot.value)) {
+                        repo.discardAllLocal()
+                    }
 
-                // 1. 拉取。本地已物理删除、但墓碑还没推送的记录（例如撤销了「新增」），不能被服务器上的旧版本带回来，
-                //    除非别的设备在那之后又改过它（remote 更新）。
-                val waitingTombstones = repo.pendingPurged().associateBy { it.id }
-                while (true) {
-                    val page = client.pull(store.cursor)
-                    val remote =
-                        page.records.mapNotNull(SyncCodec::decode).filter { r ->
-                            val t = waitingTombstones[r.id]
-                            t == null || r.updatedAt > t.updatedAt
-                        }
-                    applied += repo.applyRemote(remote)
-                    store.cursor = page.cursor
-                    if (!page.more) break
-                }
-                repo.ensureDefaultSemester()
+                    // 1. 拉取。本地已物理删除、但墓碑还没推送的记录（例如撤销了「新增」），不能被服务器上的旧版本带回来，
+                    //    除非别的设备在那之后又改过它（remote 更新）。
+                    val waitingTombstones = repo.pendingPurged().associateBy { it.id }
+                    while (true) {
+                        val page = client.pull(store.cursor)
+                        val remote =
+                            page.records.mapNotNull(SyncCodec::decode).filter { r ->
+                                val t = waitingTombstones[r.id]
+                                t == null || r.updatedAt > t.updatedAt
+                            }
+                        applied += repo.applyRemote(remote)
+                        store.cursor = page.cursor
+                        if (!page.more) break
+                    }
+                    repo.ensureDefaultSemester()
 
-                // 2. 推送：本地水位线之后改动的记录 + 已被物理删除但服务器还不知道的墓碑
-                val snap = repo.snapshot.value
-                val purged = repo.pendingPurged()
-                val stale = purged.filter { snap.find(it.id) != null }.map { it.id } // 又被重做回来的，不再需要墓碑
-                if (stale.isNotEmpty()) repo.clearPurged(stale)
-                val tombstones = purged.filter { snap.find(it.id) == null }
-                val changed = SyncPlanner.pending(snap, store.watermark)
-                var newMark = store.watermark
-                val outgoing = changed + tombstones
-                for (batch in outgoing.chunked(500)) {
-                    val res = client.push(batch.map(SyncCodec::encode))
-                    val rejected = res.rejected.mapNotNull(SyncCodec::decode)
-                    applied += repo.applyRemote(rejected)
-                    newMark = maxOf(newMark, rejected.maxOfOrNull { it.updatedAt } ?: 0)
-                }
-                newMark = maxOf(newMark, changed.maxOfOrNull { it.updatedAt } ?: 0)
-                store.watermark = newMark
-                if (tombstones.isNotEmpty()) repo.clearPurged(tombstones.map { it.id })
+                    // 2. 推送：本地水位线之后改动的记录 + 已被物理删除但服务器还不知道的墓碑
+                    val snap = repo.snapshot.value
+                    val purged = repo.pendingPurged()
+                    val stale = purged.filter { snap.find(it.id) != null }.map { it.id } // 又被重做回来的，不再需要墓碑
+                    if (stale.isNotEmpty()) repo.clearPurged(stale)
+                    val tombstones = purged.filter { snap.find(it.id) == null }
+                    val changed = SyncPlanner.pending(snap, store.watermark)
+                    var newMark = store.watermark
+                    val outgoing = changed + tombstones
+                    for (batch in outgoing.chunked(500)) {
+                        val res = client.push(batch.map(SyncCodec::encode))
+                        val rejected = res.rejected.mapNotNull(SyncCodec::decode)
+                        applied += repo.applyRemote(rejected)
+                        newMark = maxOf(newMark, rejected.maxOfOrNull { it.updatedAt } ?: 0)
+                    }
+                    newMark = maxOf(newMark, changed.maxOfOrNull { it.updatedAt } ?: 0)
+                    store.watermark = newMark
+                    if (tombstones.isNotEmpty()) repo.clearPurged(tombstones.map { it.id })
 
-                store.lastSyncAt = clock()
-                store.lastError = null
-                publish()
-                applied
+                    store.lastSyncAt = clock()
+                    store.lastError = null
+                    publish()
+                    applied
                 } catch (e: SyncException) {
                     store.lastError = if (e.unauthorized) "登录已失效，请重新登录" else e.message
                     publish()

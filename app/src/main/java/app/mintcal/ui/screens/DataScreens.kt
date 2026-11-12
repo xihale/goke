@@ -66,12 +66,12 @@ import app.mintcal.ui.Tab
 import app.mintcal.ui.components.ChangeList
 import app.mintcal.ui.components.ChipChoice
 import app.mintcal.ui.components.ConfirmDialog
+import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.NavRow
 import app.mintcal.ui.components.SwitchRow
-import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.fullDate
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.settingsState
@@ -124,7 +124,7 @@ fun DataScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             FormSection(stringResource(R.string.section_import)) {
-                NavRow(stringResource(R.string.import_file), stringResource(R.string.import_file_desc), Icons.Rounded.UploadFile) { nav.push(Route.Import(null)) }
+                NavRow(stringResource(R.string.import_file), null, Icons.Rounded.UploadFile) { nav.push(Route.Import(null)) }
             }
             FormSection(stringResource(R.string.section_backup)) {
                 SwitchRow(stringResource(R.string.auto_backup), stringResource(R.string.auto_backup_desc, st.backupKeep), st.autoBackup) { v ->
@@ -144,7 +144,7 @@ fun DataScreen(onBack: () -> Unit) {
                 }
             }
             FormSection(stringResource(R.string.section_export)) {
-                NavRow(stringResource(R.string.export_ics), stringResource(R.string.export_ics_desc), Icons.Rounded.IosShare, enabled = !busy) {
+                NavRow(stringResource(R.string.export_ics), null, Icons.Rounded.IosShare, enabled = !busy) {
                     scope.launch {
                         busy = true
                         try {
@@ -155,7 +155,7 @@ fun DataScreen(onBack: () -> Unit) {
                         }
                     }
                 }
-                NavRow(stringResource(R.string.export_image), stringResource(R.string.export_image_desc), Icons.Rounded.Image, enabled = !busy) {
+                NavRow(stringResource(R.string.export_image), null, Icons.Rounded.Image, enabled = !busy) {
                     scope.launch {
                         busy = true
                         try {
@@ -168,7 +168,7 @@ fun DataScreen(onBack: () -> Unit) {
                         }
                     }
                 }
-                NavRow(stringResource(R.string.export_json), stringResource(R.string.export_json_desc), Icons.Rounded.IosShare, enabled = !busy) {
+                NavRow(stringResource(R.string.export_json), null, Icons.Rounded.IosShare, enabled = !busy) {
                     scope.launch {
                         busy = true
                         try {
@@ -181,7 +181,7 @@ fun DataScreen(onBack: () -> Unit) {
                 }
             }
             FormSection(stringResource(R.string.section_restore)) {
-                NavRow(stringResource(R.string.restore_json), stringResource(R.string.restore_json_desc), Icons.Rounded.Restore, enabled = !busy) {
+                NavRow(stringResource(R.string.restore_json), null, Icons.Rounded.Restore, enabled = !busy) {
                     pickBackup.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*"))
                 }
             }
@@ -286,14 +286,20 @@ fun ImportScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (sem == null) {
-                Text(stringResource(R.string.import_no_semester))
+                EmptyState(
+                    stringResource(R.string.import_no_semester),
+                    icon = Icons.Rounded.UploadFile,
+                    actionLabel = stringResource(R.string.timetable_create_semester),
+                    onAction = { nav.push(Route.EditTimetable) },
+                )
                 return@Column
             }
             when (val s = state) {
                 ImportState.Pick -> {
-                    Text(stringResource(R.string.import_pick_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button(onClick = { picker.launch(arrayOf("text/calendar", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream", "*/*")) }) {
-                        Text(stringResource(R.string.import_pick))
+                    Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Button(onClick = { picker.launch(arrayOf("text/calendar", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream", "*/*")) }) {
+                            Text(stringResource(R.string.import_pick))
+                        }
                     }
                 }
 

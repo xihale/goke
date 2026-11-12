@@ -3,6 +3,8 @@ package app.mintcal
 import android.app.Application
 import android.content.Context
 import app.mintcal.advanced.AdvancedController
+import app.mintcal.calendar.CalendarSyncStore
+import app.mintcal.calendar.SystemCalendarSync
 import app.mintcal.core.change.Unify
 import app.mintcal.data.AutoBackup
 import app.mintcal.data.MintDb
@@ -17,6 +19,8 @@ import app.mintcal.notify.ReminderScheduler
 import app.mintcal.sync.PeriodicSync
 import app.mintcal.sync.SyncManager
 import app.mintcal.sync.SyncStore
+import app.mintcal.widget.NextWidgetProvider
+import app.mintcal.widget.ParcelWidgetProvider
 import app.mintcal.widget.ScheduleWidgetProvider
 import app.mintcal.widget.TodayWidgetProvider
 import app.mintcal.widget.TodoWidgetProvider
@@ -48,6 +52,8 @@ open class MintCalApp : Application() {
         private set
     lateinit var sync: SyncManager
         private set
+    lateinit var calendarSync: SystemCalendarSync
+        private set
     lateinit var jxfw: JxfwManager
         private set
 
@@ -72,6 +78,7 @@ open class MintCalApp : Application() {
         reminders = ReminderScheduler(this)
         advanced = AdvancedController(this)
         sync = SyncManager(repo, SyncStore(this, secrets), scope)
+        calendarSync = SystemCalendarSync(this, repo, settings, CalendarSyncStore(this), scope)
         jxfw = JxfwManager(this, repo, secrets)
         focus = FocusController(this)
         // 通知渠道 / 桌面快捷方式都是 Binder IPC，不挡 Application 主线程的首帧
@@ -88,41 +95,55 @@ open class MintCalApp : Application() {
                 settings.update { it.copy(unifiedTasks = true) }
             }
             jxfw.ensureAlarm()
-            // 回到前台才做网络同步与教务抓取；后台拉起的进程（小组件 tick / 开机）不碰网络
+            // 回到前台才做网络同步、系统日历监听与教务抓取；后台拉起的进程（小组件 tick / 开机）不碰网络
             launch {
                 uiActive.collect { active ->
+                    calendarSync.updateObserving(active)
                     if (active) {
                         sync.requestSync(1000)
+                        calendarSync.requestSync(1200)
                         launch { jxfw.catchUp() }
                     }
                 }
             }
             // 登录状态下排后台周期同步（MCP / 其他设备的写入由此到达本机），退出登录自动取消。
-            // 登录状态只在真正变化时才触发（发布/订阅流的中间态不再反复 enqueue WorkManager）
             launch {
                 sync.state
                     .map { it.account != null }
                     .distinctUntilChanged()
                     .collect { PeriodicSync.follow(this@MintCalApp, it) }
             }
-            // 本地数据有变化（含从服务器写入的）后，登录状态下稍后同步一次；未登录时 requestSync 什么都不做。
-            // 后台进程里改数据（小组件勾选等）不触发网络，等下次前台会话或 15 分钟周期同步兜底
-            launch { repo.snapshot.collect { if (uiActive.value) sync.requestSync() } }
-            // 数据或设置变化后重新排提醒并刷新小组件（防抖，避免连续编辑时反复调度）
+            launch {
+                calendarSync.state
+                    .map { it.prefs.enabled }
+                    .distinctUntilChanged()
+                    .collect {
+                        calendarSync.updateObserving(uiActive.value)
+                        PeriodicSync.followCalendar(this@MintCalApp, it)
+                    }
+            }
+            // 本地数据有变化后，稍后触发云端与系统日历对账
+            launch {
+                repo.snapshot.collect {
+                    if (uiActive.value) {
+                        sync.requestSync()
+                        calendarSync.requestSync()
+                    }
+                }
+            }
+            // 数据或设置变化后重新排提醒并刷新全部 5 款桌面小组件（防抖，避免连续编辑时反复调度）
             combine(repo.snapshot, settings.flow) { s, st -> s to st }
                 .debounce(800)
                 .collect { (snap, st) ->
                     reminders.reschedule(snap, st)
-                    // 常驻快速添加通知跟随设置（重启 / 数据变化时自动恢复或撤掉）
                     if (st.quickAddNotif) Notifications.postQuickAdd(this@MintCalApp) else Notifications.cancelQuickAdd(this@MintCalApp)
-                    // 自动备份：节流为每天一次，失败静默
-                    launch(kotlinx.coroutines.Dispatchers.IO) { AutoBackup.maybeRun(this@MintCalApp, snap, st) }
-                    // 小组件：RemoteViews 构建（含课程/待办展开）与 Binder 刷新移出主线程，
-                    // 编辑后的防抖回调不再在 Main 上连做三次整套刷新
+                    launch(Dispatchers.IO) { AutoBackup.maybeRun(this@MintCalApp, snap, st) }
                     launch(Dispatchers.Default) {
                         TodayWidgetProvider.refreshAll(this@MintCalApp, snap, st)
                         TodoWidgetProvider.refreshAll(this@MintCalApp)
+                        ParcelWidgetProvider.refreshAll(this@MintCalApp)
                         ScheduleWidgetProvider.refreshAll(this@MintCalApp, snap, st)
+                        NextWidgetProvider.refreshAll(this@MintCalApp, snap, st)
                     }
                 }
         }

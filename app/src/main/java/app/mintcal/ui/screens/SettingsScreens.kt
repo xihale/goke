@@ -51,10 +51,8 @@ import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -84,6 +82,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import app.mintcal.BuildConfig
 import app.mintcal.R
 import app.mintcal.core.change.Change
+import app.mintcal.core.model.CourseException
 import app.mintcal.core.model.Semester
 import app.mintcal.data.DarkMode
 import app.mintcal.data.DemoData
@@ -94,15 +93,14 @@ import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
 import app.mintcal.ui.components.ChipChoice
-import app.mintcal.ui.components.FieldText
 import app.mintcal.ui.components.FormSection
-import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.MinutesDialSheet
 import app.mintcal.ui.components.NavRow
 import app.mintcal.ui.components.SwitchRow
 import app.mintcal.ui.components.TimeDialSheet
 import app.mintcal.ui.components.ValueRow
+import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.theme.Preset
@@ -137,10 +135,17 @@ fun SettingsScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             FormSection {
-                NavRow(stringResource(R.string.appearance), stringResource(R.string.appearance_desc), Icons.Rounded.Palette) { nav.push(Route.Appearance) }
+                val themeSource = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && st.themeSource == ThemeSource.DYNAMIC) ThemeSource.PRESET else st.themeSource
+                val sourceLabel =
+                    when (themeSource) {
+                        ThemeSource.DYNAMIC -> stringResource(R.string.theme_dynamic)
+                        ThemeSource.PRESET -> stringResource(Preset.entries.firstOrNull { it.key == st.preset }?.label ?: R.string.theme_preset)
+                        ThemeSource.CUSTOM -> stringResource(R.string.theme_custom)
+                    }
+                NavRow(stringResource(R.string.appearance), null, Icons.Rounded.Palette, trailing = sourceLabel) { nav.push(Route.Appearance) }
             }
             FormSection(stringResource(R.string.section_display)) {
-                SwitchRow(stringResource(R.string.show_teacher), stringResource(R.string.show_teacher_desc), st.showTeacher) { v -> app.settings.update { it.copy(showTeacher = v) } }
+                SwitchRow(stringResource(R.string.show_teacher), null, st.showTeacher) { v -> app.settings.update { it.copy(showTeacher = v) } }
                 SwitchRow(stringResource(R.string.week_starts_monday), null, st.weekStartsMonday) { v -> app.settings.update { it.copy(weekStartsMonday = v) } }
                 SwitchRow(stringResource(R.string.swap_swipe), stringResource(R.string.swap_swipe_desc), st.swapSwipe) { v -> app.settings.update { it.copy(swapSwipe = v) } }
                 var blockDial by remember { mutableStateOf(false) }
@@ -225,26 +230,40 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
             FormSection {
-                val permDesc =
-                    if (permOkCount == 3) {
-                        stringResource(R.string.settings_perm_desc_ok)
-                    } else {
-                        stringResource(R.string.settings_perm_desc_n, 3 - permOkCount)
-                    }
-                NavRow(stringResource(R.string.settings_perm_title), permDesc, Icons.Rounded.VerifiedUser) { nav.push(Route.Permission) }
+                NavRow(stringResource(R.string.settings_perm_title), null, Icons.Rounded.VerifiedUser, trailing = permStatusDesc(permOkCount)) { nav.push(Route.Permission) }
             }
             FormSection(stringResource(R.string.section_more)) {
+                val account by app.sync.state.collectAsState()
+                val snap = liveSnapshot()
+                val trashCount = snap.allRecords().count { it.deletedAt != null && it !is CourseException }
                 NavRow(
                     stringResource(R.string.sync_title),
-                    stringResource(R.string.sync_row_desc),
+                    null,
                     Icons.Rounded.Cloud,
+                    trailing = account.account?.username,
                 ) { nav.push(Route.Sync) }
-                NavRow(stringResource(R.string.jxfw_title), stringResource(R.string.jxfw_row_desc), Icons.Rounded.School) { nav.push(Route.Jxfw) }
-                NavRow(stringResource(R.string.reliability_title), stringResource(R.string.reliability_row_desc), Icons.Rounded.NotificationsActive) { nav.push(Route.Reliability) }
-                NavRow(stringResource(R.string.data_title), stringResource(R.string.data_desc), Icons.Rounded.SwapVert) { nav.push(Route.Data) }
-                NavRow(stringResource(R.string.parcel_title), stringResource(R.string.parcel_row_desc), Icons.Rounded.LocalShipping) { nav.push(Route.Parcel) }
+                val jxfwState by app.jxfw.state.collectAsState()
+                NavRow(
+                    stringResource(R.string.jxfw_title),
+                    null,
+                    Icons.Rounded.School,
+                    trailing = jxfwState.username,
+                ) { nav.push(Route.Jxfw) }
+                NavRow(stringResource(R.string.reliability_title), null, Icons.Rounded.NotificationsActive, trailing = permStatusDesc(permOkCount)) { nav.push(Route.Reliability) }
+                NavRow(stringResource(R.string.data_title), null, Icons.Rounded.SwapVert) { nav.push(Route.Data) }
+                NavRow(
+                    stringResource(R.string.parcel_title),
+                    null,
+                    Icons.Rounded.LocalShipping,
+                    trailing = stringResource(if (st.parcelEnabled) R.string.parcel_status_on else R.string.parcel_status_off),
+                ) { nav.push(Route.Parcel) }
                 NavRow(stringResource(R.string.history_title), null, Icons.Rounded.History) { nav.push(Route.History) }
-                NavRow(stringResource(R.string.trash_title), stringResource(R.string.trash_row_desc), Icons.Rounded.DeleteSweep) { nav.push(Route.Trash) }
+                NavRow(
+                    stringResource(R.string.trash_title),
+                    null,
+                    Icons.Rounded.DeleteSweep,
+                    trailing = if (trashCount > 0) stringResource(R.string.conflict_count, trashCount) else null,
+                ) { nav.push(Route.Trash) }
                 NavRow(stringResource(R.string.about_title), null, Icons.Rounded.Info) { nav.push(Route.About) }
             }
         }
@@ -258,6 +277,15 @@ private fun permGrantedCount(ctx: Context): Int {
     val battery = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName)
     return listOf(notif, exact, battery).count { it }
 }
+
+/** 权限状态短读数：全过 →「已就绪」，否则「N 项待授权」。 */
+@Composable
+private fun permStatusDesc(granted: Int): String =
+    if (granted == 3) {
+        stringResource(R.string.settings_perm_desc_ok)
+    } else {
+        stringResource(R.string.settings_perm_desc_n, 3 - granted)
+    }
 
 /** 开机自启没有公开 API 可检测，只能按厂商尝试专页，失败落到应用详情页。 */
 private fun openAutoStart(ctx: Context) {
@@ -365,9 +393,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
                 if (!dynamicOk) Text(stringResource(R.string.theme_dynamic_unavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
                 Spacer(Modifier.height(10.dp))
                 when (source) {
-                    ThemeSource.DYNAMIC -> {
-                        Text(stringResource(R.string.theme_dynamic_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    ThemeSource.DYNAMIC -> {}
 
                     ThemeSource.PRESET -> {
                         FlowRow(
@@ -488,26 +514,32 @@ fun AboutScreen(onBack: () -> Unit) {
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            MintCard {
+            FormSection {
                 Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineSmall)
                 Text("v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(8.dp))
-                Text(stringResource(R.string.about_desc), style = MaterialTheme.typography.bodyMedium)
             }
-            MintCard {
-                Text(stringResource(R.string.about_license_title), style = MaterialTheme.typography.titleMedium)
-                Text(stringResource(R.string.about_license), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(8.dp))
-                Text(stringResource(R.string.about_privacy), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FormSection {
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        stringResource(R.string.about_license_title),
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text("AGPL-3.0", style = MaterialTheme.typography.bodyLarge)
+                }
             }
-            DemoDataCard()
+            DemoDataSection()
         }
     }
 }
 
 /** 填入一批真实含量的演示数据：整批一次提交，可在操作记录里一步撤销。 */
 @Composable
-private fun DemoDataCard() {
+private fun DemoDataSection() {
     val ctx = LocalContext.current
     val app = LocalApp.current
     val actions = LocalActions.current
@@ -534,14 +566,7 @@ private fun DemoDataCard() {
         }
     }
 
-    MintCard {
-        Text(stringResource(R.string.demo_data_title), style = MaterialTheme.typography.titleMedium)
-        Text(
-            stringResource(R.string.demo_data_hint, existing),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(8.dp))
+    FormSection(stringResource(R.string.demo_data_title)) {
         TextButton(
             enabled = !busy && semester != null,
             onClick = { if (existing > 0) confirm = true else fill() },

@@ -10,16 +10,17 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -49,15 +50,16 @@ import app.mintcal.core.parcel.ParcelRule
 import app.mintcal.core.parcel.ParcelRuleEngine
 import app.mintcal.core.parcel.RuleTemplate
 import app.mintcal.core.util.Ids
-import app.mintcal.data.Repository
 import app.mintcal.notify.ParcelTasks
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.components.ConfirmDialog
+import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.FieldText
 import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
+import app.mintcal.ui.components.NavRow
 import app.mintcal.ui.components.SwitchRow
 import app.mintcal.ui.components.TimeDialSheet
 import app.mintcal.ui.components.ValueRow
@@ -110,10 +112,7 @@ fun TrashScreen(onBack: () -> Unit) {
         actions = { if (trashed.isNotEmpty()) TextButton(onClick = { confirmEmpty = true }) { Text(stringResource(R.string.trash_empty_action)) } },
     ) {
         if (trashed.isEmpty()) {
-            Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center) {
-                Text(stringResource(R.string.trash_empty), style = MaterialTheme.typography.titleMedium)
-                Text(stringResource(R.string.trash_hint, Repository.TRASH_DAYS), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            EmptyState(stringResource(R.string.trash_empty), Modifier.padding(top = 48.dp), icon = Icons.Rounded.DeleteOutline)
         } else {
             LazyColumn(
                 Modifier.fillMaxSize().navigationBarsPadding(),
@@ -122,7 +121,6 @@ fun TrashScreen(onBack: () -> Unit) {
                         .PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { Text(stringResource(R.string.trash_hint, Repository.TRASH_DAYS), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 items(trashed, key = { it.id }) { r ->
                     MintCard {
                         Text(r.displayTitle, style = MaterialTheme.typography.titleMedium)
@@ -182,9 +180,7 @@ fun HistoryScreen(onBack: () -> Unit) {
 
     MintScreen(title = stringResource(R.string.history_title), onBack = onBack) {
         if (history.isEmpty()) {
-            Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center) {
-                Text(stringResource(R.string.history_empty), style = MaterialTheme.typography.titleMedium)
-            }
+            EmptyState(stringResource(R.string.history_empty), Modifier.padding(top = 48.dp), icon = Icons.Rounded.History)
         } else {
             LazyColumn(
                 Modifier.fillMaxSize().navigationBarsPadding(),
@@ -193,7 +189,6 @@ fun HistoryScreen(onBack: () -> Unit) {
                         .PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { Text(stringResource(R.string.history_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 items(history, key = { it.id }) { op ->
                     MintCard {
                         Text(op.description.ifBlank { stringResource(R.string.history_unnamed) }, style = MaterialTheme.typography.titleMedium)
@@ -229,12 +224,6 @@ fun HistoryScreen(onBack: () -> Unit) {
                                     }
                                 }) { Text(stringResource(if (canUndo) R.string.undo else R.string.redo)) }
                             }
-                        } else {
-                            Text(
-                                stringResource(if (op.undoneAt == null) R.string.history_blocked_undo else R.string.history_blocked_redo),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
                         }
                     }
                 }
@@ -259,8 +248,13 @@ fun ParcelScreen(onBack: () -> Unit) {
     var sample by remember { mutableStateOf("") }
     var result by remember { mutableStateOf<app.mintcal.core.parcel.ParcelInfo?>(null) }
     var tried by remember { mutableStateOf(false) }
+    var showTry by remember { mutableStateOf(false) }
     var sampleDraft by remember { mutableStateOf<RuleDraft?>(null) }
     val granted = listenerEnabled(ctx)
+
+    fun openListenerSettings() {
+        runCatching { ctx.startActivity(Intent(AndroidSettings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
 
     MintScreen(title = stringResource(R.string.parcel_title), onBack = onBack) {
         Column(
@@ -272,16 +266,15 @@ fun ParcelScreen(onBack: () -> Unit) {
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(stringResource(R.string.parcel_intro), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FormSection {
-                SwitchRow(stringResource(R.string.parcel_enable), stringResource(R.string.parcel_enable_desc), st.parcelEnabled) { v -> app.settings.update { it.copy(parcelEnabled = v) } }
-                if (st.parcelEnabled && !granted) {
-                    Text(stringResource(R.string.parcel_need_access), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                    TextButton(onClick = {
-                        runCatching { ctx.startActivity(Intent(AndroidSettings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                    }) { Text(stringResource(R.string.parcel_grant)) }
+                SwitchRow(stringResource(R.string.parcel_enable), null, st.parcelEnabled) { v -> app.settings.update { it.copy(parcelEnabled = v) } }
+                if (st.parcelEnabled) {
+                    ValueRow(
+                        stringResource(R.string.parcel_enable_desc),
+                        stringResource(if (granted) R.string.settings_perm_allowed else R.string.parcel_grant),
+                        onClick = { if (!granted) openListenerSettings() },
+                    )
                 }
-                if (st.parcelEnabled && granted) Text(stringResource(R.string.parcel_access_ok), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 AnimatedVisibility(
                     visible = st.parcelEnabled,
                     enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
@@ -300,7 +293,6 @@ fun ParcelScreen(onBack: () -> Unit) {
                             "%02d:%02d".format(st.parcelWindowEnd / 60, st.parcelWindowEnd % 60),
                             onClick = { pickEnd = true },
                         )
-                        Text(stringResource(R.string.parcel_window_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (pickStart) {
                             TimeDialSheet(LocalTime.of(st.parcelWindowStart / 60, st.parcelWindowStart % 60), onDismiss = { pickStart = false }) { time ->
                                 app.settings.update { it.copy(parcelWindowStart = time.hour * 60 + time.minute) }
@@ -314,41 +306,48 @@ fun ParcelScreen(onBack: () -> Unit) {
                     }
                 }
             }
-            FormSection(stringResource(R.string.parcel_try)) {
-                FieldText(stringResource(R.string.parcel_sample_label), sample, {
-                    sample = it
-                    tried = false
-                }, singleLine = false, minLines = 3, placeholder = stringResource(R.string.parcel_sample_hint))
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = {
-                    result = app.parcelRules.value.parse(sample, LocalDateTime.now())
-                    tried = true
-                }, enabled = sample.isNotBlank()) { Text(stringResource(R.string.parcel_recognize)) }
-                val r = result
-                if (tried && r == null) {
-                    Text(stringResource(R.string.parcel_not_found), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
-                    TextButton(onClick = { sampleDraft = RuleDraft(ParcelRule(Ids.next(), "", RuleTemplate.fromSample(sample)), sample = sample, isNew = true) }) {
-                        Text(stringResource(R.string.parcel_rule_from_sample))
-                    }
-                }
-                if (r != null) {
-                    Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(stringResource(R.string.parcel_code, r.code), style = MaterialTheme.typography.titleMedium)
-                        (app.parcelRules.value.user + ParcelRuleEngine.BUILTIN).firstOrNull { it.id == r.ruleId }?.let {
-                            Text(stringResource(R.string.parcel_rule_matched, it.name), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FormSection {
+                NavRow(stringResource(R.string.parcel_try), onClick = { showTry = !showTry })
+                AnimatedVisibility(
+                    visible = showTry,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    Column(Modifier.padding(top = 4.dp)) {
+                        FieldText(stringResource(R.string.parcel_sample_label), sample, {
+                            sample = it
+                            tried = false
+                        }, singleLine = false, minLines = 3, placeholder = stringResource(R.string.parcel_sample_hint))
+                        OutlinedButton(onClick = {
+                            result = app.parcelRules.value.parse(sample, LocalDateTime.now())
+                            tried = true
+                        }, enabled = sample.isNotBlank()) { Text(stringResource(R.string.parcel_recognize)) }
+                        val r = result
+                        if (tried && r == null) {
+                            Text(stringResource(R.string.parcel_not_found), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+                            TextButton(onClick = { sampleDraft = RuleDraft(ParcelRule(Ids.next(), "", RuleTemplate.fromSample(sample)), sample = sample, isNew = true) }) {
+                                Text(stringResource(R.string.parcel_rule_from_sample))
+                            }
                         }
-                        if (r.place.isNotBlank()) Text(stringResource(R.string.parcel_place, r.place), style = MaterialTheme.typography.bodyMedium)
-                        if (r.company.isNotBlank()) Text(stringResource(R.string.parcel_company, r.company), style = MaterialTheme.typography.bodyMedium)
-                        r.deadline?.let { Text(stringResource(R.string.parcel_deadline, it.format(STAMP)), style = MaterialTheme.typography.bodyMedium) }
-                        Button(onClick = {
-                            val desc = ctx.getString(R.string.parcel_op_desc)
-                            actions.commit(Edits.save(snap, ParcelTasks.build(ctx, r), desc, System.currentTimeMillis()), desc)
-                        }, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.parcel_add_task)) }
+                        if (r != null) {
+                            Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(stringResource(R.string.parcel_code, r.code), style = MaterialTheme.typography.titleMedium)
+                                (app.parcelRules.value.user + ParcelRuleEngine.BUILTIN).firstOrNull { it.id == r.ruleId }?.let {
+                                    Text(stringResource(R.string.parcel_rule_matched, it.name), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                if (r.place.isNotBlank()) Text(stringResource(R.string.parcel_place, r.place), style = MaterialTheme.typography.bodyMedium)
+                                if (r.company.isNotBlank()) Text(stringResource(R.string.parcel_company, r.company), style = MaterialTheme.typography.bodyMedium)
+                                r.deadline?.let { Text(stringResource(R.string.parcel_deadline, it.format(STAMP)), style = MaterialTheme.typography.bodyMedium) }
+                                Button(onClick = {
+                                    val desc = ctx.getString(R.string.parcel_op_desc)
+                                    actions.commit(Edits.save(snap, ParcelTasks.build(ctx, r), desc, System.currentTimeMillis()), desc)
+                                }, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.parcel_add_task)) }
+                            }
+                        }
                     }
                 }
             }
             ParcelRulesSection(app.parcelRules)
-            Text(stringResource(R.string.parcel_privacy), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
     sampleDraft?.let { d -> RuleEditSheet(d, app.parcelRules) { sampleDraft = null } }

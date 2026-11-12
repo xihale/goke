@@ -51,6 +51,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -62,6 +63,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -72,6 +74,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -259,7 +265,7 @@ internal fun QuickAddSheet(
             } else {
                 null
             }
-        actions.commit(buildQuickTasks(snap, placed, listFilter, defaultBucket, now, desc, ov, note), msg)
+        actions.commit(buildQuickTasks(snap, placed, listFilter, defaultBucket, now, desc, ov, note), msg, undoable = placed.size > 1)
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         note = ""
     }
@@ -399,6 +405,15 @@ internal fun QuickAddSheet(
                             )
                         }
                     }
+                    // 空输入时顺带教一下语法：示例来自 quick_add_hint
+                    if (text.isEmpty()) {
+                        Text(
+                            stringResource(R.string.quick_add_hint),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
                     // 备注：详细编辑同款素面输入，可留空
                     Box(Modifier.fillMaxWidth()) {
                         BasicTextField(
@@ -485,11 +500,18 @@ internal fun QuickAddSheet(
                                 })
                             }
                         }
-                        if (snap.lists.isNotEmpty()) {
-                            Box {
-                                IconButton(onClick = { listMenu = true }) {
-                                    Icon(Icons.Rounded.Inbox, stringResource(R.string.label_list), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        // 清单按钮常驻：还没有自定义清单时点它插入 #，现场输名字即建清单
+                        Box {
+                            IconButton(onClick = {
+                                if (snap.lists.isEmpty()) {
+                                    rewrite(emptySet(), "#")
+                                } else {
+                                    listMenu = true
                                 }
+                            }) {
+                                Icon(Icons.Rounded.Inbox, stringResource(R.string.label_list), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (snap.lists.isNotEmpty()) {
                                 DropdownMenu(listMenu, { listMenu = false }, properties = noFocusPopup) {
                                     snap.lists.sortedBy { it.sort }.forEach { l ->
                                         DropdownMenuItem(text = { Text(l.name) }, onClick = {
@@ -506,17 +528,28 @@ internal fun QuickAddSheet(
                         }
                         // 确定：点了才落库；没写内容置灰
                         val canAdd = parsed != null
-                        Surface(
-                            onClick = { finish() },
-                            enabled = canAdd,
-                            shape = CircleShape,
-                            color = if (canAdd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.padding(start = 4.dp),
+                        val confirmLabel = stringResource(R.string.confirm)
+                        Box(
+                            modifier =
+                                Modifier
+                                    .padding(start = 4.dp)
+                                    .minimumInteractiveComponentSize()
+                                    .clip(CircleShape)
+                                    .clickable(enabled = canAdd, role = Role.Button) { finish() }
+                                    .semantics { contentDescription = confirmLabel },
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(if (canAdd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center,
+                            ) {
                                 Icon(
                                     Icons.Rounded.Check,
-                                    stringResource(R.string.confirm),
+                                    null,
                                     tint =
                                         if (canAdd) {
                                             MaterialTheme.colorScheme.onPrimary
@@ -541,20 +574,34 @@ internal fun QuickAddSheet(
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
                                 p.due?.let {
+                                    val dueText = ctx.dueLabel(it, p.dueHasTime, now.toLocalDate())
                                     Tag(
-                                        ctx.dueLabel(it, p.dueHasTime, now.toLocalDate()) + " ×",
+                                        "$dueText ×",
                                         MaterialTheme.colorScheme.primaryContainer,
                                         MaterialTheme.colorScheme.onPrimaryContainer,
-                                        Modifier.clickable { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME), null) },
+                                        Modifier
+                                            .minimumInteractiveComponentSize()
+                                            .clickable { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME), null) }
+                                            .semantics {
+                                                role = Role.Button
+                                                contentDescription = "移除时间：$dueText"
+                                            },
                                     )
                                 }
                                 p.courseName?.let { name ->
                                     val c = matchCourse(snap, name)
+                                    val courseTitle = c?.name ?: name
                                     Tag(
-                                        stringResource(R.string.detail_editor_before_class, c?.name ?: name) + " ×",
+                                        stringResource(R.string.detail_editor_before_class, courseTitle) + " ×",
                                         MaterialTheme.colorScheme.primaryContainer,
                                         MaterialTheme.colorScheme.onPrimaryContainer,
-                                        Modifier.clickable { rewrite(setOf(QuickTokenKind.COURSE), null) },
+                                        Modifier
+                                            .minimumInteractiveComponentSize()
+                                            .clickable { rewrite(setOf(QuickTokenKind.COURSE), null) }
+                                            .semantics {
+                                                role = Role.Button
+                                                contentDescription = "移除课程：$courseTitle"
+                                            },
                                     )
                                 }
                                 if (p.priority > 0) {
@@ -564,13 +611,19 @@ internal fun QuickAddSheet(
                                             2 -> R.string.priority_2
                                             else -> R.string.priority_1
                                         }
-                                    // chip 与旗子/高亮同源取优先级语义色，低透明度底 + 实色字
+                                    val prioStr = stringResource(label)
                                     val prio = colors.priorityColor(p.priority) ?: MaterialTheme.colorScheme.secondary
                                     Tag(
-                                        "!" + stringResource(label) + " ×",
+                                        "!$prioStr ×",
                                         prio.copy(alpha = 0.14f),
                                         prio,
-                                        Modifier.clickable { rewrite(setOf(QuickTokenKind.PRIORITY), null) },
+                                        Modifier
+                                            .minimumInteractiveComponentSize()
+                                            .clickable { rewrite(setOf(QuickTokenKind.PRIORITY), null) }
+                                            .semantics {
+                                                role = Role.Button
+                                                contentDescription = "移除优先级：$prioStr"
+                                            },
                                     )
                                 }
                                 p.listName?.let {
@@ -578,7 +631,13 @@ internal fun QuickAddSheet(
                                         "#$it ×",
                                         MaterialTheme.colorScheme.tertiaryContainer,
                                         MaterialTheme.colorScheme.onTertiaryContainer,
-                                        Modifier.clickable { rewrite(setOf(QuickTokenKind.LIST), null) },
+                                        Modifier
+                                            .minimumInteractiveComponentSize()
+                                            .clickable { rewrite(setOf(QuickTokenKind.LIST), null) }
+                                            .semantics {
+                                                role = Role.Button
+                                                contentDescription = "移除清单：$it"
+                                            },
                                     )
                                 }
                                 val tagTokens = p.tokens.filter { it.kind == QuickTokenKind.TAG }
@@ -587,11 +646,16 @@ internal fun QuickAddSheet(
                                         "@$tag ×",
                                         MaterialTheme.colorScheme.surfaceVariant,
                                         MaterialTheme.colorScheme.onSurfaceVariant,
-                                        Modifier.clickable {
-                                            tagTokens.getOrNull(i)?.let { tok ->
-                                                text = text.replace(tok.text, " ").replace(Regex("\\s+"), " ").trim()
-                                            }
-                                        },
+                                        Modifier
+                                            .minimumInteractiveComponentSize()
+                                            .clickable {
+                                                tagTokens.getOrNull(i)?.let { tok ->
+                                                    text = text.replace(tok.text, " ").replace(Regex("\\s+"), " ").trim()
+                                                }
+                                            }.semantics {
+                                                role = Role.Button
+                                                contentDescription = "移除标签：@$tag"
+                                            },
                                     )
                                 }
                             }
@@ -607,27 +671,46 @@ internal fun QuickAddSheet(
                                         "$panelWhenLabel ×",
                                         MaterialTheme.colorScheme.primaryContainer,
                                         MaterialTheme.colorScheme.onPrimaryContainer,
-                                        Modifier.clickable { panelWhen = null },
+                                        Modifier
+                                            .minimumInteractiveComponentSize()
+                                            .clickable { panelWhen = null }
+                                            .semantics {
+                                                role = Role.Button
+                                                contentDescription = "移除时间：$panelWhenLabel"
+                                            },
                                     )
                                 }
                                 if (panelRemind != null) {
+                                    val rLabel = remindLabel(panelRemind)
                                     Tag(
-                                        remindLabel(panelRemind) + " ×",
+                                        "$rLabel ×",
                                         MaterialTheme.colorScheme.secondaryContainer,
                                         MaterialTheme.colorScheme.onSecondaryContainer,
-                                        Modifier.clickable { panelRemind = null },
+                                        Modifier
+                                            .minimumInteractiveComponentSize()
+                                            .clickable { panelRemind = null }
+                                            .semantics {
+                                                role = Role.Button
+                                                contentDescription = "移除提醒：$rLabel"
+                                            },
                                     )
                                 }
                                 if (panelFreq != null) {
+                                    val fLabel = freqLabel(panelFreq, panelUntil, panelInterval, panelByDays, panelWhen?.date)
                                     Tag(
-                                        freqLabel(panelFreq, panelUntil, panelInterval, panelByDays, panelWhen?.date) + " ×",
+                                        "$fLabel ×",
                                         MaterialTheme.colorScheme.tertiaryContainer,
                                         MaterialTheme.colorScheme.onTertiaryContainer,
-                                        Modifier.clickable {
-                                            panelFreq = null
-                                            panelUntil = null
-                                            panelByDays = emptySet()
-                                        },
+                                        Modifier
+                                            .minimumInteractiveComponentSize()
+                                            .clickable {
+                                                panelFreq = null
+                                                panelUntil = null
+                                                panelByDays = emptySet()
+                                            }.semantics {
+                                                role = Role.Button
+                                                contentDescription = "移除重复：$fLabel"
+                                            },
                                     )
                                 }
                             }

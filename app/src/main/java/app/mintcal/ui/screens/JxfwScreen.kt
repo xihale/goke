@@ -92,10 +92,8 @@ private fun LoginPanel(state: JxfwState) {
 
     FormSection(stringResource(R.string.jxfw_login_section)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(R.string.jxfw_intro), style = MaterialTheme.typography.bodyMedium)
             FieldText(stringResource(R.string.jxfw_username), user, { user = it })
             FieldText(stringResource(R.string.jxfw_password), password, { password = it }, secret = true)
-            Text(stringResource(R.string.jxfw_privacy), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             errorText(state.lastErrorKind, state.lastError)?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
@@ -179,7 +177,6 @@ private fun AccountPanel(state: JxfwState) {
     FormSection(stringResource(R.string.jxfw_auto)) {
         SwitchRow(
             title = stringResource(R.string.jxfw_auto),
-            subtitle = stringResource(R.string.jxfw_auto_desc),
             checked = state.autoSync,
             onChange = { app.jxfw.setAutoSync(it) },
         )

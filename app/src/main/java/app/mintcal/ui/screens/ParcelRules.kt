@@ -6,16 +6,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -53,7 +48,7 @@ data class RuleDraft(
     val isNew: Boolean = false,
 )
 
-/** 快递规则管理：自定义规则列表（增改停排序）、内置开关、噪声词。 */
+/** 快递规则管理：自定义规则列表（增改停用）、内置开关、噪声词。 */
 @Composable
 fun ParcelRulesSection(store: ParcelRuleStore) {
     val cfg by store.flow.collectAsState()
@@ -61,81 +56,70 @@ fun ParcelRulesSection(store: ParcelRuleStore) {
     var noiseOpen by remember { mutableStateOf(false) }
 
     FormSection(stringResource(R.string.parcel_rules)) {
-        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (cfg.user.isEmpty()) {
-                Text(
-                    stringResource(R.string.parcel_rules_empty),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
-            }
-            cfg.user.forEachIndexed { i, rule ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton({ store.move(rule.id, -1) }, enabled = i > 0) {
-                        Icon(Icons.Rounded.KeyboardArrowUp, stringResource(R.string.parcel_move_up))
-                    }
-                    TextButton({ store.move(rule.id, 1) }, enabled = i < cfg.user.size - 1) {
-                        Icon(Icons.Rounded.KeyboardArrowDown, stringResource(R.string.parcel_move_down))
-                    }
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .clickable { draft = RuleDraft(rule) }
-                            .padding(vertical = 6.dp),
-                    ) {
-                        Text(rule.name.ifBlank { rule.template.take(12) }, style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            rule.template,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Switch(rule.enabled, onCheckedChange = { store.upsert(rule.copy(enabled = it)) })
+        if (cfg.user.isEmpty()) {
+            Text(
+                stringResource(R.string.parcel_rules_empty),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 6.dp),
+            )
+        }
+        cfg.user.forEach { rule ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { draft = RuleDraft(rule) }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f).padding(end = 16.dp)) {
+                    Text(rule.name.ifBlank { rule.template.take(12) }, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        rule.template,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
+                Switch(rule.enabled, onCheckedChange = { store.upsert(rule.copy(enabled = it)) })
             }
-            TextButton({ draft = RuleDraft(ParcelRule(Ids.next(), "", ""), isNew = true) }) {
-                Text(stringResource(R.string.parcel_rule_add))
-            }
+        }
+        TextButton({ draft = RuleDraft(ParcelRule(Ids.next(), "", ""), isNew = true) }) {
+            Text(stringResource(R.string.parcel_rule_add))
         }
     }
     FormSection(stringResource(R.string.parcel_rules_builtin)) {
-        Column(Modifier.padding(8.dp)) {
-            ParcelRuleEngine.BUILTIN.forEach { b ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .clickable { draft = RuleDraft(b.copy(id = Ids.next(), builtin = false), originBuiltinId = b.id) }
-                            .padding(vertical = 6.dp),
-                    ) {
-                        Text(b.name, style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            b.template,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Switch(b.id !in cfg.disabledBuiltins, onCheckedChange = { store.setBuiltinEnabled(b.id, it) })
+        ParcelRuleEngine.BUILTIN.forEach { b ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { draft = RuleDraft(b.copy(id = Ids.next(), builtin = false), originBuiltinId = b.id) }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f).padding(end = 16.dp)) {
+                    Text(b.name, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        b.template,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
+                Switch(b.id !in cfg.disabledBuiltins, onCheckedChange = { store.setBuiltinEnabled(b.id, it) })
             }
-            TextButton({ store.restoreDefaults() }) { Text(stringResource(R.string.parcel_rules_restore)) }
         }
+        TextButton({ store.restoreDefaults() }) { Text(stringResource(R.string.parcel_rules_restore)) }
     }
     FormSection(stringResource(R.string.parcel_noise)) {
-        Column(Modifier.padding(8.dp)) {
-            Text(
-                stringResource(R.string.parcel_noise_desc),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(cfg.rejects.joinToString("，"), style = MaterialTheme.typography.bodyMedium)
-            TextButton({ noiseOpen = true }) { Text(stringResource(R.string.parcel_noise_edit)) }
-        }
+        Text(
+            cfg.rejects.joinToString("，"),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(vertical = 6.dp),
+        )
+        TextButton({ noiseOpen = true }) { Text(stringResource(R.string.parcel_noise_edit)) }
     }
 
     draft?.let { RuleEditSheet(it, store) { draft = null } }

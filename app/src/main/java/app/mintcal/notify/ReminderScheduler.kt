@@ -89,7 +89,11 @@ class ReminderScheduler(
                     .putExtra(ReminderReceiver.EXTRA_TASK_ID, r.taskId)
                     .putExtra(ReminderReceiver.EXTRA_PERSISTENT, r.persistent)
             val pi = PendingIntent.getBroadcast(ctx, i, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-            val at = r.triggerAt.atZone(zone).toInstant().toEpochMilli()
+            val at =
+                r.triggerAt
+                    .atZone(zone)
+                    .toInstant()
+                    .toEpochMilli()
             runCatching {
                 if (canExact) {
                     am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)

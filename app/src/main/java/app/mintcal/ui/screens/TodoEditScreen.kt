@@ -74,6 +74,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -125,14 +128,14 @@ import app.mintcal.ui.theme.priorityColor
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.LocalDateTime
+import java.time.ZoneId
 
 /**
  * 唯一的编辑页：新建和修改都是它。版式对齐 TickTick 详情：
  * 勾选在顶栏右侧，标题从左缘起，日期、备注、附件依次全宽铺在页面里。
  * 底部左侧是清单名，右侧是子任务、优先级、图片和附件；子任务点清单图标在栏上方展开。
- * 修改返回即保存（空标题等于放弃）；新建要点顶栏「确定」才落库，返回 / 手势退出等于丢弃草稿。
+ * 修改返回即保存（空标题等于放弃）；新建要点顶栏「确定」才落库，返回先确认放弃（空白草稿直接走）。
  * 标题里识别到的日期时间就地高亮，点一下表示认错了。
  */
 @Composable
@@ -210,6 +213,7 @@ fun TodoEditScreen(
     var subReset by remember { mutableIntStateOf(0) }
     var subsOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmDiscard by remember { mutableStateOf(false) }
     var listMenu by remember { mutableStateOf(false) }
     var priorityMenu by remember { mutableStateOf(false) }
     val titleFocus = remember { FocusRequester() }
@@ -240,12 +244,24 @@ fun TodoEditScreen(
             argDate != null -> WhenPick(argDate, null)
             else -> null
         }
+    // 周历框选带来的其它日期：时间面板切走时间段后不再生效，与 commit 的口径一致
+    val extraDays =
+        remember(extraDatesArg, whenPick) {
+            if (whenPick?.start == null) {
+                emptyList()
+            } else {
+                extraDatesArg
+                    .orEmpty()
+                    .split(',')
+                    .mapNotNull { runCatching { LocalDate.parse(it.trim()) }.getOrNull() }
+                    .filter { it != whenPick?.date }
+            }
+        }
     val initialWhen = remember { whenPick }
     val whenChanged =
         whenPick?.date != initialWhen?.date || whenPick?.start != initialWhen?.start || whenPick?.minutes != initialWhen?.minutes
     val hasChanges =
-        // 新建时草稿就是内容本身：带着草稿进来点返回也该落成一条，不能当作「没改过」
-        (existing == null && text.isNotBlank()) || text != existing?.title.orEmpty() || note != existing?.note.orEmpty() ||
+        text != existing?.title.orEmpty() || note != existing?.note.orEmpty() ||
             attachments != existing?.attachments.orEmpty() || listId != existing?.listId || priority != (existing?.priority ?: 0) ||
             remind != existing?.remindMinutes || persistent != (existing?.remindPersistent == true) || freq != existing?.repeat?.freq ||
             (freq != null && (interval != (existing?.repeat?.interval ?: 1) || until != existing?.repeat?.until || byDays != (existing?.repeat?.byDays ?: emptySet<Int>()))) ||
@@ -365,20 +381,25 @@ fun TodoEditScreen(
                         )
                     Edits.save(snap, t2, ctx.getString(R.string.add_task_desc, t2.title), ms)
                 }
+        // 编辑保存静默；新建单条 Toast；框选多天一次给撤销（与批量预览同一承诺）
         val feedback =
             when {
-                existing != null -> desc
+                existing != null -> null
                 changes.size > 1 -> resources.getString(R.string.todo_batch_toast, changes.size)
                 w != null -> resources.getString(R.string.detail_editor_added_date, ctx.dueLabel(w.date.atStartOfDay(), false, today))
                 else -> resources.getString(R.string.detail_editor_added_inbox)
             }
-        actions.commit(ChangeSet(Ids.next(), desc, Source.MANUAL, ms, changes.flatMap { it.changes }), feedback)
+        actions.commit(ChangeSet(Ids.next(), desc, Source.MANUAL, ms, changes.flatMap { it.changes }), feedback, undoable = changes.size > 1)
         onBack()
     }
 
-    // 修改：返回即保存（有改动就落盘）；新建：只有点「确定」才落库，返回一律丢弃草稿
+    // 修改：返回即保存（空标题等于放弃）；新建：返回一律不落库——带内容的草稿先确认放弃，空白直接走
     fun requestBack() {
-        if (existing != null && title.isNotEmpty() && hasChanges) commit() else onBack()
+        when {
+            existing != null -> if (title.isNotBlank() && hasChanges) commit() else onBack()
+            title.isBlank() -> onBack()
+            else -> confirmDiscard = true
+        }
     }
     BackHandler { requestBack() }
 
@@ -389,33 +410,53 @@ fun TodoEditScreen(
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .imePadding(),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { requestBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
-            Spacer(Modifier.weight(1f))
-            if (existing != null) {
-                MintCheck(existing.done, { d -> toggle(actions, snap, existing, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, existing.title)) }, Modifier, 18.dp)
-                Box {
-                    IconButton(onClick = { pageMenu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
-                    DropdownMenu(pageMenu, { pageMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.delete)) },
-                            leadingIcon = { Icon(Icons.Rounded.Delete, null) },
-                            onClick = {
-                                pageMenu = false
-                                confirmDelete = true
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Row(
+                Modifier
+                    .widthIn(max = 680.dp)
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = { requestBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
+                Spacer(Modifier.weight(1f))
+                if (existing != null) {
+                    MintCheck(
+                        checked = existing.done,
+                        onChange = { d -> toggle(actions, snap, existing, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, existing.title)) },
+                        modifier =
+                            Modifier.semantics {
+                                contentDescription = ctx.getString(if (existing.done) R.string.a11y_mark_undone else R.string.a11y_mark_done)
                             },
-                        )
+                        size = 18.dp,
+                    )
+                    Box {
+                        IconButton(onClick = { pageMenu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
+                        DropdownMenu(pageMenu, { pageMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.delete)) },
+                                leadingIcon = { Icon(Icons.Rounded.Delete, null) },
+                                onClick = {
+                                    pageMenu = false
+                                    confirmDelete = true
+                                },
+                            )
+                        }
                     }
+                } else {
+                    // 新建：明确一个「确定」键，返回就是丢弃
+                    TextButton(enabled = title.isNotEmpty(), onClick = { commit() }) { Text(stringResource(R.string.confirm)) }
                 }
-            } else {
-                // 新建：明确一个「确定」键，返回就是丢弃
-                TextButton(enabled = title.isNotEmpty(), onClick = { commit() }) { Text(stringResource(R.string.confirm)) }
             }
         }
         Column(
             Modifier
                 .weight(1f)
+                .widthIn(max = 680.dp)
+                .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
         ) {
@@ -430,6 +471,15 @@ fun TodoEditScreen(
                 until = null
                 byDays = emptySet()
             }) { timeSheet = true }
+            if (extraDays.isNotEmpty()) {
+                // 周历框选带进来的其它日期：明说会建几条，不再静默生成
+                Text(
+                    stringResource(R.string.detail_editor_extra_dates, extraDays.size + 1),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
             AnimatedVisibility(
                 visible = clashes.isNotEmpty(),
                 enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
@@ -665,6 +715,16 @@ fun TodoEditScreen(
             },
         )
     }
+    if (confirmDiscard) {
+        ConfirmDialog(
+            stringResource(R.string.detail_editor_discard_title),
+            stringResource(R.string.detail_editor_discard_desc),
+            stringResource(R.string.detail_editor_discard),
+            onConfirm = { onBack() },
+            onDismiss = { confirmDiscard = false },
+            danger = true,
+        )
+    }
     if (confirmDelete && existing != null) {
         ConfirmDialog(
             stringResource(R.string.delete_task_title),
@@ -695,51 +755,57 @@ private fun SmartTitle(
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val haptics = LocalHapticFeedback.current
+    val hint = stringResource(R.string.entry_hint)
     var layoutState by remember { mutableStateOf<TextLayoutResult?>(null) }
-    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-        BasicTextField(
-            value = value,
-            onValueChange = onChange,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focus)
-                    .pointerInput(ranges) {
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                            val layout = layoutState ?: return@awaitEachGesture
-                            if (layout.layoutInput.text.isEmpty()) return@awaitEachGesture
-                            val off = layout.getOffsetForPosition(down.position)
-                            val hit = ranges.firstOrNull { off in it }
-                            if (hit != null) {
-                                down.consume()
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onCancelRange(hit)
-                            }
+    BasicTextField(
+        value = value,
+        onValueChange = onChange,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .focusRequester(focus)
+                .semantics { contentDescription = hint }
+                .pointerInput(ranges) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        val layout = layoutState ?: return@awaitEachGesture
+                        if (layout.layoutInput.text.isEmpty()) return@awaitEachGesture
+                        val off = layout.getOffsetForPosition(down.position)
+                        val hit = ranges.firstOrNull { off in it }
+                        if (hit != null) {
+                            down.consume()
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onCancelRange(hit)
                         }
-                    }.padding(vertical = 12.dp),
-            textStyle =
-                MaterialTheme.typography.titleLarge.copy(
-                    color = if (done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Normal,
-                    textDecoration = if (done) TextDecoration.LineThrough else null,
-                ),
-            cursorBrush = SolidColor(accent),
-            visualTransformation = TokenPaint(ranges, accent),
-            onTextLayout = { layoutState = it },
-        )
-        if (value.text.isEmpty()) {
-            Text(
-                stringResource(R.string.entry_hint),
-                modifier = Modifier.padding(vertical = 12.dp),
-                style =
-                    MaterialTheme.typography.titleLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Normal,
-                    ),
-            )
-        }
-    }
+                    }
+                }.padding(vertical = 12.dp),
+        textStyle =
+            MaterialTheme.typography.titleLarge.copy(
+                color = if (done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Normal,
+                textDecoration = if (done) TextDecoration.LineThrough else null,
+            ),
+        cursorBrush = SolidColor(accent),
+        visualTransformation = TokenPaint(ranges, accent),
+        onTextLayout = { layoutState = it },
+        decorationBox = { innerTextField ->
+            Box {
+                if (value.text.isEmpty()) {
+                    Text(
+                        hint,
+                        style =
+                            MaterialTheme.typography.titleLarge.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Normal,
+                            ),
+                        modifier = Modifier.clearAndSetSemantics {},
+                    )
+                }
+                innerTextField()
+            }
+        },
+    )
 }
 
 private class TokenPaint(
@@ -861,27 +927,35 @@ private fun FlatField(
     modifier: Modifier = Modifier,
 ) {
     var v by remember(reset) { mutableStateOf(TextFieldValue(value)) }
-    Box(modifier.fillMaxWidth().heightIn(min = 44.dp)) {
-        BasicTextField(
-            value = v,
-            onValueChange = {
-                v = it
-                onChange(it.text)
-            },
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            singleLine = singleLine,
-        )
-        if (v.text.isEmpty()) {
-            Text(
-                placeholder,
-                modifier = Modifier.padding(vertical = 8.dp),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+    BasicTextField(
+        value = v,
+        onValueChange = {
+            v = it
+            onChange(it.text)
+        },
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .semantics { contentDescription = placeholder }
+                .padding(vertical = 8.dp),
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        singleLine = singleLine,
+        decorationBox = { innerTextField ->
+            Box {
+                if (v.text.isEmpty()) {
+                    Text(
+                        placeholder,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.clearAndSetSemantics {},
+                    )
+                }
+                innerTextField()
+            }
+        },
+    )
 }
 
 /** 这条待办的专注统计：累计 + 最近几段起止，入口「开始专注」与「查看全部」。 */

@@ -1,6 +1,7 @@
 package app.mintcal.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -26,6 +28,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
@@ -39,7 +44,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,8 +57,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -63,6 +69,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -84,10 +91,10 @@ import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.MintFab
 import app.mintcal.ui.components.NavClearance
 import app.mintcal.ui.liveSnapshot
-import app.mintcal.ui.rememberNowGated
-import app.mintcal.ui.rememberToday
 import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
+import app.mintcal.ui.rememberNowGated
+import app.mintcal.ui.rememberToday
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import kotlinx.coroutines.delay
@@ -156,7 +163,6 @@ fun TodoScreen() {
     val bucketOfTask = remember(sections) { sections.flatMap { s -> s.tasks.map { it.id to s.bucket } }.toMap() }
     val overdueTasks = sections.firstOrNull { it.bucket == Bucket.OVERDUE }?.tasks.orEmpty()
     val nextUp = remember(snap, now) { NextUps.find(snap, now) }
-    val urgent = overdueTasks.firstOrNull() ?: sections.firstOrNull { it.bucket == Bucket.TODAY }?.tasks?.firstOrNull()
     val dropBuckets = DROPPABLE.filter { TaskLogic.dropDate(it, today) != TaskLogic.NO_DROP }
 
     val expanded = remember(expandedCsv) { csvToSet(expandedCsv) }
@@ -289,19 +295,46 @@ fun TodoScreen() {
             item(key = "filters") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (searching) {
-                        OutlinedTextField(
-                            queryText,
-                            { queryText = it },
-                            Modifier.fillMaxWidth().focusRequester(searchFocus),
-                            placeholder = { Text(stringResource(R.string.todo_search_hint), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(20.dp),
-                            trailingIcon = {
-                                if (queryText.isNotEmpty()) {
-                                    IconButton(onClick = { queryText = "" }) { Icon(Icons.Rounded.Close, stringResource(R.string.todo_clear)) }
-                                }
-                            },
-                        )
+                        // 无框搜索：柔色胶囊 + 搜索图标，唯一的描边输入框已经拆掉
+                        val scheme = MaterialTheme.colorScheme
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(scheme.surfaceContainerLow)
+                                .heightIn(min = 48.dp)
+                                .padding(start = 14.dp, end = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Rounded.Search, null, Modifier.size(20.dp), tint = scheme.onSurfaceVariant)
+                            BasicTextField(
+                                value = queryText,
+                                onValueChange = { queryText = it },
+                                modifier = Modifier.weight(1f).padding(horizontal = 10.dp).focusRequester(searchFocus),
+                                textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
+                                cursorBrush = SolidColor(scheme.primary),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+                                decorationBox = { inner ->
+                                    Box {
+                                        if (queryText.isEmpty()) {
+                                            Text(
+                                                stringResource(R.string.todo_search_hint),
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = scheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        inner()
+                                    }
+                                },
+                            )
+                            if (queryText.isNotEmpty()) {
+                                IconButton(onClick = { queryText = "" }) { Icon(Icons.Rounded.Close, stringResource(R.string.todo_clear)) }
+                            }
+                        }
                     }
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (snap.lists.isNotEmpty()) {
@@ -361,8 +394,8 @@ fun TodoScreen() {
                 }
             }
             if (!selecting && !searching) {
-                if (nextUp != null || urgent != null) {
-                    item(key = "next") { NextUpCard(nextUp, urgent, snap, now, anim()) }
+                nextUp?.let { up ->
+                    item(key = "next") { NextUpCard(up, now, anim()) }
                 }
             }
             if (sections.isEmpty()) {
@@ -371,7 +404,7 @@ fun TodoScreen() {
                 item(key = "empty") {
                     EmptyState(
                         stringResource(if (filtered) R.string.todo_search_empty else R.string.todo_all_empty),
-                        hint = if (filtered) stringResource(R.string.todo_empty_filtered_hint) else null,
+                        hint = null,
                         actionLabel = stringResource(R.string.shortcut_add_task),
                         onAction = {
                             addTarget = null

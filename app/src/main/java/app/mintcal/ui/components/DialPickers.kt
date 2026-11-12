@@ -5,15 +5,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -35,8 +38,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import java.time.LocalTime
@@ -79,6 +87,11 @@ fun MinutesDialSheet(
         m: Int,
     ): Pair<Int, Int> = if (h * 60 + m > maxMinutes) maxMinutes / 60 to maxMinutes % 60 else h to m
 
+    val presets =
+        remember(maxMinutes) {
+            listOf(15, 30, 45, 60, 90).filter { it <= maxMinutes }
+        }
+
     DialDialog(
         hours = hours,
         minutes = minutes,
@@ -88,6 +101,7 @@ fun MinutesDialSheet(
         onMinutes = { minutes = clamp(hours, it).second },
         onHourPicked = { mode = DialMode.MINUTE },
         a11y = hourMinuteDesc(hours, minutes),
+        presets = presets,
         onDismiss = onDismiss,
         onConfirm = {
             onPick(clamp(hours, minutes).let { it.first * 60 + it.second })
@@ -116,6 +130,7 @@ fun TimeDialSheet(
         onMinutes = { minutes = it },
         onHourPicked = { mode = DialMode.MINUTE },
         a11y = hourMinuteDesc(hours, minutes),
+        presets = null,
         onDismiss = onDismiss,
         onConfirm = {
             onPick(LocalTime.of(hours, minutes))
@@ -140,6 +155,7 @@ private fun DialDialog(
     onMinutes: (Int) -> Unit,
     onHourPicked: () -> Unit,
     a11y: String,
+    presets: List<Int>? = null,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -158,9 +174,80 @@ private fun DialDialog(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Digit("%02d".format(hours), mode == DialMode.HOUR) { onMode(DialMode.HOUR) }
-                Text(":", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Digit("%02d".format(minutes), mode == DialMode.MINUTE) { onMode(DialMode.MINUTE) }
+                Digit(
+                    text = "%02d".format(hours),
+                    desc = stringResource(R.string.dial_hours),
+                    active = mode == DialMode.HOUR,
+                ) { onMode(DialMode.HOUR) }
+                Text(
+                    ":",
+                    modifier = Modifier.clearAndSetSemantics {},
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Digit(
+                    text = "%02d".format(minutes),
+                    desc = stringResource(R.string.dial_minutes),
+                    active = mode == DialMode.MINUTE,
+                ) { onMode(DialMode.MINUTE) }
+            }
+            if (presets != null && presets.isNotEmpty()) {
+                val currentTotal = hours * 60 + minutes
+                Row(
+                    modifier =
+                        Modifier
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    presets.forEach { p ->
+                        val sel = currentTotal == p
+                        val label =
+                            if (p < 60) {
+                                "${p}m"
+                            } else if (p % 60 == 0) {
+                                "${p / 60}h"
+                            } else {
+                                "${p / 60}h${p % 60}m"
+                            }
+                        val desc =
+                            if (p < 60) {
+                                "${p}${stringResource(R.string.dial_minutes)}"
+                            } else {
+                                "${p / 60}${stringResource(R.string.dial_hours)}" + if (p % 60 > 0) "${p % 60}${stringResource(R.string.dial_minutes)}" else ""
+                            }
+                        Surface(
+                            selected = sel,
+                            onClick = {
+                                onHours(p / 60)
+                                onMinutes(p % 60)
+                            },
+                            modifier =
+                                Modifier
+                                    .heightIn(min = 48.dp)
+                                    .semantics {
+                                        role = Role.RadioButton
+                                        this.selected = sel
+                                        contentDescription = desc
+                                    },
+                            shape = CircleShape,
+                            color = if (sel) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = if (sel) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                                )
+                            }
+                        }
+                    }
+                }
             }
             DialFace(
                 mode = mode,
@@ -181,15 +268,30 @@ private fun DialDialog(
 @Composable
 private fun Digit(
     text: String,
+    desc: String,
     active: Boolean,
     onClick: () -> Unit,
 ) {
-    Text(
-        text,
-        Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp),
-        style = MaterialTheme.typography.displaySmall,
-        color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-    )
+    Box(
+        modifier =
+            Modifier
+                .heightIn(min = 48.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+                .semantics {
+                    role = Role.Tab
+                    this.selected = active
+                    contentDescription = "$desc $text"
+                },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.displaySmall,
+            color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
+    }
 }
 
 /** 表盘本体：背景圆 + 指针 + 数字（选中数字套主题色圆）。点按与拖动都拨盘，拖动结束回调。 */
@@ -248,13 +350,28 @@ private fun DialFace(
         val c = size / 2
         when (mode) {
             DialMode.HOUR -> {
-                HOUR_OUTER.forEachIndexed { i, v -> hourLabel(i, v, selected = v == selected, c, labelR) }
-                HOUR_INNER.forEachIndexed { i, v -> hourLabel(i, v, selected = v == selected, c, innerR) }
+                HOUR_OUTER.forEachIndexed { i, v ->
+                    hourLabel(i, v, selected = v == selected, c, labelR, onSelect, onSelectDone)
+                }
+                HOUR_INNER.forEachIndexed { i, v ->
+                    hourLabel(i, v, selected = v == selected, c, innerR, onSelect, onSelectDone)
+                }
             }
 
             DialMode.MINUTE -> {
                 for (s in 0..59 step 5) {
-                    dialLabel("%02d".format(s), s == selected, c, labelR, s * 6.0)
+                    dialLabel(
+                        text = "%02d".format(s),
+                        desc = "$s ${stringResource(R.string.dial_minutes)}",
+                        selected = s == selected,
+                        c = c,
+                        radius = labelR,
+                        angleDeg = s * 6.0,
+                        onClick = {
+                            onSelect(s)
+                            onSelectDone()
+                        },
+                    )
                 }
             }
         }
@@ -268,15 +385,30 @@ private fun hourLabel(
     selected: Boolean,
     c: androidx.compose.ui.unit.Dp,
     radius: androidx.compose.ui.unit.Dp,
-) = dialLabel(value.toString(), selected, c, radius, idx * 30.0)
+    onSelect: (Int) -> Unit,
+    onSelectDone: () -> Unit,
+) = dialLabel(
+    text = value.toString(),
+    desc = "$value ${stringResource(R.string.dial_hours)}",
+    selected = selected,
+    c = c,
+    radius = radius,
+    angleDeg = idx * 30.0,
+    onClick = {
+        onSelect(value)
+        onSelectDone()
+    },
+)
 
 @Composable
 private fun dialLabel(
     text: String,
+    desc: String,
     selected: Boolean,
     c: androidx.compose.ui.unit.Dp,
     radius: androidx.compose.ui.unit.Dp,
     angleDeg: Double,
+    onClick: () -> Unit,
 ) {
     val rad = Math.toRadians(angleDeg - 90.0)
     val x = c + (radius * cos(rad).toFloat()) - 18.dp
@@ -285,7 +417,14 @@ private fun dialLabel(
         Modifier
             .absoluteOffset(x = x, y = y)
             .size(36.dp)
-            .then(if (selected) Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary) else Modifier),
+            .clip(CircleShape)
+            .then(if (selected) Modifier.background(MaterialTheme.colorScheme.primary) else Modifier)
+            .clickable(onClick = onClick)
+            .semantics {
+                role = Role.Button
+                this.selected = selected
+                contentDescription = desc
+            },
         contentAlignment = Alignment.Center,
     ) {
         Text(

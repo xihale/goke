@@ -2,7 +2,7 @@
 // 默认「薄荷」的取值与 Android 端 ui/theme/Theme.kt 一致；其他种子色按 HSL 推导。
 
 export const PRESETS = [
-  { id: 'mint', name: '薄荷', seed: '#4FA796' },
+  { id: 'mint', name: '薄荷', seed: '#2E776C' },
   { id: 'peach', name: '蜜桃', seed: '#E8836B' },
   { id: 'lavender', name: '薰衣草', seed: '#7A6CC4' },
   { id: 'sky', name: '天空', seed: '#4A90D9' },
@@ -46,10 +46,10 @@ export function hsl(h, s, l) {
 
 const MINT = {
   light: {
-    primary: '#4FA796', onPrimary: '#FFFFFF', primaryContainer: '#CDEBE3', onPrimaryContainer: '#1B473F',
+    primary: '#2E776C', onPrimary: '#FFFFFF', primaryContainer: '#CDEBE3', onPrimaryContainer: '#1B473F',
     secondaryContainer: '#FBE3D6', onSecondaryContainer: '#7A4630', tertiaryContainer: '#E4E0F6', onTertiaryContainer: '#3D3873',
     background: '#F2F7F5', surface: '#FFFFFF', surfaceHigh: '#F7FAF9', surfaceVariant: '#E9F1EE', onSurface: '#24312D',
-    onSurfaceVariant: '#6E7F7A', outline: '#9AABA6', outlineVariant: '#E4ECE9', error: '#E56458', errorContainer: '#FCE9E7', onErrorContainer: '#7A2A22',
+    onSurfaceVariant: '#5E6F69', outline: '#6E7F7A', outlineVariant: '#E4ECE9', error: '#B23E50', errorContainer: '#FCE9E7', onErrorContainer: '#7A2A22',
   },
   dark: {
     primary: '#7CCDBA', onPrimary: '#0B2A24', primaryContainer: '#24413B', onPrimaryContainer: '#BFEDE2',

@@ -2,11 +2,11 @@
    手机优先，≥900px 切换为侧边导航 + 宽屏布局。CSP 不允许内联样式，所以所有样式都在这个文件里。 */
 
 :root {
-  --primary: #4FA796; --on-primary: #fff; --primary-container: #CDEBE3; --on-primary-container: #1B473F;
+  --primary: #2E776C; --on-primary: #fff; --primary-container: #CDEBE3; --on-primary-container: #1B473F;
   --secondary-container: #FBE3D6; --on-secondary-container: #7A4630; --tertiary-container: #E4E0F6; --on-tertiary-container: #3D3873;
   --background: #F2F7F5; --surface: #fff; --surface-high: #F7FAF9; --surface-variant: #E9F1EE;
-  --on-surface: #24312D; --on-surface-variant: #6E7F7A; --outline: #9AABA6; --outline-variant: #E4ECE9;
-  --error: #E56458; --error-container: #FCE9E7; --on-error-container: #7A2A22;
+  --on-surface: #24312D; --on-surface-variant: #5E6F69; --outline: #6E7F7A; --outline-variant: #E4ECE9;
+  --error: #B23E50; --error-container: #FCE9E7; --on-error-container: #7A2A22;
   --radius-s: 12px; --radius-m: 20px; --radius-l: 28px;
   --shadow-sm: 0 1px 2px rgba(20, 50, 42, .05), 0 2px 10px rgba(20, 50, 42, .05);
   --shadow-md: 0 4px 24px rgba(20, 50, 42, .12);
@@ -372,5 +372,17 @@ dialog.sheet::backdrop { background: rgba(14, 26, 22, .5); backdrop-filter: blur
 .login-sub { text-align: center; color: var(--on-surface-variant); font-size: 14px; }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (pointer: coarse) {
+  .icon-btn { min-width: 48px; min-height: 48px; }
+  .btn.small { min-height: 48px; }
+  .check { position: relative; }
+  .check::after { content: ''; position: absolute; inset: -10px; }
 }

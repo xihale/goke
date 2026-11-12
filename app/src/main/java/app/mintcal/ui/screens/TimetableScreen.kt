@@ -122,12 +122,13 @@ import app.mintcal.ui.Route
 import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.FieldText
 import app.mintcal.ui.components.NavListInset
+import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.components.mintPressable
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
-import app.mintcal.ui.rememberToday
 import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
+import app.mintcal.ui.rememberToday
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.weekdayFull
@@ -137,8 +138,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlin.math.roundToInt
 
-private val TimeColW = 34.dp
-private val RowH = 60.dp
+private val BaseTimeColW = 34.dp
+private val BaseRowH = 60.dp
 private val GroupGap = 14.dp
 private val HeaderH = 46.dp
 
@@ -151,12 +152,13 @@ private val PeekGap = 2.dp
 
 private fun groupBoundaries(periodCount: Int) = listOf(4, 8).filter { it < periodCount }
 
-private fun periodTop(
+private fun calcPeriodTop(
     p: Int,
     periodCount: Int,
+    rowH: Dp = BaseRowH,
 ): Dp {
     val gaps = groupBoundaries(periodCount).count { p > it }
-    return RowH * (p - 1) + GroupGap * gaps
+    return rowH * (p - 1) + GroupGap * gaps
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -181,8 +183,7 @@ fun TimetableScreen() {
                 }
             }
             EmptyState(
-                stringResource(R.string.timetable_empty_title),
-                hint = stringResource(R.string.timetable_empty_hint),
+                title = stringResource(R.string.timetable_empty_title),
                 icon = Icons.Rounded.CalendarViewWeek,
                 actionLabel = stringResource(R.string.timetable_import_jxfw),
                 onAction = { nav.push(Route.Jxfw) },
@@ -440,13 +441,21 @@ private fun WeekGrid(
     onBoxSelect: (days: IntRange, startPeriod: Int, endPeriod: Int) -> Unit,
 ) {
     val ctx = LocalContext.current
+    val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.35f)
+    val rowH = BaseRowH * fontScale
+    val timeColW = BaseTimeColW * fontScale
+
+    fun periodTop(
+        p: Int,
+        periodCount: Int,
+    ): Dp = calcPeriodTop(p, periodCount, rowH)
     val periods = sem.periods.sortedBy { it.index }
     val n = periods.size
-    val totalH = periodTop(n, n) + RowH
+    val totalH = periodTop(n, n) + rowH
     val outline = MaterialTheme.colorScheme.outlineVariant
     Column(modifier.fillMaxSize()) {
         // 星期头：今天垫一块 primaryContainer 并换强调色文字，一眼能扫到今天在哪一列。
-        Row(Modifier.fillMaxWidth().height(HeaderH).padding(start = TimeColW)) {
+        Row(Modifier.fillMaxWidth().height(HeaderH).padding(start = timeColW)) {
             for (d in 1..7) {
                 val date = cal.dateOf(week, d)
                 val isToday = date == today
@@ -477,16 +486,16 @@ private fun WeekGrid(
                 Modifier
                     .fillMaxWidth()
                     .height(totalH)
-                    .pointerInput(n) {
-                        val timeColPx = TimeColW.toPx()
+                    .pointerInput(n, timeColW, rowH) {
+                        val timeColPx = timeColW.toPx()
                         val colPx = (size.width - timeColPx) / 7f
-                        val rowPx = RowH.toPx()
+                        val rowPx = rowH.toPx()
 
                         fun colOf(x: Float): Int = (((x - timeColPx) / colPx).toInt().coerceIn(0, 6)) + 1
 
                         fun slotOf(y: Float): Int {
                             for (p in 1..n) {
-                                val top = (RowH.value * (p - 1) + GroupGap.value * groupBoundaries(n).count { p > it }) * density
+                                val top = (rowH.value * (p - 1) + GroupGap.value * groupBoundaries(n).count { p > it }) * density
                                 if (y < top + rowPx) return p
                             }
                             return n
@@ -516,7 +525,7 @@ private fun WeekGrid(
                         )
                     },
             ) {
-                val colW = (maxWidth - TimeColW) / 7
+                val colW = (maxWidth - timeColW) / 7
                 // 不画「当前时间」的线和圆点：7 天网格里一列只有 40 来 dp，
                 // 那条线横穿在一整列色块上，多一根线只是噪声；今天靠星期头的色块指认。
                 // 左侧节次
@@ -524,8 +533,8 @@ private fun WeekGrid(
                     Column(
                         Modifier
                             .absoluteOffset(0.dp, periodTop(p.index, n))
-                            .width(TimeColW)
-                            .height(RowH)
+                            .width(timeColW)
+                            .height(rowH)
                             .padding(top = 5.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Top,
@@ -533,7 +542,7 @@ private fun WeekGrid(
                         Text("${p.index}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         Text(
                             p.start.hm(),
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontFeatureSettings = "tnum"),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontFeatureSettings = "tnum"),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -542,8 +551,8 @@ private fun WeekGrid(
                 groupBoundaries(n).forEach { b ->
                     Box(
                         Modifier
-                            .absoluteOffset(TimeColW, periodTop(b, n) + RowH + GroupGap / 2)
-                            .width(maxWidth - TimeColW)
+                            .absoluteOffset(timeColW, periodTop(b, n) + rowH + GroupGap / 2)
+                            .width(maxWidth - timeColW)
                             .height(1.dp)
                             .background(outline),
                     )
@@ -554,14 +563,14 @@ private fun WeekGrid(
                 // 再窄就叠放：课程优先当正面卡，其余只在右侧露一道边，底栏写「N 项」，
                 // 点开列出这段时间的全部安排自己挑——Google 日历 / Outlook 在窄列里也是这么收敛的。
                 val geoms =
-                    remember(cells, blocks, n) {
+                    remember(cells, blocks, n, rowH) {
                         val courseBoxes =
                             cells.map { c ->
                                 val o = c.occ
                                 LaneBox(
                                     o.date.dayOfWeek.value,
                                     periodTop(o.startPeriod.coerceAtMost(n), n) + 2.dp,
-                                    periodTop(o.endPeriod.coerceIn(o.startPeriod, n), n) + RowH - 2.dp,
+                                    periodTop(o.endPeriod.coerceIn(o.startPeriod, n), n) + rowH - 2.dp,
                                     o.course.colorIndex,
                                     course = true,
                                 )
@@ -571,7 +580,7 @@ private fun WeekGrid(
                                 val s = b.start
                                 val e = if (b.timed) s.plusMinutes(b.minutes.toLong()) else s.plusMinutes(1)
                                 Agenda.blockRows(periods, s.toLocalTime(), e.toLocalTime())?.let { rows ->
-                                    b to LaneBox(s.dayOfWeek.value, periodTop(rows.first, n) + 2.dp, periodTop(rows.last, n) + RowH - 2.dp, b.color)
+                                    b to LaneBox(s.dayOfWeek.value, periodTop(rows.first, n) + 2.dp, periodTop(rows.last, n) + rowH - 2.dp, b.color)
                                 }
                             }
                         courseBoxes to drawable
@@ -617,7 +626,7 @@ private fun WeekGrid(
                     Box(
                         Modifier
                             .absoluteOffset(
-                                TimeColW + colW * (p.day - 1) + 1.5.dp + (colW - 3.dp) - PeekW,
+                                timeColW + colW * (p.day - 1) + 1.5.dp + (colW - 3.dp) - PeekW,
                                 p.top,
                             ).width(PeekW)
                             .height(p.bottom - p.top)
@@ -631,7 +640,7 @@ private fun WeekGrid(
                     if (slot.hidden) return@forEachIndexed
                     val o = cell.occ
                     val top = periodTop(o.startPeriod.coerceAtMost(n), n) + 2.dp
-                    val bottom = periodTop(o.endPeriod.coerceIn(o.startPeriod, n), n) + RowH - 2.dp
+                    val bottom = periodTop(o.endPeriod.coerceIn(o.startPeriod, n), n) + rowH - 2.dp
                     val laneW = (colW - 3.dp) / slot.lanes
                     // 块宽在这里算一次：传给 Modifier.width 和 CourseBlock 的 wide 判定（省掉每块一个子组合）
                     val blockW =
@@ -646,7 +655,7 @@ private fun WeekGrid(
                         slot.overlap,
                         blockW >= 64.dp,
                         Modifier
-                            .absoluteOffset(TimeColW + colW * (o.date.dayOfWeek.value - 1) + 1.5.dp + laneW * slot.lane, top)
+                            .absoluteOffset(timeColW + colW * (o.date.dayOfWeek.value - 1) + 1.5.dp + laneW * slot.lane, top)
                             .width(blockW)
                             .height(bottom - top),
                         onClick = { if (slot.overlap > 1) onSlotClick(slotEntries[ci].orEmpty()) else onClick(cell) },
@@ -670,7 +679,7 @@ private fun WeekGrid(
                         onCommit = { ns, nm -> onMoveTask(t, ns, nm) },
                         modifier =
                             Modifier
-                                .absoluteOffset(TimeColW + colW * (s.dayOfWeek.value - 1) + 1.5.dp + laneW * slot.lane, tbox.top)
+                                .absoluteOffset(timeColW + colW * (s.dayOfWeek.value - 1) + 1.5.dp + laneW * slot.lane, tbox.top)
                                 .width(
                                     when {
                                         slot.lanes > 1 -> laneW - 2.dp
@@ -685,13 +694,13 @@ private fun WeekGrid(
                 box?.let { b ->
                     val boxAlpha by animateFloatAsState(if (box != null) 1f else 0f, MintTheme.spec(), label = "box-sel")
                     val top = periodTop(b.first, n) + 2.dp
-                    val bottom = periodTop(b.last, n) + RowH - 2.dp
+                    val bottom = periodTop(b.last, n) + rowH - 2.dp
                     val d1 = minOf(b.day1, b.day2)
                     val d2 = maxOf(b.day1, b.day2)
                     Box(
                         Modifier
                             .graphicsLayer { alpha = boxAlpha }
-                            .absoluteOffset(TimeColW + colW * (d1 - 1) + 1.5.dp, top)
+                            .absoluteOffset(timeColW + colW * (d1 - 1) + 1.5.dp, top)
                             .width(colW * (d2 - d1 + 1) - 3.dp)
                             .height(bottom - top)
                             .clip(RoundedCornerShape(14.dp))
@@ -1009,7 +1018,7 @@ private fun TaskBlock(
         ) {
             // 时间数字统一 tnum；标题走 labelSmall token 局部 copy
             val titleStyle = MaterialTheme.typography.labelSmall.copy(lineHeight = 13.sp)
-            val timeStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp, fontFeatureSettings = "tnum")
+            val timeStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp, fontFeatureSettings = "tnum")
             // 失效态语法与「已调课」一致：底色降饱和；完成的不再画删除线，退灰就够
             Text(
                 task.title,
@@ -1147,11 +1156,11 @@ private fun CourseBlock(
                     if (wide) "@" + o.room else o.room,
                     modifier = Modifier.weight(1f, fill = false),
                     color = (if (cell.kind == CellKind.REMOVED) colors.removed else fg).copy(alpha = 0.85f),
-                    // 窄列只有 30 来 dp：9sp 的「教3-204」放不下会折成「教 / 3-204」，窄卡降到 8sp 一行放完
+                    // 窄卡与宽卡字号：至少 10sp，保证 TalkBack 及大字号无障碍要求
                     style =
                         MaterialTheme.typography.labelSmall.copy(
-                            fontSize = if (wide) 9.sp else 8.sp,
-                            lineHeight = 11.sp,
+                            fontSize = if (wide) 10.5.sp else 10.sp,
+                            lineHeight = 12.sp,
                             letterSpacing = 0.sp,
                         ),
                     maxLines = if (wide && rows >= 2) 2 else 1,
@@ -1166,8 +1175,8 @@ private fun CourseBlock(
                     color = fg.copy(alpha = 0.75f),
                     style =
                         MaterialTheme.typography.labelSmall.copy(
-                            fontSize = if (wide) 9.sp else 8.sp,
-                            lineHeight = 11.sp,
+                            fontSize = if (wide) 10.5.sp else 10.sp,
+                            lineHeight = 12.sp,
                             letterSpacing = 0.sp,
                         ),
                     maxLines = 1,
@@ -1179,7 +1188,7 @@ private fun CourseBlock(
                 Text(
                     stringResource(R.string.rescheduled),
                     color = fg,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -1187,7 +1196,7 @@ private fun CourseBlock(
                 Text(
                     stringResource(R.string.conflict_count, overlap),
                     color = colors.removed,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Clip,
@@ -1220,10 +1229,29 @@ private fun CourseSheet(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (o.room.isNotBlank()) Text(stringResource(R.string.label_room_value, o.room), style = MaterialTheme.typography.bodyMedium)
-            if (c.teacher.isNotBlank()) Text(stringResource(R.string.label_teacher_value, c.teacher), style = MaterialTheme.typography.bodyMedium)
-            Text(stringResource(R.string.label_weeks_value, WeekSets.format(c.weeks)), style = MaterialTheme.typography.bodyMedium)
-            if (c.note.isNotBlank()) Text(c.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (o.room.isNotBlank()) {
+                Hairline()
+                ValueRow(stringResource(R.string.label_room), o.room, onClick = {
+                    onDismiss()
+                    nav.push(Route.CourseEdit(c.id))
+                })
+            }
+            if (c.teacher.isNotBlank()) {
+                Hairline()
+                ValueRow(stringResource(R.string.label_teacher), c.teacher, onClick = {
+                    onDismiss()
+                    nav.push(Route.CourseEdit(c.id))
+                })
+            }
+            Hairline()
+            ValueRow(stringResource(R.string.week_label), WeekSets.format(c.weeks), onClick = {
+                onDismiss()
+                nav.push(Route.CourseEdit(c.id))
+            })
+            if (c.note.isNotBlank()) {
+                Hairline()
+                Text(c.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Spacer(Modifier.height(8.dp))
             if (cell.kind == CellKind.NORMAL) {
                 // 小屏放不下三个按钮就换行，主次不变：编辑 > 停课 > 调课
@@ -1250,8 +1278,6 @@ private fun CourseSheet(
                         onDismiss()
                     }) { Text(stringResource(R.string.restore_class)) }
                 }
-            } else {
-                Text(stringResource(R.string.preview_cell_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

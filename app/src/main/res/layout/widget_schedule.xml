@@ -5,26 +5,56 @@
     android:layout_height="match_parent"
     android:background="@drawable/widget_bg"
     android:orientation="vertical"
-    android:padding="12dp">
+    android:paddingBottom="10dp"
+    android:paddingEnd="12dp"
+    android:paddingStart="12dp"
+    android:paddingTop="12dp">
 
-    <TextView
-        android:id="@+id/sched_title"
+    <LinearLayout
+        android:id="@+id/sched_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="@color/widget_accent"
-        android:textSize="13sp"
-        android:textStyle="bold" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingBottom="4dp"
+        android:paddingEnd="2dp"
+        android:paddingStart="4dp">
+
+        <TextView
+            android:id="@+id/sched_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/widget_text"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/sched_week"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/widget_pill_bg"
+            android:paddingBottom="1dp"
+            android:paddingEnd="8dp"
+            android:paddingStart="8dp"
+            android:paddingTop="1dp"
+            android:textColor="@color/widget_pill_fg"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/sched_empty"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:gravity="center"
         android:textColor="@color/widget_muted"
-        android:textSize="14sp"
+        android:textSize="13sp"
         android:visibility="gone" />
 
     <LinearLayout
@@ -35,22 +65,23 @@
         android:background="@drawable/widget_row_bg"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingTop="5dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="5dp"
+        android:paddingBottom="6dp"
+        android:paddingEnd="10dp"
+        android:paddingStart="10dp"
+        android:paddingTop="6dp"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:id="@+id/sched_bar0"
-            android:layout_width="4dp"
-            android:layout_height="30dp"
-            android:background="@color/widget_accent" />
+            android:layout_width="3.5dp"
+            android:layout_height="28dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/widget_bar_bg" />
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="9dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
@@ -71,7 +102,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/widget_muted"
-                android:textSize="12sp" />
+                android:textSize="11.5sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -83,22 +114,23 @@
         android:background="@drawable/widget_row_bg"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingTop="5dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="5dp"
+        android:paddingBottom="6dp"
+        android:paddingEnd="10dp"
+        android:paddingStart="10dp"
+        android:paddingTop="6dp"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:id="@+id/sched_bar1"
-            android:layout_width="4dp"
-            android:layout_height="30dp"
-            android:background="@color/widget_accent" />
+            android:layout_width="3.5dp"
+            android:layout_height="28dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/widget_bar_bg" />
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="9dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
@@ -119,7 +151,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/widget_muted"
-                android:textSize="12sp" />
+                android:textSize="11.5sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -131,22 +163,23 @@
         android:background="@drawable/widget_row_bg"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingTop="5dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="5dp"
+        android:paddingBottom="6dp"
+        android:paddingEnd="10dp"
+        android:paddingStart="10dp"
+        android:paddingTop="6dp"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:id="@+id/sched_bar2"
-            android:layout_width="4dp"
-            android:layout_height="30dp"
-            android:background="@color/widget_accent" />
+            android:layout_width="3.5dp"
+            android:layout_height="28dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/widget_bar_bg" />
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="9dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
@@ -167,7 +200,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/widget_muted"
-                android:textSize="12sp" />
+                android:textSize="11.5sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -179,22 +212,23 @@
         android:background="@drawable/widget_row_bg"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingTop="5dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="5dp"
+        android:paddingBottom="6dp"
+        android:paddingEnd="10dp"
+        android:paddingStart="10dp"
+        android:paddingTop="6dp"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:id="@+id/sched_bar3"
-            android:layout_width="4dp"
-            android:layout_height="30dp"
-            android:background="@color/widget_accent" />
+            android:layout_width="3.5dp"
+            android:layout_height="28dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/widget_bar_bg" />
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="9dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
@@ -215,7 +249,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/widget_muted"
-                android:textSize="12sp" />
+                android:textSize="11.5sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -227,22 +261,23 @@
         android:background="@drawable/widget_row_bg"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingTop="5dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="5dp"
+        android:paddingBottom="6dp"
+        android:paddingEnd="10dp"
+        android:paddingStart="10dp"
+        android:paddingTop="6dp"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:id="@+id/sched_bar4"
-            android:layout_width="4dp"
-            android:layout_height="30dp"
-            android:background="@color/widget_accent" />
+            android:layout_width="3.5dp"
+            android:layout_height="28dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/widget_bar_bg" />
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="9dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
@@ -263,7 +298,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/widget_muted"
-                android:textSize="12sp" />
+                android:textSize="11.5sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -275,22 +310,23 @@
         android:background="@drawable/widget_row_bg"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingTop="5dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="5dp"
+        android:paddingBottom="6dp"
+        android:paddingEnd="10dp"
+        android:paddingStart="10dp"
+        android:paddingTop="6dp"
         android:visibility="gone">
 
-        <View
+        <ImageView
             android:id="@+id/sched_bar5"
-            android:layout_width="4dp"
-            android:layout_height="30dp"
-            android:background="@color/widget_accent" />
+            android:layout_width="3.5dp"
+            android:layout_height="28dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/widget_bar_bg" />
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="9dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
@@ -311,7 +347,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/widget_muted"
-                android:textSize="12sp" />
+                android:textSize="11.5sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -322,6 +358,6 @@
         android:layout_marginTop="4dp"
         android:gravity="end"
         android:textColor="@color/widget_muted"
-        android:textSize="12sp"
+        android:textSize="11sp"
         android:visibility="gone" />
 </LinearLayout>

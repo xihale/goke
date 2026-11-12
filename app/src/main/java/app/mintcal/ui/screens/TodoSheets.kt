@@ -188,17 +188,22 @@ internal fun MorningSheet(
         list: List<Task>,
         d: LocalDate,
     ) {
-        actions.commit(Edits.reschedule(list, d, ctx.getString(R.string.todo_reschedule_desc, list.first().title), System.currentTimeMillis()))
+        actions.commit(
+            Edits.reschedule(list, d, ctx.getString(R.string.todo_reschedule_desc, list.first().title), System.currentTimeMillis()),
+            ctx.getString(R.string.todo_moved_to_toast, ctx.dueLabel(d.atStartOfDay(), false, today)),
+        )
     }
 
     fun drop(list: List<Task>) {
-        actions.commit(Edits.dropTasks(list, ctx.getString(R.string.todo_drop_desc, list.first().title), System.currentTimeMillis()))
+        actions.commit(
+            Edits.dropTasks(list, ctx.getString(R.string.todo_drop_desc, list.first().title), System.currentTimeMillis()),
+            ctx.getString(R.string.todo_dropped_toast, list.size),
+        )
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
-            Text(stringResource(R.string.todo_tidy_title, tasks.size), style = MaterialTheme.typography.titleMedium)
-            Text(stringResource(R.string.todo_tidy_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
+            Text(stringResource(R.string.todo_tidy_title, tasks.size), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
             if (tasks.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilledTonalButton(onClick = { move(tasks, today) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.todo_all_to_today)) }

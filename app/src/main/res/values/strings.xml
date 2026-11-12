@@ -12,7 +12,7 @@
     <string name="shortcut_add_task">新建待办</string>
     <string name="shortcut_today">今天</string>
     <string name="process_text_label">加到薄荷待办</string>
-    <string name="widget_empty">今天没有安排，好好休息</string>
+    <string name="widget_empty">(〃\'▽\'〃) 今天没有安排啦</string>
     <string name="channel_reminder">课程与待办提醒</string>
     <string name="channel_parcel">快递取件</string>
     <string name="back">返回</string>
@@ -82,16 +82,12 @@
     <string name="restore_class">恢复上课</string>
     <string name="restore_class_desc">恢复上课：%1$s</string>
     <string name="restore_class_toast">已恢复上课</string>
-    <string name="label_room_value">教室：%1$s</string>
-    <string name="label_teacher_value">教师：%1$s</string>
     <string name="label_weeks_value">周次：%1$s</string>
     <string name="preview_mode">预览模式</string>
-    <string name="preview_cell_hint">绿色为新增，黄色为修改，红色为删除；应用前不会改动任何数据。</string>
     <string name="today_summary">%1$d 节课 · %2$d 项待办</string>
     <string name="today_task_progress">待办 %1$d/%2$d</string>
     <string name="today_next_class">下一节 %1$s %2$s %3$s</string>
     <string name="today_empty_title">今天没有安排</string>
-    <string name="today_empty_hint">好好休息，或者去待办里挑一件小事做。</string>
     <string name="overdue_count">已逾期 · %1$d</string>
     <string name="overdue_since">%1$s 起逾期</string>
     <string name="timeline">今日时间线</string>
@@ -116,7 +112,6 @@
     <string name="day_empty">这一天没有安排</string>
     <string name="filter_done">已完成</string>
     <string name="todo_all_empty">这里还没有待办</string>
-    <string name="todo_empty_filtered_hint">换个条件试试，或直接新建一条</string>
     <string name="quick_add_hint">添加待办，如明天交作业</string>
     <string name="quick_add_prompt">准备做什么？</string>
     <string name="date_weekend">本周末</string>
@@ -217,11 +212,9 @@
     <string name="no_conflict">没有冲突</string>
     <string name="edit_timetable">编辑课表</string>
     <string name="timetable_empty_title">还没有课表</string>
-    <string name="timetable_empty_hint">登录学校教务，这一学期的课会进到这里。也可以先手动建一个学期。</string>
     <string name="timetable_import_jxfw">登录教务</string>
     <string name="timetable_create_semester">手动建学期</string>
     <string name="edit_semester_desc">修改学期信息</string>
-    <string name="semester_progress_hint">今天是第 %1$d 周（0 表示尚未开学）</string>
     <string name="courses_count">%1$d 门</string>
     <string name="course_line">周%1$s 第%2$d–%3$d节 · 第%4$s周</string>
     <string name="import_excel">导入 Excel 课表</string>
@@ -304,12 +297,10 @@
     <string name="entity_list">清单</string>
     <string name="entity_focus">专注</string>
     <string name="appearance">外观</string>
-    <string name="appearance_desc">主题色、深色模式</string>
     <string name="theme_color">主题色</string>
     <string name="theme_dynamic">跟随壁纸</string>
     <string name="theme_preset">预设</string>
     <string name="theme_custom">自定义</string>
-    <string name="theme_dynamic_desc">使用系统壁纸取色（Android 12 及以上）。</string>
     <string name="theme_dynamic_unavailable">当前系统不支持壁纸取色。</string>
     <string name="theme_hue">色相</string>
     <string name="dark_mode">深色模式</string>
@@ -317,7 +308,6 @@
     <string name="dark_light">浅色</string>
     <string name="dark_dark">深色</string>
     <string name="show_teacher">课表里显示教师</string>
-    <string name="show_teacher_desc">关闭时只显示课名和教室</string>
     <string name="week_starts_monday">周一作为一周的开始</string>
     <string name="swap_swipe">交换滑动方向</string>
     <string name="swap_swipe_desc">开启后：左滑完成，右滑改期</string>
@@ -329,16 +319,11 @@
     <string name="remind_course_text">%1$s 开课 · %2$s</string>
     <string name="remind_task_text">待办到时间了</string>
     <string name="data_title">数据与备份</string>
-    <string name="data_desc">导入、导出、备份与恢复</string>
     <string name="parcel_title">快递取件</string>
-    <string name="parcel_row_desc">识别取件通知，生成待办（默认关闭）</string>
     <string name="history_title">操作历史</string>
     <string name="trash_title">回收站</string>
-    <string name="trash_row_desc">已删除内容保留 30 天</string>
     <string name="about_title">关于</string>
-    <string name="about_desc">薄荷日程：把课表、日历和待办放在一起的本地优先日程应用。</string>
     <string name="demo_data_title">演示数据</string>
-    <string name="demo_data_hint">写入一批课程、日程与待办（含逾期、今天、已完成、已放弃、子任务与时间块），日期按今天生成。现有 %1$d 条记录会一起进回收站，整批算一次操作，可在操作记录里一步撤销。</string>
     <string name="demo_data_replace">替换为演示数据</string>
     <string name="demo_data_confirm_title">用演示数据替换现有内容？</string>
     <string name="demo_data_confirm_text">现有的 %1$d 条课程、日程与待办会进回收站（保留 30 天），然后写入一批演示数据。整批算一次操作，可以在操作记录里一步撤销。</string>
@@ -346,18 +331,11 @@
     <string name="demo_data_running">正在写入…</string>
     <string name="demo_data_done">已写入 %1$d 条演示数据，可在操作记录里撤销</string>
     <string name="about_license_title">开源许可</string>
-    <string name="about_license">本应用以 AGPL-3.0 协议开源。</string>
-    <string name="about_privacy">所有数据默认只保存在本机；只有你主动使用 AI 时，才会把必要的摘要发送给你配置的服务。</string>
     <string name="import_file">导入文件</string>
-    <string name="import_file_desc">Excel 课表、ICS 日历</string>
     <string name="export_ics">导出为 ICS</string>
-    <string name="export_ics_desc">可导入其他日历应用</string>
     <string name="export_image">导出课表图片</string>
-    <string name="export_image_desc">当前周的课表，PNG</string>
     <string name="export_json">导出备份（JSON）</string>
-    <string name="export_json_desc">包含全部课程、日程、待办</string>
     <string name="restore_json">从备份恢复</string>
-    <string name="restore_json_desc">选择之前导出的 JSON 备份</string>
     <string name="restore_confirm">将用备份覆盖当前全部数据（%1$d 门课、%2$d 个日程、%3$d 项待办），当前的操作历史也会清空。</string>
     <string name="restore_action">覆盖并恢复</string>
     <string name="restore_failed">无法读取这个备份文件</string>
@@ -382,11 +360,7 @@
     <string name="trash_empty">回收站是空的</string>
     <string name="trash_empty_action">清空</string>
     <string name="trash_empty_confirm">回收站里的内容将被永久删除，无法恢复。</string>
-    <string name="trash_hint">删除的内容会保留 %1$d 天，之后自动清除。</string>
     <string name="history_empty">还没有操作记录</string>
-    <string name="history_hint">每次修改都会记录下来，可以连续撤销多步，也可以重做已撤销的操作。若之后的修改涉及相同内容，需要先撤销那些修改。</string>
-    <string name="history_blocked_undo">之后的修改涉及相同内容，暂时无法撤销</string>
-    <string name="history_blocked_redo">内容已被改动，无法重做</string>
     <string name="history_blocked_toast">内容已被后来的修改改动，无法操作</string>
     <string name="history_unnamed">未命名操作</string>
     <string name="history_undone">已撤销</string>
@@ -395,15 +369,11 @@
     <string name="source_ai">AI</string>
     <string name="source_import">导入</string>
     <string name="source_parcel">快递识别</string>
-    <string name="parcel_intro">识别快递驿站、取件码通知，自动加一条取件待办。只读取通知文本，不读取短信，识别在本机完成。</string>
     <string name="parcel_enable">识别取件通知</string>
     <string name="parcel_enable_desc">需要授予「通知使用权」</string>
-    <string name="parcel_need_access">还没有授权通知使用权，识别不会工作。</string>
     <string name="parcel_grant">去授权</string>
-    <string name="parcel_access_ok">已授权，收到取件通知时会自动生成待办。</string>
     <string name="parcel_window_start">时段开始</string>
     <string name="parcel_window_end">时段结束</string>
-    <string name="parcel_window_desc">快递一般下午/晚上下班后再拿，生成的取件日程自动排进每天的这段时间；过了结束时刻则排到明天。驿站的截止时间仍会保留并提醒。</string>
     <string name="parcel_try">试一试</string>
     <string name="parcel_sample_label">粘贴一条取件通知</string>
     <string name="parcel_sample_hint">【菜鸟驿站】取件码 5-2-1234，请到学校东门驿站取件，今晚 22:00 前有效</string>
@@ -416,7 +386,6 @@
     <string name="parcel_add_task">加入待办</string>
     <string name="parcel_task_title">取件 %1$s · %2$s</string>
     <string name="parcel_op_desc">快递取件待办</string>
-    <string name="parcel_privacy">通知内容不会上传。识别失败时不会发给任何服务。</string>
     <string name="parcel_rules">规则</string>
     <string name="parcel_rules_empty">还没有自定义规则。内置规则没认出的驿站短信，照抄进模板、把取件码换成 {code} 即可。</string>
     <string name="parcel_rules_builtin">内置规则（可停用）</string>
@@ -479,9 +448,6 @@
     </string-array>
     <!-- 教务系统 -->
     <string name="jxfw_title">教务系统</string>
-    <string name="jxfw_row_desc">登录广工教务，同步课表 / 调课 / 考试</string>
-    <string name="jxfw_intro">用学号和统一认证密码登录学校教务系统，自动导入整学期课表、考试安排，每周日晚再同步一次下周的停课、调课和补课。你手动建的课程不会被改动。</string>
-    <string name="jxfw_privacy">密码只加密保存在这台手机上，仅用于登录学校教务系统，不会上传到任何其他服务器。</string>
     <string name="jxfw_login_section">登录教务系统</string>
     <string name="jxfw_username">学号</string>
     <string name="jxfw_password">统一认证密码</string>
@@ -496,7 +462,6 @@
     <string name="jxfw_sync_full">重新全量同步</string>
     <string name="jxfw_sync_week">同步下周</string>
     <string name="jxfw_auto">每周日晚自动同步</string>
-    <string name="jxfw_auto_desc">周日 21:00 前后在后台更新下周课表，有变动时通知你；系统省电可能让它延后。</string>
     <string name="jxfw_logout">退出教务登录</string>
     <string name="jxfw_logout_message">将删除保存的教务密码并停止自动同步。已导入的课程和考试会保留。</string>
     <string name="jxfw_progress_login">正在登录教务系统…</string>
@@ -515,19 +480,13 @@
     <string name="jxfw_done_toast">教务同步完成</string>
     <!-- 账号与同步 -->
     <string name="sync_title">账号与同步</string>
-    <string name="sync_row_desc">本地模式 / 登录自建服务器同步</string>
-    <string name="sync_mode_local">本地模式</string>
-    <string name="sync_local_desc">目前没有登录，所有数据只保存在这台手机上，功能不受影响。如果你有自建的薄荷日程服务器，可以登录后在多台设备间同步。</string>
     <string name="sync_login_section">登录自建服务器</string>
-    <string name="sync_login_hint">账号由服务器管理员创建，没有注册入口。</string>
     <string name="sync_server">服务器地址</string>
     <string name="sync_http_warning">这是未加密的 http 地址，密码和日程会明文传输。仅建议在可信的内网使用，公网请配置 https。</string>
     <string name="sync_username">用户名</string>
     <string name="sync_password">密码</string>
     <string name="sync_login">登录并开启同步</string>
-    <string name="sync_no_account">没有账号或忘记密码，请联系服务器管理员。</string>
     <string name="sync_mode_cloud">云端模式</string>
-    <string name="sync_cloud_desc">已登录，本地数据会在后台与服务器同步。断网时照常使用，恢复后自动同步。</string>
     <string name="sync_account">账号</string>
     <string name="sync_role_admin">管理员</string>
     <string name="sync_last">上次同步</string>
@@ -557,8 +516,6 @@
     <string name="todo_add_here">添加到这一组</string>
     <string name="todo_drop_here">放到这里</string>
     <string name="todo_next_up">下一件事</string>
-    <string name="todo_next_up_none">课前没有要交的待办</string>
-    <string name="todo_overdue_card">有 %1$d 条已逾期的待办</string>
     <string name="todo_tidy">整理一下</string>
     <string name="todo_selected_count">已选 %1$d 项</string>
     <string name="todo_select_all">全选</string>
@@ -571,7 +528,6 @@
     <string name="todo_all_lists">全部清单</string>
     <string name="todo_reschedule">改期</string>
     <string name="todo_reschedule_desc">改期：%1$s</string>
-    <string name="todo_reorder_desc">排序：%1$s</string>
     <string name="todo_moved_toast">已改期 %1$d 项</string>
     <string name="todo_moved_to_toast">已移到「%1$s」</string>
     <string name="todo_no_date">无日期（收集箱）</string>
@@ -580,10 +536,8 @@
     <string name="todo_dropped_toast">已标记不做了（%1$d 项）</string>
     <string name="todo_complete">完成</string>
     <string name="todo_tidy_title">整理 %1$d 条逾期待办</string>
-    <string name="todo_tidy_hint">逐条决定改到今天、明天，或者干脆不做了。</string>
     <string name="todo_all_to_today">全部改到今天</string>
     <string name="todo_all_drop">全部不做了</string>
-    <string name="todo_subtask_desc">设为子任务：%1$s</string>
     <string name="todo_subtask_toast">「%1$s」已设为「%2$s」的子任务</string>
     <string name="todo_bulk_desc">批量修改 %1$d 项待办</string>
     <string name="todo_bulk_done_desc">批量完成 %1$d 项待办</string>
@@ -603,8 +557,6 @@
 
     <!-- 提醒可靠性自检 -->
     <string name="reliability_title">提醒可靠性自检</string>
-    <string name="reliability_row_desc">检查通知、闹钟、省电限制，并发一条测试提醒</string>
-    <string name="reliability_intro">课程、待办、日程的提醒依赖系统的通知与闹钟。下面逐项检查会让提醒悄悄失效的设置。</string>
     <string name="reliability_checks">逐项检查</string>
     <string name="reliability_fix">去开启</string>
     <string name="reliability_notif">通知权限</string>
@@ -619,7 +571,6 @@
     <string name="reliability_vendor_desc">这类系统还有系统没法检测的限制，请手动确认：\n1. 设置 → 应用设置 → 应用管理 → 薄荷日程 → 开启「自启动」；\n2. 同一页「省电策略」选「无限制」；\n3. 在最近任务里长按本应用卡片，选择「锁定」，避免被一键清理。</string>
     <string name="reliability_open_details">打开应用详情</string>
     <string name="reliability_test">测试提醒</string>
-    <string name="reliability_test_desc">1 分钟后发一条测试通知。建议发出后立刻锁屏、划掉应用，看它能不能准时弹出。</string>
     <string name="reliability_test_button">1 分钟后发测试提醒</string>
     <string name="reliability_test_title">薄荷日程 · 测试提醒</string>
     <string name="reliability_test_text">看到这条说明提醒可以正常送达</string>
@@ -644,29 +595,22 @@
     <string name="course_semester_grid">课表</string>
     <string name="course_weeks_pick">在哪些周上课</string>
     <string name="course_weeks_clear">清空</string>
-    <string name="course_weeks_brush_hint">选中的周就是画笔：按住课表空白拖动＝给这些周安排时间；按住已有色块拖动＝把它搬到新位置</string>
     <string name="course_brush_weeks">画笔：%1$s周</string>
     <string name="course_block_remove_brush">从选中周移除</string>
     <string name="course_pattern_delete">删除此时间</string>
     <string name="course_cancel_badge">停</string>
-    <string name="course_todos_add">添加课前待办</string>
+    <string name="course_todos_add">添加待办</string>
     <string name="course_todos_empty">还没有待办</string>
     <string name="clash_row_course">与「%1$s」冲突 · %2$s</string>
     <string name="clash_row_task">与「%1$s」重叠 · %2$s</string>
     <string name="done_count">已完成 %1$d</string>
     <string name="state_expanded">已展开</string>
     <string name="state_collapsed">已收起</string>
-    <string name="today_all_done_title">今天的事都做完了</string>
-    <string name="plan_tomorrow">安排明天</string>
+    <string name="today_all_done_title">都做完了</string>
     <string name="back_today">回今天</string>
     <string name="delete_forever_confirm">永久删除「%1$s」？此操作无法撤销。</string>
-    <string name="calendar_mark_schedule">日程</string>
-    <string name="calendar_mark_pending">待办</string>
-    <string name="calendar_mark_done">已完成</string>
-    <string name="calendar_preview_hint">长按日期预览</string>
     <string name="calendar_preview_day">预览当天安排</string>
     <string name="calendar_view_day">查看当天</string>
-    <string name="calendar_day_totals">%1$d 项日程 · %2$d 项待办</string>
     <string name="calendar_day_detail">%1$d 项日程，%2$d 项待办未完成，%3$d 项已完成</string>
     <string name="detail_custom">自定义</string>
     <string name="detail_custom_value">自定义（%1$s）</string>
@@ -713,11 +657,12 @@
     <string name="detail_editor_discard">放弃修改</string>
     <string name="detail_editor_added_date">已加入%1$s</string>
     <string name="detail_editor_added_inbox">已加入收集箱</string>
+    <string name="detail_editor_extra_dates">将在 %1$d 天各建一条</string>
     <!-- quick add sheet -->
     <string name="priority_none">无优先级</string>
     <!-- settings-agent -->
     <string name="settings_perm_title">权限</string>
-    <string name="settings_perm_desc_ok">提醒与后台权限均已就绪</string>
+    <string name="settings_perm_desc_ok">已就绪</string>
     <string name="settings_perm_desc_n">%1$d 项待授权</string>
     <string name="settings_perm_allowed">已允许</string>
     <string name="settings_perm_section_alerts">通知与闹钟</string>
@@ -761,4 +706,38 @@
     <string name="focus_editor_start">开始专注</string>
     <string name="focus_editor_more">查看全部</string>
     <string name="confirm">确定</string>
+    <!-- a11y -->
+    <string name="a11y_prev_month">上个月</string>
+    <string name="a11y_next_month">下个月</string>
+    <string name="a11y_mark_done">标记为已完成</string>
+    <string name="a11y_mark_undone">标记为未完成</string>
+    <string name="close">关闭</string>
+    <!-- 快递取件体验与小组件 -->
+    <string name="parcel_pickup_section">待取快递</string>
+    <string name="parcel_code_copied">已复制取件码 %1$s</string>
+    <string name="parcel_status_on">已开启</string>
+    <string name="parcel_status_off">未开启</string>
+    <string name="widget_parcel_name">待取快递</string>
+    <string name="widget_parcel_desc">大号取件码、驿站地点与一键已取。</string>
+    <string name="widget_parcel_title">待取件</string>
+    <string name="widget_parcel_empty">(〃\'▽\'〃) 暂无待取快递</string>
+    <string name="widget_parcel_station">快递驿站</string>
+    <string name="widget_next_name">下一件事</string>
+    <string name="widget_next_desc">紧凑展示下一节课、日程或待办，一键开启专注或新建。</string>
+    <string name="widget_next_empty">当前空闲，开启一段专注吧</string>
+    <string name="widget_next_label">接下来</string>
+    <string name="widget_ongoing">进行中</string>
+    <!-- 系统日历双向同步 -->
+    <string name="cal_sync_section">系统日历与桌面账号</string>
+    <string name="cal_sync_enable">系统日历双向同步</string>
+    <string name="cal_sync_enable_desc">与手机系统日历、桌面小组件及云账号日程双向互通</string>
+    <string name="cal_sync_grant">授权</string>
+    <string name="cal_sync_accounts">同步日历账本</string>
+    <string name="cal_sync_no_calendars">未发现可用系统日历账本</string>
+    <string name="cal_sync_create_local">创建「薄荷日程」本地系统日历</string>
+    <string name="cal_sync_local_created">已创建本地系统日历账本</string>
+    <string name="cal_sync_courses">同步课程表到系统日历</string>
+    <string name="cal_sync_courses_desc">供系统自带桌面日历、负一屏与手表读取</string>
+    <string name="cal_sync_done_toast">系统日历同步完成（更新 %1$d 项）</string>
+    <string name="cal_sync_local_account_name">薄荷日程</string>
 </resources>

@@ -100,12 +100,30 @@ val Record.entityType: EntityType
 val Record.displayTitle: String
     get() =
         when (this) {
-            is Semester -> name
-            is Course -> name
-            is CourseException -> "#$week"
-            is Event -> title
-            is Task -> title
-            is TaskList -> name
+            is Semester -> {
+                name
+            }
+
+            is Course -> {
+                name
+            }
+
+            is CourseException -> {
+                "#$week"
+            }
+
+            is Event -> {
+                title
+            }
+
+            is Task -> {
+                title
+            }
+
+            is TaskList -> {
+                name
+            }
+
             // 时长即可（历史行会再拼「专注 ·」前缀，不再重复）
             is FocusSession -> {
                 val m = (focusMillis + 59_999) / 60_000

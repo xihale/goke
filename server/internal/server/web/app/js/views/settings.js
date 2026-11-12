@@ -50,7 +50,7 @@ export const settingsView = {
       type: 'button', class: 'theme-swatch', 'aria-pressed': String(theme.seed.toLowerCase() === p.seed.toLowerCase()), 'aria-label': p.name, title: p.name,
       style: { '--sw': palette(p.seed, dark).primary }, onclick: () => change({ seed: p.seed }),
     }, h('span', {}, p.name))));
-    const custom = h('input', { type: 'color', class: 'color-input', value: hexToHsl(theme.seed) ? theme.seed : '#4FA796', 'aria-label': '自定义主题色', onchange: (e) => change({ seed: e.target.value }) });
+    const custom = h('input', { type: 'color', class: 'color-input', value: hexToHsl(theme.seed) ? theme.seed : '#2E776C', 'aria-label': '自定义主题色', onchange: (e) => change({ seed: e.target.value }) });
 
     const account = section('账号与同步',
       row(user.username, user.role === 'admin' ? '管理员' : '普通用户'),

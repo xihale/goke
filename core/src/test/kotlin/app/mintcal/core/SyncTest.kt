@@ -39,7 +39,13 @@ class SyncTest {
             val back = SyncCodec.decode(MintJson.decodeFromString(WireRecord.serializer(), text))
             assertEquals(r, back)
         }
-        assertEquals("focusSession", MintJson.encodeToJsonElement(Record.serializer(), focus).jsonObject["_t"]!!.jsonPrimitive.content)
+        assertEquals(
+            "focusSession",
+            MintJson
+                .encodeToJsonElement(Record.serializer(), focus)
+                .jsonObject["_t"]!!
+                .jsonPrimitive.content,
+        )
     }
 
     @Test fun `pristine ignores focus sessions only when none exist`() {

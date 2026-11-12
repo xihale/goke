@@ -95,7 +95,7 @@ object MintTheme {
 
 ```js
 // server/internal/server/web/app/js/theme.js
-export const PRESETS = [{ id:'mint', name:'薄荷', seed:'#4FA796' }, /* peach/lavender/sky/rose/lemon */];
+export const PRESETS = [{ id:'mint', name:'薄荷', seed:'#2E776C' }, /* peach/lavender/sky/rose/lemon */];
 export const COURSE_COLORS = { light: [[0xD9E8EF,0x3B6173], /* … 8 组 */], dark: [ /* … */ ] };
 export function applyTheme(t, root = document.documentElement) { /* camelToKebab → root.style.setProperty */ }
 ```
@@ -103,15 +103,13 @@ export function applyTheme(t, root = document.documentElement) { /* camelToKebab
 变量名与 M3 角色同名：`--primary`、`--on-surface-variant`、`--surface-high`、`--primary-container`、`--error-container`；
 另有 `--radius-s|m|l = 12/20/28`、`--shadow-sm|md`、`--ease: cubic-bezier(.2,.8,.2,1)`、`--nav-h: 68px`、课程色 `--c0..c7-bg|fg`。
 薄荷的固定值必须与 Android `brandLight/brandDark` 一致；其它主题按种子推导，**不手调**。
+Web、Android 与 Figma 浅色薄荷统一为 `primary #2E776C`、`onSurfaceVariant #5E6F69`、`outline #6E7F7A`、`error #B23E50`；深色统一为 `#7CCDBA` / `#93A39E` / `#FF8F84`。
 
-> **已知漂移（待修，勿扩散）**：Web `MINT.light` 仍是旧值 —— `primary #4FA796`、`onSurfaceVariant #6E7F7A`、`error #E56458`；
-> Android 与 Figma 已是 `#2E776C` / `#5E6F69` / `#B23E50`。深色三端一致（`#7CCDBA` / `#93A39E` / `#FF8F84`）。
-> 涉及浅色主色时以 Android 为准，修 Web 时同步 `app.css :root` 回退值与 `theme.js`。
 
 ### 2.3 Figma 侧对应（已建成）
 
-文件：`https://www.figma.com/design/8bqbOrsS0QiNff29mgDQVM`
-页面：`Tokens 0:1` / `Components 1:2` / `Screens·Light 1:3` / `Screens·Dark 1:4`
+文件：`https://www.figma.com/design/8cDbTu3hnk3YhfYYg4Nz1s`
+页面：`Tokens 0:1` / `Components 2:2` / `Screens·Light 2:3` / `Screens·Dark 2:4`
 
 | Figma 资产 | 内容 | 命名 |
 |---|---|---|
@@ -169,7 +167,7 @@ MintCard {
 ## 4. 资源管理
 
 - **没有位图资产**。`res/drawable/` 只有启动/通知/小组件底：`splash_icon_transparent.xml`、`ic_launcher_foreground.xml`、`ic_notification.xml`、`widget_bg.xml`、`widget_row_bg.xml`、`widget_row_now_bg.xml`。
-- 小组件是 **RemoteViews + XML 布局**（`res/layout/widget_*.xml`）+ `values-night/colors.xml`，**不吃 Compose 主题**；改主题色时别忘了它（`widget_accent #4FA796`、`widget_bg #F2F7F5`）。
+- 小组件是 **RemoteViews + XML 布局**（`res/layout/widget_*.xml`）+ `values-night/colors.xml`，**不吃 Compose 主题**；改主题色时别忘了它（`widget_accent #2E776C`、`widget_bg #F2F7F5`）。
 - 需要新插图：优先 vector drawable（24×24 网格、`tint`/`currentColor`），许可证记入 `docs/DEPENDENCIES.md`；Figma 画在 `🖼 图标 Icons` 区。
 - 无 CDN、无外链字体、无外部图片；Web CSP 为 `script-src 'self'; style-src 'self'`，禁止内联样式与拼 HTML。
 

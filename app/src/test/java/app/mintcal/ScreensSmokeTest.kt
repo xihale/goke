@@ -54,10 +54,12 @@ import app.mintcal.core.model.EventKind
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
 import app.mintcal.core.model.TaskList
+import app.mintcal.core.parcel.ParcelInfo
 import app.mintcal.core.util.Ids
 import app.mintcal.data.Attachments
 import app.mintcal.data.DarkMode
 import app.mintcal.data.ThemeSource
+import app.mintcal.notify.ParcelTasks
 import app.mintcal.ui.Actions
 import app.mintcal.ui.HOME
 import app.mintcal.ui.LocalActions
@@ -152,7 +154,19 @@ class ScreensSmokeTest {
                 )
             val meeting = Task(Ids.next(), "社团例会", listId = list.id, blockStart = today.atTime(19, 0), blockMinutes = 90, remindMinutes = 15)
             val exam = Task(Ids.next(), "考试：期末考试", blockStart = today.plusDays(10).atTime(9, 0), blockMinutes = 120, tags = listOf("考试"))
-            app.repo.commit(Edits.saveAll(app.repo.snapshot.value, listOf<app.mintcal.core.model.Record>(list) + tasks + meeting + exam, "seed", now))
+            val parcel =
+                ParcelTasks.build(
+                    app,
+                    ParcelInfo(
+                        code = "4-2-1086",
+                        place = "东门菜鸟驿站",
+                        company = "顺丰",
+                        deadline = today.atTime(22, 0),
+                        raw = "【菜鸟驿站】取件码 4-2-1086",
+                        ruleId = "builtin",
+                    ),
+                )
+            app.repo.commit(Edits.saveAll(app.repo.snapshot.value, listOf<app.mintcal.core.model.Record>(list) + tasks + meeting + exam + parcel, "seed", now))
         }
     }
 
@@ -287,7 +301,12 @@ class ScreensSmokeTest {
         // 新建草稿：点返回即丢弃，不落库
         rule.onNodeWithContentDescription("返回").performClick()
         rule.waitForIdle()
-        assertEquals(existingIds, app.repo.snapshot.value.tasks.map { it.id }.toSet())
+        assertEquals(
+            existingIds,
+            app.repo.snapshot.value.tasks
+                .map { it.id }
+                .toSet(),
+        )
         // 点顶栏「确定」才落库
         rule.onNodeWithText(app.getString(R.string.confirm)).performClick()
         rule.waitUntil(5_000) {

@@ -27,10 +27,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -64,6 +66,11 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.IntOffset
@@ -142,15 +149,21 @@ fun AdvancedSheet(onDismiss: () -> Unit) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                 EXAMPLES.forEach { ex ->
+                    val labelText = stringResource(ex.label)
                     Text(
-                        stringResource(ex.label),
+                        labelText,
                         Modifier
+                            .heightIn(min = 48.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                             .clickable {
                                 app.advanced.setCode(ex.code)
                                 app.advanced.dryRun()
-                            }.padding(horizontal = 14.dp, vertical = 7.dp),
+                            }.semantics {
+                                role = Role.Button
+                                contentDescription = labelText
+                            }.wrapContentHeight(Alignment.CenterVertically)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -315,20 +328,31 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                 listOf(R.string.seg_code, R.string.seg_preview).forEachIndexed { i, label ->
                     val pillBg by animateColorAsState(if (seg == i) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, MintTheme.spec(), label = "seg-bg")
                     val pillFg by animateColorAsState(if (seg == i) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, MintTheme.spec(), label = "seg-fg")
-                    Text(
-                        stringResource(label),
-                        Modifier
-                            .weight(1f)
-                            .clip(CircleShape)
-                            .background(pillBg)
-                            .clickable {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                seg = i
-                            }.padding(vertical = 9.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = pillFg,
-                    )
+                    val labelText = stringResource(label)
+                    Box(
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .clip(CircleShape)
+                                .background(pillBg)
+                                .clickable {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    seg = i
+                                }.semantics {
+                                    role = Role.Tab
+                                    selected = seg == i
+                                    contentDescription = labelText
+                                },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            labelText,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = pillFg,
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(10.dp))
@@ -375,16 +399,21 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                                 AdvancedMessage(st.message)
                                 Text(stringResource(R.string.examples), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 EXAMPLES.forEach { ex ->
+                                    val descText = stringResource(ex.desc)
                                     Text(
-                                        stringResource(ex.desc),
+                                        descText,
                                         Modifier
                                             .fillMaxWidth()
+                                            .heightIn(min = 48.dp)
                                             .clip(RoundedCornerShape(16.dp))
                                             .background(MintTheme.card)
                                             .clickable {
                                                 app.advanced.setCode(ex.code)
                                                 app.advanced.dryRun()
                                                 seg = 1
+                                            }.semantics {
+                                                role = Role.Button
+                                                contentDescription = descText
                                             }.padding(14.dp),
                                         style = MaterialTheme.typography.bodyMedium,
                                     )

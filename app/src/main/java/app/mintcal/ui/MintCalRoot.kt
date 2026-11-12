@@ -18,8 +18,12 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -29,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -54,11 +59,13 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -97,6 +104,7 @@ import app.mintcal.ui.screens.TodoScreen
 import app.mintcal.ui.screens.TrashScreen
 import app.mintcal.ui.theme.LocalReduceMotion
 import app.mintcal.ui.theme.MintTheme
+import kotlinx.coroutines.delay
 
 @Composable
 fun MintCalRoot(
@@ -155,6 +163,20 @@ fun MintCalRoot(
                 nav.tab = Tab.TODO
             }
 
+            DeepLink.Timetable -> {
+                nav.clearToRoot()
+                nav.tab = Tab.TIMETABLE
+            }
+
+            DeepLink.Focus -> {
+                nav.clearToRoot()
+                nav.tab = Tab.FOCUS
+            }
+
+            DeepLink.Parcel -> {
+                nav.push(Route.Parcel)
+            }
+
             is DeepLink.Add -> {
                 val lines = l.text.lines().count { it.isNotBlank() }
                 if (lines > 1) {
@@ -182,7 +204,13 @@ fun MintCalRoot(
     val splashScale = if (reduce) snap<Float>() else tween<Float>(durationMillis = 280, easing = enterEase)
     // back 与整张 destination 表都 remember：NavHost 内部按 builder 的函数 identity 记忆图，
     // 每次 MintCalRoot 重组都传新 lambda 会让整张导航图被替换重建
-    val back = remember(nav) { { nav.pop(); Unit } }
+    val back =
+        remember(nav) {
+            {
+                nav.pop()
+                Unit
+            }
+        }
 
     CompositionLocalProvider(LocalApp provides app, LocalActions provides actions, LocalNav provides nav) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -270,8 +298,8 @@ fun NavGraphBuilder.mintDestinations(
 }
 
 /**
- * 撤销圆钮：一个没文字的图标，3 秒内点就撤销，超时自己消失。
- * 外圈那道弧是剩下的时间——不用读秒，扫一眼就知道还剩多少。
+ * 撤销胶囊：包含撤销图标与文字「撤销」，外圈进度弧显示剩余时间。
+ * reduceMotion 下保留常驻进度并等待 UNDO_MS 超时，不闪现跳过。
  */
 @Composable
 private fun UndoButton(
@@ -286,52 +314,68 @@ private fun UndoButton(
     LaunchedEffect(token) {
         remain.snapTo(1f)
         if (reduce) {
-            remain.snapTo(0f)
+            delay(UNDO_MS.toLong())
             onTimeout()
         } else {
             remain.animateTo(0f, tween(durationMillis = UNDO_MS, easing = LinearEasing))
             onTimeout()
         }
     }
-    Box(
-        Modifier
-            .size(52.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .mintClickable {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                onUndo()
-            }.semantics {
-                contentDescription = label
-                role = Role.Button
-            },
-        contentAlignment = Alignment.Center,
+    val undoText = stringResource(R.string.undo)
+    val a11yDesc = if (label.isNotBlank()) "$label，$undoText" else undoText
+    Row(
+        modifier =
+            Modifier
+                .heightIn(min = 48.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), CircleShape)
+                .mintClickable {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onUndo()
+                }.semantics {
+                    contentDescription = a11yDesc
+                    role = Role.Button
+                }.padding(start = 10.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         val ring = MaterialTheme.colorScheme.primary
-        Canvas(Modifier.fillMaxSize()) {
-            val stroke = 2.dp.toPx()
-            val inset = stroke / 2 + 1.dp.toPx()
-            val arcRect = Size(size.width - inset * 2, size.height - inset * 2)
-            drawArc(
-                color = ring,
-                startAngle = -90f,
-                sweepAngle = 360f * remain.value,
-                useCenter = false,
-                topLeft = Offset(inset, inset),
-                size = arcRect,
-                style = Stroke(width = stroke, cap = StrokeCap.Round),
+        Box(
+            modifier = Modifier.size(32.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                val stroke = 2.dp.toPx()
+                val inset = stroke / 2 + 1.dp.toPx()
+                val arcRect = Size(size.width - inset * 2, size.height - inset * 2)
+                drawArc(
+                    color = ring,
+                    startAngle = -90f,
+                    sweepAngle = 360f * remain.value,
+                    useCenter = false,
+                    topLeft = Offset(inset, inset),
+                    size = arcRect,
+                    style = Stroke(width = stroke, cap = StrokeCap.Round),
+                )
+            }
+            Icon(
+                Icons.AutoMirrored.Rounded.Undo,
+                null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
             )
         }
-        Icon(
-            Icons.AutoMirrored.Rounded.Undo,
-            null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp),
+        Text(
+            text = undoText,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
 
-private const val UNDO_MS = 3000
+private const val UNDO_MS = 4500
 
 @Composable
 private fun Tabs(nav: Nav) {

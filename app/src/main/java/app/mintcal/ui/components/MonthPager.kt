@@ -30,6 +30,11 @@ import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -78,7 +83,7 @@ fun MonthPager(
                         if (reduce) pager.scrollToPage(target) else pager.animateScrollToPage(target)
                     }
                 },
-            ) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, null) }
+            ) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, stringResource(R.string.a11y_prev_month)) }
             IconButton(
                 onClick = {
                     scope.launch {
@@ -86,7 +91,7 @@ fun MonthPager(
                         if (reduce) pager.scrollToPage(target) else pager.animateScrollToPage(target)
                     }
                 },
-            ) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) }
+            ) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, stringResource(R.string.a11y_next_month)) }
         }
         // 月历页高恒定（星期头 + 6 行）。Pager 在有界容器（对话框/底部面板）里会按约束高
         // 定尺寸而不是按内容，第六行会被裁掉——先隐藏组装一份量出自然高度，再给 pager 定高。
@@ -113,13 +118,15 @@ private fun MonthGrid(
     month: YearMonth,
     onPick: (LocalDate) -> Unit,
 ) {
+    val ctx = LocalContext.current
     val first = month.atDay(1).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
     val haptics = LocalHapticFeedback.current
+    val today = LocalDate.now()
     Column {
         Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
             for (i in 0..6) {
                 Text(
-                    LocalContext.current.weekdayShort(i + 1),
+                    ctx.weekdayShort(i + 1),
                     Modifier.weight(1f),
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.labelMedium,
@@ -133,11 +140,24 @@ private fun MonthGrid(
                     val d = first.plusDays((r * 7 + c).toLong())
                     val sel = d == selected
                     val inMonth = YearMonth.from(d) == month
+                    val isToday = d == today
+                    val desc =
+                        buildString {
+                            append(ctx.getString(R.string.fmt_full_date, d.year, d.monthValue, d.dayOfMonth, ctx.weekdayShort(d.dayOfWeek.value)))
+                            if (isToday) append("，").append(ctx.getString(R.string.today))
+                        }
                     Box(
-                        Modifier.weight(1f).height(48.dp).clickable {
-                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                            onPick(d)
-                        },
+                        Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clickable {
+                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                onPick(d)
+                            }.semantics(mergeDescendants = true) {
+                                role = Role.Button
+                                this.selected = sel
+                                contentDescription = desc
+                            },
                         contentAlignment = Alignment.Center,
                     ) {
                         Box(
@@ -154,7 +174,7 @@ private fun MonthGrid(
                                     when {
                                         sel -> MaterialTheme.colorScheme.onPrimary
                                         !inMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                        d == LocalDate.now() -> MaterialTheme.colorScheme.primary
+                                        isToday -> MaterialTheme.colorScheme.primary
                                         else -> MaterialTheme.colorScheme.onSurface
                                     },
                             )

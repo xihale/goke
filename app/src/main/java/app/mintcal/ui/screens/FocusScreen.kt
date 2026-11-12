@@ -2,6 +2,7 @@ package app.mintcal.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -37,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -103,25 +106,37 @@ fun FocusScreen(
             .statusBarsPadding()
             // Tab 层：内容铺满，底部让位给常驻岛；压栈页保持自身避开导航栏
             .then(if (inTab) Modifier else Modifier.navigationBarsPadding()),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (inTab) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Row(
+                Modifier
+                    .widthIn(max = 680.dp)
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (inTab) {
+                    Spacer(Modifier.width(48.dp))
+                } else {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
+                }
+                Text(
+                    stringResource(R.string.focus_title),
+                    Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Medium,
+                )
                 Spacer(Modifier.width(48.dp))
-            } else {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
             }
-            Text(
-                stringResource(R.string.focus_title),
-                Modifier.weight(1f),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Medium,
-            )
-            Spacer(Modifier.width(48.dp))
         }
 
         Column(
             Modifier
                 .weight(1f)
+                .widthIn(max = 680.dp)
+                .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
         ) {
@@ -233,12 +248,6 @@ private fun RunningBody(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 24.dp),
         )
-        Text(
-            if (run.countUp) stringResource(R.string.focus_mode_countup) else stringResource(R.string.focus_mode_countdown),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp),
-        )
         val shown =
             if (run.countUp) {
                 elapsed
@@ -250,11 +259,9 @@ private fun RunningBody(
             fontSize = 64.sp,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Light,
-            modifier = Modifier.padding(vertical = 20.dp),
+            modifier = Modifier.alpha(if (paused) 0.55f else 1f).padding(vertical = 20.dp),
         )
-        if (paused) {
-            Text(stringResource(R.string.focus_paused), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary)
-        } else if (!run.countUp) {
+        if (!run.countUp) {
             Text(
                 stringResource(R.string.focus_running_of, ctx.durationLabel((run.plannedMinutes ?: 0) * 60_000L)),
                 style = MaterialTheme.typography.bodyMedium,
@@ -308,9 +315,14 @@ private fun HistoryBody(
             for (s in daySessions) {
                 val title =
                     when {
-                        s.taskId == null -> stringResource(R.string.focus_free)
-                        else -> snap.tasks.firstOrNull { it.id == s.taskId && it.deletedAt == null }?.title
-                            ?: stringResource(R.string.focus_task_deleted)
+                        s.taskId == null -> {
+                            stringResource(R.string.focus_free)
+                        }
+
+                        else -> {
+                            snap.tasks.firstOrNull { it.id == s.taskId && it.deletedAt == null }?.title
+                                ?: stringResource(R.string.focus_task_deleted)
+                        }
                     }
                 Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(

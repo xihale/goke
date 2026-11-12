@@ -7,9 +7,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.view.View
 import android.widget.RemoteViews
 import app.mintcal.DeepLinks
-import app.mintcal.MainActivity
 import app.mintcal.R
 import app.mintcal.core.todo.SmartList
 import app.mintcal.core.todo.TaskLogic
@@ -17,7 +17,8 @@ import app.mintcal.mintApp
 import app.mintcal.ui.dueLabel
 import java.time.LocalDateTime
 
-/** 「待办清单」小组件：逾期 + 今天的未完成待办；点圈直接完成，点标题进抽屉，点＋新建。 */
+/** 「待办清单」小组件：逾期 + 今天的未完成待办；点圆角方框直接完成，点行进编辑页，点＋新建。 */
+@Suppress("DEPRECATION")
 class TodoWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
         context: Context,
@@ -28,17 +29,19 @@ class TodoWidgetProvider : AppWidgetProvider() {
         manager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.widget_list)
     }
 
-    /** 一行要显示的待办。 */
     data class Row(
         val id: String,
         val title: String,
+        val code: String?,
         val due: String?,
+        val priority: Int,
         val overdue: Boolean,
     )
 
     companion object {
         const val EXTRA_OP = "op"
         const val EXTRA_TASK_ID = "task_id"
+        const val EXTRA_URI = "uri"
         const val OP_DONE = "done"
         const val OP_OPEN = "open"
         private const val MAX_ROWS = 40
@@ -66,46 +69,50 @@ class TodoWidgetProvider : AppWidgetProvider() {
             val date = now.toLocalDate()
             return (overdue + today).take(MAX_ROWS).map { t ->
                 val due = TaskLogic.effectiveDue(t, snap.currentSemester, snap.courses, snap.exceptions, now)
-                Row(t.id, t.title, due?.let { ctx.dueLabel(it, t.dueHasTime, date) }, t in overdue)
+                val code = WidgetKit.parcelCode(t)
+                val cleanTitle = if (code != null) WidgetKit.cleanTitleWithCode(ctx, t) else t.title
+                Row(
+                    id = t.id,
+                    title = cleanTitle,
+                    code = code,
+                    due = due?.let { ctx.dueLabel(it, t.dueHasTime, date) },
+                    priority = t.priority,
+                    overdue = t in overdue,
+                )
             }
         }
 
-        private fun build(
+        fun build(
             ctx: Context,
             widgetId: Int,
+            now: LocalDateTime = LocalDateTime.now(),
         ): RemoteViews {
             val views = RemoteViews(ctx.packageName, R.layout.widget_todo)
-            views.setTextViewText(R.id.widget_title, ctx.getString(R.string.widget_todo_title, rows(ctx).size))
+            val count = rows(ctx, now).size
+            views.setTextViewText(R.id.widget_title, ctx.getString(R.string.tab_todo))
+            if (count > 0) {
+                views.setViewVisibility(R.id.widget_count, View.VISIBLE)
+                views.setTextViewText(R.id.widget_count, count.toString())
+            } else {
+                views.setViewVisibility(R.id.widget_count, View.GONE)
+            }
             views.setRemoteAdapter(
                 R.id.widget_list,
-                Intent(ctx, TodoWidgetService::class.java).setData(Uri.parse("mintcal://widget/$widgetId")),
+                Intent(ctx, TodoWidgetService::class.java).setData(Uri.parse("mintcal://widget/todo/$widgetId")),
             )
             views.setEmptyView(R.id.widget_list, R.id.widget_empty)
-            // 行内点击：模板是无界面跳板 Activity（任何系统版本都允许从小组件点击启动），行里用 fillIn 区分「完成 / 打开」
             views.setPendingIntentTemplate(
                 R.id.widget_list,
                 PendingIntent.getActivity(
                     ctx,
-                    widgetId,
+                    100 + widgetId,
                     Intent(ctx, WidgetActionActivity::class.java),
                     PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
                 ),
             )
-            views.setOnClickPendingIntent(R.id.widget_title, activity(ctx, 1, DeepLinks.todoUri()))
-            views.setOnClickPendingIntent(R.id.widget_add, activity(ctx, 2, DeepLinks.addUri()))
+            views.setOnClickPendingIntent(R.id.widget_header, WidgetKit.mainActivityIntent(ctx, 10, DeepLinks.todoUri()))
+            views.setOnClickPendingIntent(R.id.widget_add, WidgetKit.mainActivityIntent(ctx, 11, DeepLinks.addUri()))
             return views
         }
-
-        private fun activity(
-            ctx: Context,
-            code: Int,
-            uri: Uri,
-        ): PendingIntent =
-            PendingIntent.getActivity(
-                ctx,
-                code,
-                Intent(Intent.ACTION_VIEW, uri, ctx, MainActivity::class.java),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
     }
 }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -83,13 +84,14 @@ fun FieldText(
             decorationBox = { inner ->
                 Box {
                     if (value.isEmpty() && placeholder != null) {
-                        Text(placeholder, style = MaterialTheme.typography.bodyLarge, color = scheme.onSurfaceVariant)
+                        Text(placeholder, style = MaterialTheme.typography.bodyLarge, color = scheme.onSurfaceVariant.copy(alpha = 0.5f))
                     }
                     inner()
                 }
             },
         )
-        if (supporting != null) Text(supporting, style = MaterialTheme.typography.bodySmall, color = labelColor)
+        HorizontalDivider(thickness = 0.5.dp, color = scheme.outlineVariant.copy(alpha = 0.45f), modifier = Modifier.padding(top = 4.dp))
+        if (supporting != null) Text(supporting, style = MaterialTheme.typography.bodySmall, color = labelColor, modifier = Modifier.padding(top = 4.dp))
     }
 }
 

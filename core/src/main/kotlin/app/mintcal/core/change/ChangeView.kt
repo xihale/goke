@@ -134,6 +134,8 @@ object ChangeViews {
             }
 
             // 专注会话：标题已含时长摘要，不再展开字段
-            is FocusSession -> emptyList()
+            is FocusSession -> {
+                emptyList()
+            }
         }
 }

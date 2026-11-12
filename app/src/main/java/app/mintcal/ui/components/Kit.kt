@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -99,6 +100,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -132,17 +134,29 @@ fun MintScreen(
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .imePadding(),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (onBack != null) {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
-            } else {
-                Spacer(Modifier.width(12.dp))
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Row(
+                Modifier
+                    .widthIn(max = 680.dp)
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (onBack != null) {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
+                } else {
+                    Spacer(Modifier.width(12.dp))
+                }
+                Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                actions()
             }
-            Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            actions()
         }
-        Box(Modifier.weight(1f).fillMaxWidth()) { content() }
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            Box(Modifier.fillMaxHeight().widthIn(max = 680.dp).fillMaxWidth()) { content() }
+        }
     }
 }
 
@@ -192,14 +206,16 @@ fun Tag(
     fg: Color,
     modifier: Modifier = Modifier,
 ) {
-    Text(
-        text,
-        modifier = modifier.clip(CircleShape).background(bg).padding(horizontal = 10.dp, vertical = 3.dp),
-        style = MaterialTheme.typography.labelMedium,
-        color = fg,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Text(
+            text,
+            modifier = Modifier.clip(CircleShape).background(bg).padding(horizontal = 10.dp, vertical = 3.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = fg,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 /** 勾选框：两态保持相同轮廓，命中区保底 48dp，使用水波与触觉反馈。 */
@@ -341,7 +357,12 @@ fun FloatingNavBar(
     // 深色里 surfaceContainerHighest 和岛几乎同色，选中块会糊成一块污渍；往文字色混一档，仍是中性色
     val thumb = if (dark) lerp(bar, scheme.onSurface, 0.16f) else scheme.surfaceContainerHighest
     Surface(
-        modifier = modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = NavIslandPadding).fillMaxWidth(),
+        modifier =
+            modifier
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = NavIslandPadding)
+                .widthIn(max = 460.dp)
+                .fillMaxWidth(),
         shape = CircleShape,
         color = bar,
         shadowElevation = 3.dp,
@@ -646,6 +667,7 @@ fun Modifier.mintPressable(
 fun Modifier.mintClickable(
     enabled: Boolean = true,
     role: Role? = null,
+    selected: Boolean? = null,
     haptic: Boolean = true,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
@@ -664,11 +686,18 @@ fun Modifier.mintClickable(
         } else {
             Modifier.clickable(interactionSource = source, indication = null, enabled = enabled, role = role, onClick = click)
         }
+    val semanticsMod =
+        if (selected != null) {
+            Modifier.semantics { this.selected = selected }
+        } else {
+            Modifier
+        }
     return this
         .graphicsLayer {
             scaleX = scale
             scaleY = scale
         }.then(gesture)
+        .then(semanticsMod)
 }
 
 /** 一次可撤销操作：条还在时持有对应变更集和当时的说明。 */
