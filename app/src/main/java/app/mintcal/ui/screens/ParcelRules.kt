@@ -1,6 +1,5 @@
 package app.mintcal.ui.screens
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,6 +38,7 @@ import app.mintcal.data.ParcelRuleStore
 import app.mintcal.ui.components.ChipChoice
 import app.mintcal.ui.components.FieldText
 import app.mintcal.ui.components.FormSection
+import app.mintcal.ui.components.mintClickable
 
 /** 正在编辑的规则：originBuiltinId 非空 = 编辑的是内置种子，保存时 fork 成用户规则并停用原条目。 */
 data class RuleDraft(
@@ -68,7 +68,7 @@ fun ParcelRulesSection(store: ParcelRuleStore) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clickable { draft = RuleDraft(rule) }
+                    .mintClickable(pressedScale = 0.98f) { draft = RuleDraft(rule) }
                     .padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -94,7 +94,7 @@ fun ParcelRulesSection(store: ParcelRuleStore) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clickable { draft = RuleDraft(b.copy(id = Ids.next(), builtin = false), originBuiltinId = b.id) }
+                    .mintClickable(pressedScale = 0.98f) { draft = RuleDraft(b.copy(id = Ids.next(), builtin = false), originBuiltinId = b.id) }
                     .padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

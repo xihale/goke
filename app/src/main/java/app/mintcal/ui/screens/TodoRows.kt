@@ -62,12 +62,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import app.mintcal.core.agenda.NextUp
 import app.mintcal.core.change.Edits
 import app.mintcal.core.model.Snapshot
+import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
 import app.mintcal.core.todo.Bucket
 import app.mintcal.core.todo.TaskLogic
@@ -77,12 +79,14 @@ import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintCheck
-import app.mintcal.ui.components.ParcelCodeTag
+import app.mintcal.ui.components.ParcelCodeCopyButton
+import app.mintcal.ui.components.ParcelCodeHeadline
 import app.mintcal.ui.components.Tag
 import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.components.parcelCode
 import app.mintcal.ui.components.parcelLabel
 import app.mintcal.ui.dueLabel
+import app.mintcal.ui.formatRooms
 import app.mintcal.ui.hm
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.theme.priorityColor
@@ -154,13 +158,25 @@ fun TodoLine(
     val haptics = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(if (pressed) 0.96f else 1f, MintTheme.spec(), label = "todo-press")
-    Surface(
+    val pressScale by animateFloatAsState(if (pressed) 0.98f else 1f, MintTheme.spec(), label = "todo-press")
+    val rowAlpha by animateFloatAsState(if (task.done) 0.45f else 1f, MintTheme.spec(), label = "todo-alpha")
+    val code = task.parcelCode()
+    val station = if (code != null) task.parcelLabel()?.takeIf { it.isNotBlank() } else null
+    val rowBgModifier =
+        if (selectMode && selected) {
+            Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f), shape = MaterialTheme.shapes.medium)
+        } else {
+            Modifier
+        }
+    Row(
         modifier =
             modifier
+                .fillMaxWidth()
+                .then(rowBgModifier)
                 .graphicsLayer {
                     scaleX = pressScale
                     scaleY = pressScale
+                    alpha = rowAlpha
                 }.combinedClickable(
                     interactionSource = interaction,
                     indication = null,
@@ -169,70 +185,109 @@ fun TodoLine(
                         haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                         if (onClick != null) onClick() else nav.openTask(task.id)
                     },
-                ),
-        shape = MaterialTheme.shapes.medium,
-        color = MintTheme.card,
+                ).heightIn(min = 48.dp)
+                .padding(start = 4.dp, end = if (code != null && !selectMode && expanded == null) 4.dp else 10.dp, top = 7.dp, bottom = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(Modifier.heightIn(min = 52.dp).padding(start = 4.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (selectMode) {
-                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                    Icon(
-                        if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
-                        null,
-                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                    )
-                }
-            } else {
-                MintCheck(
-                    task.done,
-                    { d -> toggle(actions, snap, task, d, now, ctx.getString(R.string.done_toast, task.title)) },
-                    tint = list?.let { colors.fg(it.colorIndex) },
-                    strokeWidth = ring,
+        if (selectMode) {
+            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                Icon(
+                    if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                    null,
+                    tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                 )
             }
-            Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
-                // 快递待办：取件码做成胶囊放在标题前，标题只留驿站 / 快递名
-                val code = task.parcelCode()
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (code != null) {
-                        ParcelCodeTag(code)
-                        Spacer(Modifier.width(6.dp))
+        } else {
+            MintCheck(
+                task.done,
+                { d -> toggle(actions, snap, task, d, now, ctx.getString(R.string.done_toast, task.title)) },
+                tint = list?.let { colors.fg(it.colorIndex) },
+                strokeWidth = ring,
+            )
+        }
+        Column(Modifier.weight(1f)) {
+            if (code != null) {
+                ParcelCodeHeadline(code = code, done = task.done, copyEnabled = !selectMode)
+            } else {
+                Text(
+                    task.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = titleColor,
+                    textDecoration = if (task.done) TextDecoration.LineThrough else null,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val dueText =
+                due?.let {
+                    if (task.dueBeforeNextClass && course != null) {
+                        stringResource(R.string.before_next_class_short, course.name)
+                    } else {
+                        ctx.dueLabel(it, task.dueHasTime, now.toLocalDate())
                     }
-                    Text(
-                        task.parcelLabel() ?: task.title,
-                        Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = titleColor,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
                 }
-                if (meta.isNotEmpty()) {
-                    Text(meta.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                if (due != null) {
-                    val label =
-                        if (task.dueBeforeNextClass && course != null) {
-                            stringResource(R.string.before_next_class_short, course.name)
-                        } else {
-                            ctx.dueLabel(due, task.dueHasTime, now.toLocalDate())
+            val extraMeta = listOfNotNull(station, meta.takeIf { it.isNotEmpty() }?.joinToString(" · "))
+            if (dueText != null || extraMeta.isNotEmpty()) {
+                if (overdue && !task.done && dueText != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 1.dp)) {
+                        if (station != null) {
+                            Text(
+                                "$station · ",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
                         }
+                        Text(
+                            dueText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.removed,
+                            maxLines = 1,
+                        )
+                        if (meta.isNotEmpty()) {
+                            Text(
+                                " · " + meta.joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                } else {
+                    val subtitleLine =
+                        listOfNotNull(
+                            station,
+                            dueText,
+                            meta.takeIf { it.isNotEmpty() }?.joinToString(" · "),
+                        ).joinToString(" · ")
                     Text(
-                        label,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (overdue && !task.done) colors.removed else MaterialTheme.colorScheme.onSurfaceVariant,
+                        subtitleLine,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 1.dp),
                     )
                 }
             }
-            // 优先级旗子：圈粗太细看不出来，行尾补一面旗（0 档无色不显示）
+        }
+        // 快递默认自带中优先级（2 档），优先把尾部让给一键复制图标；手动升为高优或普通待办照常显旗
+        val showFlag = code == null || (task.source != Source.PARCEL && task.priority > 0) || task.priority >= 3
+        if (showFlag) {
             colors.priorityColor(task.priority)?.let { prio ->
-                Icon(Icons.Rounded.Flag, null, Modifier.padding(end = 8.dp).size(14.dp), tint = prio)
+                Icon(Icons.Rounded.Flag, null, Modifier.padding(end = if (code != null && !selectMode) 2.dp else 8.dp).size(14.dp), tint = prio)
             }
-            if (expanded != null && onToggleExpand != null) {
-                val rot by animateFloatAsState(if (expanded) 0f else -90f, MintTheme.spec(), label = "sub-chevron")
-                IconButton(onClick = onToggleExpand, Modifier.size(48.dp)) {
-                    Icon(Icons.Rounded.ExpandMore, stringResource(R.string.todo_toggle_subtasks), Modifier.rotate(rot), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+        }
+        if (code != null && !selectMode) {
+            ParcelCodeCopyButton(code)
+        }
+        if (expanded != null && onToggleExpand != null) {
+            val rot by animateFloatAsState(if (expanded) 0f else -90f, MintTheme.spec(), label = "sub-chevron")
+            IconButton(onClick = onToggleExpand, Modifier.size(48.dp)) {
+                Icon(Icons.Rounded.ExpandMore, stringResource(R.string.todo_toggle_subtasks), Modifier.rotate(rot), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -291,25 +346,28 @@ internal fun TodoRow(
             },
         )
     val shape = RoundedCornerShape(16.dp)
+    val swiping = state.dismissDirection != SwipeToDismissBoxValue.Settled
     SwipeToDismissBox(
         state = state,
         modifier = modifier.clip(shape),
         enableDismissFromStartToEnd = swipeEnabled,
         enableDismissFromEndToStart = swipeEnabled,
         backgroundContent = {
-            // 右滑（StartToEnd）默认显示完成；交换后显示改期
-            val right = state.targetValue == SwipeToDismissBoxValue.StartToEnd
-            val doneSide = right != swapSwipe
-            val bg = if (doneSide) colors.added else MaterialTheme.colorScheme.tertiary
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .clip(shape)
-                    .background(bg.copy(alpha = 0.18f))
-                    .padding(horizontal = 22.dp),
-                contentAlignment = if (right) Alignment.CenterStart else Alignment.CenterEnd,
-            ) {
-                Icon(if (doneSide) Icons.Rounded.Check else Icons.Rounded.Event, null, tint = bg)
+            if (swiping) {
+                // 右滑（StartToEnd）默认显示完成；交换后显示改期
+                val right = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
+                val doneSide = right != swapSwipe
+                val bg = if (doneSide) colors.added else MaterialTheme.colorScheme.tertiary
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .clip(shape)
+                        .background(bg.copy(alpha = 0.18f))
+                        .padding(horizontal = 22.dp),
+                    contentAlignment = if (right) Alignment.CenterStart else Alignment.CenterEnd,
+                ) {
+                    Icon(if (doneSide) Icons.Rounded.Check else Icons.Rounded.Event, null, tint = bg)
+                }
             }
         },
     ) {
@@ -317,6 +375,7 @@ internal fun TodoRow(
             task,
             snap,
             now,
+            modifier = if (swiping) Modifier.background(MaterialTheme.colorScheme.background, shape) else Modifier,
             selectMode = selectMode,
             selected = selected,
             index = index,
@@ -339,23 +398,26 @@ internal fun SubRow(
     val ctx = LocalContext.current
     val nav = LocalNav.current
     val actions = LocalActions.current
+    val subAlpha by animateFloatAsState(if (sub.done) 0.45f else 1f, MintTheme.spec(), label = "sub-alpha")
     Row(
         modifier
             .fillMaxWidth()
             .padding(start = 40.dp)
             .clip(MaterialTheme.shapes.medium)
-            .background(MintTheme.card)
-            .mintClickable { nav.openTask(sub.id) }
-            .padding(horizontal = 8.dp),
+            .graphicsLayer { alpha = subAlpha }
+            .mintClickable(pressedScale = 0.98f) { nav.openTask(sub.id) }
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         app.mintcal.ui.components
             .MintCheck(sub.done, { d -> toggle(actions, snap, sub, d, now, ctx.getString(R.string.done_toast, sub.title)) })
         Text(
             sub.title,
-            Modifier.weight(1f).padding(vertical = 8.dp),
+            Modifier.weight(1f).padding(start = 6.dp),
             style = MaterialTheme.typography.bodyMedium,
             color = if (sub.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+            textDecoration = if (sub.done) TextDecoration.LineThrough else null,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
@@ -427,7 +489,7 @@ internal fun SectionHeader(
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.small)
             .semantics { stateDescription = expansion }
-            .clickable(role = Role.Button, onClick = onToggle)
+            .mintClickable(role = Role.Button, pressedScale = 0.98f, onClick = onToggle)
             .heightIn(min = 48.dp)
             .padding(start = 6.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -472,13 +534,14 @@ internal fun NextUpCard(
     val nav = LocalNav.current
     val o = up.occurrence
     val whenText = (if (o.date == today) "" else ctx.dueLabel(o.date.atStartOfDay(), false, today) + " ") + o.start.hm()
+    val roomText = o.room.takeIf { it.isNotBlank() }?.let { ctx.formatRooms(it) }
     MintCard(modifier) {
         Text(stringResource(R.string.todo_next_up), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
-                .mintClickable(role = Role.Button) { nav.push(Route.CourseEdit(o.course.id)) },
+                .mintClickable(role = Role.Button, pressedScale = 0.98f) { nav.push(Route.CourseEdit(o.course.id)) },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
@@ -490,7 +553,7 @@ internal fun NextUpCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    listOfNotNull(whenText, o.room.takeIf { it.isNotBlank() }).joinToString(" · "),
+                    listOfNotNull(whenText, roomText).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

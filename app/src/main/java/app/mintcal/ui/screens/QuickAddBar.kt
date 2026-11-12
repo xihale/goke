@@ -109,6 +109,7 @@ import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
 import app.mintcal.ui.components.Tag
+import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.dueLabel
 import app.mintcal.ui.hm
 import app.mintcal.ui.settingsState
@@ -535,7 +536,7 @@ internal fun QuickAddSheet(
                                     .padding(start = 4.dp)
                                     .minimumInteractiveComponentSize()
                                     .clip(CircleShape)
-                                    .clickable(enabled = canAdd, role = Role.Button) { finish() }
+                                    .mintClickable(enabled = canAdd, pressedScale = 0.96f, role = Role.Button) { finish() }
                                     .semantics { contentDescription = confirmLabel },
                             contentAlignment = Alignment.Center,
                         ) {
@@ -562,157 +563,58 @@ internal fun QuickAddSheet(
                         }
                     }
                     AnimatedVisibility(
-                        visible = parsed?.tokens?.isNotEmpty() == true || panelWhenLabel != null || panelRemind != null || panelFreq != null,
+                        visible = panelWhenLabel != null || panelRemind != null || panelFreq != null,
                         enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
                         exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
                     ) {
-                        val p = parsed
-                        if (p != null) {
-                            FlowRow(
-                                Modifier.padding(end = 6.dp, top = 2.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                p.due?.let {
-                                    val dueText = ctx.dueLabel(it, p.dueHasTime, now.toLocalDate())
-                                    Tag(
-                                        "$dueText ×",
-                                        MaterialTheme.colorScheme.primaryContainer,
-                                        MaterialTheme.colorScheme.onPrimaryContainer,
-                                        Modifier
-                                            .minimumInteractiveComponentSize()
-                                            .clickable { rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME), null) }
-                                            .semantics {
-                                                role = Role.Button
-                                                contentDescription = "移除时间：$dueText"
-                                            },
-                                    )
-                                }
-                                p.courseName?.let { name ->
-                                    val c = matchCourse(snap, name)
-                                    val courseTitle = c?.name ?: name
-                                    Tag(
-                                        stringResource(R.string.detail_editor_before_class, courseTitle) + " ×",
-                                        MaterialTheme.colorScheme.primaryContainer,
-                                        MaterialTheme.colorScheme.onPrimaryContainer,
-                                        Modifier
-                                            .minimumInteractiveComponentSize()
-                                            .clickable { rewrite(setOf(QuickTokenKind.COURSE), null) }
-                                            .semantics {
-                                                role = Role.Button
-                                                contentDescription = "移除课程：$courseTitle"
-                                            },
-                                    )
-                                }
-                                if (p.priority > 0) {
-                                    val label =
-                                        when (p.priority) {
-                                            3 -> R.string.priority_3
-                                            2 -> R.string.priority_2
-                                            else -> R.string.priority_1
-                                        }
-                                    val prioStr = stringResource(label)
-                                    val prio = colors.priorityColor(p.priority) ?: MaterialTheme.colorScheme.secondary
-                                    Tag(
-                                        "!$prioStr ×",
-                                        prio.copy(alpha = 0.14f),
-                                        prio,
-                                        Modifier
-                                            .minimumInteractiveComponentSize()
-                                            .clickable { rewrite(setOf(QuickTokenKind.PRIORITY), null) }
-                                            .semantics {
-                                                role = Role.Button
-                                                contentDescription = "移除优先级：$prioStr"
-                                            },
-                                    )
-                                }
-                                p.listName?.let {
-                                    Tag(
-                                        "#$it ×",
-                                        MaterialTheme.colorScheme.tertiaryContainer,
-                                        MaterialTheme.colorScheme.onTertiaryContainer,
-                                        Modifier
-                                            .minimumInteractiveComponentSize()
-                                            .clickable { rewrite(setOf(QuickTokenKind.LIST), null) }
-                                            .semantics {
-                                                role = Role.Button
-                                                contentDescription = "移除清单：$it"
-                                            },
-                                    )
-                                }
-                                val tagTokens = p.tokens.filter { it.kind == QuickTokenKind.TAG }
-                                p.tags.forEachIndexed { i, tag ->
-                                    Tag(
-                                        "@$tag ×",
-                                        MaterialTheme.colorScheme.surfaceVariant,
-                                        MaterialTheme.colorScheme.onSurfaceVariant,
-                                        Modifier
-                                            .minimumInteractiveComponentSize()
-                                            .clickable {
-                                                tagTokens.getOrNull(i)?.let { tok ->
-                                                    text = text.replace(tok.text, " ").replace(Regex("\\s+"), " ").trim()
-                                                }
-                                            }.semantics {
-                                                role = Role.Button
-                                                contentDescription = "移除标签：@$tag"
-                                            },
-                                    )
-                                }
+                        FlowRow(
+                            Modifier.padding(end = 6.dp, top = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            if (panelWhenLabel != null) {
+                                Tag(
+                                    "$panelWhenLabel ×",
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.onPrimaryContainer,
+                                    Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelWhen = null }
+                                        .semantics {
+                                            contentDescription = "移除时间：$panelWhenLabel"
+                                        },
+                                )
                             }
-                        }
-                        if (panelWhenLabel != null || panelRemind != null || panelFreq != null) {
-                            FlowRow(
-                                Modifier.padding(end = 6.dp, top = 6.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                if (panelWhenLabel != null) {
-                                    Tag(
-                                        "$panelWhenLabel ×",
-                                        MaterialTheme.colorScheme.primaryContainer,
-                                        MaterialTheme.colorScheme.onPrimaryContainer,
-                                        Modifier
-                                            .minimumInteractiveComponentSize()
-                                            .clickable { panelWhen = null }
-                                            .semantics {
-                                                role = Role.Button
-                                                contentDescription = "移除时间：$panelWhenLabel"
-                                            },
-                                    )
-                                }
-                                if (panelRemind != null) {
-                                    val rLabel = remindLabel(panelRemind)
-                                    Tag(
-                                        "$rLabel ×",
-                                        MaterialTheme.colorScheme.secondaryContainer,
-                                        MaterialTheme.colorScheme.onSecondaryContainer,
-                                        Modifier
-                                            .minimumInteractiveComponentSize()
-                                            .clickable { panelRemind = null }
-                                            .semantics {
-                                                role = Role.Button
-                                                contentDescription = "移除提醒：$rLabel"
-                                            },
-                                    )
-                                }
-                                if (panelFreq != null) {
-                                    val fLabel = freqLabel(panelFreq, panelUntil, panelInterval, panelByDays, panelWhen?.date)
-                                    Tag(
-                                        "$fLabel ×",
-                                        MaterialTheme.colorScheme.tertiaryContainer,
-                                        MaterialTheme.colorScheme.onTertiaryContainer,
-                                        Modifier
-                                            .minimumInteractiveComponentSize()
-                                            .clickable {
-                                                panelFreq = null
-                                                panelUntil = null
-                                                panelByDays = emptySet()
-                                            }.semantics {
-                                                role = Role.Button
-                                                contentDescription = "移除重复：$fLabel"
-                                            },
-                                    )
-                                }
+                            if (panelRemind != null) {
+                                val rLabel = remindLabel(panelRemind)
+                                Tag(
+                                    "$rLabel ×",
+                                    MaterialTheme.colorScheme.secondaryContainer,
+                                    MaterialTheme.colorScheme.onSecondaryContainer,
+                                    Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelRemind = null }
+                                        .semantics {
+                                            contentDescription = "移除提醒：$rLabel"
+                                        },
+                                )
+                            }
+                            if (panelFreq != null) {
+                                val fLabel = freqLabel(panelFreq, panelUntil, panelInterval, panelByDays, panelWhen?.date)
+                                Tag(
+                                    "$fLabel ×",
+                                    MaterialTheme.colorScheme.tertiaryContainer,
+                                    MaterialTheme.colorScheme.onTertiaryContainer,
+                                    Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .mintClickable(pressedScale = 0.96f, role = Role.Button) {
+                                            panelFreq = null
+                                            panelUntil = null
+                                            panelByDays = emptySet()
+                                        }.semantics {
+                                            contentDescription = "移除重复：$fLabel"
+                                        },
+                                )
                             }
                         }
                     }

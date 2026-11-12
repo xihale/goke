@@ -281,7 +281,10 @@ fun NavGraphBuilder.mintDestinations(
     composable<Route.Jxfw> { JxfwScreen(back) }
     composable<Route.Reliability> { ReliabilityScreen(back) }
     composable<Route.Import> { e -> ImportScreen(e.toRoute<Route.Import>().uri, back) }
-    composable<Route.CourseEdit> { e -> CourseEditScreen(e.toRoute<Route.CourseEdit>().id, back) }
+    composable<Route.CourseEdit> { e ->
+        val r = e.toRoute<Route.CourseEdit>()
+        CourseEditScreen(r.id, r.initialDow, r.initialPeriod, back)
+    }
     composable<Route.TodoEdit> { e ->
         val r = e.toRoute<Route.TodoEdit>()
         TodoEditScreen(r.id, r.date, r.start, r.end, r.text, r.courseId, r.extraDates, r.note) {

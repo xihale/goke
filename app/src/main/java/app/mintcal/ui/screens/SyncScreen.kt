@@ -60,6 +60,7 @@ import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintCheck
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.SwitchRow
+import app.mintcal.ui.components.TonalField
 import app.mintcal.ui.components.mintClickable
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -288,7 +289,7 @@ private fun LoginPanel() {
 
     FormSection(stringResource(R.string.sync_login_section)) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            FieldText(
+            TonalField(
                 stringResource(R.string.sync_server),
                 url,
                 { url = it },
@@ -296,8 +297,8 @@ private fun LoginPanel() {
                 supporting = if (SyncClient.isInsecure(url.trim().lowercase())) stringResource(R.string.sync_http_warning) else null,
                 isError = SyncClient.isInsecure(url.trim().lowercase()),
             )
-            FieldText(stringResource(R.string.sync_username), user, { user = it })
-            FieldText(stringResource(R.string.sync_password), password, { password = it }, secret = true)
+            TonalField(stringResource(R.string.sync_username), user, { user = it })
+            TonalField(stringResource(R.string.sync_password), password, { password = it }, secret = true)
             error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             Button(
                 enabled = !busy && url.isNotBlank() && user.isNotBlank() && password.isNotEmpty(),
@@ -315,7 +316,7 @@ private fun LoginPanel() {
                         }
                     }
                 },
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             ) {
                 if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.sync_login))
             }

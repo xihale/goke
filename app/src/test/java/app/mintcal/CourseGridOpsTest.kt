@@ -1,85 +1,127 @@
 package app.mintcal.ui.screens
 
+import app.mintcal.core.change.Change
 import app.mintcal.core.model.Course
+import app.mintcal.core.model.CourseException
+import app.mintcal.core.model.ExceptionType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 课程编辑画布的周次代数：画 / 搬 / 移除都是「画笔周」与「时间周集」的集合运算。 */
+/** 课程结构化时段编辑：分时段独立教室、增删改时段与悬空调课异常清理。 */
 class CourseGridOpsTest {
-    private fun draft(
-        dow: Int,
-        sp: Int,
-        ep: Int,
-        weeks: Set<Int>,
-        base: String? = null,
-    ) = PatternDraft(
-        base?.let { Course(id = it, semesterId = "s", name = "n", dayOfWeek = dow, startPeriod = sp, endPeriod = ep, weeks = weeks) },
-        dow,
-        sp,
-        ep,
-        weeks,
-        null,
+    private fun baseCourse(
+        id: String,
+        dow: Int = 1,
+        sp: Int = 1,
+        ep: Int = 2,
+        weeks: Set<Int> = (1..16).toSet(),
+        room: String = "教3-204",
+    ) = Course(
+        id = id,
+        semesterId = "sem1",
+        name = "计算机组成原理",
+        teacher = "张三",
+        room = room,
+        dayOfWeek = dow,
+        startPeriod = sp,
+        endPeriod = ep,
+        weeks = weeks,
+        colorIndex = 2,
     )
 
-    /** base 的 Course 字段由 materialize 落值，代数只动 (位置, 周集)，按投影比较。 */
-    private fun List<PatternDraft>.proj(): List<List<Any?>> = map { listOf(it.base?.id, it.dow, it.sp, it.ep, it.weeks.sorted()) }
-
-    private fun List<PatternDraft>.assertProj(vararg expected: List<Any?>) = assertEquals(expected.toList(), proj())
+    private fun slotOf(c: Course) =
+        SlotDraft(
+            id = c.id,
+            base = c,
+            dayOfWeek = c.dayOfWeek,
+            startPeriod = c.startPeriod,
+            endPeriod = c.endPeriod,
+            weeks = c.weeks,
+            room = c.room,
+            remindMinutes = c.remindMinutes,
+        )
 
     @Test
-    fun drawOnEmptySlotCreatesDraftWithBrushWeeks() {
-        PatternOps.draw(emptyList(), dow = 1, sp = 3, ep = 4, brush = setOf(1, 2, 3)).assertProj(listOf(null, 1, 3, 4, listOf(1, 2, 3)))
+    fun newMultiSlotCoursePreservesPerSlotRoom() {
+        val s1 = SlotDraft("c1", null, dayOfWeek = 1, startPeriod = 1, endPeriod = 2, weeks = (1..14).toSet(), room = "教3-204", remindMinutes = null)
+        val s2 = SlotDraft("c2", null, dayOfWeek = 4, startPeriod = 5, endPeriod = 7, weeks = setOf(6, 8, 10, 12), room = "实4-401", remindMinutes = 15)
+        val changes =
+            buildSlotChanges(
+                semesterId = "sem1",
+                name = " 计算机组成原理 ",
+                teacher = " 张三 ",
+                colorIndex = 3,
+                note = "",
+                initialSlots = emptyList(),
+                slots = listOf(s1, s2),
+                liveExceptions = emptyList(),
+            )
+        assertEquals(2, changes.size)
+        val added = changes.map { (it as Change.Add).after as Course }
+        assertEquals("教3-204", added[0].room)
+        assertEquals("实4-401", added[1].room)
+        assertEquals(15, added[1].remindMinutes)
     }
 
     @Test
-    fun drawExactSlotUnionsWeeks() {
-        PatternOps.draw(listOf(draft(1, 3, 4, setOf(1, 2))), 1, 3, 4, brush = setOf(2, 3)).assertProj(listOf(null, 1, 3, 4, listOf(1, 2, 3)))
+    fun shrinkingWeeksPrunesDanglingExceptionsOnlyForDroppedWeeks() {
+        val c1 = baseCourse("c1", weeks = (1..16).toSet())
+        val exKeep = CourseException(id = "ex4", courseId = "c1", week = 4, type = ExceptionType.CANCEL)
+        val exDrop = CourseException(id = "ex15", courseId = "c1", week = 15, type = ExceptionType.CANCEL)
+        val initial = listOf(slotOf(c1))
+        val edited = listOf(slotOf(c1).copy(weeks = (1..12).toSet()))
+        val changes =
+            buildSlotChanges(
+                semesterId = "sem1",
+                name = c1.name,
+                teacher = c1.teacher,
+                colorIndex = c1.colorIndex,
+                note = c1.note,
+                initialSlots = initial,
+                slots = edited,
+                liveExceptions = listOf(exKeep, exDrop),
+            )
+        assertTrue(changes.any { it is Change.Modify && (it.after as Course).weeks == (1..12).toSet() })
+        assertEquals(listOf("ex15"), changes.filterIsInstance<Change.Remove>().map { it.before.id })
     }
 
     @Test
-    fun drawOverlappingSlotTakesBrushWeeksAwayFromIt() {
-        // 周一 3-4节 的 1-8 周 + 画 2-4节 的 9-16 周：旧时间保住 1-8，新时间 9-16
-        val next = PatternOps.draw(listOf(draft(1, 3, 4, (1..8).toSet())), 1, 2, 4, brush = (9..16).toSet())
-        next.assertProj(listOf(null, 1, 3, 4, (1..8).toList()), listOf(null, 1, 2, 4, (9..16).toList()))
+    fun deletingOneSlotRemovesCourseAndItsExceptionsWhileKeepingSibling() {
+        val c1 = baseCourse("c1", dow = 1, room = "教3-204")
+        val c2 = baseCourse("c2", dow = 4, sp = 5, ep = 6, room = "实4-401")
+        val ex2 = CourseException(id = "ex-c2", courseId = "c2", week = 3, type = ExceptionType.CANCEL)
+        val initial = listOf(slotOf(c1), slotOf(c2))
+        val changes =
+            buildSlotChanges(
+                semesterId = "sem1",
+                name = c1.name,
+                teacher = c1.teacher,
+                colorIndex = c1.colorIndex,
+                note = c1.note,
+                initialSlots = initial,
+                slots = listOf(slotOf(c1)),
+                liveExceptions = listOf(ex2),
+            )
+        val removedIds = changes.filterIsInstance<Change.Remove>().map { it.before.id }.toSet()
+        assertEquals(setOf("c2", "ex-c2"), removedIds)
     }
 
     @Test
-    fun moveWholePatternRelocatesRecord() {
-        val next = PatternOps.move(listOf(draft(1, 3, 4, (1..16).toSet(), base = "b1")), 0, dow = 3, sp = 5, ep = 6, brush = (1..16).toSet())
-        next.assertProj(listOf("b1", 3, 5, 6, (1..16).toList()))
-    }
-
-    @Test
-    fun moveSplitOfWeekCreatesNewDraftAndKeepsRest() {
-        val next = PatternOps.move(listOf(draft(1, 3, 4, (1..16).toSet(), base = "b1")), 0, dow = 3, sp = 5, ep = 6, brush = setOf(9, 10))
-        next.assertProj(listOf("b1", 1, 3, 4, (1..8).toList() + (11..16).toList()), listOf(null, 3, 5, 6, listOf(9, 10)))
-    }
-
-    @Test
-    fun moveIntoExactSlotMergesInsteadOfStacking() {
-        val base = listOf(draft(1, 3, 4, setOf(1, 2), base = "b1"), draft(3, 5, 6, setOf(3, 4)))
-        val next = PatternOps.move(base, 1, dow = 1, sp = 3, ep = 4, brush = setOf(3, 4))
-        // b1 是原本就在目标位置的那条：吸收搬来的周；被搬的草稿周空被丢弃
-        next.assertProj(listOf("b1", 1, 3, 4, listOf(1, 2, 3, 4)))
-    }
-
-    @Test
-    fun removeBrushWeeksDropsEmptyDraftsKeepsBase() {
-        val base = listOf(draft(1, 3, 4, setOf(1, 2), base = "b1"), draft(2, 1, 2, setOf(5)))
-        val next = PatternOps.removeWeeks(base, 0, brush = setOf(1, 2))
-        next.assertProj(listOf("b1", 1, 3, 4, emptyList<Int>()), listOf(null, 2, 1, 2, listOf(5)))
-    }
-
-    @Test
-    fun removeDropsWholePattern() {
-        val base = listOf(draft(1, 3, 4, setOf(1)), draft(2, 1, 2, setOf(5)))
-        PatternOps.remove(base, 0).assertProj(listOf(null, 2, 1, 2, listOf(5)))
-    }
-
-    @Test
-    fun opsNeverLeaveEmptyDraftsBehind() {
-        val next = PatternOps.draw(listOf(draft(1, 3, 4, setOf(1))), 1, 3, 4, brush = setOf(1))
-        assertTrue(next.none { it.base == null && it.weeks.isEmpty() })
+    fun unchangedSlotsProduceZeroChanges() {
+        val c1 = baseCourse("c1")
+        val initial = listOf(slotOf(c1))
+        val changes =
+            buildSlotChanges(
+                semesterId = "sem1",
+                name = c1.name,
+                teacher = c1.teacher,
+                colorIndex = c1.colorIndex,
+                note = c1.note,
+                initialSlots = initial,
+                slots = initial,
+                liveExceptions = emptyList(),
+            )
+        assertTrue(changes.isEmpty())
     }
 }

@@ -47,3 +47,18 @@ fun Context.dueLabel(
         }
     return if (hasTime) "$day ${dt.hm()}" else day
 }
+
+private val ROOM_SPLIT_RE = Regex("""[,，/、;；]+""")
+
+/** 多教室智能折叠：超过 maxInline 间时折叠为「首间 等 N 处」，避免实验室长串截断噪音。 */
+fun Context.formatRooms(
+    room: String,
+    maxInline: Int = 2,
+): String {
+    val parts = room.split(ROOM_SPLIT_RE).map { it.trim() }.filter { it.isNotEmpty() }
+    return when {
+        parts.isEmpty() -> ""
+        parts.size <= maxInline -> parts.joinToString(" / ")
+        else -> getString(R.string.fmt_rooms_folded, parts.first(), parts.size)
+    }
+}

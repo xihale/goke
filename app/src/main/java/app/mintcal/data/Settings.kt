@@ -11,7 +11,7 @@ enum class ThemeSource { DYNAMIC, PRESET, CUSTOM }
 enum class DarkMode { SYSTEM, LIGHT, DARK }
 
 data class Settings(
-    val themeSource: ThemeSource = ThemeSource.DYNAMIC,
+    val themeSource: ThemeSource = ThemeSource.PRESET,
     val preset: String = "mint",
     val seedColor: Int = 0xFF2E776C.toInt(),
     val darkMode: DarkMode = DarkMode.SYSTEM,

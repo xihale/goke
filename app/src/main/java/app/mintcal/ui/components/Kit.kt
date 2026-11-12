@@ -273,7 +273,10 @@ fun SwitchRow(
     onChange: (Boolean) -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }.padding(vertical = 10.dp),
+        Modifier
+            .fillMaxWidth()
+            .mintClickable(enabled = enabled, pressedScale = 0.98f) { onChange(!checked) }
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).padding(end = 16.dp)) {
@@ -298,7 +301,7 @@ fun NavRow(
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .alpha(if (enabled) 1f else 0.38f)
-            .clickable(enabled = enabled, onClick = onClick)
+            .mintClickable(enabled = enabled, pressedScale = 0.98f, onClick = onClick)
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -665,6 +668,7 @@ fun Modifier.mintPressable(
 @Composable
 fun Modifier.mintClickable(
     enabled: Boolean = true,
+    pressedScale: Float = 0.96f,
     role: Role? = null,
     selected: Boolean? = null,
     haptic: Boolean = true,
@@ -673,7 +677,7 @@ fun Modifier.mintClickable(
 ): Modifier {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.96f else 1f, MintTheme.spec(), label = "press-scale")
+    val scale by animateFloatAsState(if (pressed) pressedScale else 1f, MintTheme.spec(), label = "press-scale")
     val haptics = LocalHapticFeedback.current
     val click: () -> Unit = {
         if (haptic) haptics.performHapticFeedback(HapticFeedbackType.LongPress)

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">薄荷日程</string>
+    <string name="app_name">薄荷广工</string>
     <string name="widget_today_name">今日安排</string>
     <string name="widget_today_desc">在桌面查看今天的课程、日程与待办</string>
     <string name="widget_todo_name">待办清单</string>
@@ -42,7 +42,7 @@
     <string name="task_added_toast">已添加待办:%1$s</string>
     <string name="export_failed">导出失败</string>
     <string name="tab_today">今日</string>
-    <string name="tab_timetable">周历</string>
+    <string name="tab_timetable">课表</string>
     <string name="tab_calendar">日历</string>
     <string name="tab_todo">待办</string>
     <string name="today">今天</string>
@@ -340,7 +340,7 @@
     <string name="restore_failed">无法读取这个备份文件</string>
     <string name="restored_toast">已从备份恢复</string>
     <string name="import_no_semester">还没有学期，请先在课表里创建。</string>
-    <string name="import_pick_hint">选择 .xlsx 课表或 .ics 日历文件。你也可以在文件管理器里直接用「薄荷日程」打开它们。</string>
+    <string name="import_pick_hint">选择 .xlsx 课表或 .ics 日历文件。你也可以在文件管理器里直接用「薄荷广工」打开它们。</string>
     <string name="import_pick">选择文件</string>
     <string name="import_pick_again">重新选择</string>
     <string name="import_failed">无法读取这个文件</string>
@@ -447,7 +447,6 @@
     </string-array>
     <!-- 教务系统 -->
     <string name="jxfw_title">教务系统</string>
-    <string name="jxfw_login_section">登录教务系统</string>
     <string name="jxfw_username">学号</string>
     <string name="jxfw_password">统一认证密码</string>
     <string name="jxfw_login">登录并同步</string>
@@ -566,12 +565,12 @@
     <string name="reliability_exact_desc">没有时，提醒可能晚几分钟才到。</string>
     <string name="reliability_battery">不受电池优化限制</string>
     <string name="reliability_battery_desc">省电策略可能在后台推迟或丢弃闹钟。建议把本应用设为「不限制」。</string>
-    <string name="reliability_vendor">小米 / MIUI 等国产系统</string>
-    <string name="reliability_vendor_desc">这类系统还有系统没法检测的限制，请手动确认：\n1. 设置 → 应用设置 → 应用管理 → 薄荷日程 → 开启「自启动」；\n2. 同一页「省电策略」选「无限制」；\n3. 在最近任务里长按本应用卡片，选择「锁定」，避免被一键清理。</string>
+    <string name="reliability_vendor">后台运行保护指南</string>
+    <string name="reliability_vendor_desc">部分国产系统还有无法自动检测的后台限制，请手动确认：\n1. 应用管理 → 薄荷广工 → 开启「自启动」；\n2. 同一页「省电策略」选「无限制」；\n3. 最近任务里长按卡片「锁定」，避免被一键清理。</string>
     <string name="reliability_open_details">打开应用详情</string>
     <string name="reliability_test">测试提醒</string>
     <string name="reliability_test_button">1 分钟后发测试提醒</string>
-    <string name="reliability_test_title">薄荷日程 · 测试提醒</string>
+    <string name="reliability_test_title">薄荷广工 · 测试提醒</string>
     <string name="reliability_test_text">看到这条说明提醒可以正常送达</string>
     <string name="reliability_test_scheduled">已安排，1 分钟后弹出</string>
     <string name="reliability_test_failed">安排失败，请检查闹钟权限</string>
@@ -591,13 +590,8 @@
     <string name="auto_backup">每天备份一次</string>
     <string name="auto_backup_desc">数据变化时自动导出完整备份（JSON）到应用目录 backup/，保留最近 %1$d 份</string>
     <string name="course_todos">这门课的待办</string>
-    <string name="course_semester_grid">课表</string>
-    <string name="course_weeks_pick">在哪些周上课</string>
     <string name="course_weeks_clear">清空</string>
-    <string name="course_brush_weeks">画笔：%1$s周</string>
-    <string name="course_block_remove_brush">从选中周移除</string>
     <string name="course_pattern_delete">删除此时间</string>
-    <string name="course_cancel_badge">停</string>
     <string name="course_todos_add">添加待办</string>
     <string name="course_todos_empty">还没有待办</string>
     <string name="clash_row_course">与「%1$s」冲突 · %2$s</string>
@@ -686,6 +680,7 @@
     <string name="close">关闭</string>
     <!-- 快递取件体验与小组件 -->
     <string name="parcel_pickup_section">待取快递</string>
+    <string name="parcel_copy_code">复制取件码 %1$s</string>
     <string name="parcel_code_copied">已复制取件码 %1$s</string>
     <string name="parcel_status_on">已开启</string>
     <string name="parcel_status_off">未开启</string>
@@ -706,10 +701,46 @@
     <string name="cal_sync_grant">授权</string>
     <string name="cal_sync_accounts">同步日历账本</string>
     <string name="cal_sync_no_calendars">未发现可用系统日历账本</string>
-    <string name="cal_sync_create_local">创建「薄荷日程」本地系统日历</string>
+    <string name="cal_sync_create_local">创建「薄荷广工」本地系统日历</string>
     <string name="cal_sync_local_created">已创建本地系统日历账本</string>
     <string name="cal_sync_courses">同步课程表到系统日历</string>
     <string name="cal_sync_courses_desc">供系统自带桌面日历、负一屏与手表读取</string>
     <string name="cal_sync_done_toast">系统日历同步完成（更新 %1$d 项）</string>
-    <string name="cal_sync_local_account_name">薄荷日程</string>
+    <string name="cal_sync_local_account_name">薄荷广工</string>
+    <!-- 薄荷广工 · 设计系统与子页重设计 -->
+    <string name="fmt_rooms_folded">%1$s 等 %2$d 处</string>
+    <string name="campus_preset_section">广工校区作息预设</string>
+    <string name="campus_hemc">大学城</string>
+    <string name="campus_longdong">龙洞</string>
+    <string name="campus_dongfeng">东风路</string>
+    <string name="campus_jieyang">揭阳</string>
+    <string name="course_slots_section">上课时段</string>
+    <string name="course_add_slot">添加时段</string>
+    <string name="course_slot_sheet_title">编辑上课时段</string>
+    <string name="course_slot_room_hint">教室（如 教3-204，选填）</string>
+    <string name="course_name_placeholder">输入课程名称</string>
+    <string name="course_teacher_placeholder">授课教师（选填）</string>
+    <string name="course_note_placeholder">考核要求、教材或课程群号备注…</string>
+    <string name="course_end_period">结束节次</string>
+    <string name="jxfw_card_title">广工教务同步</string>
+    <string name="jxfw_card_unbound_desc">登录广工统一身份认证，一键导入本学期课表与考试安排</string>
+    <string name="jxfw_card_bind_action">登录教务</string>
+    <string name="jxfw_card_bound_meta">学号 %1$s · %2$s</string>
+    <string name="jxfw_card_sync_now">立即同步</string>
+    <string name="jxfw_login_hint">使用广东工业大学统一身份认证（jxfw.gdut.edu.cn）学号与密码，凭据仅加密保存在本机。</string>
+    <string name="courses_slots_count">%1$d 个时段</string>
+    <string name="parcel_window_section">默认取件时段</string>
+    <string name="parcel_window_desc">识别出的取件待办默认排入每日此时段，并在课表顶栏展示胶囊</string>
+    <string name="parcel_rules_manage">短信识别规则</string>
+    <string name="parcel_rules_enabled_count">已启用 %1$d 条规则</string>
+    <string name="timetable_flex_count">%1$d 项待办</string>
+    <string name="reliability_vendor_xiaomi">小米 / HyperOS 后台保护</string>
+    <string name="reliability_vendor_xiaomi_desc">1. 应用信息 → 省电策略 → 设为「无限制」；\n2. 开启「自启动」权限；\n3. 最近任务下滑/长按卡片锁定薄荷广工。</string>
+    <string name="reliability_vendor_huawei">华为 / 荣耀后台保护</string>
+    <string name="reliability_vendor_huawei_desc">1. 应用启动管理 → 关闭「自动管理」；\n2. 手动开启「允许自启动 / 允许后台活动」；\n3. 最近任务下滑卡片加锁。</string>
+    <string name="reliability_vendor_oppo">OPPO / ColorOS 后台保护</string>
+    <string name="reliability_vendor_oppo_desc">1. 耗电管理 → 允许完全后台行为、允许自启动；\n2. 最近任务右上角菜单锁定薄荷广工。</string>
+    <string name="reliability_vendor_vivo">vivo / OriginOS 后台保护</string>
+    <string name="reliability_vendor_vivo_desc">1. 应用耗电管理 → 选「后台高耗电允许」；\n2. 权限管理 → 开启「自启动」；\n3. 最近任务下滑锁定卡片。</string>
+    <string name="reliability_vendor_all_toggle">查看其他系统设置说明</string>
 </resources>

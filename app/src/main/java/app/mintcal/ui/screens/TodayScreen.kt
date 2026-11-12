@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -76,17 +77,15 @@ import app.mintcal.ui.Route
 import app.mintcal.ui.components.AgendaRow
 import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.MintCard
-import app.mintcal.ui.components.MintCheck
 import app.mintcal.ui.components.MintFab
 import app.mintcal.ui.components.NavClearance
 import app.mintcal.ui.components.NavListInset
-import app.mintcal.ui.components.ParcelCodeTag
 import app.mintcal.ui.components.SectionLabel
 import app.mintcal.ui.components.TaskRow
 import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.components.parcelCode
-import app.mintcal.ui.components.parcelLabel
 import app.mintcal.ui.dueLabel
+import app.mintcal.ui.formatRooms
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDayWeekday
@@ -174,11 +173,16 @@ fun TodayScreen() {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = NavListInset),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = NavListInset),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
-                Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(64.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Column(Modifier.weight(1f)) {
                         Text(ctx.monthDayWeekday(today), style = MaterialTheme.typography.titleLarge)
                         Text(weekLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -204,7 +208,7 @@ fun TodayScreen() {
                                 }
                                 if (next != null) {
                                     Text(
-                                        stringResource(R.string.today_next_class, next.occ.start.hm(), next.occ.course.name, next.occ.room),
+                                        stringResource(R.string.today_next_class, next.occ.start.hm(), next.occ.course.name, ctx.formatRooms(next.occ.room)),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,
@@ -227,13 +231,13 @@ fun TodayScreen() {
             if (parcels.isNotEmpty()) {
                 item(key = "h-parcel") { SectionLabel(stringResource(R.string.parcel_pickup_section), trailing = parcels.size.toString()) }
                 items(parcels, key = { "p-" + it.id }) { t ->
-                    ParcelRow(
+                    TaskRow(
                         task = t,
-                        now = now,
                         onToggle = { task, done ->
                             toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title))
                         },
                         onOpen = { nav.openTask(it) },
+                        subtitle = t.due?.let { ctx.dueLabel(it, t.dueHasTime, now.toLocalDate()) },
                         modifier =
                             Modifier.animateItem(
                                 fadeInSpec = MintTheme.spec(),
@@ -278,7 +282,7 @@ fun TodayScreen() {
                             .fillMaxWidth()
                             .heightIn(min = 48.dp)
                             .clip(MaterialTheme.shapes.small)
-                            .clickable { showDone = !showDone }
+                            .mintClickable(pressedScale = 0.98f) { showDone = !showDone }
                             .semantics { stateDescription = expansion }
                             .padding(horizontal = 4.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -343,51 +347,6 @@ fun TodayScreen() {
             acceptShare = false,
             modifier = Modifier.align(Alignment.TopCenter).fillMaxSize(),
         )
-    }
-}
-
-/** 取件票据行：码做成胶囊（点一下复制），驿站在右，点行打开、勾选即取。 */
-@Composable
-private fun ParcelRow(
-    task: Task,
-    now: LocalDateTime,
-    onToggle: (Task, Boolean) -> Unit,
-    onOpen: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val ctx = LocalContext.current
-    val code = task.parcelCode()
-    Row(
-        modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .clip(MaterialTheme.shapes.medium)
-            .background(MintTheme.card)
-            .mintClickable(role = Role.Button) { onOpen(task.id) }
-            .padding(start = 4.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MintCheck(task.done, { onToggle(task, it) })
-        if (code != null) {
-            ParcelCodeTag(code)
-            Box(Modifier.size(6.dp))
-        }
-        Column(Modifier.weight(1f)) {
-            Text(
-                task.parcelLabel() ?: task.title,
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            task.due?.let {
-                Text(
-                    ctx.dueLabel(it, task.dueHasTime, now.toLocalDate()),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-            }
-        }
     }
 }
 

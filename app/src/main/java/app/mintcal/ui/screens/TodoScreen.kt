@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -74,7 +75,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.currentBackStackEntryAsState
 import app.mintcal.R
-import app.mintcal.core.agenda.NextUps
 import app.mintcal.core.change.Edits
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Task
@@ -90,6 +90,7 @@ import app.mintcal.ui.Tab
 import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.MintFab
 import app.mintcal.ui.components.NavClearance
+import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
@@ -162,7 +163,6 @@ fun TodoScreen() {
     val todoIndex = remember(snap, now) { todoIndexOf(snap, now) }
     val bucketOfTask = remember(sections) { sections.flatMap { s -> s.tasks.map { it.id to s.bucket } }.toMap() }
     val overdueTasks = sections.firstOrNull { it.bucket == Bucket.OVERDUE }?.tasks.orEmpty()
-    val nextUp = remember(snap, now) { NextUps.find(snap, now) }
     val dropBuckets = DROPPABLE.filter { TaskLogic.dropDate(it, today) != TaskLogic.NO_DROP }
 
     val expanded = remember(expandedCsv) { csvToSet(expandedCsv) }
@@ -261,11 +261,16 @@ fun TodoScreen() {
             state = listState,
             // 列表铺满整屏：底部留白放进行内边距，行可以滚到岛下面，滚到底再让出底栏和批量条
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = bottomSpace),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = bottomSpace),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             item(key = "top") {
-                Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(64.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     if (selecting) {
                         Text(stringResource(R.string.todo_selected_count, selected.size), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                         TextButton(onClick = {
@@ -293,7 +298,7 @@ fun TodoScreen() {
                 }
             }
             item(key = "filters") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (searching) {
                         // 无框搜索：柔色胶囊 + 搜索图标，唯一的描边输入框已经拆掉
                         val scheme = MaterialTheme.colorScheme
@@ -339,16 +344,21 @@ fun TodoScreen() {
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (snap.lists.isNotEmpty()) {
                             Box {
-                                Surface(onClick = { listMenu = true }, shape = CircleShape, color = MintTheme.card) {
-                                    Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Rounded.FolderOpen, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text(
-                                            snap.lists.firstOrNull { it.id == listFilter }?.name ?: stringResource(R.string.todo_all_lists),
-                                            Modifier.padding(horizontal = 8.dp),
-                                            style = MaterialTheme.typography.labelLarge,
-                                        )
-                                        Icon(Icons.Rounded.ExpandMore, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
+                                Row(
+                                    Modifier
+                                        .clip(CircleShape)
+                                        .background(MintTheme.card)
+                                        .mintClickable(pressedScale = 0.96f) { listMenu = true }
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(Icons.Rounded.FolderOpen, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        snap.lists.firstOrNull { it.id == listFilter }?.name ?: stringResource(R.string.todo_all_lists),
+                                        Modifier.padding(horizontal = 6.dp),
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                    Icon(Icons.Rounded.ExpandMore, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 DropdownMenu(listMenu, { listMenu = false }) {
                                     DropdownMenuItem(text = { Text(stringResource(R.string.todo_all_lists)) }, onClick = {
@@ -365,21 +375,26 @@ fun TodoScreen() {
                             }
                         }
                         Box {
-                            Surface(onClick = { priorityMenu = true }, shape = CircleShape, color = MintTheme.card) {
-                                Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Rounded.Flag, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(
-                                        when (priorityFilter) {
-                                            3 -> stringResource(R.string.priority_3)
-                                            2 -> stringResource(R.string.priority_2)
-                                            1 -> stringResource(R.string.priority_1)
-                                            else -> stringResource(R.string.label_priority)
-                                        },
-                                        Modifier.padding(horizontal = 8.dp),
-                                        style = MaterialTheme.typography.labelLarge,
-                                    )
-                                    Icon(Icons.Rounded.ExpandMore, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
+                            Row(
+                                Modifier
+                                    .clip(CircleShape)
+                                    .background(MintTheme.card)
+                                    .mintClickable(pressedScale = 0.96f) { priorityMenu = true }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(Icons.Rounded.Flag, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    when (priorityFilter) {
+                                        3 -> stringResource(R.string.priority_3)
+                                        2 -> stringResource(R.string.priority_2)
+                                        1 -> stringResource(R.string.priority_1)
+                                        else -> stringResource(R.string.label_priority)
+                                    },
+                                    Modifier.padding(horizontal = 6.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                                Icon(Icons.Rounded.ExpandMore, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             DropdownMenu(priorityMenu, { priorityMenu = false }) {
                                 listOf(0 to R.string.todo_priority_all, 3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1).forEach { (v, label) ->
@@ -391,11 +406,6 @@ fun TodoScreen() {
                             }
                         }
                     }
-                }
-            }
-            if (!selecting && !searching) {
-                nextUp?.let { up ->
-                    item(key = "next") { NextUpCard(up, now, anim()) }
                 }
             }
             if (sections.isEmpty()) {

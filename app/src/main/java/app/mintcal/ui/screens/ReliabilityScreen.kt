@@ -7,6 +7,11 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +33,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,6 +49,7 @@ import app.mintcal.notify.Notifications
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.components.FormSection
+import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.theme.MintTheme
 import android.provider.Settings as AndroidSettings
@@ -77,6 +84,18 @@ fun ReliabilityScreen(onBack: () -> Unit) {
 
     val appDetails = Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}"))
 
+    // 厂商识别：只展开本机对应的品牌指引，其余收进「查看其他系统设置说明」
+    val mfr = Build.MANUFACTURER.lowercase()
+    val (vendorTitle, vendorDesc, vendorMatched) =
+        when (mfr) {
+            in listOf("xiaomi", "redmi", "blackshark") -> Triple(R.string.reliability_vendor_xiaomi, R.string.reliability_vendor_xiaomi_desc, true)
+            in listOf("huawei", "honor") -> Triple(R.string.reliability_vendor_huawei, R.string.reliability_vendor_huawei_desc, true)
+            in listOf("oppo", "realme", "oneplus") -> Triple(R.string.reliability_vendor_oppo, R.string.reliability_vendor_oppo_desc, true)
+            in listOf("vivo", "iqoo") -> Triple(R.string.reliability_vendor_vivo, R.string.reliability_vendor_vivo_desc, true)
+            else -> Triple(R.string.reliability_vendor, R.string.reliability_vendor_desc, false)
+        }
+    var showOtherVendors by remember { mutableStateOf(false) }
+
     MintScreen(title = stringResource(R.string.reliability_title), onBack = onBack) {
         Column(
             Modifier
@@ -86,6 +105,17 @@ fun ReliabilityScreen(onBack: () -> Unit) {
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            if (!anyIssue) {
+                // 四项全部就绪时的安心状态卡，避免整屏看起来像坏了
+                FormSection(stringResource(R.string.reliability_checks)) {
+                    MintCard {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Icon(Icons.Rounded.CheckCircle, null, Modifier.size(24.dp), tint = MintTheme.colors.success)
+                            Text(stringResource(R.string.settings_perm_desc_ok), style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            }
             if (anyIssue) {
                 FormSection(stringResource(R.string.reliability_checks)) {
                     if (!notifOn) {
@@ -114,9 +144,28 @@ fun ReliabilityScreen(onBack: () -> Unit) {
                     }
                 }
             }
-            FormSection(stringResource(R.string.reliability_vendor)) {
-                Text(stringResource(R.string.reliability_vendor_desc), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 4.dp))
-                TextButton(onClick = { open(appDetails) }) { Text(stringResource(R.string.reliability_open_details)) }
+            FormSection(stringResource(vendorTitle)) {
+                MintCard {
+                    Text(stringResource(vendorDesc), style = MaterialTheme.typography.bodyMedium)
+                    if (vendorMatched) {
+                        TextButton(onClick = { showOtherVendors = !showOtherVendors }) { Text(stringResource(R.string.reliability_vendor_all_toggle)) }
+                        AnimatedVisibility(
+                            visible = showOtherVendors,
+                            enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                            exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                        ) {
+                            Text(
+                                stringResource(R.string.reliability_vendor_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 4.dp),
+                            )
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { open(appDetails) }) { Text(stringResource(R.string.reliability_open_details)) }
+                    }
+                }
             }
             FormSection(stringResource(R.string.reliability_test)) {
                 Button(onClick = {

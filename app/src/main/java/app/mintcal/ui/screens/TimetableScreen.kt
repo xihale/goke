@@ -20,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -123,7 +124,10 @@ import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.FieldText
 import app.mintcal.ui.components.NavListInset
 import app.mintcal.ui.components.ValueRow
+import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.components.mintPressable
+import app.mintcal.ui.components.parcelCode
+import app.mintcal.ui.formatRooms
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.reduceMotion
@@ -371,6 +375,9 @@ fun TimetableScreen() {
                             ),
                         )
                     },
+                    onEmptySlotClick = { dow, period ->
+                        nav.push(Route.CourseEdit(id = null, initialDow = dow, initialPeriod = period))
+                    },
                 )
             }
         }
@@ -439,6 +446,7 @@ private fun WeekGrid(
     onSlotClick: (List<SlotEntry>) -> Unit,
     onMoveTask: (Task, LocalDateTime, Int) -> Unit,
     onBoxSelect: (days: IntRange, startPeriod: Int, endPeriod: Int) -> Unit,
+    onEmptySlotClick: (dow: Int, period: Int) -> Unit,
 ) {
     val ctx = LocalContext.current
     val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.35f)
@@ -453,12 +461,23 @@ private fun WeekGrid(
     val n = periods.size
     val totalH = periodTop(n, n) + rowH
     val outline = MaterialTheme.colorScheme.outlineVariant
+    val (headerBlocks, gridBlocks) =
+        remember(blocks, defaultBlockMinutes) {
+            blocks.partition { it.isHeaderBadge(defaultBlockMinutes) }
+        }
+    val headerBadgesByDay =
+        remember(headerBlocks) {
+            headerBlocks.filter { !it.task.done }.groupBy { it.start.dayOfWeek.value }
+        }
+    val hasBadges = headerBadgesByDay.isNotEmpty()
+    val headerH = if (hasBadges) 58.dp else HeaderH
     Column(modifier.fillMaxSize()) {
         // 星期头：今天垫一块 primaryContainer 并换强调色文字，一眼能扫到今天在哪一列。
-        Row(Modifier.fillMaxWidth().height(HeaderH).padding(start = timeColW)) {
+        Row(Modifier.fillMaxWidth().height(headerH).padding(start = timeColW)) {
             for (d in 1..7) {
                 val date = cal.dateOf(week, d)
                 val isToday = date == today
+                val badges = headerBadgesByDay[d].orEmpty()
                 Column(
                     Modifier
                         .weight(1f)
@@ -470,6 +489,53 @@ private fun WeekGrid(
                 ) {
                     Text(ctx.weekdayShort(d), style = MaterialTheme.typography.labelMedium, color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("${date.monthValue}/${date.dayOfMonth}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, fontFeatureSettings = "tnum"), color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (badges.isNotEmpty()) {
+                        val first = badges.first()
+                        val parcel = badges.firstOrNull { it.task.parcelCode() != null }?.task?.parcelCode()
+                        val badgeText =
+                            when {
+                                parcel != null && badges.size == 1 -> parcel
+                                badges.size == 1 && first.task.title.length <= 4 -> first.task.title
+                                else -> ctx.getString(R.string.timetable_flex_count, badges.size)
+                            }
+                        Box(
+                            Modifier
+                                .padding(top = 2.dp)
+                                .clip(CircleShape)
+                                .background(if (isToday) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primaryContainer)
+                                .mintClickable(pressedScale = 0.96f) {
+                                    if (badges.size == 1) {
+                                        onOpenTask(first.task.id)
+                                    } else {
+                                        val entries =
+                                            badges.map { b ->
+                                                SlotEntry(
+                                                    b.task.title,
+                                                    if (b.timed) {
+                                                        "${b.start.hm()} · ${ctx.getString(R.string.entity_task)}"
+                                                    } else {
+                                                        ctx.getString(R.string.entity_task)
+                                                    },
+                                                    b.color,
+                                                    b.start,
+                                                    null,
+                                                    b.task,
+                                                )
+                                            }
+                                        onSlotClick(entries)
+                                    }
+                                }.padding(horizontal = 3.dp, vertical = 1.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                badgeText,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp, lineHeight = 10.sp, letterSpacing = (-0.2).sp, fontFeatureSettings = "tnum"),
+                                color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimaryContainer,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -486,7 +552,40 @@ private fun WeekGrid(
                 Modifier
                     .fillMaxWidth()
                     .height(totalH)
-                    .pointerInput(n, timeColW, rowH) {
+                    .pointerInput(n, timeColW, rowH, cells, gridBlocks) {
+                        val timeColPx = timeColW.toPx()
+                        val colPx = (size.width - timeColPx) / 7f
+                        val rowPx = rowH.toPx()
+
+                        fun colOf(x: Float): Int = (((x - timeColPx) / colPx).toInt().coerceIn(0, 6)) + 1
+
+                        fun slotOf(y: Float): Int {
+                            for (p in 1..n) {
+                                val top = (rowH.value * (p - 1) + GroupGap.value * groupBoundaries(n).count { p > it }) * density
+                                if (y < top + rowPx) return p
+                            }
+                            return n
+                        }
+
+                        detectTapGestures(
+                            onTap = { off ->
+                                if (box == null && off.x >= timeColPx) {
+                                    val d = colOf(off.x)
+                                    val p = slotOf(off.y)
+                                    val hasCourse = cells.any { it.occ.date.dayOfWeek.value == d && p in it.occ.startPeriod..it.occ.endPeriod }
+                                    val hasTask =
+                                        gridBlocks.any { b ->
+                                            val s = b.start
+                                            val e = if (b.timed) s.plusMinutes(b.minutes.toLong()) else s.plusMinutes(1)
+                                            s.dayOfWeek.value == d && Agenda.blockRows(periods, s.toLocalTime(), e.toLocalTime())?.let { p in it } == true
+                                        }
+                                    if (!hasCourse && !hasTask) {
+                                        onEmptySlotClick(d, p)
+                                    }
+                                }
+                            },
+                        )
+                    }.pointerInput(n, timeColW, rowH) {
                         val timeColPx = timeColW.toPx()
                         val colPx = (size.width - timeColPx) / 7f
                         val rowPx = rowH.toPx()
@@ -563,7 +662,7 @@ private fun WeekGrid(
                 // 再窄就叠放：课程优先当正面卡，其余只在右侧露一道边，底栏写「N 项」，
                 // 点开列出这段时间的全部安排自己挑——Google 日历 / Outlook 在窄列里也是这么收敛的。
                 val geoms =
-                    remember(cells, blocks, n, rowH) {
+                    remember(cells, gridBlocks, n, rowH) {
                         val courseBoxes =
                             cells.map { c ->
                                 val o = c.occ
@@ -576,7 +675,7 @@ private fun WeekGrid(
                                 )
                             }
                         val drawable =
-                            blocks.mapNotNull { b ->
+                            gridBlocks.mapNotNull { b ->
                                 val s = b.start
                                 val e = if (b.timed) s.plusMinutes(b.minutes.toLong()) else s.plusMinutes(1)
                                 Agenda.blockRows(periods, s.toLocalTime(), e.toLocalTime())?.let { rows ->
@@ -721,6 +820,8 @@ private data class BlockRow(
     val timed: Boolean,
 ) {
     val minutes: Int get() = task.blockMinutes ?: 60
+
+    fun isHeaderBadge(defaultBlockMinutes: Int): Boolean = !timed || task.parcelCode() != null || (task.blockMinutes ?: defaultBlockMinutes) > 180
 }
 
 /** 课表框选：day 1-7，first/last 为节次序号（升序）。 */
@@ -860,7 +961,7 @@ private fun SlotSheet(
                         .fillMaxWidth()
                         .heightIn(min = 52.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { onOpen(e) }
+                        .mintClickable(pressedScale = 0.98f) { onOpen(e) }
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1103,6 +1204,7 @@ private fun CourseBlock(
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
+    val ctx = LocalContext.current
     val o = cell.occ
     val colors = MintTheme.colors
     val bg = colors.bg(o.course.colorIndex)
@@ -1152,8 +1254,9 @@ private fun CourseBlock(
                 textDecoration = strike,
             )
             if (o.room.isNotBlank()) {
+                val roomText = ctx.formatRooms(o.room, maxInline = 1)
                 Text(
-                    if (wide) "@" + o.room else o.room,
+                    if (wide) "@" + roomText else roomText,
                     modifier = Modifier.weight(1f, fill = false),
                     color = (if (cell.kind == CellKind.REMOVED) colors.removed else fg).copy(alpha = 0.85f),
                     // 窄卡与宽卡字号：至少 10sp，保证 TalkBack 及大字号无障碍要求
@@ -1231,7 +1334,13 @@ private fun CourseSheet(
             )
             if (o.room.isNotBlank()) {
                 Hairline()
-                ValueRow(stringResource(R.string.label_room), o.room, onClick = {
+                val fullRoom =
+                    o.room
+                        .split(Regex("[,，/\\s]+"))
+                        .filter { it.isNotBlank() }
+                        .joinToString(" / ")
+                        .ifBlank { o.room }
+                ValueRow(stringResource(R.string.label_room), fullRoom, onClick = {
                     onDismiss()
                     nav.push(Route.CourseEdit(c.id))
                 })

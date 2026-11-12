@@ -3,16 +3,22 @@ package app.mintcal.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -34,10 +40,12 @@ import app.mintcal.jxfw.JxfwException
 import app.mintcal.jxfw.JxfwState
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
-import app.mintcal.ui.components.FieldText
+import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.FormSection
+import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.SwitchRow
+import app.mintcal.ui.components.TonalField
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDateTime
@@ -90,37 +98,58 @@ private fun LoginPanel(state: JxfwState) {
     var password by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
 
-    FormSection(stringResource(R.string.jxfw_login_section)) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FieldText(stringResource(R.string.jxfw_username), user, { user = it })
-            FieldText(stringResource(R.string.jxfw_password), password, { password = it }, secret = true)
-            errorText(state.lastErrorKind, state.lastError)?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            }
-            Button(
-                enabled = !busy && user.isNotBlank() && password.isNotEmpty(),
-                onClick = {
-                    busy = true
-                    scope.launch {
-                        try {
-                            app.jxfw.login(user, password)
-                            password = ""
-                        } catch (_: JxfwException) {
-                            // 错误已写入状态并显示
-                        } finally {
-                            busy = false
-                        }
+    MintCard {
+        Text(
+            stringResource(R.string.jxfw_login_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(12.dp))
+        TonalField(
+            label = stringResource(R.string.jxfw_username),
+            value = user,
+            onChange = { user = it },
+            number = true,
+        )
+        TonalField(
+            label = stringResource(R.string.jxfw_password),
+            value = password,
+            onChange = { password = it },
+            secret = true,
+        )
+        errorText(state.lastErrorKind, state.lastError)?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Button(
+            enabled = !busy && user.isNotBlank() && password.isNotEmpty(),
+            onClick = {
+                busy = true
+                scope.launch {
+                    try {
+                        app.jxfw.login(user, password)
+                        password = ""
+                    } catch (_: JxfwException) {
+                        // 错误已写入状态并显示
+                    } finally {
+                        busy = false
                     }
-                },
-            ) {
-                if (busy) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Text(state.progress ?: stringResource(R.string.jxfw_progress_login))
-                    }
-                } else {
-                    Text(stringResource(R.string.jxfw_login))
                 }
+            },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        ) {
+            if (busy) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Text(state.progress ?: stringResource(R.string.jxfw_progress_login))
+                }
+            } else {
+                Text(stringResource(R.string.jxfw_login))
             }
         }
     }
@@ -134,14 +163,20 @@ private fun AccountPanel(state: JxfwState) {
     val scope = rememberCoroutineScope()
     var showLogout by remember { mutableStateOf(false) }
 
-    FormSection(stringResource(R.string.jxfw_account_section)) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    MintCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Sync, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(stringResource(R.string.jxfw_account_section), style = MaterialTheme.typography.titleMedium)
+        }
+        Spacer(Modifier.height(10.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             InfoLine(stringResource(R.string.jxfw_account), state.username.orEmpty())
             state.term?.let { InfoLine(stringResource(R.string.jxfw_term), it) }
             InfoLine(stringResource(R.string.jxfw_last_full), state.lastFullAt?.let(::stamp) ?: stringResource(R.string.jxfw_never))
             InfoLine(stringResource(R.string.jxfw_last_weekly), state.lastWeeklyAt?.let(::stamp) ?: stringResource(R.string.jxfw_never))
             if (state.busy) {
-                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     Text(state.progress.orEmpty(), style = MaterialTheme.typography.bodySmall)
                 }
@@ -149,10 +184,14 @@ private fun AccountPanel(state: JxfwState) {
                 state.lastResult?.let { InfoLine(stringResource(R.string.jxfw_last_result), it) }
             }
             errorText(state.lastErrorKind, state.lastError)?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp))
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
-            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(enabled = !state.busy, onClick = {
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                enabled = !state.busy,
+                onClick = {
                     scope.launch {
                         try {
                             app.jxfw.fullSync()
@@ -161,8 +200,12 @@ private fun AccountPanel(state: JxfwState) {
                             // 错误已写入状态并显示
                         }
                     }
-                }) { Text(stringResource(R.string.jxfw_sync_full)) }
-                OutlinedButton(enabled = !state.busy, onClick = {
+                },
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            ) { Text(stringResource(R.string.jxfw_sync_full), maxLines = 1) }
+            OutlinedButton(
+                enabled = !state.busy,
+                onClick = {
                     scope.launch {
                         try {
                             app.jxfw.weeklySync()
@@ -170,31 +213,31 @@ private fun AccountPanel(state: JxfwState) {
                             // 同上
                         }
                     }
-                }) { Text(stringResource(R.string.jxfw_sync_week)) }
-            }
+                },
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            ) { Text(stringResource(R.string.jxfw_sync_week), maxLines = 1) }
         }
     }
-    FormSection(stringResource(R.string.jxfw_auto)) {
+
+    FormSection {
         SwitchRow(
             title = stringResource(R.string.jxfw_auto),
             checked = state.autoSync,
             onChange = { app.jxfw.setAutoSync(it) },
         )
-        TextButton(onClick = { showLogout = true }) { Text(stringResource(R.string.jxfw_logout), color = MaterialTheme.colorScheme.error) }
+    }
+    TextButton(onClick = { showLogout = true }) {
+        Text(stringResource(R.string.jxfw_logout), color = MaterialTheme.colorScheme.error)
     }
 
     if (showLogout) {
-        AlertDialog(
-            onDismissRequest = { showLogout = false },
-            title = { Text(stringResource(R.string.jxfw_logout)) },
-            text = { Text(stringResource(R.string.jxfw_logout_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showLogout = false
-                    scope.launch { app.jxfw.logout() }
-                }) { Text(stringResource(R.string.jxfw_logout)) }
-            },
-            dismissButton = { TextButton(onClick = { showLogout = false }) { Text(stringResource(R.string.cancel)) } },
+        ConfirmDialog(
+            stringResource(R.string.jxfw_logout),
+            stringResource(R.string.jxfw_logout_message),
+            stringResource(R.string.jxfw_logout),
+            onConfirm = { scope.launch { app.jxfw.logout() } },
+            onDismiss = { showLogout = false },
+            danger = true,
         )
     }
 }

@@ -97,6 +97,8 @@ import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.MintFab
 import app.mintcal.ui.components.NavClearance
 import app.mintcal.ui.components.NavListInset
+import app.mintcal.ui.components.SegmentedPill
+import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.fullDate
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDayWeekday
@@ -211,13 +213,18 @@ fun CalendarScreen() {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item(key = "header") {
-                Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(64.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Row(
                         Modifier
                             .weight(1f)
                             .heightIn(min = 48.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable(role = Role.Button, onClickLabel = stringResource(R.string.date_pick)) { showPicker = true }
+                            .mintClickable(role = Role.Button, pressedScale = 0.98f) { showPicker = true }
                             .padding(end = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -231,10 +238,19 @@ fun CalendarScreen() {
                         )
                         Icon(Icons.Rounded.ExpandMore, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    ModeSwitch(mode) {
-                        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                        mode = it
-                    }
+                    SegmentedPill(
+                        options =
+                            listOf(
+                                CalMode.MONTH to stringResource(R.string.mode_month),
+                                CalMode.WEEK to stringResource(R.string.mode_week),
+                            ),
+                        selected = mode,
+                        onSelect = {
+                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            mode = it
+                        },
+                        modifier = Modifier.width(112.dp),
+                    )
                 }
             }
             item(key = "grid") {
@@ -345,8 +361,7 @@ fun CalendarScreen() {
                                 Modifier
                                     .heightIn(min = 48.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .clickable(role = Role.Button) {
-                                        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                                    .mintClickable(role = Role.Button, pressedScale = 0.96f) {
                                         goto(today)
                                     }.padding(horizontal = 12.dp, vertical = 12.dp),
                         )
@@ -472,61 +487,6 @@ private fun agendaType(i: app.mintcal.core.agenda.AgendaItem): String =
         is TaskItem -> "task"
         is BlockItem -> "block"
     }
-
-@Composable
-private fun ModeSwitch(
-    mode: CalMode,
-    onChange: (CalMode) -> Unit,
-) {
-    // 与底栏同款的滑动色块：选中块从当前项滑到目标项，而不是两边各自淡入淡出
-    val sel = if (mode == CalMode.MONTH) 0 else 1
-    val travel = remember { Animatable(sel.toFloat()) }
-    val spec = MintTheme.spec<Float>()
-    LaunchedEffect(sel) { travel.animateTo(sel.toFloat(), spec) }
-    val pill = MaterialTheme.colorScheme.primaryContainer
-    Box(
-        Modifier
-            .clip(CircleShape)
-            .background(MintTheme.card)
-            .padding(3.dp)
-            .selectableGroup(),
-    ) {
-        Canvas(Modifier.matchParentSize()) {
-            val slot = size.width / CalMode.entries.size
-            drawRoundRect(
-                color = pill,
-                topLeft = Offset(travel.value * slot, 0f),
-                size = Size(slot, size.height),
-                cornerRadius = CornerRadius(size.height / 2f),
-            )
-        }
-        Row {
-            CalMode.entries.forEach { m ->
-                val isSel = m == mode
-                val fg by animateColorAsState(if (isSel) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, MintTheme.spec(), label = "mode-fg")
-                Text(
-                    stringResource(if (m == CalMode.MONTH) R.string.mode_month else R.string.mode_week),
-                    modifier =
-                        Modifier
-                            .heightIn(min = 48.dp)
-                            .clip(CircleShape)
-                            .selectable(
-                                selected = isSel,
-                                role = Role.Tab,
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) {
-                                if (!isSel) {
-                                    onChange(m)
-                                }
-                            }.padding(horizontal = 18.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = fg,
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun DayCell(

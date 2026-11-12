@@ -65,6 +65,7 @@ import app.mintcal.ui.HOME
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
+import app.mintcal.ui.MintCalRoot
 import app.mintcal.ui.components.AttachmentEditor
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.mintDestinations
@@ -232,6 +233,7 @@ class ScreensSmokeTest {
                 "about" to { AboutScreen {} },
                 "advanced_full" to { AdvancedFullScreen {} },
                 "advanced_sheet" to { AdvancedSheet {} },
+                "root_shell" to { MintCalRoot(app, null) {} },
             )
         val idx = mutableIntStateOf(0)
         rule.setContent { Host { key(idx.intValue) { screens[idx.intValue].second() } } }
@@ -245,6 +247,17 @@ class ScreensSmokeTest {
                 failures += "$name: ${t::class.simpleName}: ${t.message?.take(300)}"
                 t.printStackTrace()
             }
+        }
+        try {
+            app.settings.update { it.copy(darkMode = DarkMode.DARK) }
+            rule.runOnIdle { idx.intValue = 0 }
+            rule.waitForIdle()
+            shot("today_dark")
+            rule.runOnIdle { idx.intValue = 4 }
+            rule.waitForIdle()
+            shot("course_edit_dark")
+        } finally {
+            app.settings.update { it.copy(darkMode = DarkMode.SYSTEM) }
         }
         assertTrue("渲染失败的页面：\n" + failures.joinToString("\n"), failures.isEmpty())
     }

@@ -62,7 +62,9 @@ sealed interface Route {
     ) : Route
 
     @Serializable data class CourseEdit(
-        val id: String?,
+        val id: String? = null,
+        val initialDow: Int? = null,
+        val initialPeriod: Int? = null,
     ) : Route
 
     /** 唯一的编辑页：新建 / 修改共用；[id] 为空时 [text] 是带过来的草稿标题。 */

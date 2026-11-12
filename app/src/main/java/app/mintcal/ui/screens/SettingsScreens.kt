@@ -17,7 +17,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,11 +33,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.BatterySaver
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.History
@@ -51,9 +50,8 @@ import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -75,7 +73,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -97,9 +94,12 @@ import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.MinutesDialSheet
 import app.mintcal.ui.components.NavRow
+import app.mintcal.ui.components.SegmentedPill
 import app.mintcal.ui.components.SwitchRow
 import app.mintcal.ui.components.TimeDialSheet
+import app.mintcal.ui.components.TonalField
 import app.mintcal.ui.components.ValueRow
+import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
@@ -389,7 +389,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             FormSection(stringResource(R.string.theme_color)) {
-                ChipChoice(sources, source, { v -> app.settings.update { it.copy(themeSource = v) } })
+                SegmentedPill(sources, source, { v -> app.settings.update { it.copy(themeSource = v) } })
                 if (!dynamicOk) Text(stringResource(R.string.theme_dynamic_unavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
                 Spacer(Modifier.height(10.dp))
                 when (source) {
@@ -419,8 +419,11 @@ fun AppearanceScreen(onBack: () -> Unit) {
                                                 contentDescription = name
                                                 role = Role.RadioButton
                                                 selected = sel
-                                            }.clickable { app.settings.update { it.copy(preset = p.key) } },
-                                    )
+                                            }.mintClickable(pressedScale = 0.96f) { app.settings.update { it.copy(preset = p.key) } },
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        if (sel) Icon(Icons.Rounded.Check, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
+                                    }
                                     Text(name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                                 }
                             }
@@ -492,7 +495,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
                 }
             }
             FormSection(stringResource(R.string.dark_mode)) {
-                ChipChoice(
+                SegmentedPill(
                     listOf(DarkMode.SYSTEM to ctx.getString(R.string.dark_system), DarkMode.LIGHT to ctx.getString(R.string.dark_light), DarkMode.DARK to ctx.getString(R.string.dark_dark)),
                     st.darkMode,
                     { v -> app.settings.update { it.copy(darkMode = v) } },
@@ -612,22 +615,18 @@ internal fun MinutesChoiceRow(
 ) {
     var editing by remember { mutableStateOf(false) }
     val custom = current !in presets
-    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        presets.forEach { m ->
-            FilterChip(
-                selected = current == m,
-                onClick = { onSelect(m) },
-                label = { Text(label(m)) },
-                shape = CircleShape,
-            )
+    val customLabel =
+        if (custom) {
+            stringResource(R.string.detail_custom_value, label(current))
+        } else {
+            stringResource(R.string.detail_custom)
         }
-        FilterChip(
-            selected = custom,
-            onClick = { editing = true },
-            label = { Text(if (custom) stringResource(R.string.detail_custom_value, label(current)) else stringResource(R.string.detail_custom)) },
-            shape = CircleShape,
-        )
-    }
+    val options =
+        buildList<Pair<Int?, String>> {
+            presets.forEach { m -> add(m to label(m)) }
+            add(null to customLabel)
+        }
+    ChipChoice(options, if (custom) null else current, { v -> if (v == null) editing = true else onSelect(v) })
     if (editing) {
         MinutesDialog(range = range, initial = current, title = dialogTitle, zeroHint = zeroHint, onDismiss = { editing = false }, onConfirm = onSelect)
     }
@@ -650,19 +649,18 @@ private fun MinutesDialog(
         title = { Text(title) },
         text = {
             Column {
-                OutlinedTextField(
+                TonalField(
+                    label = "",
                     value = text,
-                    onValueChange = { t -> if (t.length <= 6 && t.all { it.isDigit() }) text = t },
-                    singleLine = true,
+                    onChange = { t -> if (t.length <= 6 && t.all { it.isDigit() }) text = t },
+                    number = true,
                     isError = !valid,
-                    supportingText = {
+                    supporting =
                         when {
-                            !valid -> Text(stringResource(R.string.detail_minutes_invalid, range.first, range.last))
-                            zeroHint != null -> Text(zeroHint)
-                        }
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = RoundedCornerShape(16.dp),
+                            !valid -> stringResource(R.string.detail_minutes_invalid, range.first, range.last)
+                            zeroHint != null -> zeroHint
+                            else -> null
+                        },
                 )
             }
         },
@@ -696,23 +694,18 @@ private fun HexColorDialog(
         title = { Text(stringResource(R.string.theme_hex)) },
         text = {
             Column {
-                OutlinedTextField(
+                TonalField(
+                    label = "",
                     value = text,
-                    onValueChange = { t ->
+                    onChange = { t ->
                         text = t.filter { it == '#' || it in '0'..'9' || it in 'A'..'F' || it in 'a'..'f' }.take(7)
                     },
-                    singleLine = true,
                     isError = parsed == null,
-                    supportingText =
-                        if (parsed == null) {
-                            { Text(stringResource(R.string.theme_hex_invalid)) }
-                        } else {
-                            null
-                        },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
-                    shape = RoundedCornerShape(16.dp),
+                    supporting = if (parsed == null) stringResource(R.string.theme_hex_invalid) else null,
                 )
                 Spacer(Modifier.height(12.dp))
+                // 未输入合法值时用当前色阶托底预览，不硬编码颜色
+                val newPreview = if (parsed != null) Color(parsed) else MaterialTheme.colorScheme.surfaceContainerHighest
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
@@ -730,7 +723,7 @@ private fun HexColorDialog(
                                 .fillMaxWidth()
                                 .height(32.dp)
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(Color(parsed ?: 0xFF888888.toInt())),
+                                .background(newPreview),
                         )
                         Text(stringResource(R.string.theme_hex_new), style = MaterialTheme.typography.labelSmall)
                     }

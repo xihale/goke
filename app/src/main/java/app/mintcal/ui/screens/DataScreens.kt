@@ -64,13 +64,13 @@ import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
 import app.mintcal.ui.Tab
 import app.mintcal.ui.components.ChangeList
-import app.mintcal.ui.components.ChipChoice
 import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.NavRow
+import app.mintcal.ui.components.SegmentedPill
 import app.mintcal.ui.components.SwitchRow
 import app.mintcal.ui.fullDate
 import app.mintcal.ui.liveSnapshot
@@ -296,11 +296,24 @@ fun ImportScreen(
             }
             when (val s = state) {
                 ImportState.Pick -> {
-                    Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Button(onClick = { picker.launch(arrayOf("text/calendar", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream", "*/*")) }) {
-                            Text(stringResource(R.string.import_pick))
-                        }
-                    }
+                    EmptyState(
+                        title = stringResource(R.string.import_file),
+                        hint = stringResource(R.string.import_pick_hint),
+                        icon = Icons.Rounded.UploadFile,
+                        actionLabel = stringResource(R.string.import_pick),
+                        onAction = {
+                            picker.launch(
+                                arrayOf(
+                                    "text/calendar",
+                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    "application/octet-stream",
+                                    "*/*",
+                                ),
+                            )
+                        },
+                        secondaryLabel = stringResource(R.string.timetable_import_jxfw),
+                        onSecondary = { nav.push(Route.Jxfw) },
+                    )
                 }
 
                 ImportState.Loading -> {
@@ -371,7 +384,11 @@ fun ImportScreen(
                         Text(stringResource(if (s.kind == ImportState.Kind.XLSX) R.string.import_kind_xlsx else R.string.import_kind_ics), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     if (s.kind == ImportState.Kind.ICS && cal != null) {
-                        ChipChoice(listOf(IcsMode.COURSES to ctx.getString(R.string.import_as_courses), IcsMode.EVENTS to ctx.getString(R.string.import_as_events)), mode, { mode = it })
+                        SegmentedPill(
+                            listOf(IcsMode.COURSES to stringResource(R.string.import_as_courses), IcsMode.EVENTS to stringResource(R.string.import_as_events)),
+                            mode,
+                            { mode = it },
+                        )
                     }
                     if (suggested != null && suggested != sem.week1Monday && (s.kind == ImportState.Kind.XLSX || mode == IcsMode.COURSES)) {
                         if (s.kind == ImportState.Kind.ICS) {

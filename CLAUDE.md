@@ -1,12 +1,13 @@
-# CLAUDE.md — MintCal 设计系统规则
+# CLAUDE.md — 薄荷广工（MintGDUT）设计系统与工程规则
 
 适用范围：仓库根。给 AI 助手改界面或设计系统时遵守。
-需求与决策背景见 `docs/specs/`、`docs/adr/`；本文件只写**约束**。
+设计哲学、视觉层级与页面准则见仓库根 `DESIGN.md`；需求与决策背景见 `docs/specs/`、`docs/adr/`；本文件写**代码级约束**。
 
 ## 0. 事实来源优先级
 
 1. 代码：`ui/theme/Theme.kt`、`ui/components/`、`ui/screens/`
-2. 文档：`docs/specs/*`、`docs/adr/*`、`docs/todo-ux-notes.md`
+2. 设计标准：`DESIGN.md`（优雅 · 流畅 · 高效）
+3. 文档：`docs/specs/*`、`docs/adr/*`、`docs/todo-ux-notes.md`
 
 冲突时以代码为准。
 
@@ -122,16 +123,18 @@ Web 与 Android 浅色薄荷统一为 `primary #2E776C`、`onSurfaceVariant #5E6
 | `MintFab` | 同上 | primaryContainer 底，缩放 0.6 进出 |
 | `ConflictCard` | 同上 | `MintTheme.colors.conflictBg` 底，radius 16，padding 14/10 |
 | `ConfirmDialog` / `DatePickerDlg` / `TimePickerDlg` / `TimeWheels` | 同上 | 对话框 radius 28；滚轮行高 36×5 行 |
-| `AgendaRow` / `TaskRow` | `components/Rows.kt` | 时间列 + 内容列；课程块与待办块同构 |
-| `FieldText` | `components/FormKit.kt` | 无框输入：标签 labelMedium 在上，值 bodyLarge 在下 |
-| `ChipChoice` | 同上 | 选中只改主色 + Medium，不套底色；命中 40 |
-| `ValueRow` | 同上 | 标签弱化 + 值主体 + chevron，最小高 48 |
+| `AgendaRow` / `TaskRow` | `components/Rows.kt` | 课程块软彩底（radius 16）；待办行直接落在纸面底色上，零分割线、纯留白呼吸，完成态 0.45 退灰 + 删除线 |
+| `TonalField` / `FieldText` | `components/FormKit.kt` | 圆角微色阶输入（12dp `surfaceContainerHighest`），零底边横线，聚焦主色细描边，支持密码显隐 |
+| `SegmentedPill` | 同上 | 2–4 项等宽互斥滑动胶囊，滑块走 `MintTheme.spec()` 弹簧 |
+| `ChipChoice` | 同上 | 流式胶囊单选（5 项及以上），清晰底色包裹 |
+| `ValueRow` | 同上 | 标签弱化 + 值主体 + chevron，最小高 48，按压 0.98 |
 | `FormSection` | 同上 | 只有小标题，不套卡片 |
 | `MonthPager` / `DialPickers` / `AttachmentEditor` / `ChangeList` / `QuickAddBar` | `components/*.kt` | — |
 
 **架构规则**
+- 默认主题锁定为 `ThemeSource.PRESET`（`preset = "mint"`），开箱即 `#F2F7F5` 薄荷纸底 + `#2E776C` 森林薄荷绿；跟随壁纸由用户在外观页主动开启。
 - 无 ViewModel；状态经 `LocalApp` / `LocalActions` / `LocalNav` CompositionLocal + 参数下传，屏幕是纯函数。
-- 所有自绘可点区域走 `Modifier.mintClickable` / `mintPressable`：按下缩放 0.96 + 触觉，`indication = null`。
+- 所有自绘可点区域统一走 `Modifier.mintClickable` / `mintPressable`（严禁裸 `.clickable` 无视觉反馈）：通栏列表行 `pressedScale = 0.98f`，紧凑按钮/胶囊/色块 `pressedScale = 0.96f`，配触觉反馈，`indication = null`。
 - 全局 `LocalIndication` 被替换为 `FocusRingIndication`（**只画键盘/无障碍焦点环**）。
 - 命中区 ≥ 48dp；`MintCheck` 是 22dp 视觉 / 48dp 命中。
 - 尺寸常量放组件文件顶部，不散落：`NavIslandHeight = 68.dp`、`NavIslandPadding = 12.dp`、`NavClearance = 92.dp`、`NavListInset = NavClearance + 84.dp`。

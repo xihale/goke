@@ -1,7 +1,6 @@
 package app.mintcal.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -24,10 +24,14 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,10 +39,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,25 +52,38 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import app.mintcal.core.change.Edits
+import app.mintcal.core.model.Course
+import app.mintcal.core.model.GdutCampus
+import app.mintcal.core.model.GdutPeriods
+import app.mintcal.core.model.Semester
 import app.mintcal.core.time.WeekSets
+import app.mintcal.jxfw.JxfwException
 import app.mintcal.ui.LocalActions
+import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
 import app.mintcal.ui.components.DatePickerDlg
 import app.mintcal.ui.components.FieldText
 import app.mintcal.ui.components.FormSection
+import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.NavRow
 import app.mintcal.ui.components.SectionLabel
+import app.mintcal.ui.components.SegmentedPill
 import app.mintcal.ui.components.ValueRow
+import app.mintcal.ui.components.mintClickable
+import app.mintcal.ui.formatRooms
 import app.mintcal.ui.fullDate
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.weekdayShort
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -102,9 +121,15 @@ fun EditTimetableScreen(onBack: () -> Unit) {
         }
     }
 
-    val courses =
+    // 同名课程 = 同一门课的多个时段：按名称聚合成一行，别让 26 条重复排课刷屏
+    val groupedCourses =
         remember(snap, sem) {
-            snap.courses.filter { it.semesterId == sem.id }.sortedWith(compareBy({ it.dayOfWeek }, { it.startPeriod }, { it.name }))
+            snap.courses
+                .filter { it.semesterId == sem.id }
+                .sortedWith(compareBy({ it.dayOfWeek }, { it.startPeriod }, { it.name }))
+                .groupBy { it.name }
+                .values
+                .toList()
         }
 
     MintScreen(title = stringResource(R.string.edit_timetable), onBack = onBack) {
@@ -117,6 +142,8 @@ fun EditTimetableScreen(onBack: () -> Unit) {
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            JxfwSyncCard(sem)
+
             FormSection(stringResource(R.string.section_semester)) {
                 FieldText(stringResource(R.string.label_semester_name), name, { name = it })
                 ValueRow(stringResource(R.string.label_week1_monday), ctx.fullDate(week1), { pickDate = true })
@@ -130,55 +157,39 @@ fun EditTimetableScreen(onBack: () -> Unit) {
                 )
             }
 
-            SectionLabel(stringResource(R.string.section_courses), trailing = ctx.getString(R.string.courses_count, courses.size))
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                courses.forEach { c ->
+            Column {
+                SectionLabel(
+                    stringResource(R.string.section_courses),
+                    trailing = ctx.getString(R.string.courses_count, groupedCourses.size),
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    groupedCourses.forEach { group ->
+                        CourseGroupRow(group) { nav.push(Route.CourseEdit(group.first().id)) }
+                    }
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .heightIn(min = 48.dp)
-                            .clickable { nav.push(Route.CourseEdit(c.id)) },
+                            .mintClickable(pressedScale = 0.98f) { nav.push(Route.CourseEdit(null)) }
+                            .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(MintTheme.colors.fg(c.colorIndex)))
+                        Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(c.name, style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                ctx.getString(R.string.course_line, ctx.weekdayShort(c.dayOfWeek), c.startPeriod, c.endPeriod, WeekSets.format(c.weeks)) +
-                                    c.room
-                                        .takeIf { it.isNotBlank() }
-                                        ?.let { " · $it" }
-                                        .orEmpty(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        Text(stringResource(R.string.new_course), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
                     }
-                }
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { nav.push(Route.CourseEdit(null)) },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Text(stringResource(R.string.new_course), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
                 }
             }
 
             FormSection(stringResource(R.string.section_import)) {
                 NavRow(stringResource(R.string.jxfw_title), icon = Icons.Rounded.UploadFile) { nav.push(Route.Jxfw) }
-                Hairline()
                 NavRow(stringResource(R.string.import_excel), icon = Icons.Rounded.UploadFile) { nav.push(Route.Import(null)) }
-                Hairline()
                 NavRow(stringResource(R.string.import_ics), icon = Icons.Rounded.UploadFile) { nav.push(Route.Import(null)) }
             }
 
             FormSection(stringResource(R.string.section_more)) {
                 NavRow(stringResource(R.string.edit_periods), stringResource(R.string.edit_periods_desc, sem.periods.size), Icons.Rounded.Schedule) { nav.push(Route.Periods) }
-                Hairline()
                 NavRow(stringResource(R.string.copy_next_semester), stringResource(R.string.copy_next_semester_desc), Icons.Rounded.ContentCopy) { copyDlg = true }
-                Hairline()
                 NavRow(stringResource(R.string.advanced_title), stringResource(R.string.advanced_row_desc), Icons.Rounded.AutoAwesome) { showAdvanced = true }
             }
         }
@@ -215,6 +226,124 @@ fun EditTimetableScreen(onBack: () -> Unit) {
     }
 }
 
+/**
+ * 教务同步入口卡：未登录时一句说明 + 登录键；已登录时学号 / 学期 + 立即同步。
+ * 教务是广工的第一公民，所以它排在学期设置之上。
+ */
+@Composable
+private fun JxfwSyncCard(sem: Semester) {
+    val ctx = LocalContext.current
+    val app = LocalApp.current
+    val nav = LocalNav.current
+    val actions = LocalActions.current
+    val scope = rememberCoroutineScope()
+    val state by app.jxfw.state.collectAsState()
+
+    MintCard(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Sync, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(
+                stringResource(R.string.jxfw_card_title),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        if (!state.loggedIn) {
+            Text(
+                stringResource(R.string.jxfw_card_unbound_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = { nav.push(Route.Jxfw) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.jxfw_card_bind_action))
+            }
+        } else {
+            Text(
+                ctx.getString(R.string.jxfw_card_bound_meta, state.username.orEmpty(), state.term ?: sem.name),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (state.busy && state.progress != null) {
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                    Text(state.progress.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                FilledTonalButton(
+                    enabled = !state.busy,
+                    onClick = {
+                        scope.launch {
+                            try {
+                                app.jxfw.fullSync()
+                                actions.toast(ctx.getString(R.string.jxfw_done_toast))
+                            } catch (_: JxfwException) {
+                                // 错误已写入状态，详情页里能看到
+                            }
+                        }
+                    },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) {
+                    Text(stringResource(R.string.jxfw_card_sync_now))
+                }
+                TextButton(onClick = { nav.push(Route.Jxfw) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.jxfw_title))
+                }
+            }
+        }
+    }
+}
+
+/** 一门课一行：色点 + 课名 + 时段摘要（多时段折叠成「前两个 · N 个时段」）+ 教室。 */
+@Composable
+private fun CourseGroupRow(
+    group: List<Course>,
+    onClick: () -> Unit,
+) {
+    val ctx = LocalContext.current
+    val first = group.first()
+    val rooms = group.map { it.room }.filter { it.isNotBlank() }.distinct()
+
+    fun line(c: Course): String = ctx.getString(R.string.course_line, ctx.weekdayShort(c.dayOfWeek), c.startPeriod, c.endPeriod, WeekSets.format(c.weeks))
+
+    val summary =
+        buildString {
+            append(group.take(2).joinToString(" · ") { line(it) })
+            if (group.size > 2) append(" · ").append(ctx.getString(R.string.courses_slots_count, group.size))
+            if (rooms.isNotEmpty()) {
+                val folded = ctx.formatRooms(rooms.joinToString(" / "))
+                if (folded.isNotEmpty()) append(" · ").append(folded)
+            }
+        }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .mintClickable(pressedScale = 0.98f, onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(10.dp).clip(CircleShape).background(MintTheme.colors.fg(first.colorIndex)))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(first.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(
+                summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
 @Composable
 fun PeriodsScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
@@ -242,6 +371,16 @@ fun PeriodsScreen(onBack: () -> Unit) {
         }
     }
 
+    // 广工四校区作息：点一下就整套换掉，省得逐节改时间
+    val campus = GdutPeriods.detectCampus(periods)
+    val campusOptions: List<Pair<GdutCampus?, String>> =
+        listOf(
+            GdutCampus.HEMC to stringResource(R.string.campus_hemc),
+            GdutCampus.LONGDONG to stringResource(R.string.campus_longdong),
+            GdutCampus.DONGFENG to stringResource(R.string.campus_dongfeng),
+            GdutCampus.JIEYANG to stringResource(R.string.campus_jieyang),
+        )
+
     MintScreen(
         title = stringResource(R.string.edit_periods),
         onBack = onBack,
@@ -253,7 +392,7 @@ fun PeriodsScreen(onBack: () -> Unit) {
                         text = { Text(stringResource(R.string.reset_default)) },
                         onClick = {
                             menu = false
-                            periods = app.mintcal.core.model.GdutPeriods.default
+                            periods = GdutPeriods.default
                         },
                     )
                 }
@@ -268,7 +407,25 @@ fun PeriodsScreen(onBack: () -> Unit) {
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp),
         ) {
+            FormSection(stringResource(R.string.campus_preset_section)) {
+                SegmentedPill(
+                    options = campusOptions,
+                    selected = campus,
+                    onSelect = { picked -> if (picked != null) periods = GdutPeriods.forCampus(picked) },
+                )
+                Text(
+                    stringResource(R.string.edit_periods_desc, periods.size),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
             periods.forEachIndexed { i, p ->
+                // 上午 / 下午 / 晚上之间留一口气，12 节不再糊成一条
+                val prev = periods.getOrNull(i - 1)
+                if (prev != null && (prev.index == 4 || prev.index == 9)) Spacer(Modifier.height(12.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(ctx.getString(R.string.period_n, p.index), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                     TimeTap(p.start.hm()) { editing = i to true }
@@ -278,13 +435,15 @@ fun PeriodsScreen(onBack: () -> Unit) {
             }
             if (periods.size < 16) {
                 Row(
-                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable {
-                        val last = periods.last()
-                        periods =
-                            periods +
-                            app.mintcal.core.model
-                                .PeriodTime(last.index + 1, last.end.plusMinutes(5), last.end.plusMinutes(50))
-                    },
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .mintClickable(pressedScale = 0.98f) {
+                            val last = periods.last()
+                            periods = periods +
+                                app.mintcal.core.model
+                                    .PeriodTime(last.index + 1, last.end.plusMinutes(5), last.end.plusMinutes(50))
+                        },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
@@ -297,8 +456,9 @@ fun PeriodsScreen(onBack: () -> Unit) {
                     stringResource(R.string.remove_last_period),
                     modifier =
                         Modifier
+                            .fillMaxWidth()
                             .heightIn(min = 48.dp)
-                            .clickable { periods = periods.dropLast(1) }
+                            .mintClickable(pressedScale = 0.98f) { periods = periods.dropLast(1) }
                             .padding(vertical = 12.dp),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.error,
@@ -320,7 +480,10 @@ private fun TimeTap(
     onClick: () -> Unit,
 ) {
     Box(
-        Modifier.heightIn(min = 48.dp).clickable(onClick = onClick).padding(horizontal = 8.dp),
+        Modifier
+            .heightIn(min = 48.dp)
+            .mintClickable(pressedScale = 0.96f, onClick = onClick)
+            .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)

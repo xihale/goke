@@ -2,6 +2,7 @@ package app.mintcal.ui.screens
 
 import android.content.Context
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -21,9 +22,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,6 +33,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -55,13 +58,13 @@ import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.EmptyState
-import app.mintcal.ui.components.FieldText
 import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.NavRow
 import app.mintcal.ui.components.SwitchRow
 import app.mintcal.ui.components.TimeDialSheet
+import app.mintcal.ui.components.TonalField
 import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
@@ -244,16 +247,21 @@ fun ParcelScreen(onBack: () -> Unit) {
             .collectAsState()
             .value
             .live()
+    val rulesCfg by app.parcelRules.flow.collectAsState()
     var sample by remember { mutableStateOf("") }
     var result by remember { mutableStateOf<app.mintcal.core.parcel.ParcelInfo?>(null) }
     var tried by remember { mutableStateOf(false) }
-    var showTry by remember { mutableStateOf(false) }
     var sampleDraft by remember { mutableStateOf<RuleDraft?>(null) }
+    var showRules by rememberSaveable { mutableStateOf(false) }
     val granted = listenerEnabled(ctx)
+    val enabledCount = rulesCfg.user.count { it.enabled } + ParcelRuleEngine.BUILTIN.count { it.id !in rulesCfg.disabledBuiltins }
 
     fun openListenerSettings() {
         runCatching { ctx.startActivity(Intent(AndroidSettings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
+
+    // 二级「短信识别规则」视图的返回手势：模板语法不上主页面，只在全屏子页里编辑
+    BackHandler(enabled = showRules) { showRules = false }
 
     MintScreen(title = stringResource(R.string.parcel_title), onBack = onBack) {
         Column(
@@ -265,88 +273,126 @@ fun ParcelScreen(onBack: () -> Unit) {
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            FormSection {
+            // 卡 1：自动识别开关 + 通知使用权状态
+            MintCard {
                 SwitchRow(stringResource(R.string.parcel_enable), null, st.parcelEnabled) { v -> app.settings.update { it.copy(parcelEnabled = v) } }
-                if (st.parcelEnabled) {
-                    ValueRow(
-                        stringResource(R.string.parcel_enable_desc),
-                        stringResource(if (granted) R.string.settings_perm_allowed else R.string.parcel_grant),
-                        onClick = { if (!granted) openListenerSettings() },
-                    )
-                }
                 AnimatedVisibility(
                     visible = st.parcelEnabled,
                     enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
                     exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
                 ) {
-                    var pickStart by remember { mutableStateOf(false) }
-                    var pickEnd by remember { mutableStateOf(false) }
-                    Column {
-                        ValueRow(
-                            stringResource(R.string.parcel_window_start),
-                            "%02d:%02d".format(st.parcelWindowStart / 60, st.parcelWindowStart % 60),
-                            onClick = { pickStart = true },
-                        )
-                        ValueRow(
-                            stringResource(R.string.parcel_window_end),
-                            "%02d:%02d".format(st.parcelWindowEnd / 60, st.parcelWindowEnd % 60),
-                            onClick = { pickEnd = true },
-                        )
-                        if (pickStart) {
-                            TimeDialSheet(LocalTime.of(st.parcelWindowStart / 60, st.parcelWindowStart % 60), onDismiss = { pickStart = false }) { time ->
-                                app.settings.update { it.copy(parcelWindowStart = time.hour * 60 + time.minute) }
-                            }
-                        }
-                        if (pickEnd) {
-                            TimeDialSheet(LocalTime.of(st.parcelWindowEnd / 60, st.parcelWindowEnd % 60), onDismiss = { pickEnd = false }) { time ->
-                                app.settings.update { it.copy(parcelWindowEnd = time.hour * 60 + time.minute) }
-                            }
-                        }
+                    ValueRow(
+                        stringResource(R.string.parcel_enable_desc),
+                        stringResource(if (granted) R.string.settings_perm_allowed else R.string.parcel_grant),
+                        valueColor = if (granted) MintTheme.colors.success else MaterialTheme.colorScheme.primary,
+                        onClick = { if (!granted) openListenerSettings() },
+                    )
+                }
+            }
+            // 段 2：默认取件时段（常驻可见，课表顶栏胶囊同源）
+            FormSection(stringResource(R.string.parcel_window_section)) {
+                Text(
+                    stringResource(R.string.parcel_window_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+                var pickStart by remember { mutableStateOf(false) }
+                var pickEnd by remember { mutableStateOf(false) }
+                ValueRow(
+                    stringResource(R.string.parcel_window_start),
+                    "%02d:%02d".format(st.parcelWindowStart / 60, st.parcelWindowStart % 60),
+                    onClick = { pickStart = true },
+                )
+                ValueRow(
+                    stringResource(R.string.parcel_window_end),
+                    "%02d:%02d".format(st.parcelWindowEnd / 60, st.parcelWindowEnd % 60),
+                    onClick = { pickEnd = true },
+                )
+                if (pickStart) {
+                    TimeDialSheet(LocalTime.of(st.parcelWindowStart / 60, st.parcelWindowStart % 60), onDismiss = { pickStart = false }) { time ->
+                        app.settings.update { it.copy(parcelWindowStart = time.hour * 60 + time.minute) }
+                    }
+                }
+                if (pickEnd) {
+                    TimeDialSheet(LocalTime.of(st.parcelWindowEnd / 60, st.parcelWindowEnd % 60), onDismiss = { pickEnd = false }) { time ->
+                        app.settings.update { it.copy(parcelWindowEnd = time.hour * 60 + time.minute) }
                     }
                 }
             }
-            FormSection {
-                NavRow(stringResource(R.string.parcel_try), onClick = { showTry = !showTry })
-                AnimatedVisibility(
-                    visible = showTry,
-                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-                ) {
-                    Column(Modifier.padding(top = 4.dp)) {
-                        FieldText(stringResource(R.string.parcel_sample_label), sample, {
+            // 段 3：粘贴短信试一试
+            FormSection(stringResource(R.string.parcel_try)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TonalField(
+                        stringResource(R.string.parcel_sample_label),
+                        sample,
+                        {
                             sample = it
                             tried = false
-                        }, singleLine = false, minLines = 3, placeholder = stringResource(R.string.parcel_sample_hint))
-                        OutlinedButton(onClick = {
-                            result = app.parcelRules.value.parse(sample, LocalDateTime.now())
+                        },
+                        singleLine = false,
+                        minLines = 3,
+                        placeholder = stringResource(R.string.parcel_sample_hint),
+                    )
+                    FilledTonalButton(
+                        onClick = {
+                            result = rulesCfg.parse(sample, LocalDateTime.now())
                             tried = true
-                        }, enabled = sample.isNotBlank()) { Text(stringResource(R.string.parcel_recognize)) }
-                        val r = result
-                        if (tried && r == null) {
-                            Text(stringResource(R.string.parcel_not_found), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
-                            TextButton(onClick = { sampleDraft = RuleDraft(ParcelRule(Ids.next(), "", RuleTemplate.fromSample(sample)), sample = sample, isNew = true) }) {
-                                Text(stringResource(R.string.parcel_rule_from_sample))
-                            }
+                        },
+                        enabled = sample.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(stringResource(R.string.parcel_recognize)) }
+                    val r = result
+                    if (tried && r == null) {
+                        Text(stringResource(R.string.parcel_not_found), style = MaterialTheme.typography.bodyMedium)
+                        TextButton(onClick = { sampleDraft = RuleDraft(ParcelRule(Ids.next(), "", RuleTemplate.fromSample(sample)), sample = sample, isNew = true) }) {
+                            Text(stringResource(R.string.parcel_rule_from_sample))
                         }
-                        if (r != null) {
-                            Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(stringResource(R.string.parcel_code, r.code), style = MaterialTheme.typography.titleMedium)
-                                (app.parcelRules.value.user + ParcelRuleEngine.BUILTIN).firstOrNull { it.id == r.ruleId }?.let {
-                                    Text(stringResource(R.string.parcel_rule_matched, it.name), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                if (r.place.isNotBlank()) Text(stringResource(R.string.parcel_place, r.place), style = MaterialTheme.typography.bodyMedium)
-                                if (r.company.isNotBlank()) Text(stringResource(R.string.parcel_company, r.company), style = MaterialTheme.typography.bodyMedium)
-                                r.deadline?.let { Text(stringResource(R.string.parcel_deadline, it.format(STAMP)), style = MaterialTheme.typography.bodyMedium) }
-                                Button(onClick = {
+                    }
+                    if (r != null) {
+                        MintCard {
+                            Text(stringResource(R.string.parcel_code, r.code), style = MaterialTheme.typography.titleMedium)
+                            (rulesCfg.user + ParcelRuleEngine.BUILTIN).firstOrNull { it.id == r.ruleId }?.let {
+                                Text(stringResource(R.string.parcel_rule_matched, it.name), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (r.place.isNotBlank()) Text(stringResource(R.string.parcel_place, r.place), style = MaterialTheme.typography.bodyMedium)
+                            if (r.company.isNotBlank()) Text(stringResource(R.string.parcel_company, r.company), style = MaterialTheme.typography.bodyMedium)
+                            r.deadline?.let { Text(stringResource(R.string.parcel_deadline, it.format(STAMP)), style = MaterialTheme.typography.bodyMedium) }
+                            Button(
+                                onClick = {
                                     val desc = ctx.getString(R.string.parcel_op_desc)
                                     actions.commit(Edits.save(snap, ParcelTasks.build(ctx, r), desc, System.currentTimeMillis()), desc)
-                                }, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.parcel_add_task)) }
-                            }
+                                },
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            ) { Text(stringResource(R.string.parcel_add_task)) }
                         }
                     }
                 }
             }
-            ParcelRulesSection(app.parcelRules)
+            // 段 4：识别规则渐进披露入口（模板语法收进二级页）
+            NavRow(
+                stringResource(R.string.parcel_rules_manage),
+                stringResource(R.string.parcel_rules_enabled_count, enabledCount),
+                Icons.Rounded.Tune,
+            ) { showRules = true }
+        }
+    }
+    if (showRules) {
+        MintScreen(
+            title = stringResource(R.string.parcel_rules_manage),
+            onBack = { showRules = false },
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                ParcelRulesSection(app.parcelRules)
+            }
         }
     }
     sampleDraft?.let { d -> RuleEditSheet(d, app.parcelRules) { sampleDraft = null } }

@@ -222,23 +222,99 @@ data class Task(
     ) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
 }
 
-/** 广工节次时间（来自 WakeUp 导出的 ICS，见需求文档 6.2）。 */
+enum class GdutCampus { HEMC, LONGDONG, DONGFENG, JIEYANG }
+
+/** 广工节次时间（来自 WakeUp 导出的 ICS 与广工各校区作息表，见需求文档 6.2）。 */
 object GdutPeriods {
-    val default: List<PeriodTime> =
-        listOf(
-            "08:30" to "09:15",
-            "09:20" to "10:05",
-            "10:25" to "11:10",
-            "11:15" to "12:00",
-            "13:50" to "14:35",
-            "14:40" to "15:25",
-            "15:30" to "16:15",
-            "16:30" to "17:15",
-            "17:20" to "18:05",
-            "18:30" to "19:15",
-            "19:20" to "20:05",
-            "20:10" to "20:55",
-        ).mapIndexed { i, (s, e) -> PeriodTime(i + 1, LocalTime.parse(s), LocalTime.parse(e)) }
+    private fun pairsToPeriods(pairs: List<Pair<String, String>>): List<PeriodTime> = pairs.mapIndexed { i, (s, e) -> PeriodTime(i + 1, LocalTime.parse(s), LocalTime.parse(e)) }
+
+    /** 大学城 / 番禺校区默认作息（08:30 / 13:50 / 18:30）。 */
+    val hemc: List<PeriodTime> =
+        pairsToPeriods(
+            listOf(
+                "08:30" to "09:15",
+                "09:20" to "10:05",
+                "10:25" to "11:10",
+                "11:15" to "12:00",
+                "13:50" to "14:35",
+                "14:40" to "15:25",
+                "15:30" to "16:15",
+                "16:30" to "17:15",
+                "17:20" to "18:05",
+                "18:30" to "19:15",
+                "19:20" to "20:05",
+                "20:10" to "20:55",
+            ),
+        )
+
+    /** 龙洞校区作息（下午 13:30 开课）。 */
+    val longdong: List<PeriodTime> =
+        pairsToPeriods(
+            listOf(
+                "08:30" to "09:15",
+                "09:20" to "10:05",
+                "10:25" to "11:10",
+                "11:15" to "12:00",
+                "13:30" to "14:15",
+                "14:20" to "15:05",
+                "15:25" to "16:10",
+                "16:15" to "17:00",
+                "17:05" to "17:50",
+                "18:30" to "19:15",
+                "19:20" to "20:05",
+                "20:10" to "20:55",
+            ),
+        )
+
+    /** 东风路校区作息（下午 14:00、晚间 19:00 开课）。 */
+    val dongfeng: List<PeriodTime> =
+        pairsToPeriods(
+            listOf(
+                "08:30" to "09:15",
+                "09:20" to "10:05",
+                "10:25" to "11:10",
+                "11:15" to "12:00",
+                "14:00" to "14:45",
+                "14:50" to "15:35",
+                "15:55" to "16:40",
+                "16:45" to "17:30",
+                "17:35" to "18:20",
+                "19:00" to "19:45",
+                "19:50" to "20:35",
+                "20:40" to "21:25",
+            ),
+        )
+
+    /** 揭阳校区作息（上午 08:30、下午 14:00、晚间 19:00）。 */
+    val jieyang: List<PeriodTime> =
+        pairsToPeriods(
+            listOf(
+                "08:30" to "09:15",
+                "09:20" to "10:05",
+                "10:25" to "11:10",
+                "11:15" to "12:00",
+                "14:00" to "14:45",
+                "14:50" to "15:35",
+                "15:45" to "16:30",
+                "16:35" to "17:20",
+                "17:25" to "18:10",
+                "19:00" to "19:45",
+                "19:50" to "20:35",
+                "20:40" to "21:25",
+            ),
+        )
+
+    val default: List<PeriodTime> = hemc
+
+    fun forCampus(campus: GdutCampus): List<PeriodTime> =
+        when (campus) {
+            GdutCampus.HEMC -> hemc
+            GdutCampus.LONGDONG -> longdong
+            GdutCampus.DONGFENG -> dongfeng
+            GdutCampus.JIEYANG -> jieyang
+        }
+
+    fun detectCampus(periods: List<PeriodTime>): GdutCampus? = GdutCampus.entries.firstOrNull { forCampus(it) == periods }
 
     /** 第 1 周周一（需求文档 6.2）。 */
     val week1Monday: LocalDate = LocalDate.of(2026, 8, 31)
