@@ -626,7 +626,7 @@ private fun WeekGrid(
                 val colW = (maxWidth - timeColW) / 7
                 // 不画「当前时间」的线和圆点：7 天网格里一列只有 40 来 dp，
                 // 那条线横穿在一整列色块上，多一根线只是噪声；今天靠星期头的色块指认。
-                // 左侧节次
+                // 左侧节次：开始 / 结束时间都给，两行 tnum 数字
                 periods.forEach { p ->
                     Column(
                         Modifier
@@ -638,9 +638,16 @@ private fun WeekGrid(
                         verticalArrangement = Arrangement.Top,
                     ) {
                         Text("${p.index}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        val timeStyle =
+                            MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp, fontFeatureSettings = "tnum")
                         Text(
                             p.start.hm(),
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontFeatureSettings = "tnum"),
+                            style = timeStyle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            p.end.hm(),
+                            style = timeStyle,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -1252,8 +1259,19 @@ private fun CourseBlock(
                 overflow = TextOverflow.Ellipsis,
                 textDecoration = strike,
             )
+            // 地点完整显示：多教室不折叠成「首间 等 N 处」，允许换行吃满剩余高度，
+            // 标题是加权子项会自动让行；行数上限按块高折算（保住标题两行、老师一行）兜底。
             if (o.room.isNotBlank()) {
-                val roomText = ctx.formatRooms(o.room, maxInline = 1)
+                // 每间教室各占一行（比「 / 」拼接省一半宽度），多教室不折叠不省略
+                val roomText =
+                    o.room
+                        .split(Regex("[,，/、;；\\s]+"))
+                        .filter { it.isNotBlank() }
+                        .joinToString("\n")
+                        .ifBlank { o.room }
+                val teacherLine = if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) 1 else 0
+                val roomMaxLines =
+                    (BaseRowH * rows - 16.dp - 26.dp - 12.dp * teacherLine).div(12.dp).toInt().coerceAtLeast(2)
                 Text(
                     if (wide) "@" + roomText else roomText,
                     modifier = Modifier.weight(1f, fill = false),
@@ -1265,8 +1283,7 @@ private fun CourseBlock(
                             lineHeight = 12.sp,
                             letterSpacing = 0.sp,
                         ),
-                    maxLines = if (wide && rows >= 2) 2 else 1,
-                    softWrap = false,
+                    maxLines = roomMaxLines,
                     overflow = TextOverflow.Ellipsis,
                     textDecoration = strike,
                 )
