@@ -950,7 +950,8 @@ internal class LocalMcpTools(
                 putJsonObject("properties") {
                     put("freq", prop("string", "DAILY / WEEKLY / MONTHLY / YEARLY / NONE"))
                     put("interval", prop("integer", "间隔数，默认 1"))
-                    put("byDays", arrayProp("integer", "仅 WEEKLY：1=周一 … 7=周日"))
+                    put("byDays", arrayProp("integer", "WEEKLY：1=周一 … 7=周日；MONTHLY / YEARLY：1…31 日"))
+                    put("byMonths", arrayProp("integer", "仅 YEARLY：1…12 月"))
                     put("until", prop("string", "重复截止日期 YYYY-MM-DD"))
                     put("count", prop("integer", "重复次数"))
                 }
@@ -995,14 +996,30 @@ internal class LocalMcpTools(
                 runCatching { Freq.valueOf(freqRaw) }
                     .getOrElse { throw McpToolError("不支持的重复频率：$freqRaw") }
             val interval = (obj.int("interval") ?: 1).coerceIn(1, 365)
-            val byDays =
+            val rawDays =
                 (obj["byDays"] as? JsonArray)
-                    ?.mapNotNull { (it as? JsonPrimitive)?.intOrNull?.takeIf { d -> d in 1..7 } }
+                    ?.mapNotNull { (it as? JsonPrimitive)?.intOrNull }
                     ?.toSet()
                     .orEmpty()
+            // 同一个字段周内指星期几、月/年内指第几天，按频率各自校验
+            val byDays =
+                when (freq) {
+                    Freq.WEEKLY -> rawDays.filter { it in 1..7 }.toSet()
+                    Freq.MONTHLY, Freq.YEARLY -> rawDays.filter { it in 1..31 }.toSet()
+                    Freq.DAILY -> emptySet()
+                }
+            val byMonths =
+                if (freq == Freq.YEARLY) {
+                    (obj["byMonths"] as? JsonArray)
+                        ?.mapNotNull { (it as? JsonPrimitive)?.intOrNull?.takeIf { m -> m in 1..12 } }
+                        ?.toSet()
+                        .orEmpty()
+                } else {
+                    emptySet()
+                }
             val until = obj.str("until")?.takeIf { it.isNotBlank() }?.let(::parseDateStrict)
             val count = obj.int("count")?.takeIf { it > 0 }
-            return Recurrence(freq = freq, interval = interval, byDays = byDays, until = until, count = count)
+            return Recurrence(freq = freq, interval = interval, byDays = byDays, until = until, count = count, byMonths = byMonths)
         }
     }
 }

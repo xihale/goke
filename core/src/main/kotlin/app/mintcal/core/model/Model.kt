@@ -115,7 +115,11 @@ data class CourseException(
 data class Recurrence(
     val freq: Freq,
     val interval: Int = 1,
-    /** 仅 WEEKLY 使用：1=周一…7=周日；为空表示与起始日同一星期几。 */
+    /**
+     * 复现的「日」：
+     * WEEKLY → 1=周一…7=周日；MONTHLY / YEARLY → 1…31 日（该月没有这一天就跳过）。
+     * 为空表示跟随起始日（同一星期几 / 同一日）。
+     */
     val byDays: Set<Int> = emptySet(),
     @Serializable(with = LocalDateSerializer::class) val until: LocalDate? = null,
     val count: Int? = null,
@@ -123,6 +127,8 @@ data class Recurrence(
         @Serializable(with = LocalDateSerializer::class)
         LocalDate,
     > = emptySet(),
+    /** 仅 YEARLY 使用：1…12 月；与 [byDays] 取笛卡尔积（跨月多选时为每月的那几天）。为空表示跟随起始月。 */
+    val byMonths: Set<Int> = emptySet(),
 )
 
 @Serializable

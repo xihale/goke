@@ -263,13 +263,32 @@ object IcsImporter {
                     }
                 }?.toSet()
                 .orEmpty()
+        // BYMONTHDAY / BYMONTH：负数（月末倒数）表达不了，直接丢掉
+        val monthDays =
+            p["BYMONTHDAY"]
+                ?.split(',')
+                ?.mapNotNull { it.trim().toIntOrNull()?.takeIf { d -> d in 1..31 } }
+                ?.toSet()
+                .orEmpty()
+        val months =
+            p["BYMONTH"]
+                ?.split(',')
+                ?.mapNotNull { it.trim().toIntOrNull()?.takeIf { m -> m in 1..12 } }
+                ?.toSet()
+                .orEmpty()
         return Recurrence(
             freq = freq,
             interval = p["INTERVAL"]?.toIntOrNull() ?: 1,
-            byDays = if (freq == Freq.WEEKLY) days else emptySet(),
+            byDays =
+                when (freq) {
+                    Freq.WEEKLY -> days
+                    Freq.MONTHLY, Freq.YEARLY -> monthDays
+                    Freq.DAILY -> emptySet()
+                },
             until = p["UNTIL"]?.let { IcsParser.parseUntil(it, zone)?.toLocalDate() },
             count = p["COUNT"]?.toIntOrNull(),
             exDates = exDates,
+            byMonths = if (freq == Freq.YEARLY) months else emptySet(),
         )
     }
 }

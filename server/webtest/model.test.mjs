@@ -96,6 +96,13 @@ test('重复规则', () => {
   const yearly = M.newRecurrence('YEARLY');
   const yy = M.recurrenceDates(yearly, D('2024-02-29'), D('2024-01-01'), D('2033-01-01')).map(U.fmtDate);
   assert.deepEqual(yy, ['2024-02-29', '2028-02-29', '2032-02-29']);
+  // 自定义：每月哪几天 / 每年哪几月哪几天（与 Android RecurrenceEngine 同义）
+  const days2 = M.newRecurrence('MONTHLY', { byDays: [1, 15] });
+  const m2 = M.recurrenceDates(days2, D('2026-01-10'), D('2026-01-01'), D('2026-02-28')).map(U.fmtDate);
+  assert.deepEqual(m2, ['2026-01-15', '2026-02-01', '2026-02-15']);
+  const ymd2 = M.newRecurrence('YEARLY', { byMonths: [3, 10], byDays: [5, 12] });
+  const y2 = M.recurrenceDates(ymd2, D('2026-03-05'), D('2026-01-01'), D('2026-12-31')).map(U.fmtDate);
+  assert.deepEqual(y2, ['2026-03-05', '2026-03-12', '2026-10-05', '2026-10-12']);
 });
 
 test('事件展开：重复与跨天', () => {

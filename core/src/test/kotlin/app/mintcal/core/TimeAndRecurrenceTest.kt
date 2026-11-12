@@ -1,5 +1,6 @@
 package app.mintcal.core
 
+import app.mintcal.core.importer.IcsImporter
 import app.mintcal.core.model.Course
 import app.mintcal.core.model.CourseException
 import app.mintcal.core.model.Event
@@ -9,6 +10,7 @@ import app.mintcal.core.model.Recurrence
 import app.mintcal.core.recurrence.CourseExpander
 import app.mintcal.core.recurrence.EventExpander
 import app.mintcal.core.recurrence.RecurrenceEngine
+import app.mintcal.core.sync.CalendarBridge
 import app.mintcal.core.time.SemesterCalendar
 import app.mintcal.core.time.WeekSets
 import java.time.LocalDate
@@ -72,6 +74,78 @@ class TimeAndRecurrenceTest {
         val r = Recurrence(Freq.MONTHLY, count = 3)
         val d = RecurrenceEngine.dates(r, LocalDate.of(2026, 1, 31), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31))
         assertEquals(listOf(LocalDate.of(2026, 1, 31), LocalDate.of(2026, 3, 31), LocalDate.of(2026, 5, 31)), d)
+    }
+
+    @Test fun `monthly on several days of the month`() {
+        val r = Recurrence(Freq.MONTHLY, byDays = setOf(1, 15))
+        val d = RecurrenceEngine.dates(r, LocalDate.of(2026, 1, 10), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 3, 31))
+        assertEquals(
+            listOf(
+                LocalDate.of(2026, 1, 15),
+                LocalDate.of(2026, 2, 1),
+                LocalDate.of(2026, 2, 15),
+                LocalDate.of(2026, 3, 1),
+                LocalDate.of(2026, 3, 15),
+            ),
+            d,
+        )
+    }
+
+    @Test fun `monthly by days drops the 31st in short months but keeps the 1st`() {
+        val r = Recurrence(Freq.MONTHLY, byDays = setOf(1, 31))
+        val d = RecurrenceEngine.dates(r, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 3, 31))
+        assertEquals(
+            listOf(
+                LocalDate.of(2026, 1, 1),
+                LocalDate.of(2026, 1, 31),
+                LocalDate.of(2026, 2, 1),
+                LocalDate.of(2026, 3, 1),
+                LocalDate.of(2026, 3, 31),
+            ),
+            d,
+        )
+    }
+
+    @Test fun `yearly on several month and day combinations`() {
+        val r = Recurrence(Freq.YEARLY, byMonths = setOf(3, 10), byDays = setOf(5, 12))
+        val d = RecurrenceEngine.dates(r, LocalDate.of(2026, 3, 5), LocalDate.of(2026, 1, 1), LocalDate.of(2027, 12, 31))
+        assertEquals(
+            listOf(
+                LocalDate.of(2026, 3, 5),
+                LocalDate.of(2026, 3, 12),
+                LocalDate.of(2026, 10, 5),
+                LocalDate.of(2026, 10, 12),
+                LocalDate.of(2027, 3, 5),
+                LocalDate.of(2027, 3, 12),
+                LocalDate.of(2027, 10, 5),
+                LocalDate.of(2027, 10, 12),
+            ),
+            d,
+        )
+    }
+
+    @Test fun `yearly by months before the anchor month still repeats next year`() {
+        val r = Recurrence(Freq.YEARLY, byMonths = setOf(1))
+        val d = RecurrenceEngine.dates(r, LocalDate.of(2026, 3, 5), LocalDate.of(2027, 1, 1), LocalDate.of(2027, 2, 28))
+        assertEquals(listOf(LocalDate.of(2027, 1, 5)), d)
+    }
+
+    @Test fun `yearly without by fields keeps the anchor date`() {
+        val r = Recurrence(Freq.YEARLY, interval = 2)
+        val d = RecurrenceEngine.dates(r, LocalDate.of(2026, 3, 5), LocalDate.of(2026, 1, 1), LocalDate.of(2030, 12, 31))
+        assertEquals(listOf(LocalDate.of(2026, 3, 5), LocalDate.of(2028, 3, 5), LocalDate.of(2030, 3, 5)), d)
+    }
+
+    @Test fun `ics rrule round trip keeps month and month-day selections`() {
+        val zone = java.time.ZoneId.of("Asia/Shanghai")
+        val monthly = IcsImporter.parseRecurrence("FREQ=MONTHLY;BYMONTHDAY=1,15", LocalDateTime.of(2026, 3, 1, 9, 0), emptySet(), zone)
+        assertEquals(setOf(1, 15), monthly?.byDays)
+        assertEquals("FREQ=MONTHLY;BYMONTHDAY=1,15", CalendarBridge.formatRRule(monthly!!, zone))
+        val yearly =
+            IcsImporter.parseRecurrence("FREQ=YEARLY;BYMONTH=3,10;BYMONTHDAY=5,20", LocalDateTime.of(2026, 3, 5, 9, 0), emptySet(), zone)
+        assertEquals(setOf(3, 10), yearly?.byMonths)
+        assertEquals(setOf(5, 20), yearly?.byDays)
+        assertEquals("FREQ=YEARLY;BYMONTH=3,10;BYMONTHDAY=5,20", CalendarBridge.formatRRule(yearly!!, zone))
     }
 
     @Test fun `next occurrence is strictly after`() {

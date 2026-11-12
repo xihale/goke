@@ -43,7 +43,7 @@ object Unify {
             blockStart = if (timed) e.start else null,
             blockMinutes = if (timed) minutes else null,
             remindMinutes = e.remindMinutes,
-            repeat = e.recurrence?.let { r -> Recurrence(r.freq, r.interval, r.byDays, r.until, r.count, r.exDates) },
+            repeat = e.recurrence?.copy(),
             sortOrder = sortOrder,
             source = e.source,
         )

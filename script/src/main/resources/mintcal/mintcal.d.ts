@@ -19,7 +19,10 @@ interface CourseInput {
 
 interface Recurrence {
   freq: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'; interval?: number;
+  /** WEEKLY：1=周一…7=周日；MONTHLY / YEARLY：每月第几天 1…31。 */
   byDays?: number[]; until?: string | null; count?: number | null; exDates?: string[];
+  /** 仅 YEARLY：哪几个月 1…12，与 byDays 取笛卡尔积。 */
+  byMonths?: number[];
 }
 interface CalEvent {
   id: string; title: string; start: string; end: string; allDay: boolean; location: string; note: string;

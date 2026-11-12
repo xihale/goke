@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -103,6 +104,7 @@ internal data class WhenPanelResult(
     val interval: Int = 1,
     val until: LocalDate? = null,
     val byDays: Set<Int> = emptySet(),
+    val byMonths: Set<Int> = emptySet(),
 )
 
 /**
@@ -122,6 +124,7 @@ internal fun WhenPanel(
     initialInterval: Int = 1,
     initialUntil: LocalDate? = null,
     initialByDays: Set<Int> = emptySet(),
+    initialByMonths: Set<Int> = emptySet(),
     semesterEnd: LocalDate? = null,
     onDismiss: () -> Unit,
     onPick: (WhenPanelResult) -> Unit,
@@ -136,6 +139,7 @@ internal fun WhenPanel(
     var interval by remember { mutableIntStateOf(initialInterval) }
     var until by remember { mutableStateOf(initialUntil) }
     var byDays by remember { mutableStateOf(initialByDays) }
+    var byMonths by remember { mutableStateOf(initialByMonths) }
     var datePicked by remember { mutableStateOf(initial != null) }
     var timeDlg by remember { mutableStateOf(false) }
     var durDlg by remember { mutableStateOf(false) }
@@ -156,7 +160,8 @@ internal fun WhenPanel(
                 freq = freq,
                 interval = interval,
                 until = if (freq == null) null else until,
-                byDays = if (freq == Freq.WEEKLY) byDays else emptySet(),
+                byDays = if (freq == Freq.WEEKLY || freq == Freq.MONTHLY || freq == Freq.YEARLY) byDays else emptySet(),
+                byMonths = if (freq == Freq.YEARLY) byMonths else emptySet(),
             ),
         )
     }
@@ -224,12 +229,13 @@ internal fun WhenPanel(
                 SettingRow(
                     Icons.Rounded.Repeat,
                     stringResource(R.string.label_repeat),
-                    freqLabel(freq, until, interval, byDays, date, withUntil = false),
+                    freqLabel(freq, until, interval, byDays, date, withUntil = false, byMonths = byMonths),
                     freq != null,
                     onClear = {
                         freq = null
                         until = null
                         byDays = emptySet()
+                        byMonths = emptySet()
                         interval = 1
                     },
                 ) { repeatDlg = true }
@@ -287,10 +293,11 @@ internal fun WhenPanel(
         }
     }
     if (repeatDlg) {
-        RepeatPickDialog(date, freq, interval, byDays, until, semesterEnd, { repeatDlg = false }) { f, i, days, u ->
+        RepeatPickDialog(date, freq, interval, byDays, byMonths, until, semesterEnd, onDismiss = { repeatDlg = false }) { f, i, days, months, u ->
             freq = f
             interval = i
             byDays = days
+            byMonths = months
             until = u
             repeatDlg = false
         }
@@ -428,9 +435,22 @@ internal fun freqLabel(
     byDays: Set<Int> = emptySet(),
     anchor: LocalDate? = null,
     withUntil: Boolean = true,
+    byMonths: Set<Int> = emptySet(),
 ): String {
     val ctx = LocalContext.current
-    val days = byDays.sorted().joinToString("、") { ctx.weekdayFull(it) }
+    val sep = stringResource(R.string.list_sep)
+    val days = byDays.sorted().joinToString(sep) { ctx.weekdayFull(it) }
+    // 每月 / 每年多选：把天数、月日拼成「1、15日」「3月5日、10月12日」
+    val monthDaysText = byDays.sorted().joinToString(sep)
+    val yearDates = mutableListOf<String>()
+    if (f == Freq.YEARLY) {
+        val ms = (byMonths.ifEmpty { anchor?.let { setOf(it.monthValue) } ?: emptySet() }).sorted()
+        val ds = (byDays.ifEmpty { anchor?.let { setOf(it.dayOfMonth) } ?: emptySet() }).sorted()
+        for (mo in ms) {
+            for (d in ds) yearDates += stringResource(R.string.repeat_month_day, mo, d)
+        }
+    }
+    val period = if (interval == 1) null else stringResource(R.string.detail_editor_every_n, interval, freqUnit(f ?: Freq.WEEKLY))
     val base =
         when {
             f == null -> {
@@ -469,8 +489,36 @@ internal fun freqLabel(
                 }
             }
 
+            f == Freq.MONTHLY && byDays.size > 1 -> {
+                stringResource(
+                    R.string.repeat_on_days,
+                    period ?: stringResource(R.string.repeat_monthly),
+                    stringResource(R.string.repeat_days_of_month, monthDaysText),
+                )
+            }
+
+            f == Freq.MONTHLY && byDays.size == 1 -> {
+                if (interval == 1) {
+                    stringResource(R.string.repeat_monthly_on, byDays.first())
+                } else {
+                    stringResource(
+                        R.string.repeat_on_days,
+                        period.orEmpty(),
+                        stringResource(R.string.repeat_days_of_month, monthDaysText),
+                    )
+                }
+            }
+
             f == Freq.MONTHLY && interval == 1 && anchor != null -> {
                 stringResource(R.string.repeat_monthly_on, anchor.dayOfMonth)
+            }
+
+            f == Freq.YEARLY && yearDates.isNotEmpty() -> {
+                stringResource(
+                    R.string.repeat_on_days,
+                    period ?: stringResource(R.string.repeat_yearly),
+                    yearDates.joinToString(sep),
+                )
             }
 
             f == Freq.YEARLY && interval == 1 && anchor != null -> {
@@ -676,6 +724,7 @@ private fun whichPreset(
     freq: Freq?,
     interval: Int,
     byDays: Set<Int>,
+    byMonths: Set<Int>,
     until: LocalDate?,
     anchor: LocalDate,
     semesterEnd: LocalDate?,
@@ -688,11 +737,11 @@ private fun whichPreset(
         }
 
         Freq.MONTHLY -> {
-            RepeatPreset.MONTHLY
+            if (byDays.isEmpty()) RepeatPreset.MONTHLY else RepeatPreset.CUSTOM
         }
 
         Freq.YEARLY -> {
-            RepeatPreset.YEARLY
+            if (byMonths.isEmpty() && byDays.isEmpty()) RepeatPreset.YEARLY else RepeatPreset.CUSTOM
         }
 
         Freq.WEEKLY -> {
@@ -706,29 +755,48 @@ private fun whichPreset(
     }
 }
 
-/** 重复。点一项就生效；自定义里选间隔和星期。结束日不在这里，面板上单独一行。 */
+/** 重复。点一项就生效；自定义里选间隔、星期几 / 月内哪几天 / 每年哪几月哪几天。结束日不在这里，面板上单独一行。 */
 @Composable
 internal fun RepeatPickDialog(
     anchor: LocalDate,
     freqInitial: Freq?,
     intervalInitial: Int,
     byDaysInitial: Set<Int>,
+    byMonthsInitial: Set<Int>,
     untilInitial: LocalDate?,
     semesterEnd: LocalDate?,
+    /** 直接打开自定义页（截图与回访校验用）。 */
+    startCustomPage: Boolean = false,
     onDismiss: () -> Unit,
-    onPick: (Freq?, Int, Set<Int>, LocalDate?) -> Unit,
+    onPick: (Freq?, Int, Set<Int>, Set<Int>, LocalDate?) -> Unit,
 ) {
     val ctx = LocalContext.current
     val dow = anchor.dayOfWeek.value
-    val preset = whichPreset(freqInitial, intervalInitial, byDaysInitial, untilInitial, anchor, semesterEnd)
+    val preset = whichPreset(freqInitial, intervalInitial, byDaysInitial, byMonthsInitial, untilInitial, anchor, semesterEnd)
     val semesterOk = semesterEnd != null && !anchor.isAfter(semesterEnd)
-    var customPage by remember { mutableStateOf(false) }
+    var customPage by remember { mutableStateOf(startCustomPage) }
     var unit by remember { mutableStateOf(freqInitial ?: Freq.WEEKLY) }
     var every by remember { mutableIntStateOf(intervalInitial.coerceIn(1, 99)) }
-    var days by remember { mutableStateOf(byDaysInitial.ifEmpty { setOf(dow) }) }
+    // 三套「日」各管一段：星期几、月内哪几天、每年哪几月
+    var weekdays by remember { mutableStateOf(if (freqInitial == Freq.WEEKLY && byDaysInitial.isNotEmpty()) byDaysInitial else setOf(dow)) }
+    var monthDays by remember {
+        mutableStateOf(if ((freqInitial == Freq.MONTHLY || freqInitial == Freq.YEARLY) && byDaysInitial.isNotEmpty()) byDaysInitial else setOf(anchor.dayOfMonth))
+    }
+    var months by remember { mutableStateOf(byMonthsInitial.ifEmpty { setOf(anchor.monthValue) }) }
+    val pickedDays =
+        when (unit) {
+            Freq.WEEKLY -> weekdays
+            Freq.MONTHLY, Freq.YEARLY -> monthDays
+            Freq.DAILY -> emptySet()
+        }
+    val pickedMonths = if (unit == Freq.YEARLY) months else emptySet()
 
-    fun toggleDay(d: Int) {
-        days = if (d in days && days.size > 1) days - d else days + d
+    fun toggle(
+        set: Set<Int>,
+        d: Int,
+        apply: (Set<Int>) -> Unit,
+    ) {
+        apply(if (d in set && set.size > 1) set - d else set + d)
     }
     PickerSheet(onDismiss) {
         Column(Modifier.padding(top = 6.dp, bottom = 8.dp)) {
@@ -740,44 +808,62 @@ internal fun RepeatPickDialog(
                     Text(stringResource(R.string.repeat_custom), style = MaterialTheme.typography.titleMedium)
                 }
                 Text(
-                    freqLabel(unit, null, every, if (unit == Freq.WEEKLY) days else emptySet(), anchor, withUntil = false),
+                    freqLabel(unit, null, every, pickedDays, anchor, withUntil = false, byMonths = pickedMonths),
                     Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.primary,
                 )
-                Text(
-                    stringResource(R.string.repeat_freq),
-                    Modifier.padding(start = 4.dp, top = 8.dp, bottom = 6.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(stringResource(R.string.repeat_every), style = MaterialTheme.typography.bodyLarge)
-                    StepPill(Icons.Rounded.Remove, stringResource(R.string.repeat_interval_down), every > 1) { every -= 1 }
+                // 31 天 + 12 月的网格可能超过一屏，局部滚动，底部按钮始终看得见
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                     Text(
-                        every.toString(),
-                        Modifier.width(40.dp),
-                        style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
-                        textAlign = TextAlign.Center,
-                    )
-                    StepPill(Icons.Rounded.Add, stringResource(R.string.repeat_interval_up), every < 99) { every += 1 }
-                    listOf(Freq.DAILY, Freq.WEEKLY, Freq.MONTHLY, Freq.YEARLY).forEach { f ->
-                        DayPill(freqUnit(f), unit == f, Modifier.weight(1f)) { unit = f }
-                    }
-                }
-                if (unit == Freq.WEEKLY) {
-                    Text(
-                        stringResource(R.string.weekday_label),
-                        Modifier.padding(start = 4.dp, top = 12.dp, bottom = 6.dp),
+                        stringResource(R.string.repeat_freq),
+                        Modifier.padding(start = 4.dp, top = 8.dp, bottom = 6.dp),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        (1..7).forEach { d -> DayPill(ctx.weekdayShort(d), d in days, Modifier.weight(1f)) { toggleDay(d) } }
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(stringResource(R.string.repeat_every), style = MaterialTheme.typography.bodyLarge)
+                        StepPill(Icons.Rounded.Remove, stringResource(R.string.repeat_interval_down), every > 1) { every -= 1 }
+                        Text(
+                            every.toString(),
+                            Modifier.width(40.dp),
+                            style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+                            textAlign = TextAlign.Center,
+                        )
+                        StepPill(Icons.Rounded.Add, stringResource(R.string.repeat_interval_up), every < 99) { every += 1 }
+                        listOf(Freq.DAILY, Freq.WEEKLY, Freq.MONTHLY, Freq.YEARLY).forEach { f ->
+                            DayPill(freqUnit(f), unit == f, Modifier.weight(1f)) { unit = f }
+                        }
+                    }
+                    if (unit == Freq.WEEKLY) {
+                        GridLabel(stringResource(R.string.weekday_label))
+                        PillRow((1..7).toList()) { d ->
+                            DayPill(ctx.weekdayShort(d), d in weekdays, Modifier.weight(1f)) { toggle(weekdays, d) { weekdays = it } }
+                        }
+                    }
+                    if (unit == Freq.MONTHLY || unit == Freq.YEARLY) {
+                        if (unit == Freq.YEARLY) {
+                            GridLabel(stringResource(R.string.repeat_pick_months))
+                            PillRow((1..12).toList(), perRow = 6) { m ->
+                                DayPill(stringResource(R.string.repeat_month_n, m), m in months, Modifier.weight(1f)) {
+                                    toggle(months, m) { months = it }
+                                }
+                            }
+                        }
+                        GridLabel(
+                            if (unit == Freq.MONTHLY) {
+                                stringResource(R.string.repeat_pick_month_days)
+                            } else {
+                                stringResource(R.string.repeat_pick_also_month_days)
+                            },
+                        )
+                        PillRow((1..31).toList(), perRow = 7) { d ->
+                            DayPill(d.toString(), d in monthDays, Modifier.weight(1f)) { toggle(monthDays, d) { monthDays = it } }
+                        }
                     }
                 }
             } else {
@@ -786,26 +872,26 @@ internal fun RepeatPickDialog(
                     Modifier.padding(start = 4.dp, end = 4.dp, bottom = 8.dp),
                     style = MaterialTheme.typography.titleMedium,
                 )
-                RemindOption(stringResource(R.string.none), preset == RepeatPreset.NONE) { onPick(null, 1, emptySet(), null) }
-                RemindOption(stringResource(R.string.repeat_daily), preset == RepeatPreset.DAILY) { onPick(Freq.DAILY, 1, emptySet(), untilInitial) }
+                RemindOption(stringResource(R.string.none), preset == RepeatPreset.NONE) { onPick(null, 1, emptySet(), emptySet(), null) }
+                RemindOption(stringResource(R.string.repeat_daily), preset == RepeatPreset.DAILY) { onPick(Freq.DAILY, 1, emptySet(), emptySet(), untilInitial) }
                 RemindOption(stringResource(R.string.repeat_weekly_on, ctx.weekdayFull(dow)), preset == RepeatPreset.WEEKLY) {
-                    onPick(Freq.WEEKLY, 1, emptySet(), untilInitial)
+                    onPick(Freq.WEEKLY, 1, emptySet(), emptySet(), untilInitial)
                 }
                 RemindOption(stringResource(R.string.repeat_monthly_on, anchor.dayOfMonth), preset == RepeatPreset.MONTHLY) {
-                    onPick(Freq.MONTHLY, 1, emptySet(), untilInitial)
+                    onPick(Freq.MONTHLY, 1, emptySet(), emptySet(), untilInitial)
                 }
                 RemindOption(stringResource(R.string.repeat_yearly_on, anchor.monthValue, anchor.dayOfMonth), preset == RepeatPreset.YEARLY) {
-                    onPick(Freq.YEARLY, 1, emptySet(), untilInitial)
+                    onPick(Freq.YEARLY, 1, emptySet(), emptySet(), untilInitial)
                 }
                 Spacer(Modifier.height(6.dp))
                 RemindOption(
                     stringResource(R.string.repeat_weekdays) + "（" + stringResource(R.string.repeat_weekdays_span) + "）",
                     preset == RepeatPreset.WORKDAYS,
-                ) { onPick(Freq.WEEKLY, 1, WORKDAYS, untilInitial) }
+                ) { onPick(Freq.WEEKLY, 1, WORKDAYS, emptySet(), untilInitial) }
                 if (semesterOk) {
                     Spacer(Modifier.height(6.dp))
                     RemindOption(stringResource(R.string.repeat_semester, ctx.weekdayFull(dow)), preset == RepeatPreset.SEMESTER) {
-                        onPick(Freq.WEEKLY, 1, emptySet(), semesterEnd)
+                        onPick(Freq.WEEKLY, 1, emptySet(), emptySet(), semesterEnd)
                     }
                 }
                 Spacer(Modifier.height(6.dp))
@@ -817,7 +903,7 @@ internal fun RepeatPickDialog(
                         Text(stringResource(R.string.cancel), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
                     }
                     TextButton(onClick = {
-                        onPick(unit, every, if (unit == Freq.WEEKLY) days else emptySet(), untilInitial)
+                        onPick(unit, every, pickedDays, pickedMonths, untilInitial)
                     }) { Text(stringResource(R.string.ok), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary) }
                 } else {
                     TextButton(onClick = onDismiss) {
@@ -860,6 +946,35 @@ private fun EndRepeatDialog(
         }
     }
     if (pick) DatePickerDlg(until ?: anchor.plusMonths(3), { pick = false }) { onPick(it) }
+}
+
+/** 小标题：网格上方的一行弱化文字。 */
+@Composable
+private fun GridLabel(text: String) {
+    Text(
+        text,
+        Modifier.padding(start = 4.dp, top = 12.dp, bottom = 6.dp),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/** 等宽胶囊网格：每行 [perRow] 个，不足补弹簧占位。 */
+@Composable
+private fun PillRow(
+    items: List<Int>,
+    perRow: Int = 7,
+    content: @Composable RowScope.(Int) -> Unit,
+) {
+    items.chunked(perRow).forEach { row ->
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            row.forEach { content(it) }
+            repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
+        }
+    }
 }
 
 /** 步进小圆钮：− / +，禁用时降透明度。 */

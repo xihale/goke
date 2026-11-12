@@ -782,6 +782,10 @@ object CalendarBridge {
             val names = listOf("MO", "TU", "WE", "TH", "FR", "SA", "SU")
             parts += "BYDAY=" + r.byDays.sorted().joinToString(",") { names[it - 1] }
         }
+        if (r.freq == Freq.YEARLY && r.byMonths.isNotEmpty()) parts += "BYMONTH=" + r.byMonths.sorted().joinToString(",")
+        if ((r.freq == Freq.MONTHLY || r.freq == Freq.YEARLY) && r.byDays.isNotEmpty()) {
+            parts += "BYMONTHDAY=" + r.byDays.sorted().joinToString(",")
+        }
         r.until?.let {
             val endUtc = LocalDateTime.of(it, LocalTime.of(23, 59, 59)).atZone(zone).withZoneSameInstant(ZoneOffset.UTC)
             parts += "UNTIL=${endUtc.format(UTC_DT)}"

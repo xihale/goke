@@ -71,27 +71,35 @@ object RecurrenceEngine {
             }
 
             Freq.MONTHLY -> {
+                val days = (rule.byDays.ifEmpty { setOf(anchor.dayOfMonth) }).sorted()
                 var k = 0L
-                while (iter++ < MAX_ITER) {
+                outer@ while (iter++ < MAX_ITER) {
                     val m = anchor.withDayOfMonth(1).plusMonths(k * interval)
-                    if (anchor.dayOfMonth <= m.lengthOfMonth()) {
-                        if (!accept(m.withDayOfMonth(anchor.dayOfMonth))) break
-                    } else if (m.isAfter(limit)) {
-                        break
+                    if (m.isAfter(limit)) break
+                    for (d in days) {
+                        // 小月没有 31 日这类日子：跳过，不挪到月末
+                        if (d > m.lengthOfMonth()) continue
+                        if (!accept(m.withDayOfMonth(d))) break@outer
                     }
                     k++
                 }
             }
 
             Freq.YEARLY -> {
+                val months = (rule.byMonths.ifEmpty { setOf(anchor.monthValue) }).sorted()
+                val days = (rule.byDays.ifEmpty { setOf(anchor.dayOfMonth) }).sorted()
                 var k = 0L
-                while (iter++ < MAX_ITER) {
-                    val y = anchor.withDayOfMonth(1).plusYears(k * interval)
-                    val md = y.withMonth(anchor.monthValue)
-                    if (anchor.dayOfMonth <= md.lengthOfMonth()) {
-                        if (!accept(md.withDayOfMonth(anchor.dayOfMonth))) break
-                    } else if (md.isAfter(limit)) {
-                        break
+                outer@ while (iter++ < MAX_ITER) {
+                    // 从那年 1 月起算：byMonths 可能选了早于起始月的月份
+                    val y = anchor.withDayOfMonth(1).withMonth(1).plusYears(k * interval)
+                    if (y.isAfter(limit)) break
+                    for (mo in months) {
+                        val md = y.withMonth(mo)
+                        if (md.isAfter(limit)) break
+                        for (d in days) {
+                            if (d > md.lengthOfMonth()) continue
+                            if (!accept(md.withDayOfMonth(d))) break@outer
+                        }
                     }
                     k++
                 }

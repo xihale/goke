@@ -3,9 +3,7 @@ package app.mintcal.ui
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -16,14 +14,9 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -33,7 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +34,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -48,24 +42,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -294,8 +278,8 @@ fun NavGraphBuilder.mintDestinations(
 }
 
 /**
- * 撤销胶囊：包含撤销图标与文字「撤销」，外圈进度弧显示剩余时间。
- * reduceMotion 下保留常驻进度并等待 UNDO_MS 超时，不闪现跳过。
+ * 撤销浮钮：一枚悬浮的撤销图标，没有文字、没有倒计时进度弧。
+ * 视觉 48dp（也就是命中区），到 UNDO_MS 自己消失。
  */
 @Composable
 private fun UndoButton(
@@ -304,70 +288,30 @@ private fun UndoButton(
     onUndo: () -> Unit,
     onTimeout: () -> Unit,
 ) {
-    val reduce = LocalReduceMotion.current
-    val haptics = LocalHapticFeedback.current
-    val remain = remember(token) { Animatable(1f) }
     LaunchedEffect(token) {
-        remain.snapTo(1f)
-        if (reduce) {
-            delay(UNDO_MS.toLong())
-            onTimeout()
-        } else {
-            remain.animateTo(0f, tween(durationMillis = UNDO_MS, easing = LinearEasing))
-            onTimeout()
-        }
+        delay(UNDO_MS.toLong())
+        onTimeout()
     }
     val undoText = stringResource(R.string.undo)
     val a11yDesc = if (label.isNotBlank()) "$label，$undoText" else undoText
-    Row(
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 3.dp,
         modifier =
             Modifier
-                .heightIn(min = 48.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), CircleShape)
-                .mintClickable {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onUndo()
-                }.semantics {
-                    contentDescription = a11yDesc
-                    role = Role.Button
-                }.padding(start = 10.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .size(48.dp)
+                .mintClickable { onUndo() }
+                .semantics { contentDescription = a11yDesc },
     ) {
-        val ring = MaterialTheme.colorScheme.primary
-        Box(
-            modifier = Modifier.size(32.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Canvas(Modifier.fillMaxSize()) {
-                val stroke = 2.dp.toPx()
-                val inset = stroke / 2 + 1.dp.toPx()
-                val arcRect = Size(size.width - inset * 2, size.height - inset * 2)
-                drawArc(
-                    color = ring,
-                    startAngle = -90f,
-                    sweepAngle = 360f * remain.value,
-                    useCenter = false,
-                    topLeft = Offset(inset, inset),
-                    size = arcRect,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round),
-                )
-            }
+        Box(contentAlignment = Alignment.Center) {
             Icon(
                 Icons.AutoMirrored.Rounded.Undo,
                 null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(22.dp),
             )
         }
-        Text(
-            text = undoText,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.SemiBold,
-        )
     }
 }
 
@@ -375,22 +319,25 @@ private const val UNDO_MS = 4500
 
 @Composable
 private fun Tabs(nav: Nav) {
-    // 首帧只组装当前 Tab，其余三个在首帧之后的空闲帧补齐：冷启动首帧从四屏重活降到一屏，
-    // 之后仍然全部常驻——切换只动绘制层（零重组，滚动/筛选/翻页状态不丢），切过去也没有首访尖刺。
+    // 首帧只组装当前 Tab，其余三个随后一帧一个补齐：冷启动首帧从四屏重活降到一屏，
+    // 三帧摊开也不会在启动淡出期间挤出一帧长卡顿。之后仍然全部常驻——切换只动绘制层
+    // （零重组，滚动/筛选/翻页状态不丢），切过去也没有首访尖刺。
     // 切页本身不做任何位移/淡入：内容瞬切、底栏色块滑过去。位移过渡需要在新页首帧之后才把
     // 偏移打进去（一帧跳出去再滑回来），线框多的课表/日历上看着就是抖——平台惯例也是瞬切。
-    var staged by remember { mutableStateOf(false) }
+    var staged by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
-        withFrameNanos {}
-        staged = true
+        repeat(Tab.entries.size) {
+            withFrameNanos {}
+            staged++
+        }
     }
     val focusManager = LocalFocusManager.current
     LaunchedEffect(nav.tab) { focusManager.clearFocus(force = true) }
     Box(Modifier.fillMaxSize()) {
-        Tab.entries.forEach { tab ->
+        Tab.entries.forEachIndexed { index, tab ->
             key(tab) {
                 val current = tab == nav.tab
-                if (current || staged) {
+                if (current || index < staged) {
                     Box(
                         Modifier
                             .zIndex(if (current) 1f else 0f)

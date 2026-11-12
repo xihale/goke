@@ -51,6 +51,7 @@ import app.mintcal.core.importer.ImportPlanner
 import app.mintcal.core.model.Attachment
 import app.mintcal.core.model.Event
 import app.mintcal.core.model.EventKind
+import app.mintcal.core.model.Freq
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
 import app.mintcal.core.model.TaskList
@@ -84,6 +85,7 @@ import app.mintcal.ui.screens.MorningSheet
 import app.mintcal.ui.screens.ParcelScreen
 import app.mintcal.ui.screens.PeriodsScreen
 import app.mintcal.ui.screens.ReliabilityScreen
+import app.mintcal.ui.screens.RepeatPickDialog
 import app.mintcal.ui.screens.RescheduleSheet
 import app.mintcal.ui.screens.SettingsScreen
 import app.mintcal.ui.screens.SlotDraft
@@ -237,6 +239,34 @@ class ScreensSmokeTest {
                 "task_edit" to { TodoEditScreen(task.id) {} },
                 "task_new" to { TodoEditScreen(null) {} },
                 "time_sheet" to { WhenPanel(null, LocalDate.now(), 30, onDismiss = {}, onPick = {}) },
+                "repeat_monthly" to {
+                    RepeatPickDialog(
+                        anchor = LocalDate.now().withDayOfMonth(1),
+                        freqInitial = Freq.MONTHLY,
+                        intervalInitial = 1,
+                        byDaysInitial = setOf(1, 15, 28),
+                        byMonthsInitial = emptySet(),
+                        untilInitial = null,
+                        semesterEnd = null,
+                        startCustomPage = true,
+                        onDismiss = {},
+                        onPick = { _, _, _, _, _ -> },
+                    )
+                },
+                "repeat_yearly" to {
+                    RepeatPickDialog(
+                        anchor = LocalDate.now().withDayOfMonth(5),
+                        freqInitial = Freq.YEARLY,
+                        intervalInitial = 1,
+                        byDaysInitial = setOf(5, 20),
+                        byMonthsInitial = setOf(3, 10),
+                        untilInitial = null,
+                        semesterEnd = null,
+                        startCustomPage = true,
+                        onDismiss = {},
+                        onPick = { _, _, _, _, _ -> },
+                    )
+                },
                 "edit_timetable" to { EditTimetableScreen {} },
                 "periods" to { PeriodsScreen {} },
                 "appearance" to { AppearanceScreen {} },
@@ -351,6 +381,42 @@ class ScreensSmokeTest {
         assertTrue(task.dueHasTime)
         assertEquals(null, task.blockStart)
         assertEquals(null, task.blockMinutes)
+    }
+
+    /** 自定义月重复：选「月」+ 几个日期，确定后按 byDays 带出，不写死成每月同一天。 */
+    @Test
+    fun customMonthlyRepeatPicksDays() {
+        var pickedDays: Set<Int>? = null
+        var pickedFreq: Freq? = null
+        rule.setContent {
+            Host {
+                RepeatPickDialog(
+                    anchor = LocalDate.of(2026, 3, 1),
+                    freqInitial = null,
+                    intervalInitial = 1,
+                    byDaysInitial = emptySet(),
+                    byMonthsInitial = emptySet(),
+                    untilInitial = null,
+                    semesterEnd = null,
+                    onDismiss = {},
+                    onPick = { f, _, days, _, _ ->
+                        pickedFreq = f
+                        pickedDays = days
+                    },
+                )
+            }
+        }
+        rule.onNodeWithText(app.getString(R.string.repeat_custom)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("月").performClick()
+        rule.onNodeWithText("15").performClick()
+        rule.onNodeWithText("28").performClick()
+        rule.waitForIdle()
+        shot("repeat_custom_month")
+        rule.onNodeWithText(app.getString(R.string.ok)).performClick()
+        assertEquals(Freq.MONTHLY, pickedFreq)
+        // 起始日是 1 号，默认就在选中的日期里
+        assertEquals(setOf(1, 15, 28), pickedDays)
     }
 
     @Test

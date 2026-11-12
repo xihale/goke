@@ -19,7 +19,8 @@ import (
 type repeatIn struct {
 	Freq     string `json:"freq" jsonschema:"重复频率：DAILY / WEEKLY / MONTHLY / YEARLY；NONE 表示清除重复"`
 	Interval int    `json:"interval,omitempty" jsonschema:"间隔数，默认 1（每 1 天/周/月/年）"`
-	ByDays   []int  `json:"byDays,omitempty" jsonschema:"仅 WEEKLY：生效的星期几，1=周一 … 7=周日"`
+	ByDays   []int  `json:"byDays,omitempty" jsonschema:"仅 WEEKLY / MONTHLY / YEARLY：WEEKLY 为星期几 1=周一 … 7=周日，MONTHLY / YEARLY 为每月第几天 1…31"`
+	ByMonths []int  `json:"byMonths,omitempty" jsonschema:"仅 YEARLY：生效的月份 1…12"`
 	Until    string `json:"until,omitempty" jsonschema:"重复到哪天为止（YYYY-MM-DD），与 count 二选一"`
 	Count    int    `json:"count,omitempty" jsonschema:"重复次数，与 until 二选一"`
 }
@@ -727,16 +728,30 @@ func repeatJSON(in *repeatIn) (map[string]any, error) {
 	if interval <= 0 {
 		interval = 1
 	}
-	r := map[string]any{"freq": in.Freq, "interval": interval, "byDays": []any{}, "until": nil, "count": nil, "exDates": []any{}}
+	r := map[string]any{"freq": in.Freq, "interval": interval, "byDays": []any{}, "byMonths": []any{}, "until": nil, "count": nil, "exDates": []any{}}
 	if in.ByDays != nil {
-		if in.Freq != "WEEKLY" {
-			return nil, fmt.Errorf("repeat.byDays 仅 WEEKLY 支持")
+		lo, hi, hint := 1, 7, "1（周一）到 7（周日）"
+		if in.Freq == "MONTHLY" || in.Freq == "YEARLY" {
+			hi, hint = 31, "1 到 31"
+		} else if in.Freq != "WEEKLY" {
+			return nil, fmt.Errorf("repeat.byDays 仅 WEEKLY / MONTHLY / YEARLY 支持")
 		}
 		for _, d := range in.ByDays {
-			if d < 1 || d > 7 {
-				return nil, fmt.Errorf("repeat.byDays 取值 1（周一）到 7（周日）")
+			if d < lo || d > hi {
+				return nil, fmt.Errorf("repeat.byDays 取值 %s", hint)
 			}
 			r["byDays"] = append(r["byDays"].([]any), d)
+		}
+	}
+	if in.ByMonths != nil {
+		if in.Freq != "YEARLY" {
+			return nil, fmt.Errorf("repeat.byMonths 仅 YEARLY 支持")
+		}
+		for _, m := range in.ByMonths {
+			if m < 1 || m > 12 {
+				return nil, fmt.Errorf("repeat.byMonths 取值 1 到 12")
+			}
+			r["byMonths"] = append(r["byMonths"].([]any), m)
 		}
 	}
 	if in.Until != "" {

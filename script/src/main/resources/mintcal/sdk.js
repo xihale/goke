@@ -215,6 +215,7 @@ function __createSdk(data, opts) {
       if (rc) {
         rc.interval = rc.interval || 1;
         rc.byDays = rc.byDays || [];
+        rc.byMonths = rc.byMonths || [];
         rc.exDates = rc.exDates || [];
         if (rc.until === undefined) rc.until = null;
         if (rc.count === undefined) rc.count = null;
@@ -257,7 +258,7 @@ function __createSdk(data, opts) {
       }
       if (r.blockStart !== null && r.blockStart !== undefined) r.blockStart = normDateTime(r.blockStart, 'blockStart');
       if (r.startDate !== null && r.startDate !== undefined) { parseDate(r.startDate); r.startDate = String(r.startDate).slice(0, 10); }
-      if (r.repeat) { r.repeat.interval = r.repeat.interval || 1; r.repeat.byDays = r.repeat.byDays || []; r.repeat.exDates = r.repeat.exDates || []; if (r.repeat.until === undefined) r.repeat.until = null; if (r.repeat.count === undefined) r.repeat.count = null; }
+      if (r.repeat) { r.repeat.interval = r.repeat.interval || 1; r.repeat.byDays = r.repeat.byDays || []; r.repeat.byMonths = r.repeat.byMonths || []; r.repeat.exDates = r.repeat.exDates || []; if (r.repeat.until === undefined) r.repeat.until = null; if (r.repeat.count === undefined) r.repeat.count = null; }
     },
     validate: function (r) {
       requireText(r.title, 'title');

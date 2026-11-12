@@ -223,18 +223,29 @@ export function recurrenceDates(rule, anchor, from, to) {
       }
     }
   } else if (rule.freq === 'MONTHLY') {
-    for (let k = 0; iter++ < MAX_ITER; k++) {
+    const days = [...(rule.byDays && rule.byDays.length ? rule.byDays : [a.d])].sort((x, y) => x - y);
+    outer: for (let k = 0; iter++ < MAX_ITER; k++) {
       const { y, m } = addMonths(a.y, a.m, k * interval);
-      if (a.d <= daysInMonth(y, m)) {
-        if (!accept(dayNum(y, m, a.d))) break;
-      } else if (dayNum(y, m, 1) > limit) break;
+      if (dayNum(y, m, 1) > limit) break;
+      const last = daysInMonth(y, m);
+      for (const d of days) {
+        if (d > last) continue;
+        if (!accept(dayNum(y, m, d))) break outer;
+      }
     }
   } else if (rule.freq === 'YEARLY') {
-    for (let k = 0; iter++ < MAX_ITER; k++) {
+    const months = [...(rule.byMonths && rule.byMonths.length ? rule.byMonths : [a.m])].sort((x, y) => x - y);
+    const days = [...(rule.byDays && rule.byDays.length ? rule.byDays : [a.d])].sort((x, y) => x - y);
+    outer: for (let k = 0; iter++ < MAX_ITER; k++) {
       const y = a.y + k * interval;
-      if (a.d <= daysInMonth(y, a.m)) {
-        if (!accept(dayNum(y, a.m, a.d))) break;
-      } else if (dayNum(y, a.m, 1) > limit) break;
+      for (const m of months) {
+        if (dayNum(y, m, 1) > limit) break;
+        const last = daysInMonth(y, m);
+        for (const d of days) {
+          if (d > last) continue;
+          if (!accept(dayNum(y, m, d))) break outer;
+        }
+      }
     }
   }
   return res;
@@ -460,7 +471,7 @@ export function newException(f, now = Date.now()) {
 }
 
 export function newRecurrence(freq, f = {}) {
-  return { freq, interval: Math.max(1, f.interval || 1), byDays: f.byDays || [], until: f.until || null, count: f.count ?? null, exDates: f.exDates || [] };
+  return { freq, interval: Math.max(1, f.interval || 1), byDays: f.byDays || [], byMonths: f.byMonths || [], until: f.until || null, count: f.count ?? null, exDates: f.exDates || [] };
 }
 
 export function newEvent(f, now = Date.now()) {
