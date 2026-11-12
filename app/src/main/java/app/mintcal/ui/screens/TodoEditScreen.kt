@@ -200,6 +200,7 @@ fun TodoEditScreen(
     var interval by remember { mutableIntStateOf(existing?.repeat?.interval ?: 1) }
     var until by remember { mutableStateOf(existing?.repeat?.until) }
     var byDays by remember { mutableStateOf(existing?.repeat?.byDays ?: emptySet<Int>()) }
+    var byMonths by remember { mutableStateOf(existing?.repeat?.byMonths ?: emptySet<Int>()) }
     var listId by remember { mutableStateOf(existing?.listId) }
     var priority by remember { mutableIntStateOf(existing?.priority ?: 0) }
     var ignored by remember { mutableStateOf(setOf<String>()) }
@@ -259,7 +260,13 @@ fun TodoEditScreen(
         text != existing?.title.orEmpty() || note != existing?.note.orEmpty() ||
             attachments != existing?.attachments.orEmpty() || listId != existing?.listId || priority != (existing?.priority ?: 0) ||
             remind != existing?.remindMinutes || persistent != (existing?.remindPersistent == true) || freq != existing?.repeat?.freq ||
-            (freq != null && (interval != (existing?.repeat?.interval ?: 1) || until != existing?.repeat?.until || byDays != (existing?.repeat?.byDays ?: emptySet<Int>()))) ||
+            (
+                freq != null &&
+                    (
+                        interval != (existing?.repeat?.interval ?: 1) || until != existing?.repeat?.until ||
+                            byDays != (existing?.repeat?.byDays ?: emptySet<Int>()) || byMonths != (existing?.repeat?.byMonths ?: emptySet<Int>())
+                    )
+            ) ||
             whenChanged || newSub.isNotBlank()
 
     // 退出即保存：有内容且有改动就静默落盘；空标题等于放弃这条
@@ -278,14 +285,24 @@ fun TodoEditScreen(
     val nav = LocalNav.current
     // 时间块与课程 / 其它已排待办的重叠：重复规则（含精确间隔）一并展开，只报前几条
     val clashInstances =
-        remember(whenPick?.date, whenPick?.start, whenPick?.block, freq, interval, until) {
+        remember(whenPick?.date, whenPick?.start, whenPick?.block, freq, interval, until, byDays, byMonths) {
             val w = whenPick
             val f = freq
             val iv = interval.coerceAtLeast(1)
+            val rule =
+                f?.let {
+                    Recurrence(
+                        freq = it,
+                        interval = iv,
+                        byDays = if (it == Freq.DAILY) emptySet() else byDays,
+                        until = until,
+                        byMonths = if (it == Freq.YEARLY) byMonths else emptySet(),
+                    )
+                }
             when {
                 w == null || w.start == null || !w.block -> emptyList()
-                f == null -> listOf(w.date)
-                else -> RecurrenceEngine.dates(Recurrence(f, iv, until = until), w.date, w.date, until ?: w.date.plusMonths(6))
+                rule == null -> listOf(w.date)
+                else -> RecurrenceEngine.dates(rule, w.date, w.date, until ?: w.date.plusMonths(6))
             }
         }
     val clashes =
@@ -348,7 +365,8 @@ fun TodoEditScreen(
                         (base.repeat?.takeIf { it.freq == f } ?: Recurrence(f)).copy(
                             freq = f,
                             interval = interval.coerceAtLeast(1),
-                            byDays = if (f == Freq.WEEKLY) byDays else emptySet(),
+                            byDays = if (f == Freq.DAILY) emptySet() else byDays,
+                            byMonths = if (f == Freq.YEARLY) byMonths else emptySet(),
                             until = until,
                         )
                     },
@@ -458,13 +476,14 @@ fun TodoEditScreen(
             SmartTitle(field, { field = it }, ranges, titleFocus, done = existing?.done == true) { range ->
                 ignored = ignored + text.substring(range.first, range.last + 1)
             }
-            WhenRow(whenPick, today, remind, freq, interval, until, byDays, onClear = {
+            WhenRow(whenPick, today, remind, freq, interval, until, byDays, byMonths, onClear = {
                 picked = null
                 cleared = true
                 remind = null
                 freq = null
                 until = null
                 byDays = emptySet()
+                byMonths = emptySet()
             }) { timeSheet = true }
             if (extraDays.isNotEmpty()) {
                 // 周历框选带进来的其它日期：明说会建几条，不再静默生成
@@ -684,6 +703,7 @@ fun TodoEditScreen(
             initialInterval = interval,
             initialUntil = until,
             initialByDays = byDays,
+            initialByMonths = byMonths,
             semesterEnd = snap.currentSemester?.let { SemesterCalendar(it).weekEnd(it.totalWeeks) },
             onDismiss = { timeSheet = false },
             onPick = { r ->
@@ -696,6 +716,7 @@ fun TodoEditScreen(
                     freq = null
                     until = null
                     byDays = emptySet()
+                    byMonths = emptySet()
                 } else {
                     picked = wp
                     cleared = false
@@ -705,6 +726,7 @@ fun TodoEditScreen(
                     interval = r.interval
                     until = r.until
                     byDays = r.byDays
+                    byMonths = r.byMonths
                 }
                 timeSheet = false
             },
@@ -840,6 +862,7 @@ private fun WhenRow(
     interval: Int,
     until: LocalDate?,
     byDays: Set<Int>,
+    byMonths: Set<Int>,
     onClear: () -> Unit,
     onClick: () -> Unit,
 ) {
@@ -868,7 +891,7 @@ private fun WhenRow(
         }
     val extras =
         buildList {
-            if (freq != null) add(freqLabel(freq, until, interval, byDays, whenPick?.date))
+            if (freq != null) add(freqLabel(freq, until, interval, byDays, whenPick?.date, byMonths = byMonths))
             if (remind != null) add(remindLabel(remind))
         }
     val empty = dateLabel == null && extras.isEmpty()

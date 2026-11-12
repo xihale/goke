@@ -154,6 +154,7 @@ internal fun QuickAddSheet(
     var panelInterval by remember { mutableIntStateOf(1) }
     var panelUntil by remember { mutableStateOf<LocalDate?>(null) }
     var panelByDays by remember { mutableStateOf(emptySet<Int>()) }
+    var panelByMonths by remember { mutableStateOf(emptySet<Int>()) }
     val settings = settingsState()
     // 工具栏弹出的菜单都不抢焦点：键盘保持打开，浮层不跟着上下跳
     val noFocusPopup = remember { PopupProperties(focusable = false) }
@@ -259,7 +260,16 @@ internal fun QuickAddSheet(
                     whenPick = panelWhen,
                     remind = panelRemind,
                     persistent = panelPersistent,
-                    repeat = panelFreq?.let { f -> Recurrence(f, panelInterval.coerceAtLeast(1), if (f == Freq.WEEKLY) panelByDays else emptySet(), panelUntil) },
+                    repeat =
+                        panelFreq?.let { f ->
+                            Recurrence(
+                                freq = f,
+                                interval = panelInterval.coerceAtLeast(1),
+                                byDays = if (f == Freq.DAILY) emptySet() else panelByDays,
+                                until = panelUntil,
+                                byMonths = if (f == Freq.YEARLY) panelByMonths else emptySet(),
+                            )
+                        },
                 )
             } else {
                 null
@@ -279,6 +289,7 @@ internal fun QuickAddSheet(
         panelFreq = null
         panelUntil = null
         panelByDays = emptySet()
+        panelByMonths = emptySet()
         onDismiss()
     }
 
@@ -299,6 +310,7 @@ internal fun QuickAddSheet(
         panelFreq = null
         panelUntil = null
         panelByDays = emptySet()
+        panelByMonths = emptySet()
         onDismiss()
     }
 
@@ -595,7 +607,7 @@ internal fun QuickAddSheet(
                                 )
                             }
                             if (panelFreq != null) {
-                                val fLabel = freqLabel(panelFreq, panelUntil, panelInterval, panelByDays, panelWhen?.date)
+                                val fLabel = freqLabel(panelFreq, panelUntil, panelInterval, panelByDays, panelWhen?.date, byMonths = panelByMonths)
                                 Tag(
                                     "$fLabel ×",
                                     MaterialTheme.colorScheme.tertiaryContainer,
@@ -606,6 +618,7 @@ internal fun QuickAddSheet(
                                             panelFreq = null
                                             panelUntil = null
                                             panelByDays = emptySet()
+                                            panelByMonths = emptySet()
                                         }.semantics {
                                             contentDescription = "移除重复：$fLabel"
                                         },
@@ -638,6 +651,7 @@ internal fun QuickAddSheet(
             initialInterval = panelInterval,
             initialUntil = panelUntil,
             initialByDays = panelByDays,
+            initialByMonths = panelByMonths,
             semesterEnd = snap.currentSemester?.let { SemesterCalendar(it).weekEnd(it.totalWeeks) },
             onDismiss = { whenPanel = false },
             onPick = { r ->
@@ -648,6 +662,7 @@ internal fun QuickAddSheet(
                 panelInterval = r.interval
                 panelUntil = r.until
                 panelByDays = r.byDays
+                panelByMonths = r.byMonths
                 whenPanel = false
             },
         )
