@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- 与 Theme.kt brandLight / web theme.js 同源；深色见 values-night。 -->
     <color name="window_bg">#F2F7F5</color>
     <color name="ic_launcher_bg">#4FA796</color>
     <color name="widget_bg">#F2F7F5</color>
@@ -8,9 +9,28 @@
     <color name="widget_muted">#5E6F69</color>
     <color name="widget_accent">#2E776C</color>
     <color name="widget_pill_bg">#CDEBE3</color>
-    <color name="widget_pill_fg">#0E322B</color>
+    <color name="widget_pill_fg">#1B473F</color>
     <color name="widget_overdue">#B23E50</color>
-    <color name="widget_priority_mid">#C88A1E</color>
-    <color name="widget_priority_low">#4B8FD8</color>
+    <color name="widget_priority_mid">#B07F1E</color>
+    <color name="widget_priority_low">#5E6F69</color>
     <color name="widget_now_bg">#CDEBE3</color>
+    <color name="widget_now_fg">#1B473F</color>
+
+    <!-- 8 组植物课表色（浅底深字），与 Theme.kt MintColors / web COURSE_COLORS.light 一致 -->
+    <color name="widget_course0_bg">#D9E8EF</color>
+    <color name="widget_course0_fg">#3B6173</color>
+    <color name="widget_course1_bg">#BFDCD5</color>
+    <color name="widget_course1_fg">#2C5B53</color>
+    <color name="widget_course2_bg">#DAD8EE</color>
+    <color name="widget_course2_fg">#4F4D7C</color>
+    <color name="widget_course3_bg">#F3EBCF</color>
+    <color name="widget_course3_fg">#75662F</color>
+    <color name="widget_course4_bg">#F7DFD2</color>
+    <color name="widget_course4_fg">#85503A</color>
+    <color name="widget_course5_bg">#DFE8DA</color>
+    <color name="widget_course5_fg">#4B5F49</color>
+    <color name="widget_course6_bg">#F4D9E0</color>
+    <color name="widget_course6_fg">#83465A</color>
+    <color name="widget_course7_bg">#D2D8EA</color>
+    <color name="widget_course7_fg">#454F7A</color>
 </resources>

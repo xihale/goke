@@ -118,7 +118,8 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
                         Agenda.forDay(s, today, st.defaultBlockMinutes).filterIsInstance<CourseItem>()
                     }.orEmpty()
             val rows = intArrayOf(R.id.sched_row0, R.id.sched_row1, R.id.sched_row2, R.id.sched_row3, R.id.sched_row4, R.id.sched_row5)
-            val bars = intArrayOf(R.id.sched_bar0, R.id.sched_bar1, R.id.sched_bar2, R.id.sched_bar3, R.id.sched_bar4, R.id.sched_bar5)
+            val times = intArrayOf(R.id.sched_time0, R.id.sched_time1, R.id.sched_time2, R.id.sched_time3, R.id.sched_time4, R.id.sched_time5)
+            val ends = intArrayOf(R.id.sched_end0, R.id.sched_end1, R.id.sched_end2, R.id.sched_end3, R.id.sched_end4, R.id.sched_end5)
             val names = intArrayOf(R.id.sched_name0, R.id.sched_name1, R.id.sched_name2, R.id.sched_name3, R.id.sched_name4, R.id.sched_name5)
             val metas = intArrayOf(R.id.sched_meta0, R.id.sched_meta1, R.id.sched_meta2, R.id.sched_meta3, R.id.sched_meta4, R.id.sched_meta5)
 
@@ -141,13 +142,24 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
                 }
                 val o = c.occ
                 val current = !o.start.isAfter(now) && o.end.isAfter(now)
+                // 课程块穿植物色软彩底；正在上的那节按设计改用薄荷容器高亮（DESIGN.md「小组件正在进行的课程高亮」）
                 views.setViewVisibility(rows[i], View.VISIBLE)
-                views.setInt(rows[i], "setBackgroundResource", if (current) R.drawable.widget_row_now_bg else R.drawable.widget_row_bg)
-                views.setInt(bars[i], "setColorFilter", WidgetKit.courseColor(o.course.colorIndex))
+                views.setInt(
+                    rows[i],
+                    "setBackgroundResource",
+                    if (current) R.drawable.widget_row_now_bg else WidgetKit.courseBgRes(o.course.colorIndex),
+                )
+                val fg =
+                    ctx.getColor(if (current) R.color.widget_now_fg else WidgetKit.courseFgRes(o.course.colorIndex))
+                views.setTextColor(times[i], fg)
+                views.setTextColor(ends[i], WidgetKit.softFg(fg))
+                views.setTextColor(names[i], fg)
+                views.setTextColor(metas[i], WidgetKit.softFg(fg))
+                views.setTextViewText(times[i], o.start.hm())
+                views.setTextViewText(ends[i], o.end.hm())
                 views.setTextViewText(names[i], o.course.name)
                 val meta =
                     listOfNotNull(
-                        o.start.hm() + "–" + o.end.hm(),
                         o.room.takeIf { it.isNotBlank() },
                         if (current) ctx.getString(R.string.widget_schedule_now) else null,
                     ).joinToString(" · ")

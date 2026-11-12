@@ -62,7 +62,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:background="@drawable/widget_row_bg"
+        android:background="@drawable/widget_course_bg0"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingBottom="6dp"
@@ -71,12 +71,32 @@
         android:paddingTop="6dp"
         android:visibility="gone">
 
-        <ImageView
-            android:id="@+id/sched_bar0"
-            android:layout_width="3.5dp"
-            android:layout_height="28dp"
+        <LinearLayout
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
             android:importantForAccessibility="no"
-            android:src="@drawable/widget_bar_bg" />
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/sched_time0"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/widget_text"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/sched_end0"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/widget_muted"
+                android:textSize="10sp" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="0dp"
@@ -102,7 +122,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/widget_muted"
-                android:textSize="11.5sp" />
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -111,7 +131,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:background="@drawable/widget_row_bg"
+        android:background="@drawable/widget_course_bg0"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingBottom="6dp"
@@ -120,12 +140,32 @@
         android:paddingTop="6dp"
         android:visibility="gone">
 
-        <ImageView
-            android:id="@+id/sched_bar1"
-            android:layout_width="3.5dp"
-            android:layout_height="28dp"
+        <LinearLayout
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
             android:importantForAccessibility="no"
-            android:src="@drawable/widget_bar_bg" />
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/sched_time1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/widget_text"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/sched_end1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/widget_muted"
+                android:textSize="10sp" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="0dp"
@@ -151,7 +191,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/widget_muted"
-                android:textSize="11.5sp" />
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -160,7 +200,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:background="@drawable/widget_row_bg"
+        android:background="@drawable/widget_course_bg0"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingBottom="6dp"
@@ -169,12 +209,32 @@
         android:paddingTop="6dp"
         android:visibility="gone">
 
-        <ImageView
-            android:id="@+id/sched_bar2"
-            android:layout_width="3.5dp"
-            android:layout_height="28dp"
+        <LinearLayout
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
             android:importantForAccessibility="no"
-            android:src="@drawable/widget_bar_bg" />
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/sched_time2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/widget_text"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/sched_end2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/widget_muted"
+                android:textSize="10sp" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="0dp"
@@ -200,7 +260,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/widget_muted"
-                android:textSize="11.5sp" />
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -209,7 +269,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:background="@drawable/widget_row_bg"
+        android:background="@drawable/widget_course_bg0"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingBottom="6dp"
@@ -218,12 +278,32 @@
         android:paddingTop="6dp"
         android:visibility="gone">
 
-        <ImageView
-            android:id="@+id/sched_bar3"
-            android:layout_width="3.5dp"
-            android:layout_height="28dp"
+        <LinearLayout
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
             android:importantForAccessibility="no"
-            android:src="@drawable/widget_bar_bg" />
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/sched_time3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/widget_text"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/sched_end3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/widget_muted"
+                android:textSize="10sp" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="0dp"
@@ -249,7 +329,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/widget_muted"
-                android:textSize="11.5sp" />
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -258,7 +338,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:background="@drawable/widget_row_bg"
+        android:background="@drawable/widget_course_bg0"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingBottom="6dp"
@@ -267,12 +347,32 @@
         android:paddingTop="6dp"
         android:visibility="gone">
 
-        <ImageView
-            android:id="@+id/sched_bar4"
-            android:layout_width="3.5dp"
-            android:layout_height="28dp"
+        <LinearLayout
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
             android:importantForAccessibility="no"
-            android:src="@drawable/widget_bar_bg" />
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/sched_time4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/widget_text"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/sched_end4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/widget_muted"
+                android:textSize="10sp" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="0dp"
@@ -298,7 +398,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/widget_muted"
-                android:textSize="11.5sp" />
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -307,7 +407,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:background="@drawable/widget_row_bg"
+        android:background="@drawable/widget_course_bg0"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingBottom="6dp"
@@ -316,12 +416,32 @@
         android:paddingTop="6dp"
         android:visibility="gone">
 
-        <ImageView
-            android:id="@+id/sched_bar5"
-            android:layout_width="3.5dp"
-            android:layout_height="28dp"
+        <LinearLayout
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
             android:importantForAccessibility="no"
-            android:src="@drawable/widget_bar_bg" />
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/sched_time5"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/widget_text"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/sched_end5"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
+                android:textColor="@color/widget_muted"
+                android:textSize="10sp" />
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="0dp"
@@ -347,7 +467,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/widget_muted"
-                android:textSize="11.5sp" />
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 

@@ -3,7 +3,6 @@
     android:id="@+id/parcel_item_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/widget_row_bg"
     android:gravity="center_vertical"
     android:minHeight="52dp"
     android:orientation="horizontal"
@@ -29,13 +28,9 @@
                 android:id="@+id/parcel_item_code"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:background="@drawable/widget_pill_bg"
+                android:fontFeatureSettings="tnum"
                 android:maxLines="1"
-                android:paddingBottom="2dp"
-                android:paddingEnd="8dp"
-                android:paddingStart="8dp"
-                android:paddingTop="2dp"
-                android:textColor="@color/widget_pill_fg"
+                android:textColor="@color/widget_accent"
                 android:textSize="15sp"
                 android:textStyle="bold" />
 

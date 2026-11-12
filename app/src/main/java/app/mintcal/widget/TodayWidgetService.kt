@@ -51,12 +51,24 @@ class TodayWidgetService : RemoteViewsService() {
             r: TodayWidgetProvider.Row,
         ): RemoteViews {
             val v = RemoteViews(ctx.packageName, R.layout.widget_today_item)
-            v.setInt(
-                R.id.today_item_root,
-                "setBackgroundResource",
-                if (r.ongoing) R.drawable.widget_row_now_bg else R.drawable.widget_row_bg,
-            )
-            v.setInt(R.id.today_item_bar, "setColorFilter", r.barColor)
+            if (r.taskId != null) {
+                // 宣纸行规则：待办行无框直落宣纸底（与 App TaskRow / web .task 一致）
+                v.setInt(R.id.today_item_root, "setBackgroundResource", 0)
+                v.setTextColor(R.id.today_item_time, ctx.getColor(R.color.widget_muted))
+                v.setTextColor(R.id.today_item_title, ctx.getColor(R.color.widget_text))
+                v.setTextColor(R.id.today_item_sub, ctx.getColor(R.color.widget_muted))
+            } else {
+                // 时间块穿植物色软彩底；正在进行的按设计改用薄荷容器高亮
+                v.setInt(
+                    R.id.today_item_root,
+                    "setBackgroundResource",
+                    if (r.ongoing) R.drawable.widget_row_now_bg else WidgetKit.courseBgRes(r.colorIndex),
+                )
+                val fg = ctx.getColor(if (r.ongoing) R.color.widget_now_fg else WidgetKit.courseFgRes(r.colorIndex))
+                v.setTextColor(R.id.today_item_time, fg)
+                v.setTextColor(R.id.today_item_title, fg)
+                v.setTextColor(R.id.today_item_sub, WidgetKit.softFg(fg))
+            }
             v.setTextViewText(R.id.today_item_time, r.time)
             if (r.code != null) {
                 v.setViewVisibility(R.id.today_item_code, View.VISIBLE)
@@ -74,7 +86,7 @@ class TodayWidgetService : RemoteViewsService() {
 
             if (r.taskId != null) {
                 v.setViewVisibility(R.id.today_item_check, View.VISIBLE)
-                v.setInt(R.id.today_item_check, "setColorFilter", r.barColor)
+                v.setInt(R.id.today_item_check, "setColorFilter", WidgetKit.priorityColor(ctx, r.priority, r.overdue))
                 v.setOnClickFillInIntent(
                     R.id.today_item_check,
                     Intent()

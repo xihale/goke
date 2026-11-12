@@ -3,7 +3,6 @@
     android:id="@+id/today_item_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/widget_row_bg"
     android:gravity="center_vertical"
     android:minHeight="42dp"
     android:orientation="horizontal"
@@ -11,13 +10,6 @@
     android:paddingEnd="8dp"
     android:paddingStart="10dp"
     android:paddingTop="5dp">
-
-    <ImageView
-        android:id="@+id/today_item_bar"
-        android:layout_width="3.5dp"
-        android:layout_height="26dp"
-        android:importantForAccessibility="no"
-        android:src="@drawable/widget_bar_bg" />
 
     <TextView
         android:id="@+id/today_item_time"

@@ -139,7 +139,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                                 badge = ctx.getString(R.string.widget_ongoing),
                                 sub = listOfNotNull("${o.start.hm()}–${o.end.hm()}", o.room.takeIf { it.isNotBlank() }).joinToString(" · "),
                                 title = o.course.name,
-                                barColor = WidgetKit.courseColor(o.course.colorIndex),
+                                barColor = WidgetKit.courseFg(ctx, o.course.colorIndex),
                                 uri = DeepLinks.timetableUri(),
                             )
                         }
@@ -174,7 +174,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                     badge = o.start.hm(),
                     sub = o.room.takeIf { it.isNotBlank() },
                     title = o.course.name,
-                    barColor = WidgetKit.courseColor(o.course.colorIndex),
+                    barColor = WidgetKit.courseFg(ctx, o.course.colorIndex),
                     uri = DeepLinks.timetableUri(),
                 )
             }
@@ -224,7 +224,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                     badge = ctx.monthDay(o.date),
                     sub = listOfNotNull(o.start.hm(), o.room.takeIf { it.isNotBlank() }).joinToString(" · "),
                     title = o.course.name,
-                    barColor = WidgetKit.courseColor(o.course.colorIndex),
+                    barColor = WidgetKit.courseFg(ctx, o.course.colorIndex),
                     uri = DeepLinks.timetableUri(),
                 )
             }
