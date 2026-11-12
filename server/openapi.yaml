@@ -208,7 +208,7 @@ components:
       required: [id, kind, data, updatedAt]
       properties:
         id: { type: string, maxLength: 64 }
-        kind: { type: string, description: "Semester / TaskList / Course / CourseException / Event / Task / FocusSession" }
+        kind: { type: string, description: "Semester / TaskList / Course / CourseException / Event / Task" }
         data: { type: object, description: 客户端的记录 JSON，服务端不解析内容 }
         updatedAt: { type: integer, format: int64, description: 毫秒时间戳，冲突时较大者胜 }
         deletedAt: { type: integer, format: int64, nullable: true, description: 非空表示已删除（墓碑） }

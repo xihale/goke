@@ -89,7 +89,6 @@ private fun entityName(
             EntityType.EVENT -> R.string.entity_event
             EntityType.TASK -> R.string.entity_task
             EntityType.LIST -> R.string.entity_list
-            EntityType.FOCUS -> R.string.entity_focus
         },
     )
 

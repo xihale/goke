@@ -295,7 +295,6 @@
     <string name="entity_event">日程</string>
     <string name="entity_task">待办</string>
     <string name="entity_list">清单</string>
-    <string name="entity_focus">专注</string>
     <string name="appearance">外观</string>
     <string name="theme_color">主题色</string>
     <string name="theme_dynamic">跟随壁纸</string>
@@ -678,33 +677,6 @@
     <string name="dur_min">%1$d 分钟</string>
     <string name="dial_hours">小时</string>
     <string name="dial_minutes">分钟</string>
-    <!-- focus / pomodoro -->
-    <string name="focus_title">专注</string>
-    <string name="focus_mode">模式</string>
-    <string name="focus_mode_countup">正计时</string>
-    <string name="focus_mode_countdown">倒计时</string>
-    <string name="focus_pick_minutes">专注时长</string>
-    <string name="focus_free">自由专注</string>
-    <string name="focus_start">开始专注</string>
-    <string name="focus_pause">暂停</string>
-    <string name="focus_resume">继续</string>
-    <string name="focus_stop">结束</string>
-    <string name="focus_running_of">共 %1$s</string>
-    <string name="focus_paused">已暂停</string>
-    <string name="focus_too_short">不足 1 分钟，未记录</string>
-    <string name="focus_history">专注记录</string>
-    <string name="focus_total_all">累计专注 %1$s</string>
-    <string name="focus_session_count">%1$d 次</string>
-    <string name="focus_task_deleted">已删除的任务</string>
-    <string name="focus_empty">还没有专注记录</string>
-    <string name="focus_done_title">专注完成</string>
-    <string name="focus_done_text_task">「%1$s」专注了 %2$d 分钟</string>
-    <string name="focus_done_text_free">本次专注了 %1$d 分钟</string>
-    <string name="focus_session_desc">专注 · %1$s</string>
-    <string name="focus_session_done_desc">完成专注 %1$s</string>
-    <string name="focus_editor_section">专注</string>
-    <string name="focus_editor_start">开始专注</string>
-    <string name="focus_editor_more">查看全部</string>
     <string name="confirm">确定</string>
     <!-- a11y -->
     <string name="a11y_prev_month">上个月</string>
@@ -723,8 +695,8 @@
     <string name="widget_parcel_empty">(〃\'▽\'〃) 暂无待取快递</string>
     <string name="widget_parcel_station">快递驿站</string>
     <string name="widget_next_name">下一件事</string>
-    <string name="widget_next_desc">紧凑展示下一节课、日程或待办，一键开启专注或新建。</string>
-    <string name="widget_next_empty">当前空闲，开启一段专注吧</string>
+    <string name="widget_next_desc">紧凑展示下一节课、日程或待办，一键新建。</string>
+    <string name="widget_next_empty">当前空闲</string>
     <string name="widget_next_label">接下来</string>
     <string name="widget_ongoing">进行中</string>
     <!-- 系统日历双向同步 -->

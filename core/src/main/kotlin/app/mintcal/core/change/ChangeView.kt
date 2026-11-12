@@ -4,7 +4,6 @@ import app.mintcal.core.model.Course
 import app.mintcal.core.model.CourseException
 import app.mintcal.core.model.EntityType
 import app.mintcal.core.model.Event
-import app.mintcal.core.model.FocusSession
 import app.mintcal.core.model.Record
 import app.mintcal.core.model.Semester
 import app.mintcal.core.model.Task
@@ -131,11 +130,6 @@ object ChangeViews {
 
             is CourseException -> {
                 listOf(FieldKey.WEEKS to r.week.toString(), FieldKey.NAME to r.type.name)
-            }
-
-            // 专注会话：标题已含时长摘要，不再展开字段
-            is FocusSession -> {
-                emptyList()
             }
         }
 }

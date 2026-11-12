@@ -63,7 +63,6 @@ object SyncPlanner {
             s.events.isEmpty() &&
             s.tasks.isEmpty() &&
             s.lists.isEmpty() &&
-            s.focusSessions.isEmpty() &&
             s.semesters.size <= 1
     }
 }

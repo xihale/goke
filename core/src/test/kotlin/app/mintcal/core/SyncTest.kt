@@ -1,8 +1,6 @@
 package app.mintcal.core
 
 import app.mintcal.core.model.Course
-import app.mintcal.core.model.FocusSession
-import app.mintcal.core.model.Record
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Task
 import app.mintcal.core.sync.SyncCodec
@@ -10,7 +8,6 @@ import app.mintcal.core.sync.SyncPlanner
 import app.mintcal.core.sync.WireRecord
 import app.mintcal.core.util.MintJson
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -31,27 +28,13 @@ class SyncTest {
 
     @Test fun `wire record round trip keeps every record kind`() {
         val task = Task("t1", "交作业").withMeta(5, null)
-        val focus = FocusSession("f1", "t1", 1000, 61_000, pausedMillis = 1000, plannedMinutes = 1).withMeta(6, null)
-        for (r in listOf(sem, a, task, focus)) {
+        for (r in listOf(sem, a, task)) {
             val w = SyncCodec.encode(r)
             assertEquals(r::class.simpleName, w.kind)
             val text = MintJson.encodeToString(WireRecord.serializer(), w)
             val back = SyncCodec.decode(MintJson.decodeFromString(WireRecord.serializer(), text))
             assertEquals(r, back)
         }
-        assertEquals(
-            "focusSession",
-            MintJson
-                .encodeToJsonElement(Record.serializer(), focus)
-                .jsonObject["_t"]!!
-                .jsonPrimitive.content,
-        )
-    }
-
-    @Test fun `pristine ignores focus sessions only when none exist`() {
-        val focus = FocusSession("f1", null, 1000, 61_000).withMeta(6, null)
-        assertFalse(SyncPlanner.isPristine(snap.put(focus)))
-        assertTrue(SyncPlanner.isPristine(Snapshot(semesters = listOf(sem))))
     }
 
     @Test fun `tombstone keeps deletedAt on the wire`() {

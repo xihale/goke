@@ -12,7 +12,6 @@ import app.mintcal.data.ParcelRuleStore
 import app.mintcal.data.Repository
 import app.mintcal.data.SecretStore
 import app.mintcal.data.SettingsStore
-import app.mintcal.focus.FocusController
 import app.mintcal.jxfw.JxfwManager
 import app.mintcal.notify.Notifications
 import app.mintcal.notify.ReminderScheduler
@@ -57,10 +56,6 @@ open class MintCalApp : Application() {
     lateinit var jxfw: JxfwManager
         private set
 
-    /** 专注计时：运行状态存 SharedPreferences，倒计时到点由 [app.mintcal.focus.FocusReceiver] 补记。 */
-    lateinit var focus: FocusController
-        private set
-
     /** 外部入口（通知 / 小组件 / 快捷方式 / 分享）待处理的动作，由根组合消费后清空。 */
     val links = MutableStateFlow<DeepLink?>(null)
 
@@ -80,7 +75,6 @@ open class MintCalApp : Application() {
         sync = SyncManager(repo, SyncStore(this, secrets), scope)
         calendarSync = SystemCalendarSync(this, repo, settings, CalendarSyncStore(this), scope)
         jxfw = JxfwManager(this, repo, secrets)
-        focus = FocusController(this)
         // 通知渠道 / 桌面快捷方式都是 Binder IPC，不挡 Application 主线程的首帧
         scope.launch(Dispatchers.Default) {
             Notifications.ensureChannels(this@MintCalApp)

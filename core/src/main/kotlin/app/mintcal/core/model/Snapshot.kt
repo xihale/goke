@@ -14,23 +14,20 @@ data class Snapshot(
     val events: List<Event> = emptyList(),
     val tasks: List<Task> = emptyList(),
     val lists: List<TaskList> = emptyList(),
-    /** 必须保持在最后一个（带默认值）：历史调用点多按位置传参。 */
-    val focusSessions: List<FocusSession> = emptyList(),
 ) {
     val currentSemester: Semester?
         get() =
             semesters.firstOrNull { it.isCurrent && it.deletedAt == null }
                 ?: semesters.firstOrNull { it.deletedAt == null }
 
-    /** 无墓碑时 [live] 直接返回自身，避免每次调用都复制 7 个列表。按实例缓存（copy 后重算）。 */
+    /** 无墓碑时 [live] 直接返回自身，避免每次调用都复制 6 个列表。按实例缓存（copy 后重算）。 */
     private val hasDeleted: Boolean by lazy(LazyThreadSafetyMode.PUBLICATION) {
         semesters.any { it.deletedAt != null } ||
             courses.any { it.deletedAt != null } ||
             exceptions.any { it.deletedAt != null } ||
             events.any { it.deletedAt != null } ||
             tasks.any { it.deletedAt != null } ||
-            lists.any { it.deletedAt != null } ||
-            focusSessions.any { it.deletedAt != null }
+            lists.any { it.deletedAt != null }
     }
 
     fun live(): Snapshot =
@@ -44,11 +41,10 @@ data class Snapshot(
                 events.filter { it.deletedAt == null },
                 tasks.filter { it.deletedAt == null },
                 lists.filter { it.deletedAt == null },
-                focusSessions.filter { it.deletedAt == null },
             )
         }
 
-    fun allRecords(): List<Record> = semesters + courses + exceptions + events + tasks + lists + focusSessions
+    fun allRecords(): List<Record> = semesters + courses + exceptions + events + tasks + lists
 
     fun find(id: String): Record? = allRecords().firstOrNull { it.id == id }
 
@@ -61,7 +57,6 @@ data class Snapshot(
             is Event -> copy(events = events.upsert(r))
             is Task -> copy(tasks = tasks.upsert(r))
             is TaskList -> copy(lists = lists.upsert(r))
-            is FocusSession -> copy(focusSessions = focusSessions.upsert(r))
         }
 
     /** 物理移除（仅用于撤销「新增」）。 */
@@ -73,7 +68,6 @@ data class Snapshot(
             is Event -> copy(events = events.filterNot { it.id == r.id })
             is Task -> copy(tasks = tasks.filterNot { it.id == r.id })
             is TaskList -> copy(lists = lists.filterNot { it.id == r.id })
-            is FocusSession -> copy(focusSessions = focusSessions.filterNot { it.id == r.id })
         }
 
     private fun <T : Record> List<T>.upsert(item: T): List<T> {
@@ -83,7 +77,7 @@ data class Snapshot(
 }
 
 /** 实体类型名（用于变更集展示）。 */
-enum class EntityType { SEMESTER, COURSE, EXCEPTION, EVENT, TASK, LIST, FOCUS }
+enum class EntityType { SEMESTER, COURSE, EXCEPTION, EVENT, TASK, LIST }
 
 val Record.entityType: EntityType
     get() =
@@ -94,7 +88,6 @@ val Record.entityType: EntityType
             is Event -> EntityType.EVENT
             is Task -> EntityType.TASK
             is TaskList -> EntityType.LIST
-            is FocusSession -> EntityType.FOCUS
         }
 
 val Record.displayTitle: String
@@ -122,11 +115,5 @@ val Record.displayTitle: String
 
             is TaskList -> {
                 name
-            }
-
-            // 时长即可（历史行会再拼「专注 ·」前缀，不再重复）
-            is FocusSession -> {
-                val m = (focusMillis + 59_999) / 60_000
-                if (m >= 60) "${m / 60}小时${if (m % 60 > 0) "${m % 60}分" else ""}" else "${m}分钟"
             }
         }

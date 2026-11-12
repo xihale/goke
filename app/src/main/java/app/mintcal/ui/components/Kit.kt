@@ -334,7 +334,6 @@ private val NAV_ITEMS =
         NavItem(Tab.TIMETABLE, Icons.Rounded.CalendarViewWeek, R.string.tab_timetable),
         NavItem(Tab.CALENDAR, Icons.Rounded.CalendarMonth, R.string.tab_calendar),
         NavItem(Tab.TODO, Icons.Rounded.CheckCircle, R.string.tab_todo),
-        NavItem(Tab.FOCUS, Icons.Rounded.Timer, R.string.focus_title),
     )
 
 @Composable

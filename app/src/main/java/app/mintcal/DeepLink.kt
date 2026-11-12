@@ -25,8 +25,6 @@ sealed interface DeepLink {
 
     data object Timetable : DeepLink
 
-    data object Focus : DeepLink
-
     data object Parcel : DeepLink
 }
 
@@ -71,13 +69,6 @@ object DeepLinks {
             .authority("timetable")
             .build()
 
-    fun focusUri(): Uri =
-        Uri
-            .Builder()
-            .scheme(SCHEME)
-            .authority("focus")
-            .build()
-
     fun parcelUri(): Uri =
         Uri
             .Builder()
@@ -93,7 +84,6 @@ object DeepLinks {
             "today" -> DeepLink.Today
             "todo" -> DeepLink.Todo
             "timetable" -> DeepLink.Timetable
-            "focus" -> DeepLink.Focus
             "parcel" -> DeepLink.Parcel
             else -> null
         }
@@ -147,7 +137,6 @@ object DeepLinks {
                 listOf(
                     shortcut("add_task", R.string.shortcut_add_task, addUri()),
                     shortcut("today", R.string.shortcut_today, todayUri()),
-                    shortcut("focus", R.string.focus_title, focusUri()),
                 ),
             )
         }

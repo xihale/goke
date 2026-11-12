@@ -77,7 +77,6 @@ import app.mintcal.ui.screens.CalendarScreen
 import app.mintcal.ui.screens.CourseEditScreen
 import app.mintcal.ui.screens.DataScreen
 import app.mintcal.ui.screens.EditTimetableScreen
-import app.mintcal.ui.screens.FocusScreen
 import app.mintcal.ui.screens.HistoryScreen
 import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.JxfwScreen
@@ -211,8 +210,6 @@ class ScreensSmokeTest {
                 "timetable" to { TimetableScreen() },
                 "calendar" to { CalendarScreen() },
                 "todo" to { TodoScreen() },
-                "focus" to { FocusScreen(null, {}) },
-                "focus_tab" to { FocusScreen(null, {}, inTab = true) },
                 "course_edit" to { CourseEditScreen(first.id) {} },
                 "course_new" to { CourseEditScreen(null) {} },
                 "task_edit" to { TodoEditScreen(task.id) {} },

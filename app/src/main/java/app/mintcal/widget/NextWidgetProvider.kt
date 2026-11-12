@@ -234,7 +234,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                 sub = null,
                 title = ctx.getString(R.string.widget_next_empty),
                 barColor = accent,
-                uri = DeepLinks.focusUri(),
+                uri = DeepLinks.todayUri(),
             )
         }
 
@@ -258,7 +258,6 @@ class NextWidgetProvider : AppWidgetProvider() {
 
             views.setOnClickPendingIntent(R.id.next_body, WidgetKit.mainActivityIntent(ctx, 50, s.uri))
             views.setOnClickPendingIntent(R.id.widget_root, WidgetKit.mainActivityIntent(ctx, 50, s.uri))
-            views.setOnClickPendingIntent(R.id.next_focus, WidgetKit.mainActivityIntent(ctx, 51, DeepLinks.focusUri()))
             views.setOnClickPendingIntent(R.id.next_add, WidgetKit.mainActivityIntent(ctx, 52, DeepLinks.addUri()))
             return views
         }
