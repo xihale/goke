@@ -743,4 +743,19 @@
     <string name="reliability_vendor_vivo">vivo / OriginOS 后台保护</string>
     <string name="reliability_vendor_vivo_desc">1. 应用耗电管理 → 选「后台高耗电允许」；\n2. 权限管理 → 开启「自启动」；\n3. 最近任务下滑锁定卡片。</string>
     <string name="reliability_vendor_all_toggle">查看其他系统设置说明</string>
+    <string name="remind_hours_value">提前 %1$d 小时</string>
+    <string name="remind_follow_default">跟随默认（%1$s）</string>
+    <string name="course_info_section">课程信息</string>
+    <string name="course_period_range_hint">再点一节设为结束节次</string>
+    <string name="periods_morning">上午</string>
+    <string name="periods_afternoon">下午</string>
+    <string name="periods_evening">晚上</string>
+    <string name="periods_custom_desc">自定义 · 共 %1$d 节</string>
+    <string name="semester_schedule_label">作息与节次</string>
+    <string name="semester_schedule_value">%1$s · %2$d 节</string>
+    <string name="semester_schedule_custom">自定义</string>
+    <string name="import_timetable_file">导入课表文件</string>
+    <string name="import_timetable_file_desc">支持 Excel (.xlsx) 与 WakeUp / ICS 日历</string>
+    <string name="advanced_open_editor">编写或编辑脚本</string>
+    <string name="advanced_code_placeholder">// mc.courses.query(...)</string>
 </resources>

@@ -54,6 +54,7 @@ import androidx.compose.material.icons.rounded.CalendarViewWeek
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -1324,16 +1325,36 @@ private fun CourseSheet(
     val c = o.course
     val cal = remember(sem) { SemesterCalendar(sem) }
     var reschedule by remember { mutableStateOf(false) }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
-        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(c.name, style = MaterialTheme.typography.titleLarge)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    ) {
+        Column(
+            Modifier
+                .padding(horizontal = 20.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .width(4.dp)
+                        .height(22.dp)
+                        .clip(CircleShape)
+                        .background(MintTheme.colors.fg(c.colorIndex)),
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(c.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+            }
             Text(
                 "${ctx.weekdayShort(o.date.dayOfWeek.value).let { stringResource(R.string.weekday_prefix, it) }} ${cal.startTime(o.startPeriod)?.hm().orEmpty()}–${cal.endTime(o.endPeriod)?.hm().orEmpty()} · ${stringResource(R.string.periods_range, o.startPeriod, o.endPeriod)}",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 14.dp, bottom = 8.dp),
             )
             if (o.room.isNotBlank()) {
-                Hairline()
                 val fullRoom =
                     o.room
                         .split(Regex("[,，/\\s]+"))
@@ -1346,37 +1367,64 @@ private fun CourseSheet(
                 })
             }
             if (c.teacher.isNotBlank()) {
-                Hairline()
                 ValueRow(stringResource(R.string.label_teacher), c.teacher, onClick = {
                     onDismiss()
                     nav.push(Route.CourseEdit(c.id))
                 })
             }
-            Hairline()
             ValueRow(stringResource(R.string.week_label), WeekSets.format(c.weeks), onClick = {
                 onDismiss()
                 nav.push(Route.CourseEdit(c.id))
             })
             if (c.note.isNotBlank()) {
-                Hairline()
-                Text(c.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    c.note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                )
             }
-            Spacer(Modifier.height(8.dp))
             if (cell.kind == CellKind.NORMAL) {
+                Spacer(Modifier.height(10.dp))
                 // 小屏放不下三个按钮就换行，主次不变：编辑 > 停课 > 调课
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        onDismiss()
-                        nav.push(Route.CourseEdit(c.id))
-                    }) { Text(stringResource(R.string.edit)) }
-                    FilledTonalButton(onClick = {
-                        val ex = CourseException(Ids.next(), c.id, origWeek(snap, c, o.date, cal), ExceptionType.CANCEL)
-                        val old = snap.exceptions.firstOrNull { it.courseId == c.id && it.week == ex.week }
-                        val cs = Edits.save(snap, if (old != null) ex.copy(id = old.id) else ex, ctx.getString(R.string.cancel_class_desc, c.name), System.currentTimeMillis())
-                        actions.commit(cs, ctx.getString(R.string.cancel_class_toast, c.name))
-                        onDismiss()
-                    }) { Text(stringResource(R.string.cancel_class_this_week)) }
-                    OutlinedButton(onClick = { reschedule = true }) { Text(stringResource(R.string.reschedule)) }
+                val secondaryColors =
+                    ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = {
+                            onDismiss()
+                            nav.push(Route.CourseEdit(c.id))
+                        },
+                        modifier = Modifier.heightIn(min = 44.dp),
+                    ) { Text(stringResource(R.string.edit)) }
+                    FilledTonalButton(
+                        onClick = {
+                            val ex = CourseException(Ids.next(), c.id, origWeek(snap, c, o.date, cal), ExceptionType.CANCEL)
+                            val old = snap.exceptions.firstOrNull { it.courseId == c.id && it.week == ex.week }
+                            val cs = Edits.save(snap, if (old != null) ex.copy(id = old.id) else ex, ctx.getString(R.string.cancel_class_desc, c.name), System.currentTimeMillis())
+                            actions.commit(cs, ctx.getString(R.string.cancel_class_toast, c.name))
+                            onDismiss()
+                        },
+                        modifier = Modifier.heightIn(min = 44.dp),
+                        colors = secondaryColors,
+                    ) { Text(stringResource(R.string.cancel_class_this_week)) }
+                    FilledTonalButton(
+                        onClick = { reschedule = true },
+                        modifier = Modifier.heightIn(min = 44.dp),
+                        colors = secondaryColors,
+                    ) { Text(stringResource(R.string.reschedule)) }
                 }
                 if (o.rescheduled) {
                     TextButton(onClick = {
@@ -1430,11 +1478,16 @@ private fun RescheduleDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.reschedule_title, c.name)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Stepper(stringResource(R.string.week_label), newWeek, 1, cal.totalWeeks) { newWeek = it }
                 Stepper(stringResource(R.string.weekday_label), dow, 1, 7, display = { ctx.weekdayFull(it) }) { dow = it }
                 Stepper(stringResource(R.string.start_period), start, 1, (cal.periods.size - len).coerceAtLeast(1)) { start = it }
-                FieldText(stringResource(R.string.label_room), room, { room = it })
+                Spacer(Modifier.height(4.dp))
+                app.mintcal.ui.components.TonalField(
+                    label = stringResource(R.string.label_room),
+                    value = room,
+                    onChange = { room = it },
+                )
             }
         },
         confirmButton = {
@@ -1462,12 +1515,23 @@ fun Stepper(
     val haptics = LocalHapticFeedback.current
     val slideSpec = MintTheme.spec<IntOffset>()
     val fadeSpec = MintTheme.spec<Float>()
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        TextButton(onClick = {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        StepperCircleButton("−", enabled = value > min) {
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             onChange(value - 1)
-        }, enabled = value > min) { Text("−") }
+        }
         AnimatedContent(
             value,
             transitionSpec = {
@@ -1477,11 +1541,53 @@ fun Stepper(
             },
             label = "stepper",
         ) { v ->
-            Text(display(v), Modifier.defaultMinSize(minWidth = 48.dp), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+            Text(
+                display(v),
+                Modifier.defaultMinSize(minWidth = 44.dp),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
+                fontWeight = FontWeight.SemiBold,
+            )
         }
-        TextButton(onClick = {
+        StepperCircleButton("+", enabled = value < max) {
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             onChange(value + 1)
-        }, enabled = value < max) { Text("+") }
+        }
+    }
+}
+
+@Composable
+private fun StepperCircleButton(
+    symbol: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        Modifier
+            .size(44.dp)
+            .then(
+                if (enabled) {
+                    Modifier.mintClickable(pressedScale = 0.92f, onClick = onClick)
+                } else {
+                    Modifier.alpha(0.35f)
+                },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(scheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                symbol,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium,
+                color = scheme.onSurface,
+            )
+        }
     }
 }

@@ -425,7 +425,7 @@ internal fun remindLabel(m: Int?): String =
         2880 -> stringResource(R.string.remind_2d)
         4320 -> stringResource(R.string.remind_3d)
         10080 -> stringResource(R.string.remind_1w)
-        else -> if (m % 60 == 0) stringResource(R.string.dur_h, m / 60) else stringResource(R.string.minutes_n, m)
+        else -> if (m % 60 == 0) stringResource(R.string.remind_hours_value, m / 60) else stringResource(R.string.remind_minutes_value, m)
     }
 
 @Composable
@@ -526,22 +526,25 @@ internal fun RemindPickDialog(
     hasTime: Boolean,
     initialPersistent: Boolean,
     onDismiss: () -> Unit,
+    noneLabel: String = stringResource(R.string.none),
+    showPersistent: Boolean = true,
     onPick: (Int?, Boolean) -> Unit,
 ) {
     val presets: List<Pair<Int?, String>> =
         if (hasTime) {
             listOf(
-                null to stringResource(R.string.none),
+                null to noneLabel,
                 0 to stringResource(R.string.remind_at_due),
                 5 to stringResource(R.string.remind_5m),
                 10 to stringResource(R.string.remind_10m),
+                15 to stringResource(R.string.remind_15m),
                 30 to stringResource(R.string.remind_30m),
                 60 to stringResource(R.string.remind_1h),
                 1440 to stringResource(R.string.remind_1d),
             )
         } else {
             listOf(
-                null to stringResource(R.string.none),
+                null to noneLabel,
                 0 to stringResource(R.string.remind_same_day),
                 1440 to stringResource(R.string.remind_before_days, 1),
                 2880 to stringResource(R.string.remind_before_days, 2),
@@ -566,20 +569,19 @@ internal fun RemindPickDialog(
                     }
                     Text(stringResource(R.string.detail_editor_remind_custom), style = MaterialTheme.typography.titleMedium)
                 }
-                OutlinedTextField(
+                app.mintcal.ui.components.TonalField(
+                    label = stringResource(R.string.detail_editor_remind_minutes),
                     value = customText,
-                    onValueChange = { customText = it.filter { ch -> ch.isDigit() }.take(5) },
-                    label = { Text(stringResource(R.string.detail_editor_remind_minutes)) },
-                    singleLine = true,
+                    onChange = { customText = it.filter { ch -> ch.isDigit() }.take(5) },
+                    number = true,
                     isError = customText.isNotEmpty() && !customValid,
-                    supportingText =
+                    supporting =
                         if (customText.isNotEmpty() && !customValid) {
-                            { Text(stringResource(R.string.detail_minutes_invalid, 0, 10080)) }
+                            stringResource(R.string.detail_minutes_invalid, 0, 10080)
                         } else {
-                            null
+                            stringResource(R.string.detail_remind_zero_hint)
                         },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
                 )
             } else {
                 Text(
@@ -596,23 +598,25 @@ internal fun RemindPickDialog(
                 }
             }
             val chosen = if (sel == -1) customValue.takeIf { customValid } else sel
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                    Text(stringResource(R.string.remind_persistent), style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        stringResource(R.string.remind_persistent_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            if (showPersistent) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(stringResource(R.string.remind_persistent), style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            stringResource(R.string.remind_persistent_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = nag && chosen != null,
+                        onCheckedChange = { nag = it },
+                        enabled = chosen != null,
                     )
                 }
-                Switch(
-                    checked = nag && chosen != null,
-                    onCheckedChange = { nag = it },
-                    enabled = chosen != null,
-                )
             }
             Row(Modifier.fillMaxWidth().padding(end = 4.dp), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onDismiss) {

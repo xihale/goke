@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
@@ -94,6 +95,7 @@ import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.formatRooms
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
+import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.weekdayShort
 import java.time.LocalDateTime
@@ -122,8 +124,8 @@ private fun clockRange(
 }
 
 /**
- * 课程编辑：三段式结构化表单（课程身份 → 上课时段 → 教师 / 提醒 / 备注 / 关联待办）。
- * 一门课的多条排课记录（同名称）合在这里，每个时段各自带教室；返回即整体保存为一个变更集。
+ * 课程编辑：三段式结构化表单（课程身份 → 上课时段与提醒 → 课程信息与关联待办）。
+ * 顶栏隐去重复标题，让正文首行大字课程名成为唯一视觉焦点；返回即整体保存为一个变更集。
  */
 @Composable
 fun CourseEditScreen(
@@ -136,6 +138,7 @@ fun CourseEditScreen(
     val actions = LocalActions.current
     val nav = LocalNav.current
     val snap = liveSnapshot()
+    val settings = settingsState()
     val sem = snap.currentSemester
     if (sem == null) {
         LaunchedEffect(Unit) { onBack() }
@@ -320,8 +323,14 @@ fun CourseEditScreen(
     }
     BackHandler { requestBack() }
 
+    val defaultRemindSummary =
+        stringResource(
+            R.string.remind_follow_default,
+            if (settings.remindCourse) remindLabel(settings.courseRemindMinutes) else stringResource(R.string.none),
+        )
+
     MintScreen(
-        title = origin?.name ?: stringResource(R.string.new_course),
+        title = "",
         onBack = { requestBack() },
         actions = {
             if (origin == null) {
@@ -352,7 +361,7 @@ fun CourseEditScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
         ) {
-            // ── 第一段：课程身份与植物色 ──
+            // ── 第一段：课程身份与植物色（无边框纸面标题，对齐待办详情） ──
             val nameHint = stringResource(R.string.course_name_placeholder)
             BasicTextField(
                 value = name,
@@ -360,11 +369,15 @@ fun CourseEditScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 56.dp)
+                        .heightIn(min = 48.dp)
                         .focusRequester(nameFocus)
                         .semantics { contentDescription = nameHint }
-                        .padding(vertical = 10.dp),
-                textStyle = MaterialTheme.typography.headlineMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                        .padding(top = 4.dp, bottom = 8.dp),
+                textStyle =
+                    MaterialTheme.typography.headlineMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 decorationBox = { innerTextField ->
                     Box {
@@ -373,7 +386,7 @@ fun CourseEditScreen(
                                 nameHint,
                                 modifier = Modifier.clearAndSetSemantics {},
                                 style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                             )
                         }
                         innerTextField()
@@ -382,8 +395,12 @@ fun CourseEditScreen(
             )
             ColorPicker(color) { color = it }
 
-            // ── 第二段：上课时段 ──
-            SectionLabel(stringResource(R.string.course_slots_section), modifier = Modifier.padding(top = 12.dp))
+            // ── 第二段：上课时段与提醒 ──
+            SectionLabel(
+                stringResource(R.string.course_slots_section),
+                trailing = if (slots.size > 1) ctx.getString(R.string.courses_slots_count, slots.size) else null,
+                modifier = Modifier.padding(top = 14.dp),
+            )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val deletable = slots.size > 1
                 slots.forEach { s ->
@@ -395,24 +412,23 @@ fun CourseEditScreen(
                         onDelete = if (deletable) ({ slots = slots.filterNot { it.id == s.id } }) else null,
                     )
                 }
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f))
-                        .mintClickable(pressedScale = 0.98f) { addSlot() }
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        stringResource(R.string.course_add_slot),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
+            }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .mintClickable(pressedScale = 0.98f) { addSlot() }
+                    .padding(horizontal = 4.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.course_add_slot),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
 
             AnimatedVisibility(
@@ -420,7 +436,7 @@ fun CourseEditScreen(
                 enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
                 exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
             ) {
-                ConflictCard(title = stringResource(R.string.conflict_title), modifier = Modifier.padding(top = 8.dp)) {
+                ConflictCard(title = stringResource(R.string.conflict_title), modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)) {
                     preview.orEmpty().take(4).forEach {
                         Text(
                             stringResource(R.string.conflict_line, it.aTitle, it.bTitle, it.start.toLocalDate().toString()),
@@ -430,21 +446,23 @@ fun CourseEditScreen(
                 }
             }
 
-            // ── 第三段：教师、提醒、备注与关联待办 ──
-            Spacer(Modifier.height(16.dp))
+            val remind = slots.firstOrNull()?.remindMinutes
+            ValueRow(
+                label = stringResource(R.string.remind_courses),
+                value = if (remind == null) defaultRemindSummary else remindLabel(remind),
+                onClick = { remindDlg = true },
+                valueColor = if (remind != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            // ── 第三段：课程信息与关联待办 ──
+            SectionLabel(stringResource(R.string.course_info_section), modifier = Modifier.padding(top = 12.dp))
             TonalField(
                 label = stringResource(R.string.label_teacher),
                 value = teacher,
                 onChange = { teacher = it },
                 placeholder = stringResource(R.string.course_teacher_placeholder),
             )
-            val remind = slots.firstOrNull()?.remindMinutes
-            ValueRow(
-                label = stringResource(R.string.label_remind),
-                value = remindLabel(remind),
-                onClick = { remindDlg = true },
-                valueColor = if (remind != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Spacer(Modifier.height(4.dp))
             TonalField(
                 label = stringResource(R.string.label_note),
                 value = note,
@@ -460,22 +478,18 @@ fun CourseEditScreen(
                         t.deletedAt == null && t.parentId == null && !t.done && t.courseId != null &&
                             (t.courseId == origin.id || snap.courses.firstOrNull { it.id == t.courseId }?.name == origin.name)
                     }
-                SectionLabel(stringResource(R.string.course_todos), modifier = Modifier.padding(top = 12.dp))
-                if (related.isEmpty()) {
-                    Text(
-                        stringResource(R.string.course_todos_empty),
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                related.forEach { t -> TodoLine(t, snap, LocalDateTime.now(), Modifier.padding(vertical = 3.dp)) }
+                SectionLabel(
+                    stringResource(R.string.course_todos),
+                    trailing = related.size.takeIf { it > 0 }?.toString(),
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+                related.forEach { t -> TodoLine(t, snap, LocalDateTime.now(), Modifier.padding(vertical = 2.dp)) }
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
                         .mintClickable(pressedScale = 0.98f) { nav.push(Route.TodoEdit(courseId = origin.id)) }
-                        .padding(vertical = 12.dp),
+                        .padding(horizontal = 4.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
@@ -483,6 +497,7 @@ fun CourseEditScreen(
                     Text(
                         stringResource(R.string.course_todos_add),
                         style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
@@ -512,6 +527,8 @@ fun CourseEditScreen(
             hasTime = true,
             initialPersistent = false,
             onDismiss = { remindDlg = false },
+            noneLabel = defaultRemindSummary,
+            showPersistent = false,
         ) { minutes, _ ->
             slots = slots.map { it.copy(remindMinutes = minutes) }
             remindDlg = false
@@ -551,7 +568,7 @@ fun CourseEditScreen(
     }
 }
 
-/** 一条时段：色条 + 「周X 第A–B节 · 第N周」+ 钟点 / 教室；点开编辑，右侧可整条删除。 */
+/** 一条时段：植物色竖条 + 「周X 第A–B节 · 第N周」+ 等宽钟点 / 教室；单条带右箭头，多条带删除键。 */
 @Composable
 private fun SlotRow(
     slot: SlotDraft,
@@ -566,8 +583,8 @@ private fun SlotRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MintTheme.card)
+            .clip(RoundedCornerShape(14.dp))
+            .background(scheme.surfaceContainerHighest.copy(alpha = 0.65f))
             .mintClickable(pressedScale = 0.98f, onClick = onOpen)
             .padding(start = 12.dp, end = if (onDelete != null) 2.dp else 12.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -589,7 +606,8 @@ private fun SlotRow(
                     slot.endPeriod,
                     WeekSets.format(slot.weeks),
                 ),
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
+                fontWeight = FontWeight.Medium,
                 color = scheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -603,10 +621,11 @@ private fun SlotRow(
             if (sub.isNotEmpty()) {
                 Text(
                     sub,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
                     color = scheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 1.dp),
                 )
             }
         }
@@ -619,14 +638,23 @@ private fun SlotRow(
                     modifier = Modifier.size(18.dp),
                 )
             }
+        } else {
+            Icon(
+                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                null,
+                tint = scheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }
 
-/** 时段编辑：星期、节次区间、教室、周次（预设 + 周号网格）。改动即时回写。 */
+/**
+ * 时段编辑抽屉：星期胶囊 → 单一 6×2 节次区间网格（一点起点、二点终点）→ 教室 → 5×4 周次网格。
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SlotEditorSheet(
+internal fun SlotEditorSheet(
     periods: List<PeriodTime>,
     totalWeeks: Int,
     slot: SlotDraft,
@@ -637,6 +665,7 @@ private fun SlotEditorSheet(
     val scheme = MaterialTheme.colorScheme
     val n = periods.size
     val clock = clockRange(periods, slot.startPeriod, slot.endPeriod)
+    var rangeAnchor by remember { mutableStateOf<Int?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -664,13 +693,13 @@ private fun SlotEditorSheet(
                 color = scheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 2.dp, top = 12.dp, bottom = 6.dp),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (d in 1..7) {
                     val on = slot.dayOfWeek == d
                     Box(
                         Modifier
                             .weight(1f)
-                            .height(48.dp)
+                            .height(42.dp)
                             .clip(CircleShape)
                             .background(if (on) scheme.primaryContainer else scheme.surfaceContainerHighest)
                             .mintClickable(pressedScale = 0.96f, role = Role.RadioButton, selected = on) {
@@ -688,50 +717,86 @@ private fun SlotEditorSheet(
                 }
             }
 
-            // 节次区间
-            Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            // 节次区间：单网格连选（第 1 下定单节/起点，第 2 下拉成区间）
+            val periodSpanText =
+                if (slot.startPeriod == slot.endPeriod) {
+                    stringResource(R.string.period_n, slot.startPeriod)
+                } else {
+                    stringResource(R.string.periods_range, slot.startPeriod, slot.endPeriod)
+                }
+            val periodSummary = listOfNotNull(periodSpanText, clock.takeIf { it.isNotEmpty() }).joinToString(" · ")
+            Row(Modifier.padding(top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     stringResource(R.string.field_periods),
                     style = MaterialTheme.typography.labelMedium,
                     color = scheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).padding(start = 2.dp),
                 )
-                if (clock.isNotEmpty()) {
-                    Text(
-                        clock,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = scheme.primary,
-                        modifier = Modifier.padding(end = 2.dp),
-                    )
-                }
+                Text(
+                    if (rangeAnchor != null) stringResource(R.string.course_period_range_hint) else periodSummary,
+                    style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                    color = scheme.primary,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(end = 2.dp),
+                )
             }
-            Text(
-                stringResource(R.string.start_period),
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 2.dp, top = 6.dp, bottom = 4.dp),
-            )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (p in 1..n) {
-                    PeriodChip("$p", p == slot.startPeriod) {
-                        onChange(slot.copy(startPeriod = p, endPeriod = slot.endPeriod.coerceAtLeast(p)))
+            val pCols = 6
+            val pRows = (n + pCols - 1) / pCols
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (r in 0 until pRows) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (c in 0 until pCols) {
+                            val p = r * pCols + c + 1
+                            if (p <= n) {
+                                val inRange = p in slot.startPeriod..slot.endPeriod
+                                val isEndpoint = p == slot.startPeriod || p == slot.endPeriod
+                                val bg =
+                                    when {
+                                        isEndpoint -> scheme.primary
+                                        inRange -> scheme.primaryContainer
+                                        else -> scheme.surfaceContainerHighest
+                                    }
+                                val fg =
+                                    when {
+                                        isEndpoint -> scheme.onPrimary
+                                        inRange -> scheme.onPrimaryContainer
+                                        else -> scheme.onSurfaceVariant
+                                    }
+                                Box(
+                                    Modifier
+                                        .weight(1f)
+                                        .height(42.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(bg)
+                                        .mintClickable(pressedScale = 0.96f, role = Role.Button, selected = inRange) {
+                                            val anchor = rangeAnchor
+                                            if (anchor == null) {
+                                                rangeAnchor = p
+                                                onChange(slot.copy(startPeriod = p, endPeriod = p))
+                                            } else {
+                                                rangeAnchor = null
+                                                onChange(slot.copy(startPeriod = minOf(anchor, p), endPeriod = maxOf(anchor, p)))
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        "$p",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                                        color = fg,
+                                        fontWeight = if (inRange) FontWeight.SemiBold else FontWeight.Normal,
+                                    )
+                                }
+                            } else {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
                     }
-                }
-            }
-            Text(
-                stringResource(R.string.course_end_period),
-                style = MaterialTheme.typography.labelSmall,
-                color = scheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 2.dp, top = 10.dp, bottom = 4.dp),
-            )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (p in slot.startPeriod..n) {
-                    PeriodChip("$p", p == slot.endPeriod) { onChange(slot.copy(endPeriod = p)) }
                 }
             }
 
             // 教室
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             TonalField(
                 label = stringResource(R.string.label_room),
                 value = slot.room,
@@ -739,13 +804,24 @@ private fun SlotEditorSheet(
                 placeholder = stringResource(R.string.course_slot_room_hint),
             )
 
-            // 周次
-            Text(
-                stringResource(R.string.week_label),
-                style = MaterialTheme.typography.labelMedium,
-                color = scheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 2.dp, top = 10.dp, bottom = 6.dp),
-            )
+            // 周次（5 列矩阵：20 周正好 4×5 满行对齐）
+            Row(Modifier.padding(top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.week_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f).padding(start = 2.dp),
+                )
+                if (slot.weeks.isNotEmpty()) {
+                    Text(
+                        stringResource(R.string.weeks_value, WeekSets.format(slot.weeks)),
+                        style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                        color = scheme.primary,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(end = 2.dp),
+                    )
+                }
+            }
             ChipChoice(
                 options =
                     listOf(
@@ -757,8 +833,8 @@ private fun SlotEditorSheet(
                 selected = slot.weeks,
                 onSelect = { onChange(slot.copy(weeks = it)) },
             )
-            Spacer(Modifier.height(10.dp))
-            val cols = 6
+            Spacer(Modifier.height(8.dp))
+            val cols = 5
             val rows = (totalWeeks + cols - 1) / cols
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (r in 0 until rows) {
@@ -770,7 +846,7 @@ private fun SlotEditorSheet(
                                 Box(
                                     Modifier
                                         .weight(1f)
-                                        .heightIn(min = 48.dp)
+                                        .height(40.dp)
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(if (on) scheme.primaryContainer else scheme.surfaceContainerHighest)
                                         .mintClickable(pressedScale = 0.96f, role = Role.Checkbox, selected = on) {
@@ -780,7 +856,7 @@ private fun SlotEditorSheet(
                                 ) {
                                     Text(
                                         "$w",
-                                        style = MaterialTheme.typography.labelMedium,
+                                        style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
                                         color = if (on) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
                                         fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
                                     )
@@ -802,32 +878,6 @@ private fun SlotEditorSheet(
                 Text(stringResource(R.string.ok))
             }
         }
-    }
-}
-
-@Composable
-private fun PeriodChip(
-    label: String,
-    on: Boolean,
-    onClick: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Box(
-        Modifier
-            .heightIn(min = 48.dp)
-            .widthIn(min = 48.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (on) scheme.primaryContainer else scheme.surfaceContainerHighest)
-            .mintClickable(pressedScale = 0.96f, role = Role.RadioButton, selected = on, onClick = onClick)
-            .padding(horizontal = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (on) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
-            fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-        )
     }
 }
 

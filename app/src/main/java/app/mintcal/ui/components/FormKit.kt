@@ -234,12 +234,14 @@ fun <T> SegmentedPill(
     modifier: Modifier = Modifier,
 ) {
     if (options.isEmpty()) return
-    val selectedIndex = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
+    val rawIndex = options.indexOfFirst { it.first == selected }
+    val selectedIndex = rawIndex.coerceAtLeast(0)
+    val thumbAlpha by animateFloatAsState(if (rawIndex >= 0) 1f else 0f, MintTheme.spec(), label = "seg-thumb-alpha")
     val haptics = LocalHapticFeedback.current
     val travel = remember { Animatable(selectedIndex.toFloat()) }
     val spec = MintTheme.spec<Float>()
-    LaunchedEffect(selectedIndex) {
-        travel.animateTo(selectedIndex.toFloat(), spec)
+    LaunchedEffect(rawIndex) {
+        if (rawIndex >= 0) travel.animateTo(rawIndex.toFloat(), spec)
     }
     val scheme = MaterialTheme.colorScheme
     val dark = scheme.background.luminance() < 0.5f
@@ -253,17 +255,19 @@ fun <T> SegmentedPill(
             .background(track),
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            val inset = 3.dp.toPx()
-            val slot = size.width / options.size
-            val w = (slot - inset * 2).coerceAtLeast(0f)
-            val h = (size.height - inset * 2).coerceAtLeast(0f)
-            val left = travel.value * slot + inset
-            drawRoundRect(
-                color = thumb,
-                topLeft = Offset(left, inset),
-                size = Size(w, h),
-                cornerRadius = CornerRadius(h / 2f, h / 2f),
-            )
+            if (thumbAlpha > 0.01f) {
+                val inset = 3.dp.toPx()
+                val slot = size.width / options.size
+                val w = (slot - inset * 2).coerceAtLeast(0f)
+                val h = (size.height - inset * 2).coerceAtLeast(0f)
+                val left = travel.value * slot + inset
+                drawRoundRect(
+                    color = thumb.copy(alpha = thumbAlpha),
+                    topLeft = Offset(left, inset),
+                    size = Size(w, h),
+                    cornerRadius = CornerRadius(h / 2f, h / 2f),
+                )
+            }
         }
         Row(Modifier.fillMaxSize()) {
             options.forEach { (v, label) ->
@@ -408,10 +412,12 @@ fun ValueRow(
 @Composable
 fun FormSection(
     title: String? = null,
+    trailing: String? = null,
+    trailingColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     content: @Composable () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(top = if (title != null) 16.dp else 4.dp, bottom = 4.dp)) {
-        if (title != null) SectionLabel(title)
+        if (title != null) SectionLabel(title, trailing = trailing, trailingColor = trailingColor)
         content()
     }
 }

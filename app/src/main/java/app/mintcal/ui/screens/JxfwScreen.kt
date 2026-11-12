@@ -17,10 +17,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -34,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import app.mintcal.jxfw.JxfwException
@@ -98,13 +100,17 @@ private fun LoginPanel(state: JxfwState) {
     var password by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
 
-    MintCard {
+    Column(
+        Modifier.padding(top = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         Text(
             stringResource(R.string.jxfw_login_hint),
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp),
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(2.dp))
         TonalField(
             label = stringResource(R.string.jxfw_username),
             value = user,
@@ -122,10 +128,10 @@ private fun LoginPanel(state: JxfwState) {
                 it,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 6.dp),
+                modifier = Modifier.padding(horizontal = 4.dp),
             )
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(4.dp))
         Button(
             enabled = !busy && user.isNotBlank() && password.isNotEmpty(),
             onClick = {
@@ -141,7 +147,7 @@ private fun LoginPanel(state: JxfwState) {
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp),
         ) {
             if (busy) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -163,14 +169,18 @@ private fun AccountPanel(state: JxfwState) {
     val scope = rememberCoroutineScope()
     var showLogout by remember { mutableStateOf(false) }
 
-    MintCard {
+    MintCard(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Sync, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(10.dp))
-            Text(stringResource(R.string.jxfw_account_section), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                stringResource(R.string.jxfw_account_section),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
-        Spacer(Modifier.height(10.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Spacer(Modifier.height(12.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             InfoLine(stringResource(R.string.jxfw_account), state.username.orEmpty())
             state.term?.let { InfoLine(stringResource(R.string.jxfw_term), it) }
             InfoLine(stringResource(R.string.jxfw_last_full), state.lastFullAt?.let(::stamp) ?: stringResource(R.string.jxfw_never))
@@ -203,7 +213,7 @@ private fun AccountPanel(state: JxfwState) {
                 },
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
             ) { Text(stringResource(R.string.jxfw_sync_full), maxLines = 1) }
-            OutlinedButton(
+            FilledTonalButton(
                 enabled = !state.busy,
                 onClick = {
                     scope.launch {
@@ -215,6 +225,11 @@ private fun AccountPanel(state: JxfwState) {
                     }
                 },
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                colors =
+                    ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                    ),
             ) { Text(stringResource(R.string.jxfw_sync_week), maxLines = 1) }
         }
     }
@@ -249,6 +264,11 @@ private fun InfoLine(
 ) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 16.dp))
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(start = 16.dp),
+        )
     }
 }

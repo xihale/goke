@@ -17,7 +17,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,23 +32,25 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -61,18 +63,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,7 +88,10 @@ import app.mintcal.ui.Route
 import app.mintcal.ui.Tab
 import app.mintcal.ui.components.ChangeList
 import app.mintcal.ui.components.MintScreen
+import app.mintcal.ui.components.SectionLabel
+import app.mintcal.ui.components.SegmentedPill
 import app.mintcal.ui.components.Tag
+import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.theme.MintTheme
 
@@ -129,51 +134,67 @@ fun AdvancedSheet(onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     val snap = liveSnapshot()
     val st by app.advanced.state.collectAsState()
-    val cs = st.changeSet
 
     ModalBottomSheet(onDismissRequest = onDismiss, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
         Column(
             Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp)
                 .imePadding()
                 .navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Icon(Icons.Rounded.Code, null, tint = MaterialTheme.colorScheme.primary)
-                Text(stringResource(R.string.advanced_title), Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.titleLarge)
-                Tag(stringResource(R.string.preview_then_apply), MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+                Text(
+                    stringResource(R.string.advanced_title),
+                    Modifier.weight(1f).padding(start = 8.dp),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Tag(
+                    stringResource(R.string.preview_then_apply),
+                    MaterialTheme.colorScheme.secondaryContainer,
+                    MaterialTheme.colorScheme.onSecondaryContainer,
+                )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+            // 横向胶囊贴边出血，避免右侧胶囊在容器内硬切
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            ) {
+                Spacer(Modifier.width(12.dp))
                 EXAMPLES.forEach { ex ->
                     val labelText = stringResource(ex.label)
                     Text(
                         labelText,
                         Modifier
-                            .heightIn(min = 48.dp)
+                            .heightIn(min = 44.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable {
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                            .mintClickable(pressedScale = 0.96f) {
                                 app.advanced.setCode(ex.code)
                                 app.advanced.dryRun()
                             }.semantics {
                                 role = Role.Button
                                 contentDescription = labelText
                             }.wrapContentHeight(Alignment.CenterVertically)
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
+                Spacer(Modifier.width(12.dp))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = {
-                    onDismiss()
-                    nav.push(Route.AdvancedFull)
-                }) { Text(stringResource(R.string.write_code)) }
+
+            Column(
+                Modifier.padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 AnimatedVisibility(
                     visible = st.running,
                     enter = scaleIn(MintTheme.spec()) + fadeIn(MintTheme.spec()),
@@ -181,53 +202,78 @@ fun AdvancedSheet(onDismiss: () -> Unit) {
                 ) {
                     CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.5.dp)
                 }
-            }
-            AdvancedMessage(st.message)
+                AdvancedMessage(st.message)
 
-            when (val o = st.outcome) {
-                is ScriptOutcome.Failure -> {
-                    FailureCard(o)
-                }
+                when (val o = st.outcome) {
+                    is ScriptOutcome.Failure -> {
+                        FailureCard(o)
+                    }
 
-                is ScriptOutcome.Success -> {
-                    val set = o.changeSet
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            if (set.isEmpty) stringResource(R.string.no_changes) else stringResource(R.string.changes_count, set.changes.size),
-                            Modifier.weight(1f),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        if (set.warnings.isEmpty()) {
-                            Text(stringResource(R.string.no_conflict), color = MintTheme.colors.success, style = MaterialTheme.typography.labelLarge)
-                        } else {
-                            Text(stringResource(R.string.warnings_count, set.warnings.size), color = MintTheme.colors.removed, style = MaterialTheme.typography.labelLarge)
+                    is ScriptOutcome.Success -> {
+                        val set = o.changeSet
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                if (set.isEmpty) stringResource(R.string.no_changes) else stringResource(R.string.changes_count, set.changes.size),
+                                Modifier.weight(1f),
+                                style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+                            )
+                            if (set.warnings.isEmpty()) {
+                                Text(stringResource(R.string.no_conflict), color = MintTheme.colors.success, style = MaterialTheme.typography.labelLarge)
+                            } else {
+                                Text(
+                                    stringResource(R.string.warnings_count, set.warnings.size),
+                                    color = MintTheme.colors.removed,
+                                    style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                                )
+                            }
+                        }
+                        if (!set.isEmpty) ChangeList(set, snap)
+                        WarningsAndLogs(set.warnings, set.logs)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                            FilledTonalButton(
+                                onClick = {
+                                    app.advanced.setPreviewOnTimetable(true)
+                                    nav.tab = Tab.TIMETABLE
+                                    nav.clearToRoot()
+                                    onDismiss()
+                                },
+                                Modifier.weight(1f).heightIn(min = 48.dp),
+                                enabled = !set.isEmpty,
+                                colors =
+                                    ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                        contentColor = MaterialTheme.colorScheme.onSurface,
+                                    ),
+                            ) { Text(stringResource(R.string.preview_on_timetable)) }
+                            Button(
+                                onClick = {
+                                    app.advanced.apply { actions.toast(ctx.getString(R.string.applied_toast, it.changes.size)) }
+                                    onDismiss()
+                                },
+                                Modifier.weight(1f).heightIn(min = 48.dp),
+                                enabled = !set.isEmpty,
+                            ) { Text(stringResource(R.string.apply_changes)) }
                         }
                     }
-                    if (!set.isEmpty) ChangeList(set, snap)
-                    WarningsAndLogs(set.warnings, set.logs)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                        FilledTonalButton(onClick = {
-                            app.advanced.setPreviewOnTimetable(true)
-                            nav.tab = Tab.TIMETABLE
-                            nav.clearToRoot()
-                            onDismiss()
-                        }, Modifier.weight(1f), enabled = !set.isEmpty) { Text(stringResource(R.string.preview_on_timetable)) }
-                        Button(onClick = {
-                            app.advanced.apply { actions.toast(ctx.getString(R.string.applied_toast, it.changes.size)) }
-                            onDismiss()
-                        }, Modifier.weight(1f), enabled = !set.isEmpty) { Text(stringResource(R.string.apply_changes)) }
-                    }
+
+                    null -> {}
                 }
 
-                null -> {}
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                TextButton(onClick = {
-                    onDismiss()
-                    nav.push(Route.AdvancedFull)
-                }) {
+                FilledTonalButton(
+                    onClick = {
+                        onDismiss()
+                        nav.push(Route.AdvancedFull)
+                    },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    colors =
+                        ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                ) {
                     Icon(Icons.Rounded.Code, null, Modifier.size(18.dp))
-                    Text("  " + stringResource(R.string.view_edit_code))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.advanced_open_editor))
                 }
             }
         }
@@ -289,13 +335,13 @@ private fun WarningsAndLogs(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(10.dp),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                    .padding(12.dp),
         )
     }
 }
 
-/** 全屏展开：描述 / 代码 / 预览 三段。 */
+/** 全屏展开：代码 / 预览 双段切换。 */
 @Composable
 fun AdvancedFullScreen(onBack: () -> Unit) {
     val app = LocalApp.current
@@ -307,7 +353,6 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
     var seg by remember { mutableIntStateOf(0) }
     var showApi by remember { mutableStateOf(false) }
     val cs = st.changeSet
-    val haptics = LocalHapticFeedback.current
     val slideSpec = MintTheme.spec<IntOffset>()
     val fadeSpec = MintTheme.spec<Float>()
 
@@ -318,47 +363,25 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .navigationBarsPadding(),
         ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(CircleShape)
-                    .background(MintTheme.card)
-                    .padding(4.dp),
-            ) {
-                listOf(R.string.seg_code, R.string.seg_preview).forEachIndexed { i, label ->
-                    val pillBg by animateColorAsState(if (seg == i) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, MintTheme.spec(), label = "seg-bg")
-                    val pillFg by animateColorAsState(if (seg == i) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant, MintTheme.spec(), label = "seg-fg")
-                    val labelText = stringResource(label)
-                    Box(
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .heightIn(min = 48.dp)
-                                .clip(CircleShape)
-                                .background(pillBg)
-                                .clickable {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    seg = i
-                                }.semantics {
-                                    role = Role.Tab
-                                    selected = seg == i
-                                    contentDescription = labelText
-                                },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            labelText,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = pillFg,
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(10.dp))
+            SegmentedPill(
+                options =
+                    listOf(
+                        0 to stringResource(R.string.seg_code),
+                        1 to stringResource(R.string.seg_preview),
+                    ),
+                selected = seg,
+                onSelect = { seg = it },
+            )
+            Spacer(Modifier.height(12.dp))
             // 每个 segment 独立滚动位置；切换时带方向滑动
             val bodyScroll = remember(seg) { ScrollState(0) }
-            Column(Modifier.weight(1f).verticalScroll(bodyScroll), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(bodyScroll)
+                    .padding(bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 AnimatedContent(
                     targetState = seg,
                     transitionSpec = {
@@ -373,21 +396,29 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         when (s) {
                             0 -> {
-                                OutlinedTextField(
-                                    st.code,
-                                    app.advanced::setCode,
-                                    Modifier.fillMaxWidth(),
-                                    minLines = 12,
-                                    textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp),
-                                    placeholder = { Text("// mc.courses.query(...)") },
-                                    shape = RoundedCornerShape(16.dp),
+                                CodeEditorField(
+                                    value = st.code,
+                                    onChange = app.advanced::setCode,
+                                    placeholder = stringResource(R.string.advanced_code_placeholder),
                                 )
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Button(onClick = {
-                                        app.advanced.dryRun()
-                                        seg = 1
-                                    }, enabled = st.code.isNotBlank() && !st.running) { Text(stringResource(R.string.dry_run)) }
-                                    OutlinedButton(onClick = { showApi = true }) { Text(stringResource(R.string.api_reference)) }
+                                    Button(
+                                        onClick = {
+                                            app.advanced.dryRun()
+                                            seg = 1
+                                        },
+                                        enabled = st.code.isNotBlank() && !st.running,
+                                        modifier = Modifier.heightIn(min = 48.dp),
+                                    ) { Text(stringResource(R.string.dry_run)) }
+                                    FilledTonalButton(
+                                        onClick = { showApi = true },
+                                        modifier = Modifier.heightIn(min = 48.dp),
+                                        colors =
+                                            ButtonDefaults.filledTonalButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                            ),
+                                    ) { Text(stringResource(R.string.api_reference)) }
                                     AnimatedVisibility(
                                         visible = st.running,
                                         enter = scaleIn(MintTheme.spec()) + fadeIn(MintTheme.spec()),
@@ -397,26 +428,50 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                                     }
                                 }
                                 AdvancedMessage(st.message)
-                                Text(stringResource(R.string.examples), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                SectionLabel(
+                                    stringResource(R.string.examples),
+                                    modifier = Modifier.padding(top = 6.dp),
+                                )
                                 EXAMPLES.forEach { ex ->
+                                    val labelText = stringResource(ex.label)
                                     val descText = stringResource(ex.desc)
-                                    Text(
-                                        descText,
+                                    Row(
                                         Modifier
                                             .fillMaxWidth()
-                                            .heightIn(min = 48.dp)
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .background(MintTheme.card)
-                                            .clickable {
+                                            .heightIn(min = 56.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f))
+                                            .mintClickable(pressedScale = 0.98f) {
                                                 app.advanced.setCode(ex.code)
                                                 app.advanced.dryRun()
                                                 seg = 1
                                             }.semantics {
                                                 role = Role.Button
                                                 contentDescription = descText
-                                            }.padding(14.dp),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
+                                            }.padding(horizontal = 14.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                labelText,
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                fontWeight = FontWeight.Medium,
+                                            )
+                                            Text(
+                                                descText,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(top = 2.dp),
+                                            )
+                                        }
+                                        Spacer(Modifier.width(8.dp))
+                                        Icon(
+                                            Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                            null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
                                 }
                             }
 
@@ -431,7 +486,13 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
                                 }
                                 when (val o = st.outcome) {
                                     null -> {
-                                        if (!st.running) Text(stringResource(R.string.preview_empty_hint), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        if (!st.running) {
+                                            Text(
+                                                stringResource(R.string.preview_empty_hint),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                                            )
+                                        }
                                     }
 
                                     is ScriptOutcome.Failure -> {
@@ -440,10 +501,15 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
 
                                     is ScriptOutcome.Success -> {
                                         val set = o.changeSet
-                                        Text(if (set.isEmpty) stringResource(R.string.no_changes) else stringResource(R.string.changes_count, set.changes.size), style = MaterialTheme.typography.titleMedium)
+                                        Text(
+                                            if (set.isEmpty) stringResource(R.string.no_changes) else stringResource(R.string.changes_count, set.changes.size),
+                                            style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+                                        )
                                         if (!set.isEmpty) ChangeList(set, snap)
                                         WarningsAndLogs(set.warnings, set.logs)
-                                        if (set.returnValue != null) Text(stringResource(R.string.return_value, set.returnValue!!), style = MaterialTheme.typography.bodySmall)
+                                        if (set.returnValue != null) {
+                                            Text(stringResource(R.string.return_value, set.returnValue!!), style = MaterialTheme.typography.bodySmall)
+                                        }
                                     }
                                 }
                             }
@@ -458,15 +524,28 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
             ) {
                 val bar = cs
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FilledTonalButton(onClick = {
-                        app.advanced.setPreviewOnTimetable(true)
-                        nav.tab = Tab.TIMETABLE
-                        nav.clearToRoot()
-                    }, Modifier.weight(1f), enabled = bar?.isEmpty == false) { Text(stringResource(R.string.preview_on_timetable)) }
-                    Button(onClick = {
-                        app.advanced.apply { actions.toast(ctx.getString(R.string.applied_toast, it.changes.size)) }
-                        onBack()
-                    }, Modifier.weight(1f), enabled = bar?.isEmpty == false) { Text(stringResource(R.string.apply_changes)) }
+                    FilledTonalButton(
+                        onClick = {
+                            app.advanced.setPreviewOnTimetable(true)
+                            nav.tab = Tab.TIMETABLE
+                            nav.clearToRoot()
+                        },
+                        Modifier.weight(1f).heightIn(min = 48.dp),
+                        enabled = bar?.isEmpty == false,
+                        colors =
+                            ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                            ),
+                    ) { Text(stringResource(R.string.preview_on_timetable)) }
+                    Button(
+                        onClick = {
+                            app.advanced.apply { actions.toast(ctx.getString(R.string.applied_toast, it.changes.size)) }
+                            onBack()
+                        },
+                        Modifier.weight(1f).heightIn(min = 48.dp),
+                        enabled = bar?.isEmpty == false,
+                    ) { Text(stringResource(R.string.apply_changes)) }
                 }
             }
         }
@@ -484,4 +563,56 @@ fun AdvancedFullScreen(onBack: () -> Unit) {
             shape = RoundedCornerShape(28.dp),
         )
     }
+}
+
+@Composable
+private fun CodeEditorField(
+    value: String,
+    onChange: (String) -> Unit,
+    placeholder: String,
+) {
+    val scheme = MaterialTheme.colorScheme
+    var focused by remember { mutableStateOf(false) }
+    val borderColor by animateColorAsState(
+        if (focused) scheme.primary else Color.Transparent,
+        MintTheme.spec(),
+        label = "code-border",
+    )
+    val textStyle =
+        TextStyle(
+            fontFamily = FontFamily.Monospace,
+            fontSize = 13.sp,
+            lineHeight = 20.sp,
+            color = scheme.onSurface,
+        )
+    BasicTextField(
+        value = value,
+        onValueChange = onChange,
+        textStyle = textStyle,
+        minLines = 11,
+        cursorBrush = SolidColor(scheme.primary),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .onFocusChanged { focused = it.isFocused },
+        decorationBox = { inner ->
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 220.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(scheme.surfaceContainerHighest)
+                    .border(1.5.dp, borderColor, RoundedCornerShape(16.dp))
+                    .padding(14.dp),
+            ) {
+                if (value.isEmpty()) {
+                    Text(
+                        placeholder,
+                        style = textStyle.copy(color = scheme.onSurfaceVariant.copy(alpha = 0.65f)),
+                    )
+                }
+                inner()
+            }
+        },
+    )
 }

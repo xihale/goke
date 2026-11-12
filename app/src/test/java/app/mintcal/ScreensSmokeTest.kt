@@ -87,6 +87,8 @@ import app.mintcal.ui.screens.PeriodsScreen
 import app.mintcal.ui.screens.ReliabilityScreen
 import app.mintcal.ui.screens.RescheduleSheet
 import app.mintcal.ui.screens.SettingsScreen
+import app.mintcal.ui.screens.SlotDraft
+import app.mintcal.ui.screens.SlotEditorSheet
 import app.mintcal.ui.screens.SyncScreen
 import app.mintcal.ui.screens.TimetableScreen
 import app.mintcal.ui.screens.TodayScreen
@@ -213,6 +215,26 @@ class ScreensSmokeTest {
                 "todo" to { TodoScreen() },
                 "course_edit" to { CourseEditScreen(first.id) {} },
                 "course_new" to { CourseEditScreen(null) {} },
+                "slot_sheet" to {
+                    val sem = app.repo.snapshot.value.currentSemester!!
+                    SlotEditorSheet(
+                        periods = sem.periods,
+                        totalWeeks = sem.totalWeeks,
+                        slot =
+                            SlotDraft(
+                                id = first.id,
+                                base = first,
+                                dayOfWeek = first.dayOfWeek,
+                                startPeriod = first.startPeriod,
+                                endPeriod = first.endPeriod,
+                                weeks = first.weeks,
+                                room = first.room,
+                                remindMinutes = first.remindMinutes,
+                            ),
+                        onChange = {},
+                        onDismiss = {},
+                    )
+                },
                 "task_edit" to { TodoEditScreen(task.id) {} },
                 "task_new" to { TodoEditScreen(null) {} },
                 "time_sheet" to { WhenPanel(null, LocalDate.now(), 30, onDismiss = {}, onPick = {}) },
