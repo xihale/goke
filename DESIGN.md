@@ -163,13 +163,13 @@ components:
 
 「薄荷广工」是专为广东工业大学师生打造的「教务课表 + 日历 + 待办 + 校园取件」一体式效率工具。全应用围绕 **优雅、流畅、高效** 三大原点构建：文字与待办像写在带有淡淡植物气息的薄荷宣纸底上，不堆砌厚重的灰白盒子，不用传统描边或底边横线切割视线，更不把底层技术语法（如短信匹配模板、全周次重影网格）直接甩给用户。
 
-界面的校园温度来自**对广工真实日常的懂行裁剪**——打开即对齐广工统一认证（`jxfw`）课表与校历周次，内置大学城、龙洞、东风路、揭阳四校区作息，自动把冗长的实验机房串浓缩成干净短句，把校园驿站的取件码提炼成抬手可点的票据胶囊。每一次触碰都有高阻尼弹簧的轻弹缩放与清脆震动回执，每一屏只呈现当下决策所需的最小信息集。
+界面的校园温度来自**对广工真实日常的懂行裁剪**——打开即对齐广工统一认证（`jxfw`）课表与校历周次，内置大学城、龙洞、东风路、揭阳四校区作息，自动把冗长的实验机房串浓缩成干净短句，把校园驿站的取件码提炼成抬手可点的票据胶囊。每一次触碰都有跟手的轻弹缩放；触觉只留给长按、拖动、滑动提交这类真正的手势，点击不振动。每一屏只呈现当下决策所需的最小信息集。
 
 **Key Characteristics:**
 
 - **宣纸分层（Paper & Pastel Hierarchy）**：待办与设置行无框直落在薄荷宣纸底上，纯靠纵向留白呼吸；仅固定占用时间的课程与日程穿着低饱和植物色块，一眼区分「时间块」与「可勾选项」。
 - **广工原生（GDUT-Native Defaults）**：教务同步是一等公民，内置广工四校区节次预设，多机房/实验室地点智能折叠，校园取件开箱即用。
-- **指尖轻弹（100% Tactile Fluidity）**：全局移除点击水波纹闪烁，所有可交互元素按尺寸分层接入物理弹簧（通栏大行 `0.98x`、紧凑控件 `0.96x`）与触觉回执，绝无「死水点击」。
+- **指尖轻弹（Tactile Fluidity）**：全局移除点击水波纹闪烁，所有可交互元素按尺寸分层接入物理弹簧（通栏大行 `0.98x`、紧凑控件 `0.96x`），绝无「死水点击」；点击不振动，触觉只出现在长按 / 拖动吸附 / 滑动提交。
 - **一屏一事（Single-Screen Focus）**：四个常驻核心入口（今日 / 课表 / 日历 / 待办）各司其职，不跨页重复堆叠「下一件事」大卡，不在自明操作下写教程长句。
 - **桌面同源（Home Screen Continuity）**：桌面小组件（今日日程、今日课表、待办清单、待取快递、下一件事）与主应用默认同享一套薄荷语义色与一键完成体验。
 
@@ -232,7 +232,7 @@ components:
 - **单处轻浮岛（3dp Island Shadow）**：全应用仅底部胶囊导航栏（`FloatingNavBar`）与右下角 `MintFab` 携带 `3dp` 柔和阴影，轻浮于宣纸背景之上；其余卡片、输入框与抽屉一律零阴影，靠纯白（`surfaceContainerLow`）或微深薄荷灰（`surfaceContainerHighest`）色阶区分层次。
 - **极细分隔线（0.5dp Hairline）**：仅在固定工具栏/抽屉底栏与滚动内容交界处使用 `45%` 透明度的 `outlineVariant` `0.5dp` 细线；待办与课程列表行之间一律零分隔线。
 
-**The 100% Tactile Press Rule.** 全局禁用点击底色水波纹（`FocusRingIndication` 仅绘制键盘/无障碍 `2dp` 焦点环），因此**所有可点击元素**必须 100% 接入 `mintPressable` / `mintClickable`：按下瞬间通过高阻尼弹簧（阻尼 `0.9` / 刚度 `700`）做分层几何回缩——**通栏列表大行采用克制的 `0.98x` 轻缩，胶囊/按钮/色块/图标等紧凑控件采用 `0.96x` 轻缩**——并触发清脆触觉回执；系统开启「移除动画」时自动切换为 `snap()` 直切。严禁在业务代码中遗留无视觉回执的裸 `.clickable`。
+**The Tactile Press Rule.** 全局禁用点击底色水波纹（`FocusRingIndication` 仅绘制键盘/无障碍 `2dp` 焦点环），因此**所有可点击元素**必须 100% 接入 `mintPressable` / `mintClickable`：按下瞬间做分层几何回缩——**通栏列表大行采用克制的 `0.98x` 轻缩，胶囊/按钮/色块/图标等紧凑控件采用 `0.96x` 轻缩**——动画走 `MintTheme.press()`（M3 fast spatial：阻尼 `1` / 刚度 `1400`，约 150ms 到位，无回弹尾巴），且动画值只在 draw 阶段读（`mintPressScale`），不逐帧重组内容；系统开启「移除动画」时自动切换为 `snap()` 直切。**点击不振动**：触觉只给长按启动拖动、拖动到吸附档、滑动提交、时间轮/刻度吸附；长按的触觉由 `combinedClickable` 自己发，不再手写叠加。严禁在业务代码中遗留无视觉回执的裸 `.clickable`。
 
 ## Shapes
 
@@ -257,7 +257,7 @@ components:
   - 节次设置页顶部提供 **广工四校区一键预设（大学城 / 龙洞 / 东风路 / 揭阳）**，下方保留单节微调列表。
 - **广工教务同步卡（`JxfwSyncCard`）**：作为空课表首屏第一引导与「课表管理」页顶部核心卡片，展示当前绑定的学号、学期（如 `2026-2027 学年第一学期`）与上次同步时间，支持一键刷新课表与考试安排；课程管理列表按课程名聚合展示，不把同一门课的多条排课拆散平铺。
 - **校园取件中心与无框取件行（`ParcelScreen` & `ParcelCodeHeadline`）**：
-  - 列表行去掉灰底盒与前置胶囊，与普通待办严守同一左轴：首行用森林薄荷色半粗等宽数字放大展示取件码（如 **`4-2-1086`**），次行收拢驿站、快递公司与截止时间（`东门菜鸟驿站 · 顺丰 · 今天 22:00`），行尾附安静复制图标；轻触取件码或复制图标均一键复制并震动提示，勾选即完成取件。
+  - 列表行去掉灰底盒与前置胶囊，与普通待办严守同一左轴：首行用森林薄荷色半粗等宽数字放大展示取件码（如 **`4-2-1086`**），次行收拢驿站、快递公司与截止时间（`东门菜鸟驿站 · 顺丰 · 今天 22:00`），行尾附安静复制图标；轻触取件码或复制图标均一键复制，复制结果走 Toast，不振动，勾选即完成取件。
   - 取件设置子页首屏只呈现「自动识别通知开关 + 默认顺路取件时间窗 + 粘贴短信测试」；底层 `{code}` / `{place}` 匹配规则模板全部收折进二级「短信识别规则」页面。
 - **浮动胶囊底栏（`FloatingNavBar`）**：4 个常驻入口（今日 / 课表 / 日历 / 待办），选中胶囊滑块在 Canvas 层平滑滑动，零多余重组。
 - **桌面小组件家族（RemoteViews Suite）**：今日日程、今日课表、待办清单、待取快递、下一件事（`4×1` 单行紧凑展示眼下最重要的一件事与快速添加）五款小组件，统一 `24dp` 外圆角、`14–16dp` 内边距与薄荷宣纸语义色。
@@ -276,7 +276,52 @@ components:
 
 - **禁止每行套盒与卡中卡**：不要给普通待办列表行单独套 `MintCard` / 圆角灰底或画行间分隔线，也不要在 `MintCard` 内部再嵌套带背景色的子卡片。
 - **禁止残留底边线或描边输入框**：严禁混用 Material 默认 `OutlinedTextField` 或老式底边 `HorizontalDivider` 输入框。
-- **禁止无触感裸点击**：在全局无水波纹前提下，业务代码中严禁对可交互块使用未带缩放/震动的裸 `.clickable`。
+- **禁止无按压回弹的裸点击**：在全局无水波纹前提下，业务代码中严禁对可交互块使用未带缩放反馈的裸 `.clickable`；同样不要给点击加振动（触觉只属于手势）。
 - **禁止底层语法直出首屏**：不要在取件页首屏直铺 `{code}` 模板代码，不要在快速添加框同时展示行内高亮块与底部重复芯片。
 - **禁止文字堆砌、旧名残留与硬编码**：界面文案与 `strings.xml` 中彻底清理「薄荷日程」「专注计时」等历史遗留词，业务屏幕内严禁硬编码 `Color(0xFF...)` 或中文字符串。
 - **禁止外部同步污染撤销链**：系统日历与教务后台增量同步写回时，不得制造多余的用户历史记录或破坏本地 `canUndo` 连续撤销体验。
+
+## Implementation & Cross-Platform Mapping
+
+### Token 真源与跨端同步
+
+- **Android（唯一真源）**：`app/src/main/java/app/mintcal/ui/theme/Theme.kt`
+  - 品牌主题色：`brandLight()` / `brandDark()`（薄荷为手写品牌 Token；其余预设与自定义由种子色通过 `material-kolor` 生成）。
+  - 主题解析链 `resolveColorScheme(settings, dark)`：`DYNAMIC`（SDK ≥ 31）→ `CUSTOM`（seed）→ `PRESET`（非 `MINT` 种子）→ `MINT` 回退。
+  - 扩展语义色 `MintColors`（`MintTheme.colors`）：8 组课程 `courseBg`/`courseFg`、`added`/`modified`/`onModified`/`removed`/`conflictBg`/`success`、`priority`（低/中/高）。
+  - 形状 `MintShapes`（4 / 12 / 16 / 24 / 28dp）、字阶 `MintTypography`（所有 `letterSpacing` 归零）、动效 `MintTheme.spec()`（M3 standard spatial spring）与 `MintTheme.press()`（M3 fast spatial spring；系统「移除动画」时均退化为 `snap()`）。
+- **Web 端**：`server/internal/server/web/app/js/theme.js` 通过 `applyTheme` 下发 CSS 变量（`--primary`、`--on-surface-variant`、`--surface-high`、`--primary-container`、`--error-container` 等）；`app.css` 的 `:root` 仅保留薄荷浅色首屏回退。Web 专有变量包括 `--radius-s|m|l`（`12/20/28`）、`--shadow-sm|md`、`--ease: cubic-bezier(.2,.8,.2,1)`、`--nav-h: 68px` 与课程色 `--c0..c7-bg|fg`。
+- **桌面小组件**：RemoteViews + XML 布局（`app/src/main/res/layout/widget_*.xml`）不吃 Compose 主题，修改品牌主题色时必须同步更新 `app/src/main/res/values/colors.xml` 与 `values-night/colors.xml`。
+- **同步约束**：新增或修改 Design Token 须同时对齐 Android `Theme.kt` ↔ Web `theme.js` ↔ 小组件 `colors.xml`；薄荷预设固定值两端保持一致，其它预设按种子推导，不单独手调。
+
+### 组件库索引（`ui/components/`）
+
+无 Storybook，预览靠 Robolectric 截图（`./gradlew :app:testDebugUnitTest` → `app/build/shots/`）。常用尺寸常量统一定义在 `Kit.kt` 顶部：`NavIslandHeight`（`68.dp`）、`NavIslandPadding`（`12.dp`）、`NavClearance`、`NavListInset`。
+
+| 符号 | 文件 | 职责与关键规格 |
+|---|---|---|
+| `MintScreen` / `MintCard` / `SectionLabel` / `Tag` | `Kit.kt` | 64dp 顶栏骨架；24dp 圆角纯白概览卡（`MintTheme.card`）；分组标题；全圆胶囊标签 |
+| `MintCheck` / `SwitchRow` / `NavRow` | `Kit.kt` | 22dp 视觉 / 48dp 命中勾选框；设置开关行；导航行（≥ 48dp） |
+| `FloatingNavBar` / `MintFab` / `EmptyState` / `ConflictCard` | `Kit.kt` | 68dp 浮动胶囊底栏（3dp 阴影）；primaryContainer 悬浮新建键；空状态；冲突提示卡 |
+| `ConfirmDialog` / `DatePickerDlg` / `TimePickerDlg` / `TimeWheels` | `Kit.kt` | 28dp 圆角对话框；滚轮时间选择（行高 36dp × 5 行） |
+| `mintPressable` / `mintPressScale` / `mintClickable` | `Kit.kt` | 统一按压缩放手势反馈（大行 `0.98f`、紧凑控件 `0.96f`，只在 draw 阶段读动画值） |
+| `AgendaRow` / `TaskRow` / `ParcelCodeHeadline` / `ParcelCodeCopyButton` | `Rows.kt` | 16dp 植物色日程块；无框宣纸待办行；取件码主标题与行尾独立复制按钮 |
+| `TonalField` / `FieldText` / `SegmentedPill` / `ChipChoice` / `ValueRow` / `FormSection` | `FormKit.kt` | 12dp 微底托输入框；无框输入；2–4 项胶囊分段器；流式多选芯片；属性行；表单分组 |
+| `MonthPager` / `DialPickers` / `AttachmentEditor` / `ChangeList` | 同名文件 | 月视图翻页、拨盘选择器、附件编辑器、变更集预览列表 |
+
+### 资产、图标与多端约束
+
+- **无位图资产**：`app/src/main/res/drawable/` 仅包含启动/通知/小组件图标与 RemoteViews 圆角底 XML。需要新插图时优先 24×24 网格 vector drawable（`tint` / `currentColor`），许可证登记至 `docs/DEPENDENCIES.md`。
+- **图标系统**：
+  - Android：使用 `material-icons-extended`，默认 **Rounded** 变体；方向性图标（`ArrowBack`、`KeyboardArrowRight/Left`、`Undo`）必须使用 `AutoMirrored`。尺寸阶梯：**24dp** 导航/工具栏 · **20dp** 行内 · **16dp** 标签与冲突卡。
+  - Web：`server/internal/server/web/app/js/dom.js` 内 `ICONS` 映射（24×24 viewBox、stroke 1.8、round cap/join），经 `icon(name, size)` 渲染；新增图标先查 Material Icons 与 Web `ICONS`。
+- **Web 样式与 CSP**：无 CDN、无外链字体/图片；CSP 为 `script-src 'self'; style-src 'self'`，禁止内联样式与字符串拼 HTML。
+- **响应式**：Android 只做手机（基准 `w411dp-h891dp`，状态栏 `24dp`、底栏净空 `NavClearance`）；Web 手机优先，CSS 断点为 `700px` / `900px` / `1100px`（`app.css`）。
+
+### 改设计前的检查清单
+
+1. 确认目标屏所属文件（见 `docs/architecture.md`）与可复用组件（见上表），优先复用再新建。
+2. 检查颜色、圆角、字阶是否已在 Token 中定义；新增需按「Token 真源与跨端同步」改齐多端，禁止硬编码。
+3. 核对状态栏避让与底栏净空（`NavClearance` / `NavListInset`）、左轴对齐与无框规则。
+4. 核对无障碍：触控 ≥ 48dp、正文对比 ≥ 4.5:1、状态不只靠颜色、图标具备 `contentDescription` / `aria-label`。
+5. 修改后运行 `./gradlew :app:testDebugUnitTest`，在 `app/build/shots/` 肉眼检查薄荷主题深浅双模式截图。
