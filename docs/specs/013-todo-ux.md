@@ -1,24 +1,39 @@
-# S013 待办 UX 改版（时间线 / 抽屉 / 快速添加 / 小组件）
+# S013 待办 UX（时间线 / 快速添加 / 显式确认 / 课表联动）
 
 ## 背景与目标
-把待办从「表单式」改为「录入零决策、原地修改、按时间分区、拖动即改期」，并和课表联动（下节课前、空档、课前提醒）。设计讨论见 Notion「待办 UX 改进方案（讨论稿）」；偏离、可调默认值、真机必测清单见 [../todo-ux-notes.md](../todo-ux-notes.md)。
 
-## 范围（已实现，待真机验证）
-- 核心（`:core`，有单测）：`Task.dropped`（「不做了」，仍记 `done=true`）；`TaskLogic.timeline/Bucket/dropDate`；`Edits.reschedule/dropTasks/makeSubtask/updateTasks`（批量合并为一个 ChangeSet，一次撤销）；`QuickAdd.parse` 返回片段区间、支持 `/课程`、`parseLines`（多行 + 缩进子任务）；`FreeGaps`、`NextUps`、`TodoSearch`（`#清单 @标签 !高`）。
-- 待办页：时间线分区（逾期/今天/明天/本周/之后/收集箱/已完成，可折叠）、下一件事卡、逾期整理（≥2 条出现）、搜索、清单下拉、多选批量、左滑改期、右滑完成、行内子任务、长按拖动跨区改期 / 右半区变子任务。
-- 录入：输入框高亮、快捷条、🎓 下节课前、📋 粘贴、🎤 语音、多行批量预览、分享文字入口（`Nav.pendingAddText`）。
-- 修改：底部抽屉 `TaskSheet`，关闭时自动保存，一次编辑一条历史；「展开全部」进整页。
-- 系统入口：待办/课表小组件（RemoteViews）、通知「完成/1 小时后再提醒」、深链接 `mintcal://task/{id}|add?text=|today|todo`、图标快捷方式、快捷设置磁贴、`PROCESS_TEXT`、提醒可靠性自检页（含测试提醒）、每日摘要（默认关，7:30）。
-- 联动：今日页空档推荐；课程编辑页列出该课待办；上课前提醒带「课前要交」。
+把待办从传统表单改为「录入零决策、按时间分区、拖动改期、课表联动」。视觉与无框行规范详见 [DESIGN.md](../../DESIGN.md)。
 
-## 验收
-- 时间线分区与分组由 `TaskLogic.timeline` 决定；拖到分区 = 设置对应截止日（收集箱 = 清除日期）。
-- 批量操作、拖动、「不做了」都能一次撤销。
-- 搜索语法与快速添加语法一致。
-- `ScreensSmokeTest` 渲染待办页、抽屉、改期/整理抽屉、可靠性页不崩。
+## 核心设计
 
-## 未做
-同区手动排序、滑动动作自定义、系统日历写入、作业通知识别、上课静音、常驻快速添加通知、图片分享变附件、桌面角标、自动备份、Web 端跟进（Web 暂不识别 `dropped`）、周课表/倒计时/快速添加小组件。
+- **单一时间线**（`TaskLogic.timeline`、`TodoScreen.kt`）：
+  - 分区：逾期 / 今天 / 明天 / 本周 / 之后 / 收集箱 / 已完成，支持折叠（默认折叠 `LATER,DONE`），已完成区最多展示 100 条。
+  - 清单与优先级顶部筛选条；搜索支持 `#清单 @标签 !高` 与关键词（`TodoSearch`）；支持右上角进入多选批量操作（改期 / 清单 / 优先级 / 完成 / 不做了 / 删除），批量操作合并为单条可撤销 `ChangeSet`。
+  - 行手势：右滑完成、左滑改期（可在设置中 `swapSwipe` 对调）；长按拖动跨区改期，拖到行右侧可设为一层子任务（自身已有子任务时不嵌套）。
+  - 「不做了」（`Task.dropped = true`）：仍记 `done = true` 但不触发重复任务的下一次实例；Web 端与 MCP 同步识别该状态。
+- **快速添加与显式确认**（`QuickAddSheet`、`TodoEditScreen`）：
+  - 自然语言行内实时高亮日期 / 时间 / 优先级 / 清单 / 标签 / `/课程`（点按高亮词可消解），支持「🎓 下节课前」、📋 粘贴、🎤 语音、多行缩进批量预览与外部分享文字接入（`Nav.pendingAddText`）。
+  - **新建必须显式确认**：`QuickAddSheet` 点工具条提交按钮或键盘 `Done` 才落库，点遮罩空白或系统返回丢弃草稿；`TodoEditScreen` 新建模式需点顶栏「确定」保存，返回或确认放弃时丢弃草稿；编辑已有待办时有未保存改动返回前提示确认。
+  - 重复规则与开始/截止、提醒、清单、优先级均可在编辑页或快速添加时间面板直接配置。
+- **课表与今日联动**：
+  - 「下一件事」卡归「今日」页独占（`NextUps.find`：下节课 + 课前要交待办，无课时回退最紧急待办）。
+  - 逾期整理卡在逾期 ≥ 2 条时出现（`MorningSheet`）。
+  - 今日页空档推荐卡（`FreeGaps`：8:00–22:00 内 ≥ 30 分钟空档，推荐有估时且未排入日历的待办）。
+  - 课程编辑页反向列出关联该课的待办；上课前提醒附带「课前要交」待办。
 
-## 测试
-:core：`TodoV2Test`、`TodoSearchTest`、QuickAdd/FreeGaps/NextUps 单测；`ScreensSmokeTest`（Robolectric）。手势、小组件刷新、通知按钮、MIUI 后台限制需真机，见 todo-ux-notes。
+## 关键默认值与约束
+
+| 项 | 默认 / 约束 | 位置 |
+|---|---|---|
+| 默认折叠分区 | 之后、已完成（`LATER,DONE`） | `TodoScreen.kt` |
+| 已完成展示上限 | 100 条 | `TodoScreen.kt` |
+| 逾期整理触发条件 | 逾期 ≥ 2 条 | `TodoScreen.kt` |
+| 拖到「本周 / 之后」落点 | 本周日（不足 2 天不可落）/ 今天 + 7 天 | `TaskLogic.dropDate` |
+| 子任务层级 | 仅支持一层 | `Edits.makeSubtask` / `TodoScreen.kt` |
+| 每日摘要默认时刻 | 07:30（开关默认关，可在设置调整） | `Settings.kt` / `ReminderScheduler.kt` |
+
+## 验收与测试
+
+- `:core`：`TodoV2Test`、`TodoSearchTest`、`QuickAddSlashDateTest`、`EditsTest`。
+- `:app`：`ScreensSmokeTest`（含 `quickAddDraftTimeStaysTodo` 等交互与渲染冒烟）。
+- 真机专项检查（手势边缘冲突、通知与小组件）见 [testing.md](../testing.md#真机专项验证清单)。
