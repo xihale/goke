@@ -314,4 +314,48 @@ class UpdateCheckerTest {
 
         updatesDir.deleteRecursively()
     }
+
+    @Test
+    fun `latest_json 按正式版与预发布通道选择目标版本`(): Unit =
+        runBlocking {
+            val latestJson =
+                """
+                {
+                  "tag_name": "v1.0.0",
+                  "prerelease": false,
+                  "apk_url": "https://mintcal.xeed.ink/downloads/MintCal-1.0.0-arm64-v8a.apk",
+                  "apk_size": 4011000,
+                  "stable": {
+                    "tag_name": "v1.0.0",
+                    "prerelease": false,
+                    "apk_url": "https://mintcal.xeed.ink/downloads/MintCal-1.0.0-arm64-v8a.apk",
+                    "apk_size": 4011000
+                  },
+                  "latest_any": {
+                    "tag_name": "v1.0.1-beta.1",
+                    "prerelease": true,
+                    "apk_url": "https://mintcal.xeed.ink/downloads/MintCal-1.0.1-beta.1-arm64-v8a.apk",
+                    "apk_size": 4012000
+                  }
+                }
+                """.trimIndent()
+
+            val stableChecker =
+                UpdateChecker(
+                    settings = store,
+                    currentVersionProvider = { "0.9.0" },
+                    fetchReleasesJson = { latestJson },
+                )
+            val stableRes = stableChecker.checkNow(nowMs = 10_000L) as UpdateCheckResult.Newer
+            assertEquals("1.0.0", stableRes.info.version)
+
+            val betaChecker =
+                UpdateChecker(
+                    settings = store,
+                    currentVersionProvider = { "1.0.0-beta.2" },
+                    fetchReleasesJson = { latestJson },
+                )
+            val betaRes = betaChecker.checkNow(nowMs = 20_000L) as UpdateCheckResult.Newer
+            assertEquals("1.0.1-beta.1", betaRes.info.version)
+        }
 }

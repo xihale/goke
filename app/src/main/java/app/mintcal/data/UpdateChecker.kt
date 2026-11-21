@@ -151,7 +151,7 @@ class UpdateChecker(
             _checking.value = true
             try {
                 val response = fetchReleasesJson()
-                val releases = json.decodeFromString<List<RemoteRelease>>(response)
+                val releases = parseManifest(response)
                 val current = currentVersion()
                 val allowPrerelease = parseSemVer(current)?.preRelease?.isNotEmpty() == true
 
@@ -374,7 +374,7 @@ class UpdateChecker(
     companion object {
         const val LANDING_URL = "https://mintcal.xeed.ink"
         const val PROJECT_URL = "https://github.com/xihale/mintcal"
-        private const val RELEASES_MANIFEST_URL = "https://mintcal.xeed.ink/downloads/releases.json"
+        private const val RELEASES_MANIFEST_URL = "https://mintcal.xeed.ink/downloads/latest.json"
         private const val UPDATES_DIR = "updates"
         private const val APK_MIME = "application/vnd.android.package-archive"
 
@@ -383,6 +383,32 @@ class UpdateChecker(
                 ignoreUnknownKeys = true
                 isLenient = true
             }
+
+        private fun parseManifest(raw: String): List<RemoteRelease> {
+            val trimmed = raw.trim()
+            if (trimmed.startsWith("[")) {
+                return json.decodeFromString<List<RemoteRelease>>(trimmed)
+            }
+            val latest = json.decodeFromString<LatestManifest>(trimmed)
+            val entries = listOfNotNull(latest.stable, latest.latestAny)
+            if (entries.isNotEmpty()) return entries
+            return if (latest.tagName.isNotBlank()) {
+                listOf(
+                    RemoteRelease(
+                        tagName = latest.tagName,
+                        htmlUrl = latest.htmlUrl,
+                        prerelease = latest.prerelease,
+                        draft = latest.draft,
+                        body = latest.body,
+                        apkUrl = latest.apkUrl,
+                        apkSize = latest.apkSize,
+                        apkSha256 = latest.apkSha256,
+                    ),
+                )
+            } else {
+                emptyList()
+            }
+        }
 
         private suspend fun defaultFetchReleasesJson(): String =
             withContext(Dispatchers.IO) {
@@ -567,4 +593,18 @@ private data class RemoteRelease(
     @SerialName("apk_url") val apkUrl: String = "",
     @SerialName("apk_size") val apkSize: Long = 0L,
     @SerialName("apk_sha256") val apkSha256: String = "",
+)
+
+@Serializable
+private data class LatestManifest(
+    @SerialName("tag_name") val tagName: String = "",
+    @SerialName("html_url") val htmlUrl: String = UpdateChecker.LANDING_URL,
+    val prerelease: Boolean = false,
+    val draft: Boolean = false,
+    val body: String? = null,
+    @SerialName("apk_url") val apkUrl: String = "",
+    @SerialName("apk_size") val apkSize: Long = 0L,
+    @SerialName("apk_sha256") val apkSha256: String = "",
+    val stable: RemoteRelease? = null,
+    @SerialName("latest_any") val latestAny: RemoteRelease? = null,
 )

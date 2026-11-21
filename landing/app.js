@@ -52,14 +52,11 @@
   }
 
   if (typeof fetch === 'function') {
-    fetch('./downloads/releases.json', { cache: 'no-cache' })
+    fetch('./downloads/latest.json', { cache: 'no-cache' })
       .then(function (res) { return res.ok ? res.json() : null; })
-      .then(function (list) {
-        if (!Array.isArray(list) || !list.length) return;
-        var stable = list.find(function (r) { return r && !r.prerelease && r.apk_name; });
-        var latest = stable || list.find(function (r) { return r && r.apk_name; });
-        if (!latest) return;
-
+      .then(function (data) {
+        if (!data || !data.apk_name) return;
+        var latest = data.stable || data;
         var ver = latest.tag_name || ('v' + latest.version);
         var sizeStr = latest.apk_size ? formatMiB(latest.apk_size) : '3.83 MiB';
         var href = './downloads/' + latest.apk_name;
