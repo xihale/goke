@@ -27,6 +27,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasImeAction
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -36,6 +37,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -455,8 +457,8 @@ class ScreensSmokeTest {
         rule.setContent { Host { SettingsScreen {} } }
         rule.onNodeWithText(app.getString(R.string.widgets_title)).performClick()
         rule.waitForIdle()
-        rule.onAllNodesWithText(app.getString(R.string.widget_today_name))[0].assertIsDisplayed()
-        rule.onAllNodesWithText(app.getString(R.string.widget_next_name))[0].assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.widget_today_name)).assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.widget_schedule_name)).assertIsDisplayed()
         val addTodayDesc = app.getString(R.string.widgets_add_to_home_a11y, app.getString(R.string.widget_today_name))
         rule.onAllNodes(hasContentDescription(addTodayDesc))[0].performClick()
         rule.waitForIdle()
@@ -464,5 +466,8 @@ class ScreensSmokeTest {
         rule.onNodeWithText(app.getString(R.string.ok)).performClick()
         rule.waitForIdle()
         rule.onAllNodesWithText(app.getString(R.string.widgets_unsupported_title)).assertCountEquals(0)
+        rule.onNode(hasScrollAction()).performScrollToIndex(4)
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(R.string.widget_next_name)).assertIsDisplayed()
     }
 }

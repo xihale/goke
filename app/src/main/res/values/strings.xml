@@ -861,6 +861,13 @@
     <string name="widgets_pin_confirmed_toast">已将「%1$s」添加到桌面</string>
     <string name="widgets_unsupported_title">请从桌面手动添加</string>
     <string name="widgets_unsupported_desc">当前桌面启动器不支持从应用内直接添加。请在手机桌面长按空白处，选择「添加小组件 / 窗口小工具」，搜索「薄荷广工」即可添加。</string>
+    <string name="widgets_blocked_title">未能弹出桌面添加确认</string>
+    <string name="widgets_blocked_desc">系统可能拦截了「桌面快捷方式」权限，或当前桌面不支持应用内直接添加。\n\n• 前往「应用设置 → 权限管理」开启「桌面快捷方式」后重试\n• 或在手机桌面长按空白处，选择「添加小组件」搜索「薄荷广工」</string>
+    <string name="widgets_open_app_settings">打开应用设置</string>
+    <string name="widgets_perm_needed_title">需先开启「桌面快捷方式」权限</string>
+    <string name="widgets_perm_needed_desc">系统当前未允许向桌面添加组件，开启后即可一键添加到桌面。</string>
+    <string name="widgets_perm_go_enable">去开启</string>
+    <string name="widgets_perm_toast">请先开启「桌面快捷方式」权限</string>
     <string name="widgets_go_home">回到桌面</string>
     <string name="widgets_sample_course_1">高等数学</string>
     <string name="widgets_sample_course_1_room">教3-204</string>

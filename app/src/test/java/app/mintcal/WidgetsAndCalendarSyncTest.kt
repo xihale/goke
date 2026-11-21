@@ -286,10 +286,8 @@ class WidgetsAndCalendarSyncTest {
                 WidgetSpec.entries.map { it.providerClass }.toSet(),
             )
             assertEquals(0, totalAddedWidgets(app))
-            val snap = app.repo.snapshot.value
-            val st = app.settings.value
             for (spec in WidgetSpec.entries) {
-                assertEquals(WidgetPinOutcome.UNSUPPORTED, requestPinWidget(app, spec, snap, st))
+                assertEquals(WidgetPinOutcome.UNSUPPORTED, requestPinWidget(app, spec))
             }
         }
 }

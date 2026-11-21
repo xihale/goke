@@ -1,5 +1,6 @@
 package app.mintcal.ui.screens
 
+import android.app.AppOpsManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
@@ -8,8 +9,10 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.os.Bundle
-import android.widget.RemoteViews
+import android.net.Uri
+import android.os.Build
+import android.os.Process
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -29,9 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -73,7 +76,6 @@ import app.mintcal.core.model.Task
 import app.mintcal.core.todo.SmartList
 import app.mintcal.core.todo.TaskLogic
 import app.mintcal.data.Settings
-import app.mintcal.ui.components.ChipPill
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.Tag
@@ -82,7 +84,6 @@ import app.mintcal.ui.dueLabel
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDayWeekday
-import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberNow
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
@@ -93,9 +94,11 @@ import app.mintcal.widget.TodayWidgetProvider
 import app.mintcal.widget.TodoWidgetProvider
 import app.mintcal.widget.WidgetKit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDateTime
+import android.provider.Settings as AndroidSettings
 
 private const val ACTION_WIDGET_PINNED = "app.mintcal.widget.PINNED"
 private const val EXTRA_WIDGET_NAME = "widget_name"
@@ -136,26 +139,23 @@ internal enum class WidgetSpec(
         sizeLabel = "4×1",
         providerClass = NextWidgetProvider::class.java,
     ),
-    ;
-
-    fun buildPreviewRemoteViews(
-        ctx: Context,
-        snap: Snapshot,
-        st: Settings,
-    ): RemoteViews =
-        when (this) {
-            TODAY -> TodayWidgetProvider.build(ctx, AppWidgetManager.INVALID_APPWIDGET_ID, snap, st)
-            SCHEDULE -> ScheduleWidgetProvider.build(ctx, snap, st)
-            TODO -> TodoWidgetProvider.build(ctx, AppWidgetManager.INVALID_APPWIDGET_ID)
-            PARCEL -> ParcelWidgetProvider.build(ctx, AppWidgetManager.INVALID_APPWIDGET_ID)
-            NEXT -> NextWidgetProvider.build(ctx, snap, st)
-        }
 }
 
 internal enum class WidgetPinOutcome {
     REQUESTED,
     UNSUPPORTED,
 }
+
+private enum class PinFallbackReason {
+    UNSUPPORTED,
+    SILENTLY_BLOCKED,
+}
+
+private data class PendingPin(
+    val spec: WidgetSpec,
+    val beforeCount: Int,
+    val seq: Int,
+)
 
 internal fun addedWidgetCount(
     ctx: Context,
@@ -171,50 +171,103 @@ internal fun totalAddedWidgets(ctx: Context): Int = WidgetSpec.entries.sumOf { a
 internal fun requestPinWidget(
     ctx: Context,
     spec: WidgetSpec,
-    snap: Snapshot,
-    st: Settings,
     successCallback: PendingIntent? = null,
 ): WidgetPinOutcome {
     val mgr = AppWidgetManager.getInstance(ctx) ?: return WidgetPinOutcome.UNSUPPORTED
     if (!mgr.isRequestPinAppWidgetSupported) return WidgetPinOutcome.UNSUPPORTED
     val provider = ComponentName(ctx, spec.providerClass)
-    val extras =
-        runCatching {
-            val preview = spec.buildPreviewRemoteViews(ctx, snap, st)
-            Bundle().apply { putParcelable(AppWidgetManager.EXTRA_APPWIDGET_PREVIEW, preview) }
-        }.getOrNull()
+    // 不传 EXTRA_APPWIDGET_PREVIEW：部分系统桌面在跨进程反序列化含 RemoteAdapter / PendingIntent 的预览时会静默丢弃请求
     val accepted =
         runCatching {
-            mgr.requestPinAppWidget(provider, extras, successCallback)
+            mgr.requestPinAppWidget(provider, null, successCallback)
         }.getOrDefault(false)
     return if (accepted) WidgetPinOutcome.REQUESTED else WidgetPinOutcome.UNSUPPORTED
+}
+
+/**
+ * 提前检测小米 / HyperOS 的「桌面快捷方式」权限（AppOps 10017）。
+ * 返回 true = 已允许，false = 明确未授权，null = 非小米机型或系统限制无法读取。
+ */
+internal fun checkShortcutPermission(ctx: Context): Boolean? {
+    val mfr = Build.MANUFACTURER.lowercase()
+    if (mfr !in listOf("xiaomi", "redmi", "blackshark", "poco")) return null
+    return runCatching {
+        val appOps = ctx.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        val method =
+            AppOpsManager::class.java.getMethod(
+                "checkOpNoThrow",
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                String::class.java,
+            )
+        val mode = method.invoke(appOps, 10017, Process.myUid(), ctx.packageName) as Int
+        mode == AppOpsManager.MODE_ALLOWED
+    }.getOrNull()
+}
+
+internal fun openWidgetPermissionSettings(ctx: Context) {
+    val candidates =
+        listOf(
+            Intent("miui.intent.action.APP_PERM_EDITOR")
+                .setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
+                .putExtra("extra_pkgname", ctx.packageName),
+            Intent("miui.intent.action.APP_PERM_EDITOR")
+                .putExtra("extra_pkgname", ctx.packageName),
+            Intent(
+                AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:${ctx.packageName}"),
+            ),
+        )
+    for (intent in candidates) {
+        val ok = runCatching { ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+        if (ok) return
+    }
 }
 
 @Composable
 fun WidgetsScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
+    val windowInfo = LocalWindowInfo.current
     val snap = liveSnapshot()
     val st = settingsState()
     val now by rememberNow()
-    val reduce = reduceMotion()
     val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
 
-    var selected by remember { mutableStateOf(WidgetSpec.TODAY) }
     var counts by remember { mutableStateOf<Map<WidgetSpec, Int>>(emptyMap()) }
-    var unsupportedSpec by remember { mutableStateOf<WidgetSpec?>(null) }
+    var shortcutPermGranted by remember { mutableStateOf<Boolean?>(null) }
+    var fallbackReason by remember { mutableStateOf<PinFallbackReason?>(null) }
+    var pendingPin by remember { mutableStateOf<PendingPin?>(null) }
+    var pinSeq by remember { mutableStateOf(0) }
+    var focusLostAtMs by remember { mutableStateOf(0L) }
+    var unfocusedDurationMs by remember { mutableStateOf(0L) }
+    var hadFocusBounce by remember { mutableStateOf(false) }
+    var pinConfirmed by remember { mutableStateOf(false) }
 
-    fun refreshCounts() {
+    fun refreshStatus() {
         scope.launch {
-            val next =
+            val (nextCounts, perm) =
                 withContext(Dispatchers.IO) {
-                    WidgetSpec.entries.associateWith { addedWidgetCount(ctx, it) }
+                    WidgetSpec.entries.associateWith { addedWidgetCount(ctx, it) } to checkShortcutPermission(ctx)
                 }
-            counts = next
+            counts = nextCounts
+            shortcutPermGranted = perm
         }
     }
 
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refreshCounts() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refreshStatus() }
+
+    LaunchedEffect(windowInfo.isWindowFocused) {
+        if (!windowInfo.isWindowFocused) {
+            if (focusLostAtMs == 0L) focusLostAtMs = SystemClock.elapsedRealtime()
+        } else {
+            if (focusLostAtMs > 0L) {
+                unfocusedDurationMs += SystemClock.elapsedRealtime() - focusLostAtMs
+                focusLostAtMs = 0L
+                hadFocusBounce = true
+            }
+            refreshStatus()
+        }
+    }
 
     DisposableEffect(ctx) {
         val receiver =
@@ -224,7 +277,9 @@ fun WidgetsScreen(onBack: () -> Unit) {
                     intent: Intent?,
                 ) {
                     val name = intent?.getStringExtra(EXTRA_WIDGET_NAME).orEmpty()
-                    refreshCounts()
+                    pinConfirmed = true
+                    pendingPin = null
+                    refreshStatus()
                     if (name.isNotEmpty()) {
                         Toast.makeText(ctx, ctx.getString(R.string.widgets_pin_confirmed_toast, name), Toast.LENGTH_SHORT).show()
                     }
@@ -234,9 +289,31 @@ fun WidgetsScreen(onBack: () -> Unit) {
         onDispose { runCatching { ctx.unregisterReceiver(receiver) } }
     }
 
+    // 兜底检测：无法提前探测权限的机型上，若焦点未离开或闪退回应用（<250ms），快速弹出权限引导
+    LaunchedEffect(pendingPin, windowInfo.isWindowFocused) {
+        val pending = pendingPin ?: return@LaunchedEffect
+        if (!windowInfo.isWindowFocused) return@LaunchedEffect
+        delay(if (hadFocusBounce) 80L else 280L)
+        if (pendingPin?.seq != pending.seq || !windowInfo.isWindowFocused) return@LaunchedEffect
+        val afterCount = withContext(Dispatchers.IO) { addedWidgetCount(ctx, pending.spec) }
+        if (afterCount > pending.beforeCount && !pinConfirmed) {
+            refreshStatus()
+            val msg = ctx.getString(R.string.widgets_pin_confirmed_toast, ctx.getString(pending.spec.labelRes))
+            Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+        } else if (!pinConfirmed && unfocusedDurationMs < 250L) {
+            fallbackReason = PinFallbackReason.SILENTLY_BLOCKED
+        }
+        pendingPin = null
+    }
+
     fun pin(spec: WidgetSpec) {
-        selected = spec
+        if (shortcutPermGranted == false) {
+            Toast.makeText(ctx, ctx.getString(R.string.widgets_perm_toast), Toast.LENGTH_SHORT).show()
+            openWidgetPermissionSettings(ctx)
+            return
+        }
         val label = ctx.getString(spec.labelRes)
+        val beforeCount = counts[spec] ?: addedWidgetCount(ctx, spec)
         val callback =
             PendingIntent.getBroadcast(
                 ctx,
@@ -244,83 +321,121 @@ fun WidgetsScreen(onBack: () -> Unit) {
                 Intent(ACTION_WIDGET_PINNED).setPackage(ctx.packageName).putExtra(EXTRA_WIDGET_NAME, label),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
-        if (requestPinWidget(ctx, spec, snap, st, callback) == WidgetPinOutcome.UNSUPPORTED) {
-            unsupportedSpec = spec
+        if (requestPinWidget(ctx, spec, callback) == WidgetPinOutcome.UNSUPPORTED) {
+            fallbackReason = PinFallbackReason.UNSUPPORTED
+            return
         }
+        focusLostAtMs = 0L
+        unfocusedDurationMs = 0L
+        hadFocusBounce = false
+        pinConfirmed = false
+        val nextSeq = pinSeq + 1
+        pinSeq = nextSeq
+        pendingPin = PendingPin(spec, beforeCount, nextSeq)
     }
 
     MintScreen(title = stringResource(R.string.widgets_title), onBack = onBack) {
-        Column(Modifier.fillMaxSize()) {
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                itemsIndexed(WidgetSpec.entries) { index, spec ->
-                    ChipPill(
-                        label = stringResource(spec.labelRes),
-                        on = selected == spec,
-                        onClick = {
-                            selected = spec
-                            scope.launch {
-                                if (reduce) listState.scrollToItem(index) else listState.animateScrollToItem(index)
+        LazyColumn(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .navigationBarsPadding(),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            if (shortcutPermGranted == false) {
+                item(key = "perm_banner") {
+                    MintCard {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    stringResource(R.string.widgets_perm_needed_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    stringResource(R.string.widgets_perm_needed_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
-                        },
-                    )
+                            TextButton(onClick = { openWidgetPermissionSettings(ctx) }) {
+                                Text(stringResource(R.string.widgets_perm_go_enable))
+                            }
+                        }
+                    }
                 }
             }
-            LazyColumn(
-                state = listState,
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .navigationBarsPadding(),
-                contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                itemsIndexed(WidgetSpec.entries, key = { _, s -> s.name }) { _, spec ->
-                    WidgetItemBlock(
-                        spec = spec,
-                        addedCount = counts[spec] ?: 0,
-                        selected = selected == spec,
-                        snap = snap,
-                        st = st,
-                        now = now,
-                        onPin = { pin(spec) },
-                    )
-                }
+            items(WidgetSpec.entries, key = { it.name }) { spec ->
+                WidgetItemBlock(
+                    spec = spec,
+                    addedCount = counts[spec] ?: 0,
+                    snap = snap,
+                    st = st,
+                    now = now,
+                    onPin = { pin(spec) },
+                )
             }
         }
     }
 
-    if (unsupportedSpec != null) {
-        AlertDialog(
-            onDismissRequest = { unsupportedSpec = null },
-            shape = MaterialTheme.shapes.extraLarge,
-            title = { Text(stringResource(R.string.widgets_unsupported_title)) },
-            text = { Text(stringResource(R.string.widgets_unsupported_desc)) },
-            dismissButton = {
-                TextButton(onClick = { unsupportedSpec = null }) { Text(stringResource(R.string.ok)) }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        unsupportedSpec = null
-                        runCatching {
-                            ctx.startActivity(
-                                Intent(Intent.ACTION_MAIN)
-                                    .addCategory(Intent.CATEGORY_HOME)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                            )
-                        }
-                    },
-                ) {
-                    Text(stringResource(R.string.widgets_go_home))
-                }
-            },
-        )
+    when (fallbackReason) {
+        PinFallbackReason.UNSUPPORTED -> {
+            AlertDialog(
+                onDismissRequest = { fallbackReason = null },
+                shape = MaterialTheme.shapes.extraLarge,
+                title = { Text(stringResource(R.string.widgets_unsupported_title)) },
+                text = { Text(stringResource(R.string.widgets_unsupported_desc)) },
+                dismissButton = {
+                    TextButton(onClick = { fallbackReason = null }) { Text(stringResource(R.string.ok)) }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            fallbackReason = null
+                            runCatching {
+                                ctx.startActivity(
+                                    Intent(Intent.ACTION_MAIN)
+                                        .addCategory(Intent.CATEGORY_HOME)
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }
+                        },
+                    ) {
+                        Text(stringResource(R.string.widgets_go_home))
+                    }
+                },
+            )
+        }
+
+        PinFallbackReason.SILENTLY_BLOCKED -> {
+            AlertDialog(
+                onDismissRequest = { fallbackReason = null },
+                shape = MaterialTheme.shapes.extraLarge,
+                title = { Text(stringResource(R.string.widgets_blocked_title)) },
+                text = { Text(stringResource(R.string.widgets_blocked_desc)) },
+                dismissButton = {
+                    TextButton(onClick = { fallbackReason = null }) { Text(stringResource(R.string.ok)) }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            fallbackReason = null
+                            openWidgetPermissionSettings(ctx)
+                        },
+                    ) {
+                        Text(stringResource(R.string.widgets_open_app_settings))
+                    }
+                },
+            )
+        }
+
+        null -> {}
     }
 }
 
@@ -328,7 +443,6 @@ fun WidgetsScreen(onBack: () -> Unit) {
 private fun WidgetItemBlock(
     spec: WidgetSpec,
     addedCount: Int,
-    selected: Boolean,
     snap: Snapshot,
     st: Settings,
     now: LocalDateTime,
@@ -338,12 +452,7 @@ private fun WidgetItemBlock(
     val typography = MaterialTheme.typography
     val name = stringResource(spec.labelRes)
     val a11yAdd = stringResource(R.string.widgets_add_to_home_a11y, name)
-    val border =
-        if (selected) {
-            BorderStroke(1.5.dp, scheme.primary)
-        } else {
-            BorderStroke(0.5.dp, scheme.outlineVariant.copy(alpha = 0.6f))
-        }
+    val border = BorderStroke(0.5.dp, scheme.outlineVariant.copy(alpha = 0.6f))
 
     Column(Modifier.fillMaxWidth()) {
         Row(
