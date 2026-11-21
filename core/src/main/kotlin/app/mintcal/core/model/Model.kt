@@ -215,7 +215,11 @@ data class Task(
     val blockMinutes: Int? = null,
     val sortOrder: Int = 0,
     val source: Source = Source.MANUAL,
-    /** 扩展字段，如快递取件码、地点：pickupCode / pickupPlace / pickupDeadline */
+    /**
+     * 扩展字段：
+     * - 快递：`code` / `place` / `company` / `windowStart` / `windowEnd`（兼容旧键 `pickupCode` / `pickupPlace`）
+     * - 日程/考试/倒数日：`kind`（`EXAM` / `COUNTDOWN` / `NORMAL`）、`location`、`checkable`（`"false"` 表示不可勾选）
+     */
     val extra: Map<String, String> = emptyMap(),
     val attachments: List<Attachment> = emptyList(),
     override val updatedAt: Long = 0,

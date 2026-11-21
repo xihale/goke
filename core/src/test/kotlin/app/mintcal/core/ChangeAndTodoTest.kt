@@ -7,6 +7,7 @@ import app.mintcal.core.change.ChangeSet
 import app.mintcal.core.change.ChangeViews
 import app.mintcal.core.change.Conflicts
 import app.mintcal.core.change.SnapshotDiff
+import app.mintcal.core.change.Unify
 import app.mintcal.core.change.apply
 import app.mintcal.core.change.canRedo
 import app.mintcal.core.change.canUndo
@@ -15,18 +16,22 @@ import app.mintcal.core.export.ExportBundle
 import app.mintcal.core.importer.ImportPlanner
 import app.mintcal.core.model.Attachment
 import app.mintcal.core.model.Course
+import app.mintcal.core.model.Event
+import app.mintcal.core.model.EventKind
 import app.mintcal.core.model.Freq
 import app.mintcal.core.model.PeriodTime
 import app.mintcal.core.model.Recurrence
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
+import app.mintcal.core.model.TaskList
 import app.mintcal.core.todo.QuickAdd
 import app.mintcal.core.todo.QuickTokenKind
 import app.mintcal.core.todo.SmartList
 import app.mintcal.core.todo.TaskLogic
 import app.mintcal.core.util.MintJson
 import app.mintcal.core.util.SequentialIds
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -299,5 +304,87 @@ class ChangeAndTodoTest {
         val t = Task("t", "作业", courseId = "c1", dueBeforeNextClass = true)
         val due = TaskLogic.effectiveDue(t, sem, listOf(c), emptyList(), now)
         assertEquals(LocalDateTime.of(2026, 10, 27, 8, 30), due)
+    }
+
+    @Test fun `export bundle imports legacy mintcal-web json`() {
+        val list = TaskList("l1", "学习")
+        val task = Task("t1", "复习", listId = "l1")
+        val c = course("c1", "线代")
+        val recordsJson =
+            listOf(sem, c, list, task).joinToString(",") {
+                MintJson.encodeToString(
+                    app.mintcal.core.model.Record
+                        .serializer(),
+                    it,
+                )
+            }
+        val iso = "2026-11-21T08:00:00.000Z"
+        val legacy = """{"app":"mintcal-web","exportedAt":"$iso","records":[$recordsJson]}"""
+        val parsed = ExportBundle.fromJson(legacy)
+        assertEquals(Instant.parse(iso).toEpochMilli(), parsed.exportedAt)
+        assertEquals(listOf(sem), parsed.snapshot.semesters)
+        assertEquals(listOf(c), parsed.snapshot.courses)
+        assertEquals(listOf(list), parsed.snapshot.lists)
+        assertEquals(listOf(task), parsed.snapshot.tasks)
+    }
+
+    @Test fun `unify eventToTask preserves kind location checkable tags and timing`() {
+        val exam =
+            Event(
+                id = "e1",
+                title = "高数期末",
+                start = LocalDateTime.of(2026, 11, 27, 9, 0),
+                end = LocalDateTime.of(2026, 11, 27, 11, 0),
+                location = "教1-201",
+                note = "闭卷",
+                category = "考试",
+                remindMinutes = 60,
+                kind = EventKind.EXAM,
+            )
+        val examTask = Unify.eventToTask(exam, "t-exam", 1)
+        assertEquals("闭卷", examTask.note)
+        assertEquals(listOf("考试"), examTask.tags)
+        assertEquals("EXAM", examTask.extra["kind"])
+        assertEquals("false", examTask.extra["checkable"])
+        assertEquals("教1-201", examTask.extra["location"])
+        assertEquals(LocalDateTime.of(2026, 11, 27, 9, 0), examTask.blockStart)
+        assertEquals(120, examTask.blockMinutes)
+        assertEquals(LocalDateTime.of(2026, 11, 27, 11, 0), examTask.due)
+        assertTrue(examTask.dueHasTime)
+
+        val countdown =
+            Event(
+                id = "e2",
+                title = "四级考试",
+                start = LocalDateTime.of(2026, 12, 12, 0, 0),
+                end = LocalDateTime.of(2026, 12, 13, 0, 0),
+                allDay = true,
+                category = "英语",
+                kind = EventKind.COUNTDOWN,
+            )
+        val countdownTask = Unify.eventToTask(countdown, "t-cd", 2)
+        assertEquals(listOf("倒数日", "英语"), countdownTask.tags)
+        assertEquals("COUNTDOWN", countdownTask.extra["kind"])
+        assertEquals("false", countdownTask.extra["checkable"])
+        assertNull(countdownTask.blockStart)
+        assertFalse(countdownTask.dueHasTime)
+
+        val rec = Recurrence(Freq.WEEKLY, byDays = setOf(4))
+        val normal =
+            Event(
+                id = "e3",
+                title = "社团例会",
+                start = LocalDateTime.of(2026, 11, 26, 19, 0),
+                end = LocalDateTime.of(2026, 11, 26, 20, 30),
+                location = "艺术楼",
+                category = "社团",
+                recurrence = rec,
+            )
+        val normalTask = Unify.eventToTask(normal, "t-norm", 3)
+        assertEquals(listOf("社团"), normalTask.tags)
+        assertNull(normalTask.extra["kind"])
+        assertNull(normalTask.extra["checkable"])
+        assertEquals("艺术楼", normalTask.extra["location"])
+        assertEquals(rec, normalTask.repeat)
     }
 }

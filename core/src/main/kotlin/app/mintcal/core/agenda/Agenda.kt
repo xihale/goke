@@ -106,11 +106,19 @@ object Agenda {
         for (t in TaskLogic.topLevel(s.tasks)) {
             if (t.done && !includeDoneTasks) continue
             val due = TaskLogic.effectiveDue(t, sem, s.courses, s.exceptions, from.atStartOfDay())
-            if (t.blockStart != null) {
-                val end = TaskLogic.blockEnd(t, defaultBlockMinutes)!!
-                add(t.blockStart.toLocalDate(), BlockItem(t, t.blockStart, end))
-            } else if (due != null) {
-                add(due.toLocalDate(), TaskItem(t, due, t.dueHasTime || t.dueBeforeNextClass))
+            val blockEnd = t.blockStart?.let { TaskLogic.blockEnd(t, defaultBlockMinutes) }
+            if (t.blockStart != null && blockEnd != null) {
+                add(t.blockStart.toLocalDate(), BlockItem(t, t.blockStart, blockEnd))
+            }
+            if (due != null) {
+                // 同一天且仅用于表达时间块自身起止（或无具体时刻）的截止不重复占位；跨天截止或同天独立时刻截止保留 TaskItem
+                val sameDayBlockCoversDue =
+                    t.blockStart != null &&
+                        due.toLocalDate() == t.blockStart.toLocalDate() &&
+                        (!(t.dueHasTime || t.dueBeforeNextClass) || due == t.blockStart || due == blockEnd)
+                if (!sameDayBlockCoversDue) {
+                    add(due.toLocalDate(), TaskItem(t, due, t.dueHasTime || t.dueBeforeNextClass))
+                }
             }
         }
         return out.mapValues { (_, v) -> v.sortedWith(compareBy({ it.rank.takeIf { r -> r == 0 } ?: 1 }, { it.sortKey }, { it.rank })) }
@@ -144,10 +152,19 @@ object Agenda {
         to: LocalDate,
     ): Map<LocalDate, DayMarks> =
         range(snapshot, from, to).mapValues { (_, items) ->
+            val openTaskIds =
+                items
+                    .mapNotNull {
+                        when {
+                            it is TaskItem && !it.task.done -> it.task.id
+                            it is BlockItem && !it.task.done -> it.task.id
+                            else -> null
+                        }
+                    }.toSet()
             DayMarks(
                 items.count { it is CourseItem },
                 items.count { it is EventItem },
-                items.count { (it is TaskItem && !it.task.done) || (it is BlockItem && !it.task.done) },
+                openTaskIds.size,
             )
         }
 }

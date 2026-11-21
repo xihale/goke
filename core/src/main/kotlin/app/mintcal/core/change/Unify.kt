@@ -1,7 +1,7 @@
 package app.mintcal.core.change
 
 import app.mintcal.core.model.Event
-import app.mintcal.core.model.Recurrence
+import app.mintcal.core.model.EventKind
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
@@ -24,20 +24,36 @@ object Unify {
         sortOrder: Int,
     ): Task {
         val timed = !e.allDay
-        val note =
-            listOf(e.note.trim(), e.location.trim())
-                .filter { it.isNotEmpty() }
-                .joinToString("\n")
+        val location = e.location.trim()
         val minutes =
             Duration
                 .between(e.start, e.end)
                 .toMinutes()
                 .toInt()
                 .coerceIn(MIN_BLOCK, 24 * 60)
+        val tags =
+            buildList {
+                when (e.kind) {
+                    EventKind.EXAM -> add("考试")
+                    EventKind.COUNTDOWN -> add("倒数日")
+                    EventKind.NORMAL -> Unit
+                }
+                val cat = e.category.trim()
+                if (cat.isNotEmpty() && cat !in this) add(cat)
+            }
+        val extra =
+            buildMap {
+                if (e.kind == EventKind.EXAM || e.kind == EventKind.COUNTDOWN) {
+                    put("kind", e.kind.name)
+                    put("checkable", "false")
+                }
+                if (location.isNotEmpty()) put("location", location)
+            }
         return Task(
             id = id,
             title = e.title,
-            note = note,
+            note = e.note.trim(),
+            tags = tags,
             due = if (timed) e.end else e.start.toLocalDate().atTime(LocalTime.of(23, 59)),
             dueHasTime = timed,
             blockStart = if (timed) e.start else null,
@@ -46,6 +62,7 @@ object Unify {
             repeat = e.recurrence?.copy(),
             sortOrder = sortOrder,
             source = e.source,
+            extra = extra,
         )
     }
 

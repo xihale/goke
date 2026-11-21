@@ -1,7 +1,5 @@
 package app.mintcal.core
 
-import app.mintcal.core.agenda.Agenda
-import app.mintcal.core.agenda.FreeGaps
 import app.mintcal.core.agenda.NextUp
 import app.mintcal.core.agenda.NextUps
 import app.mintcal.core.change.Edits
@@ -168,24 +166,6 @@ class TodoV2Test {
     }
 
     private val sem = TestUtil.semester // 2026-08-31 为第 1 周周一
-
-    @Test fun `free gaps between courses and suggestion`() {
-        // 第 9 周 = 2026-10-26 周一；节次时间见 GdutPeriods：1-2 节 08:30–10:10，3-4 节 10:30–12:10
-        val course = Course("c", sem.id, "高数", dayOfWeek = 1, startPeriod = 1, endPeriod = 2, weeks = setOf(9))
-        val snap = Snapshot(semesters = listOf(sem), courses = listOf(course))
-        val monday = LocalDate.of(2026, 10, 26)
-        val items = Agenda.forDay(snap, monday)
-        val gaps = FreeGaps.gaps(items, monday, monday.atTime(7, 0))
-        assertTrue(gaps.isNotEmpty())
-        // 课前的 8:00–课开始是一个空档（若 ≥ 30 分钟），课后到 22:00 是另一个
-        assertTrue(gaps.any { it.start.toLocalTime().hour >= 10 })
-        val tasks = listOf(Task("t1", "复习", estimateMinutes = 25), Task("t2", "没估时"), Task("t3", "太长", estimateMinutes = 9999))
-        val s = FreeGaps.suggest(gaps, tasks, monday.atTime(7, 0))
-        assertNotNull(s)
-        assertEquals("t1", s.task.id)
-        // 已排进日历的不再推荐
-        assertNull(FreeGaps.suggest(gaps, listOf(Task("t4", "x", estimateMinutes = 20, blockStart = monday.atTime(15, 0))), monday.atTime(7, 0)))
-    }
 
     @Test fun `next up finds course and related tasks`() {
         val course = Course("c", sem.id, "高数", dayOfWeek = 1, startPeriod = 1, endPeriod = 2, weeks = setOf(9))

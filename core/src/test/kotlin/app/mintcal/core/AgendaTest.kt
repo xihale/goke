@@ -68,4 +68,49 @@ class AgendaTest {
         assertEquals(1, mk.courses)
         assertEquals(1, mk.tasks)
     }
+
+    @Test fun blockWithCrossDayOrDistinctTimedDuePreservesTaskItem() {
+        val crossDay =
+            Task(
+                id = "t1",
+                title = "写论文",
+                blockStart = mon.atTime(14, 0),
+                blockMinutes = 60,
+                due = mon.plusDays(2).atTime(23, 59),
+                dueHasTime = false,
+            )
+        val sameDayDistinct =
+            Task(
+                id = "t2",
+                title = "交实验报告",
+                blockStart = mon.atTime(10, 0),
+                blockMinutes = 60,
+                due = mon.atTime(20, 0),
+                dueHasTime = true,
+            )
+        val sameDayBlockEnd =
+            Task(
+                id = "t3",
+                title = "开会",
+                blockStart = mon.atTime(16, 0),
+                blockMinutes = 60,
+                due = mon.atTime(17, 0),
+                dueHasTime = true,
+            )
+        val snap = Snapshot(tasks = listOf(crossDay, sameDayDistinct, sameDayBlockEnd))
+        val m = Agenda.range(snap, mon, mon.plusDays(2))
+
+        val monItems = m[mon].orEmpty()
+        assertEquals(3, monItems.count { it is BlockItem })
+        val monTasks = monItems.filterIsInstance<TaskItem>()
+        assertEquals(listOf("t2"), monTasks.map { it.task.id })
+        assertEquals(mon.atTime(20, 0), monTasks.single().due)
+        assertTrue(monTasks.single().hasTime)
+        assertEquals(3, Agenda.marks(snap, mon, mon)[mon]!!.tasks)
+
+        val wedItems = m[mon.plusDays(2)].orEmpty()
+        assertEquals(1, wedItems.size)
+        val wedTask = assertIs<TaskItem>(wedItems.single())
+        assertEquals("t1", wedTask.task.id)
+    }
 }
