@@ -62,6 +62,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import app.mintcal.core.model.Freq
@@ -186,20 +187,21 @@ internal fun WhenPanel(
                 .padding(horizontal = 16.dp),
         ) {
             Column(Modifier.weight(1f).clipToBounds().verticalScroll(rememberScrollState())) {
+                val isTonight = date == today && startMin == 20 * 60 && minutes == null
                 Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                    QuickChip(Icons.Rounded.CalendarToday, stringResource(R.string.today), date == today && start == null, Modifier.weight(1f)) {
+                    QuickChip(Icons.Rounded.CalendarToday, stringResource(R.string.today), date == today && !isTonight, Modifier.weight(1f)) {
                         date = today
                         datePicked = true
                     }
-                    QuickChip(Icons.Rounded.WbSunny, stringResource(R.string.tomorrow), date == today.plusDays(1) && start == null, Modifier.weight(1f)) {
+                    QuickChip(Icons.Rounded.WbSunny, stringResource(R.string.tomorrow), date == today.plusDays(1), Modifier.weight(1f)) {
                         date = today.plusDays(1)
                         datePicked = true
                     }
-                    QuickChip(Icons.Rounded.DateRange, stringResource(R.string.date_next_monday), date == nextMonday(today) && start == null, Modifier.weight(1f)) {
+                    QuickChip(Icons.Rounded.DateRange, stringResource(R.string.date_next_monday), date == nextMonday(today), Modifier.weight(1f)) {
                         date = nextMonday(today)
                         datePicked = true
                     }
-                    QuickChip(Icons.Rounded.Bedtime, stringResource(R.string.tonight), date == today && startMin == 20 * 60 && minutes == null, Modifier.weight(1f)) {
+                    QuickChip(Icons.Rounded.Bedtime, stringResource(R.string.tonight), isTonight, Modifier.weight(1f)) {
                         date = today
                         datePicked = true
                         startMin = 20 * 60
@@ -224,6 +226,16 @@ internal fun WhenPanel(
                         timeDlg = true
                         wantDur = true
                     }
+                }
+                if (start != null && (m ?: 0) > 180) {
+                    Text(
+                        text = stringResource(R.string.timetable_over_3h_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 32.dp, bottom = 4.dp),
+                    )
                 }
                 SettingRow(Icons.Rounded.Alarm, stringResource(R.string.label_remind), remindLabel(remind), remind != null, onClear = { remind = null }) { remindDlg = true }
                 SettingRow(

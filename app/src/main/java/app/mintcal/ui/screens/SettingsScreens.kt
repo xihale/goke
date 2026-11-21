@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +31,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +44,7 @@ import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.LaptopMac
 import androidx.compose.material.icons.rounded.LocalShipping
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Palette
@@ -50,17 +53,17 @@ import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Spa
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.Terminal
-import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -78,18 +81,14 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import app.mintcal.BuildConfig
 import app.mintcal.R
-import app.mintcal.core.change.Change
-import app.mintcal.core.model.CourseException
-import app.mintcal.core.model.Semester
 import app.mintcal.data.DarkMode
-import app.mintcal.data.DemoData
 import app.mintcal.data.ThemeSource
 import app.mintcal.notify.Notifications
-import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
@@ -98,6 +97,7 @@ import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.MinutesDialSheet
 import app.mintcal.ui.components.NavRow
+import app.mintcal.ui.components.SectionLabel
 import app.mintcal.ui.components.SegmentedPill
 import app.mintcal.ui.components.SwitchRow
 import app.mintcal.ui.components.TimeDialSheet
@@ -108,8 +108,9 @@ import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.theme.Preset
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.time.LocalDateTime
+import kotlinx.coroutines.withContext
 import java.time.LocalTime
 import android.provider.Settings as AndroidSettings
 
@@ -124,34 +125,57 @@ fun SettingsScreen(onBack: () -> Unit) {
     fun ensureNotifPermission() {
         if (Build.VERSION.SDK_INT >= 33 && !Notifications.canPost(ctx)) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
-    // 权限入口行要实时状态：从系统设置回来后重算
-    var permOkCount by remember { mutableStateOf(permGrantedCount(ctx)) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { permOkCount = permGrantedCount(ctx) }
+    // 权限入口行要实时状态：从系统设置回来后在异步协程中重算
+    var permOkCount by remember { mutableIntStateOf(4) }
+    val scope = rememberCoroutineScope()
+
+    fun refreshPerms() {
+        scope.launch {
+            val count = withContext(Dispatchers.IO) { permGrantedCount(ctx) }
+            if (permOkCount != count) permOkCount = count
+        }
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refreshPerms() }
 
     MintScreen(title = stringResource(R.string.settings), onBack = onBack) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .navigationBarsPadding()
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+        LazyColumn(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .navigationBarsPadding(),
+            contentPadding = PaddingValues(bottom = 24.dp),
         ) {
-            FormSection {
-                val themeSource = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && st.themeSource == ThemeSource.DYNAMIC) ThemeSource.PRESET else st.themeSource
+            item(key = "appearance", contentType = "nav_row") {
+                val themeSource =
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && st.themeSource == ThemeSource.DYNAMIC) {
+                        ThemeSource.PRESET
+                    } else {
+                        st.themeSource
+                    }
                 val sourceLabel =
                     when (themeSource) {
                         ThemeSource.DYNAMIC -> stringResource(R.string.theme_dynamic)
                         ThemeSource.PRESET -> stringResource(Preset.entries.firstOrNull { it.key == st.preset }?.label ?: R.string.theme_preset)
                         ThemeSource.CUSTOM -> stringResource(R.string.theme_custom)
                     }
-                NavRow(stringResource(R.string.appearance), null, Icons.Rounded.Palette, trailing = sourceLabel) { nav.push(Route.Appearance) }
+                Box(Modifier.padding(top = 4.dp)) {
+                    NavRow(stringResource(R.string.appearance), null, Icons.Rounded.Palette, trailing = sourceLabel) { nav.push(Route.Appearance) }
+                }
             }
-            FormSection(stringResource(R.string.section_display)) {
+            item(key = "display_header", contentType = "section_label") {
+                SectionLabel(stringResource(R.string.section_display), modifier = Modifier.padding(top = 24.dp))
+            }
+            item(key = "display_show_teacher", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.show_teacher), null, st.showTeacher) { v -> app.settings.update { it.copy(showTeacher = v) } }
+            }
+            item(key = "display_week_starts_monday", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.week_starts_monday), null, st.weekStartsMonday) { v -> app.settings.update { it.copy(weekStartsMonday = v) } }
+            }
+            item(key = "display_swap_swipe", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.swap_swipe), stringResource(R.string.swap_swipe_desc), st.swapSwipe) { v -> app.settings.update { it.copy(swapSwipe = v) } }
+            }
+            item(key = "display_default_block", contentType = "value_row") {
                 var blockDial by remember { mutableStateOf(false) }
                 ValueRow(stringResource(R.string.default_block_minutes), durationLabel(st.defaultBlockMinutes), onClick = { blockDial = true })
                 if (blockDial) {
@@ -160,11 +184,16 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
             }
-            FormSection(stringResource(R.string.section_reminders)) {
+            item(key = "reminders_header", contentType = "section_label") {
+                SectionLabel(stringResource(R.string.section_reminders), modifier = Modifier.padding(top = 24.dp))
+            }
+            item(key = "remind_courses", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.remind_courses), stringResource(R.string.remind_courses_desc), st.remindCourse) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(remindCourse = v) }
                 }
+            }
+            item(key = "remind_courses_minutes", contentType = "expandable_value_row") {
                 AnimatedVisibility(
                     visible = st.remindCourse,
                     enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
@@ -188,18 +217,26 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                     }
                 }
+            }
+            item(key = "remind_tasks", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.remind_tasks), null, st.remindTask) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(remindTask = v) }
                 }
+            }
+            item(key = "remind_events", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.remind_events), null, st.remindEvent) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(remindEvent = v) }
                 }
+            }
+            item(key = "remind_digest", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.remind_digest), stringResource(R.string.remind_digest_desc), st.dailyDigest) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(dailyDigest = v) }
                 }
+            }
+            item(key = "remind_digest_time", contentType = "expandable_value_row") {
                 AnimatedVisibility(
                     visible = st.dailyDigest,
                     enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
@@ -219,10 +256,14 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                     }
                 }
+            }
+            item(key = "remind_quick_notif", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.quick_notif_row), stringResource(R.string.quick_notif_desc), st.quickAddNotif) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(quickAddNotif = v) }
                 }
+            }
+            item(key = "remind_auto_mute", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.auto_mute), stringResource(R.string.auto_mute_desc), st.autoMute) { v ->
                     val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     if (v && !nm.isNotificationPolicyAccessGranted) {
@@ -233,69 +274,164 @@ fun SettingsScreen(onBack: () -> Unit) {
                     app.settings.update { it.copy(autoMute = v) }
                 }
             }
-            FormSection {
-                NavRow(stringResource(R.string.settings_perm_title), null, Icons.Rounded.VerifiedUser, trailing = permStatusDesc(permOkCount)) { nav.push(Route.Permission) }
+            item(key = "group_sync_header", contentType = "section_label") {
+                SectionLabel(stringResource(R.string.settings_group_sync), modifier = Modifier.padding(top = 24.dp))
             }
-            FormSection(stringResource(R.string.section_more)) {
-                val account by app.sync.state.collectAsState()
-                val snap = liveSnapshot()
-                val trashCount = snap.allRecords().count { it.deletedAt != null && it !is CourseException }
-                NavRow(
-                    stringResource(R.string.sync_title),
-                    null,
-                    Icons.Rounded.Cloud,
-                    trailing = account.account?.username,
-                ) { nav.push(Route.Sync) }
-                val jxfwState by app.jxfw.state.collectAsState()
-                NavRow(
-                    stringResource(R.string.jxfw_title),
-                    null,
-                    Icons.Rounded.School,
-                    trailing = jxfwState.username,
-                ) { nav.push(Route.Jxfw) }
-                val mcpState by app.mcp.state.collectAsState()
-                NavRow(
-                    stringResource(R.string.mcp_title),
-                    null,
-                    Icons.Rounded.Terminal,
-                    trailing = stringResource(if (mcpState.running) R.string.mcp_status_on else R.string.mcp_status_off),
-                ) { nav.push(Route.Mcp) }
-                NavRow(stringResource(R.string.reliability_title), null, Icons.Rounded.NotificationsActive, trailing = permStatusDesc(permOkCount)) { nav.push(Route.Reliability) }
-                NavRow(stringResource(R.string.data_title), null, Icons.Rounded.SwapVert) { nav.push(Route.Data) }
+            item(key = "more_sync", contentType = "nav_row") {
+                SyncNavRow { nav.push(Route.Sync) }
+            }
+            item(key = "more_jxfw", contentType = "nav_row") {
+                JxfwNavRow { nav.push(Route.Jxfw) }
+            }
+            item(key = "group_tools_header", contentType = "section_label") {
+                SectionLabel(stringResource(R.string.settings_group_tools), modifier = Modifier.padding(top = 24.dp))
+            }
+            item(key = "more_lan_web", contentType = "nav_row") {
+                LanWebNavRow { nav.push(Route.LanWeb) }
+            }
+            item(key = "more_mcp", contentType = "nav_row") {
+                McpNavRow { nav.push(Route.Mcp) }
+            }
+            item(key = "more_parcel", contentType = "nav_row") {
                 NavRow(
                     stringResource(R.string.parcel_title),
                     null,
                     Icons.Rounded.LocalShipping,
                     trailing = stringResource(if (st.parcelEnabled) R.string.parcel_status_on else R.string.parcel_status_off),
                 ) { nav.push(Route.Parcel) }
+            }
+            item(key = "group_manage_header", contentType = "section_label") {
+                SectionLabel(stringResource(R.string.settings_group_manage), modifier = Modifier.padding(top = 24.dp))
+            }
+            item(key = "more_reliability", contentType = "nav_row") {
+                ReliabilityNavRow(permOkCount = { permOkCount }) { nav.push(Route.Reliability) }
+            }
+            item(key = "more_data", contentType = "nav_row") {
+                NavRow(stringResource(R.string.data_title), null, Icons.Rounded.SwapVert) { nav.push(Route.Data) }
+            }
+            item(key = "more_history", contentType = "nav_row") {
                 NavRow(stringResource(R.string.history_title), null, Icons.Rounded.History) { nav.push(Route.History) }
-                NavRow(
-                    stringResource(R.string.trash_title),
-                    null,
-                    Icons.Rounded.DeleteSweep,
-                    trailing = if (trashCount > 0) stringResource(R.string.conflict_count, trashCount) else null,
-                ) { nav.push(Route.Trash) }
+            }
+            item(key = "more_trash", contentType = "nav_row") {
+                TrashNavRow { nav.push(Route.Trash) }
+            }
+            item(key = "group_about_header", contentType = "section_label") {
+                SectionLabel(stringResource(R.string.settings_group_about), modifier = Modifier.padding(top = 24.dp))
+            }
+            item(key = "more_about", contentType = "nav_row") {
                 NavRow(stringResource(R.string.about_title), null, Icons.Rounded.Info) { nav.push(Route.About) }
             }
         }
     }
 }
 
-/** 可检测的三项权限（通知 / 精确闹钟 / 电池优化）；自启没有公开 API，不计数。 */
+@Composable
+private fun SyncNavRow(onOpen: () -> Unit) {
+    val app = LocalApp.current
+    val account by app.sync.state.collectAsState()
+    NavRow(
+        stringResource(R.string.sync_title),
+        null,
+        Icons.Rounded.Cloud,
+        trailing = account.account?.username,
+        onClick = onOpen,
+    )
+}
+
+@Composable
+private fun JxfwNavRow(onOpen: () -> Unit) {
+    val app = LocalApp.current
+    val jxfwState by app.jxfw.state.collectAsState()
+    NavRow(
+        stringResource(R.string.jxfw_title),
+        null,
+        Icons.Rounded.School,
+        trailing = jxfwState.username,
+        onClick = onOpen,
+    )
+}
+
+@Composable
+private fun LanWebNavRow(onOpen: () -> Unit) {
+    val app = LocalApp.current
+    val lanState by app.lanWeb.state.collectAsState()
+    NavRow(
+        stringResource(R.string.lan_web_title),
+        if (lanState.running) {
+            stringResource(R.string.lan_web_nav_running, lanState.port)
+        } else {
+            stringResource(R.string.lan_web_nav_off)
+        },
+        Icons.Rounded.LaptopMac,
+        onClick = onOpen,
+    )
+}
+
+@Composable
+private fun McpNavRow(onOpen: () -> Unit) {
+    val app = LocalApp.current
+    val mcpState by app.mcp.state.collectAsState()
+    NavRow(
+        stringResource(R.string.mcp_title),
+        null,
+        Icons.Rounded.Terminal,
+        trailing = stringResource(if (mcpState.running) R.string.mcp_status_on else R.string.mcp_status_off),
+        onClick = onOpen,
+    )
+}
+
+@Composable
+private fun TrashNavRow(onOpen: () -> Unit) {
+    val snap = liveSnapshot()
+    val trashCount =
+        remember(snap) {
+            snap.courses.count { it.deletedAt != null } +
+                snap.tasks.count { it.deletedAt != null } +
+                snap.events.count { it.deletedAt != null } +
+                snap.lists.count { it.deletedAt != null }
+        }
+    NavRow(
+        stringResource(R.string.trash_title),
+        null,
+        Icons.Rounded.DeleteSweep,
+        trailing = if (trashCount > 0) stringResource(R.string.conflict_count, trashCount) else null,
+        onClick = onOpen,
+    )
+}
+
+@Composable
+private fun ReliabilityNavRow(
+    permOkCount: () -> Int,
+    onOpen: () -> Unit,
+) {
+    NavRow(
+        stringResource(R.string.reliability_title),
+        null,
+        Icons.Rounded.NotificationsActive,
+        trailing = permStatusDesc(permOkCount()),
+        onClick = onOpen,
+    )
+}
+
+/** 可检测的四项提醒权限（通知开关 / 提醒渠道 / 精确闹钟 / 电池优化）；自启没有公开 API，不计数。 */
 private fun permGrantedCount(ctx: Context): Int {
-    val notif = Build.VERSION.SDK_INT < 33 || Notifications.canPost(ctx)
-    val exact = Build.VERSION.SDK_INT < 31 || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
+    val notif = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+    val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    val channel =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            nm.getNotificationChannel(Notifications.CHANNEL_REMINDER)?.importance != NotificationManager.IMPORTANCE_NONE
+    val exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
     val battery = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName)
-    return listOf(notif, exact, battery).count { it }
+    return listOf(notif, channel, exact, battery).count { it }
 }
 
 /** 权限状态短读数：全过 →「已就绪」，否则「N 项待授权」。 */
 @Composable
 private fun permStatusDesc(granted: Int): String =
-    if (granted == 3) {
+    if (granted == 4) {
         stringResource(R.string.settings_perm_desc_ok)
     } else {
-        stringResource(R.string.settings_perm_desc_n, 3 - granted)
+        stringResource(R.string.settings_perm_desc_n, 4 - granted)
     }
 
 /** 开机自启没有公开 API 可检测，只能按厂商尝试专页，失败落到应用详情页。 */
@@ -318,16 +454,30 @@ private fun openAutoStart(ctx: Context) {
 @Composable
 fun PermissionScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
-    val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
-    var notifOk by remember { mutableStateOf(Build.VERSION.SDK_INT < 33 || Notifications.canPost(ctx)) }
-    var exactOk by remember { mutableStateOf(Build.VERSION.SDK_INT < 31 || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()) }
-    var batteryOk by remember { mutableStateOf(pm.isIgnoringBatteryOptimizations(ctx.packageName)) }
-    // 从系统设置回来后重算，避免状态挂着不消失
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        notifOk = Build.VERSION.SDK_INT < 33 || Notifications.canPost(ctx)
-        exactOk = Build.VERSION.SDK_INT < 31 || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
-        batteryOk = pm.isIgnoringBatteryOptimizations(ctx.packageName)
+    var notifOk by remember { mutableStateOf(true) }
+    var exactOk by remember { mutableStateOf(true) }
+    var batteryOk by remember { mutableStateOf(true) }
+
+    val scope = rememberCoroutineScope()
+
+    fun refresh() {
+        scope.launch {
+            val (notif, exact, battery) =
+                withContext(Dispatchers.IO) {
+                    val notif = Build.VERSION.SDK_INT < 33 || Notifications.canPost(ctx)
+                    val exact = Build.VERSION.SDK_INT < 31 || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
+                    val battery = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName)
+                    Triple(notif, exact, battery)
+                }
+            notifOk = notif
+            exactOk = exact
+            batteryOk = battery
+        }
     }
+
+    LaunchedEffect(Unit) { refresh() }
+    // 从系统设置回来后在异步协程中重算，避免状态挂着不消失
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh() }
 
     fun open(intent: Intent) {
         runCatching { ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -382,12 +532,32 @@ fun AppearanceScreen(onBack: () -> Unit) {
     val st = settingsState()
     val dynamicOk = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val sources =
-        buildList {
-            if (dynamicOk) add(ThemeSource.DYNAMIC to ctx.getString(R.string.theme_dynamic))
-            add(ThemeSource.PRESET to ctx.getString(R.string.theme_preset))
-            add(ThemeSource.CUSTOM to ctx.getString(R.string.theme_custom))
+        remember(dynamicOk) {
+            buildList {
+                if (dynamicOk) add(ThemeSource.DYNAMIC to ctx.getString(R.string.theme_dynamic))
+                add(ThemeSource.PRESET to ctx.getString(R.string.theme_preset))
+                add(ThemeSource.CUSTOM to ctx.getString(R.string.theme_custom))
+            }
+        }
+    val darkModes =
+        remember {
+            listOf(
+                DarkMode.SYSTEM to ctx.getString(R.string.dark_system),
+                DarkMode.LIGHT to ctx.getString(R.string.dark_light),
+                DarkMode.DARK to ctx.getString(R.string.dark_dark),
+            )
+        }
+    val presetItems =
+        remember {
+            Preset.entries.map { it to ctx.getString(it.label) }
         }
     val source = if (!dynamicOk && st.themeSource == ThemeSource.DYNAMIC) ThemeSource.PRESET else st.themeSource
+    val scheme = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography
+    val onSurfaceColor = scheme.onSurface
+    val onSurfaceVariantColor = scheme.onSurfaceVariant
+    val labelSmallStyle = typography.labelSmall
+    val selectedBorder = remember(onSurfaceColor) { Modifier.border(3.dp, onSurfaceColor, CircleShape) }
 
     MintScreen(title = stringResource(R.string.appearance), onBack = onBack) {
         Column(
@@ -401,7 +571,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
         ) {
             FormSection(stringResource(R.string.theme_color)) {
                 SegmentedPill(sources, source, { v -> app.settings.update { it.copy(themeSource = v) } })
-                if (!dynamicOk) Text(stringResource(R.string.theme_dynamic_unavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                if (!dynamicOk) Text(stringResource(R.string.theme_dynamic_unavailable), style = typography.bodySmall, color = onSurfaceVariantColor, modifier = Modifier.padding(top = 6.dp))
                 Spacer(Modifier.height(10.dp))
                 when (source) {
                     ThemeSource.DYNAMIC -> {}
@@ -412,9 +582,8 @@ fun AppearanceScreen(onBack: () -> Unit) {
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            Preset.entries.forEach { p ->
+                            presetItems.forEach { (p, name) ->
                                 val sel = st.preset == p.key
-                                val name = stringResource(p.label)
                                 Column(
                                     Modifier.width(84.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -425,7 +594,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
                                             .size(48.dp)
                                             .clip(CircleShape)
                                             .background(p.seed)
-                                            .then(if (sel) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
+                                            .then(if (sel) selectedBorder else Modifier)
                                             .semantics {
                                                 contentDescription = name
                                                 role = Role.RadioButton
@@ -433,9 +602,9 @@ fun AppearanceScreen(onBack: () -> Unit) {
                                             }.mintClickable(pressedScale = 0.96f) { app.settings.update { it.copy(preset = p.key) } },
                                         contentAlignment = Alignment.Center,
                                     ) {
-                                        if (sel) Icon(Icons.Rounded.Check, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
+                                        if (sel) Icon(Icons.Rounded.Check, null, Modifier.size(20.dp), tint = onSurfaceColor)
                                     }
-                                    Text(name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                    Text(name, style = labelSmallStyle, color = onSurfaceVariantColor, maxLines = 1)
                                 }
                             }
                         }
@@ -507,7 +676,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
             }
             FormSection(stringResource(R.string.dark_mode)) {
                 SegmentedPill(
-                    listOf(DarkMode.SYSTEM to ctx.getString(R.string.dark_system), DarkMode.LIGHT to ctx.getString(R.string.dark_light), DarkMode.DARK to ctx.getString(R.string.dark_dark)),
+                    darkModes,
                     st.darkMode,
                     { v -> app.settings.update { it.copy(darkMode = v) } },
                 )
@@ -594,62 +763,7 @@ fun AboutScreen(onBack: () -> Unit) {
                     )
                 }
             }
-            DemoDataSection()
         }
-    }
-}
-
-/** 填入一批真实含量的演示数据：整批一次提交，可在操作记录里一步撤销。 */
-@Composable
-private fun DemoDataSection() {
-    val ctx = LocalContext.current
-    val app = LocalApp.current
-    val actions = LocalActions.current
-    val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    var confirm by remember { mutableStateOf(false) }
-    val snap =
-        app.repo.snapshot
-            .collectAsState()
-            .value
-    val semester = snap.currentSemester
-    val existing = snap.allRecords().count { it !is Semester && it.deletedAt == null }
-
-    fun fill() {
-        val sem = semester ?: return
-        busy = true
-        // 先删后建在同一次提交里：结果只剩演示数据，撤销一步就全部回来
-        val all = snap.allRecords()
-        scope.launch {
-            val cs = DemoData.build(LocalDateTime.now(), sem.id, replace = true, existing = all)
-            app.repo.commit(cs)
-            busy = false
-            actions.toast(ctx.getString(R.string.demo_data_done, cs.changes.count { it is Change.Add }))
-        }
-    }
-
-    FormSection(stringResource(R.string.demo_data_title)) {
-        FilledTonalButton(
-            enabled = !busy && semester != null,
-            onClick = { if (existing > 0) confirm = true else fill() },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(if (busy) R.string.demo_data_running else R.string.demo_data_replace))
-        }
-    }
-    if (confirm) {
-        AlertDialog(
-            onDismissRequest = { confirm = false },
-            title = { Text(stringResource(R.string.demo_data_confirm_title)) },
-            text = { Text(stringResource(R.string.demo_data_confirm_text, existing)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirm = false
-                    fill()
-                }) { Text(stringResource(R.string.demo_data_confirm_ok)) }
-            },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } },
-        )
     }
 }
 

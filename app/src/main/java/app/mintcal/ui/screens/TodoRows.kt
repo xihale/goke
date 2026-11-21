@@ -1,15 +1,7 @@
 package app.mintcal.ui.screens
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Flag
@@ -35,11 +26,9 @@ import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
@@ -50,10 +39,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -66,7 +53,6 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
-import app.mintcal.core.agenda.NextUp
 import app.mintcal.core.change.Edits
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Source
@@ -76,8 +62,6 @@ import app.mintcal.core.todo.TaskLogic
 import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
-import app.mintcal.ui.Route
-import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintCheck
 import app.mintcal.ui.components.ParcelCodeCopyButton
 import app.mintcal.ui.components.ParcelCodeHeadline
@@ -86,18 +70,22 @@ import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.components.parcelCode
 import app.mintcal.ui.components.parcelLabel
 import app.mintcal.ui.dueLabel
-import app.mintcal.ui.formatRooms
-import app.mintcal.ui.hm
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.theme.priorityColor
 import java.time.LocalDateTime
 
+private val RowSwipeShape = RoundedCornerShape(16.dp)
+private val SubAddFieldShape = RoundedCornerShape(12.dp)
+
 /** 行级查询索引：每页待办只建一次，行内不再对全量任务/清单/课程做线性扫描（200 条待办 × 10 可见行 ≈ 2000 次全扫 → 0）。 */
+@androidx.compose.runtime.Immutable
 class TodoIndex(
     val progress: Map<String, Pair<Int, Int>>,
     val due: Map<String, LocalDateTime?>,
     val listById: Map<String, app.mintcal.core.model.TaskList>,
     val courseById: Map<String, app.mintcal.core.model.Course>,
+    val subtasksByParent: Map<String, List<Task>> = emptyMap(),
+    val topTasks: List<Task> = emptyList(),
 )
 
 fun todoIndexOf(
@@ -105,66 +93,188 @@ fun todoIndexOf(
     now: LocalDateTime,
 ): TodoIndex {
     val sem = snap.currentSemester
+    val tasks = snap.tasks
+    val subtasks = HashMap<String, MutableList<Task>>()
+    val topTasks = ArrayList<Task>(tasks.size)
+    val due = HashMap<String, LocalDateTime?>(tasks.size)
+    var nextClassByCourse: HashMap<String, LocalDateTime?>? = null
+    for (t in tasks) {
+        if (t.deletedAt != null) continue
+        val pid = t.parentId
+        if (pid != null) {
+            subtasks.getOrPut(pid) { ArrayList(4) }.add(t)
+        } else {
+            topTasks.add(t)
+            val cid = t.courseId
+            due[t.id] =
+                if (t.dueBeforeNextClass && cid != null && sem != null) {
+                    val cache = nextClassByCourse ?: HashMap<String, LocalDateTime?>().also { nextClassByCourse = it }
+                    val nextStart =
+                        if (cache.containsKey(cid)) {
+                            cache[cid]
+                        } else {
+                            TaskLogic.effectiveDue(t.copy(due = null), sem, snap.courses, snap.exceptions, now).also { cache[cid] = it }
+                        }
+                    nextStart ?: t.due
+                } else {
+                    t.due
+                }
+        }
+    }
+    val progressMap = HashMap<String, Pair<Int, Int>>(subtasks.size)
+    for ((pid, subs) in subtasks) {
+        if (subs.size > 1) subs.sortBy { it.sortOrder }
+        var doneCount = 0
+        for (s in subs) {
+            if (s.done) doneCount++
+        }
+        progressMap[pid] = doneCount to subs.size
+    }
     return TodoIndex(
-        snap.tasks.associate { t -> t.id to TaskLogic.progress(snap.tasks, t.id) },
-        snap.tasks.associate { t -> t.id to TaskLogic.effectiveDue(t, sem, snap.courses, snap.exceptions, now) },
-        snap.lists.associateBy { it.id },
-        snap.courses.associateBy { it.id },
+        progress = progressMap,
+        due = due,
+        listById = snap.lists.associateBy { it.id },
+        courseById = snap.courses.associateBy { it.id },
+        subtasksByParent = subtasks,
+        topTasks = topTasks,
     )
 }
 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun TodoLine(
+/** 稳定/不可变的行展示模型，隔离单条勾选对全列表的重组波及。 */
+@androidx.compose.runtime.Immutable
+data class TodoRowModel(
+    val task: Task,
+    val listName: String? = null,
+    val listColorIndex: Int? = null,
+    val courseName: String? = null,
+    val dueText: String? = null,
+    val isOverdue: Boolean = false,
+    val subtasksDone: Int = 0,
+    val subtasksTotal: Int = 0,
+    val metaText: String = "",
+    val hasSubtasks: Boolean = false,
+    val expanded: Boolean = false,
+    val selected: Boolean = false,
+    val parcelCode: String? = null,
+    val parcelStation: String? = null,
+    val subtitleText: String =
+        listOfNotNull(
+            parcelStation,
+            dueText,
+            metaText.takeIf { it.isNotEmpty() },
+        ).joinToString(" · "),
+)
+
+fun buildTodoRowModel(
     task: Task,
     snap: Snapshot,
     now: LocalDateTime,
-    modifier: Modifier = Modifier,
-    /** 预构建的行级索引（见 [todoIndexOf]）；空则按旧路径逐行扫描（小列表场景）。 */
-    index: TodoIndex? = null,
-    selectMode: Boolean = false,
+    index: TodoIndex,
+    expanded: Boolean = false,
     selected: Boolean = false,
-    /** 有子任务时：null 不显示展开箭头；否则显示并反映当前展开状态。 */
-    expanded: Boolean? = null,
-    onToggleExpand: (() -> Unit)? = null,
-    onClick: (() -> Unit)? = null,
-    /** 长按：进入多选并勾上本行；combinedClickable 消费掉长按后不再触发 onClick。 */
-    onLongClick: (() -> Unit)? = null,
-) {
-    val ctx = LocalContext.current
-    val nav = LocalNav.current
-    val actions = LocalActions.current
-    val colors = MintTheme.colors
-    val due = index?.due?.get(task.id) ?: TaskLogic.effectiveDue(task, snap.currentSemester, snap.courses, snap.exceptions, now)
+    context: android.content.Context,
+): TodoRowModel {
+    val due = if (task.id in index.due) index.due[task.id] else TaskLogic.effectiveDue(task, snap.currentSemester, snap.courses, snap.exceptions, now)
     val overdue = TaskLogic.isOverdue(task, now)
-    val (done, total) = index?.progress?.get(task.id) ?: TaskLogic.progress(snap.tasks, task.id)
-    val list = index?.listById?.get(task.listId) ?: snap.lists.firstOrNull { it.id == task.listId }
-    val course = index?.courseById?.get(task.courseId) ?: snap.courses.firstOrNull { it.id == task.courseId }
-    val titleColor by animateColorAsState(if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface, MintTheme.spec(), label = "todo-title")
-    // 圈色 = 清单色，圈粗 = 优先级：不占一整行也能一眼分辨
+    val (done, total) = index.progress[task.id] ?: (0 to 0)
+    val list = index.listById[task.listId]
+    val course = index.courseById[task.courseId]
+    val code = task.parcelCode()
+    val station = if (code != null) task.parcelLabel()?.takeIf { it.isNotBlank() } else null
+    val meta =
+        buildList {
+            if (task.dropped) add(context.getString(R.string.todo_dropped_mark))
+            list?.let { add(it.name) }
+            if (total > 0) add(context.getString(R.string.subtasks_progress, done, total))
+            task.tags.take(2).forEach { add("#$it") }
+        }.joinToString(" · ")
+    val dueText =
+        due?.let {
+            if (task.dueBeforeNextClass && course != null) {
+                context.getString(R.string.before_next_class_short, course.name)
+            } else {
+                context.dueLabel(it, task.dueHasTime, now.toLocalDate())
+            }
+        }
+    val subtitleText =
+        listOfNotNull(
+            station,
+            dueText,
+            meta.takeIf { it.isNotEmpty() },
+        ).joinToString(" · ")
+    return TodoRowModel(
+        task = task,
+        listName = list?.name,
+        listColorIndex = list?.colorIndex,
+        courseName = course?.name,
+        dueText = dueText,
+        isOverdue = overdue,
+        subtasksDone = done,
+        subtasksTotal = total,
+        metaText = meta,
+        hasSubtasks = total > 0,
+        expanded = expanded && total > 0,
+        selected = selected,
+        parcelCode = code,
+        parcelStation = station,
+        subtitleText = subtitleText,
+    )
+}
+
+/** 兼容旧版 Set<String> 签名的重载。 */
+fun buildTodoRowModel(
+    task: Task,
+    snap: Snapshot,
+    now: LocalDateTime,
+    index: TodoIndex,
+    expanded: Set<String>,
+    selected: Set<String>,
+    context: android.content.Context,
+): TodoRowModel =
+    buildTodoRowModel(
+        task = task,
+        snap = snap,
+        now = now,
+        index = index,
+        expanded = task.id in expanded,
+        selected = task.id in selected,
+        context = context,
+    )
+
+/** 拆分后的高性能单行视图：精简冗余动画状态，直接通过 static 颜色与 mintClickable 呈现。 */
+@Composable
+fun TodoLine(
+    model: TodoRowModel,
+    modifier: Modifier = Modifier,
+    selectMode: Boolean = false,
+    selected: Boolean = model.selected,
+    expanded: Boolean = model.expanded,
+    onToggle: (Task, Boolean) -> Unit = { _, _ -> },
+    onClick: (Task) -> Unit = {},
+    onLongClick: ((Task) -> Unit)? = null,
+    onToggleExpand: ((String) -> Unit)? = null,
+) {
+    val colors = MintTheme.colors
+    val scheme = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography
+    val onSurfaceVariant = scheme.onSurfaceVariant
+    val bodySmall = typography.bodySmall
+    val isDone = model.task.done
+    val doneAlpha = 0.65f
+    val subColor = if (isDone) onSurfaceVariant.copy(alpha = doneAlpha) else onSurfaceVariant
+    val titleColor = if (isDone) subColor else scheme.onSurface
     val ring =
-        when (task.priority) {
+        when (model.task.priority) {
             3 -> 3.5.dp
             2 -> 2.75.dp
             else -> 2.dp
         }
-    val meta =
-        buildList {
-            if (task.dropped) add(ctx.getString(R.string.todo_dropped_mark))
-            list?.let { add(it.name) }
-            if (total > 0) add(ctx.getString(R.string.subtasks_progress, done, total))
-            task.tags.take(2).forEach { add("#$it") }
-        }
-    val haptics = LocalHapticFeedback.current
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(if (pressed) 0.98f else 1f, MintTheme.spec(), label = "todo-press")
-    val rowAlpha by animateFloatAsState(if (task.done) 0.45f else 1f, MintTheme.spec(), label = "todo-alpha")
-    val code = task.parcelCode()
-    val station = if (code != null) task.parcelLabel()?.takeIf { it.isNotBlank() } else null
+    val code = model.parcelCode
+    val station = model.parcelStation
+    val isRowSelected = if (selectMode) selected else false
     val rowBgModifier =
-        if (selectMode && selected) {
-            Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f), shape = MaterialTheme.shapes.medium)
+        if (isRowSelected) {
+            Modifier.background(scheme.primaryContainer.copy(alpha = 0.45f), shape = MaterialTheme.shapes.medium)
         } else {
             Modifier
         }
@@ -173,68 +283,70 @@ fun TodoLine(
             modifier
                 .fillMaxWidth()
                 .then(rowBgModifier)
-                .graphicsLayer {
-                    scaleX = pressScale
-                    scaleY = pressScale
-                    alpha = rowAlpha
-                }.combinedClickable(
-                    interactionSource = interaction,
-                    indication = null,
-                    onLongClick = onLongClick,
-                    onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                        if (onClick != null) onClick() else nav.openTask(task.id)
-                    },
-                ).heightIn(min = 48.dp)
-                .padding(start = 4.dp, end = if (code != null && !selectMode && expanded == null) 4.dp else 10.dp, top = 7.dp, bottom = 7.dp),
+                .mintClickable(
+                    enabled = !(selectMode && isDone),
+                    pressedScale = 0.98f,
+                    onLongClick =
+                        if (onLongClick != null && !isDone) {
+                            { onLongClick(model.task) }
+                        } else {
+                            null
+                        },
+                ) {
+                    onClick(model.task)
+                }.heightIn(min = 48.dp)
+                .padding(start = 4.dp, end = if (code != null && !selectMode && !model.hasSubtasks) 4.dp else 10.dp, top = 7.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (selectMode) {
             Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                Icon(
-                    if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
-                    null,
-                    tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                )
+                if (isDone) {
+                    Icon(
+                        Icons.Rounded.Check,
+                        null,
+                        tint = scheme.outline.copy(alpha = 0.38f),
+                        modifier = Modifier.size(18.dp),
+                    )
+                } else {
+                    Icon(
+                        if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                        null,
+                        tint = if (selected) scheme.primary else scheme.outline,
+                    )
+                }
             }
         } else {
             MintCheck(
-                task.done,
-                { d -> toggle(actions, snap, task, d, now, ctx.getString(R.string.done_toast, task.title)) },
-                tint = list?.let { colors.fg(it.colorIndex) },
+                isDone,
+                { d -> onToggle(model.task, d) },
+                tint = model.listColorIndex?.let { colors.fg(it) },
                 strokeWidth = ring,
             )
         }
         Column(Modifier.weight(1f)) {
             if (code != null) {
-                ParcelCodeHeadline(code = code, done = task.done, copyEnabled = !selectMode)
+                ParcelCodeHeadline(code = code, done = isDone, copyEnabled = !selectMode)
             } else {
                 Text(
-                    task.title,
-                    style = MaterialTheme.typography.bodyLarge,
+                    model.task.title,
+                    style = typography.bodyLarge,
                     color = titleColor,
-                    textDecoration = if (task.done) TextDecoration.LineThrough else null,
+                    textDecoration = if (isDone) TextDecoration.LineThrough else null,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            val dueText =
-                due?.let {
-                    if (task.dueBeforeNextClass && course != null) {
-                        stringResource(R.string.before_next_class_short, course.name)
-                    } else {
-                        ctx.dueLabel(it, task.dueHasTime, now.toLocalDate())
-                    }
-                }
-            val extraMeta = listOfNotNull(station, meta.takeIf { it.isNotEmpty() }?.joinToString(" · "))
-            if (dueText != null || extraMeta.isNotEmpty()) {
-                if (overdue && !task.done && dueText != null) {
+            val dueText = model.dueText
+            val meta = model.metaText
+            val hasSubtitle = model.subtitleText.isNotEmpty()
+            if (hasSubtitle) {
+                if (model.isOverdue && !isDone && dueText != null) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 1.dp)) {
                         if (station != null) {
                             Text(
                                 "$station · ",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = bodySmall,
+                                color = onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false),
@@ -242,31 +354,25 @@ fun TodoLine(
                         }
                         Text(
                             dueText,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = bodySmall,
                             color = colors.removed,
                             maxLines = 1,
                         )
                         if (meta.isNotEmpty()) {
                             Text(
-                                " · " + meta.joinToString(" · "),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                " · $meta",
+                                style = bodySmall,
+                                color = onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
                 } else {
-                    val subtitleLine =
-                        listOfNotNull(
-                            station,
-                            dueText,
-                            meta.takeIf { it.isNotEmpty() }?.joinToString(" · "),
-                        ).joinToString(" · ")
                     Text(
-                        subtitleLine,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        model.subtitleText,
+                        style = bodySmall,
+                        color = subColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 1.dp),
@@ -274,29 +380,171 @@ fun TodoLine(
                 }
             }
         }
-        // 快递默认自带中优先级（2 档），优先把尾部让给一键复制图标；手动升为高优或普通待办照常显旗
-        val showFlag = code == null || (task.source != Source.PARCEL && task.priority > 0) || task.priority >= 3
+        val showFlag = code == null || (model.task.source != Source.PARCEL && model.task.priority > 0) || model.task.priority >= 3
         if (showFlag) {
-            colors.priorityColor(task.priority)?.let { prio ->
-                Icon(Icons.Rounded.Flag, null, Modifier.padding(end = if (code != null && !selectMode) 2.dp else 8.dp).size(14.dp), tint = prio)
+            colors.priorityColor(model.task.priority)?.let { prio ->
+                val flagTint = if (isDone) prio.copy(alpha = 0.45f) else prio
+                Icon(Icons.Rounded.Flag, null, Modifier.padding(end = if (code != null && !selectMode) 2.dp else 8.dp).size(14.dp), tint = flagTint)
             }
         }
         if (code != null && !selectMode) {
             ParcelCodeCopyButton(code)
         }
-        if (expanded != null && onToggleExpand != null) {
-            val rot by animateFloatAsState(if (expanded) 0f else -90f, MintTheme.spec(), label = "sub-chevron")
-            IconButton(onClick = onToggleExpand, Modifier.size(48.dp)) {
-                Icon(Icons.Rounded.ExpandMore, stringResource(R.string.todo_toggle_subtasks), Modifier.rotate(rot), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (model.hasSubtasks && onToggleExpand != null) {
+            val chevronMod = if (expanded) Modifier else Modifier.rotate(-90f)
+            IconButton(onClick = { onToggleExpand(model.task.id) }, Modifier.size(48.dp)) {
+                Icon(Icons.Rounded.ExpandMore, stringResource(R.string.todo_toggle_subtasks), chevronMod, tint = subColor)
             }
         }
     }
 }
 
-/**
- * 行手势：右滑完成/恢复；左滑不再直接删，而是弹「改期」抽屉（今天/明天/…/不做了/删除）。
- * 选择模式下关闭滑动。lambda 里一律读最新的 task / snap，避免行复用后拿到旧值。
- */
+/** 兼容调用方（如 CourseEditScreen）的原签名重载。 */
+@Composable
+fun TodoLine(
+    task: Task,
+    snap: Snapshot,
+    now: LocalDateTime,
+    modifier: Modifier = Modifier,
+    index: TodoIndex? = null,
+    selectMode: Boolean = false,
+    selected: Boolean = false,
+    expanded: Boolean? = null,
+    onToggleExpand: (() -> Unit)? = null,
+    onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
+) {
+    val ctx = LocalContext.current
+    val nav = LocalNav.current
+    val actions = LocalActions.current
+    val actualIndex = index ?: remember(snap, now) { todoIndexOf(snap, now) }
+    val isExpanded = expanded == true
+    val model =
+        remember(task, actualIndex.due[task.id], actualIndex.progress[task.id], actualIndex.listById[task.listId]) {
+            buildTodoRowModel(
+                task = task,
+                snap = snap,
+                now = now,
+                index = actualIndex,
+                expanded = false,
+                selected = false,
+                context = ctx,
+            )
+        }
+    TodoLine(
+        model = model,
+        modifier = modifier,
+        selectMode = selectMode,
+        selected = selected,
+        expanded = isExpanded,
+        onToggle = { t, d -> toggle(actions, snap, t, d, now, ctx.getString(R.string.done_toast, t.title)) },
+        onClick = { if (onClick != null) onClick() else nav.openTask(task.id) },
+        onLongClick = onLongClick?.let { l -> { l() } },
+        onToggleExpand = onToggleExpand?.let { e -> { e() } },
+    )
+}
+
+/** 优化的待办行组件：接收稳定行模型，手势与勾选回调解耦。 */
+@Suppress("DEPRECATION")
+@Composable
+internal fun TodoRow(
+    model: TodoRowModel,
+    swipeEnabled: Boolean,
+    selectMode: Boolean,
+    swapSwipe: Boolean = false,
+    expanded: Boolean = model.expanded,
+    selected: Boolean = model.selected,
+    onToggle: (Task, Boolean) -> Unit,
+    onClick: (Task) -> Unit,
+    onLongClick: ((Task) -> Unit)? = null,
+    onSwipeLeft: (Task) -> Unit,
+    onToggleExpand: ((String) -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MintTheme.colors
+    val haptics = LocalHapticFeedback.current
+    val modelNow by rememberUpdatedState(model)
+    val onToggleNow by rememberUpdatedState(onToggle)
+    val onSwipeLeftNow by rememberUpdatedState(onSwipeLeft)
+    val state =
+        rememberSwipeToDismissBoxState(
+            confirmValueChange = { v ->
+                val currentTask = modelNow.task
+                when (v) {
+                    SwipeToDismissBoxValue.StartToEnd -> {
+                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                        if (swapSwipe) onSwipeLeftNow(currentTask) else onToggleNow(currentTask, !currentTask.done)
+                    }
+
+                    SwipeToDismissBoxValue.EndToStart -> {
+                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                        if (swapSwipe) onToggleNow(currentTask, !currentTask.done) else onSwipeLeftNow(currentTask)
+                    }
+
+                    SwipeToDismissBoxValue.Settled -> {}
+                }
+                false
+            },
+        )
+    val direction = state.dismissDirection
+    val swiping = direction != SwipeToDismissBoxValue.Settled
+    SwipeToDismissBox(
+        state = state,
+        modifier = if (swiping) modifier.clip(RowSwipeShape) else modifier,
+        enableDismissFromStartToEnd = swipeEnabled,
+        enableDismissFromEndToStart = swipeEnabled,
+        backgroundContent = {
+            if (swiping) {
+                val right = direction == SwipeToDismissBoxValue.StartToEnd
+                val doneSide = right != swapSwipe
+                val bg = if (doneSide) colors.added else MaterialTheme.colorScheme.tertiary
+                val icon = if (doneSide) Icons.Rounded.Check else Icons.Rounded.Event
+                val label =
+                    stringResource(
+                        when {
+                            doneSide && model.task.done -> R.string.a11y_mark_undone
+                            doneSide -> R.string.todo_complete
+                            else -> R.string.todo_reschedule
+                        },
+                    )
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(bg.copy(alpha = 0.18f))
+                        .padding(horizontal = 20.dp),
+                    contentAlignment = if (right) Alignment.CenterStart else Alignment.CenterEnd,
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (right) {
+                            Icon(icon, null, tint = bg, modifier = Modifier.size(20.dp))
+                            Text(label, style = MaterialTheme.typography.labelLarge, color = bg)
+                        } else {
+                            Text(label, style = MaterialTheme.typography.labelLarge, color = bg)
+                            Icon(icon, null, tint = bg, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+            }
+        },
+    ) {
+        TodoLine(
+            model = model,
+            modifier = if (swiping) Modifier.background(MaterialTheme.colorScheme.background, RowSwipeShape) else Modifier,
+            selectMode = selectMode,
+            selected = selected,
+            expanded = expanded,
+            onToggle = onToggle,
+            onClick = onClick,
+            onLongClick = onLongClick,
+            onToggleExpand = onToggleExpand,
+        )
+    }
+}
+
+/** 兼容旧版 TodoRow 签名的重载。 */
 @Composable
 internal fun TodoRow(
     task: Task,
@@ -316,78 +564,37 @@ internal fun TodoRow(
 ) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
-    val colors = MintTheme.colors
-    val haptics = LocalHapticFeedback.current
-    val taskNow by rememberUpdatedState(task)
-    val snapNow by rememberUpdatedState(snap)
-    val clock by rememberUpdatedState(now)
-    val leftNow by rememberUpdatedState(onSwipeLeft)
-    val toggleDone = {
-        val t = taskNow
-        toggle(actions, snapNow, t, !t.done, clock, ctx.getString(R.string.done_toast, t.title))
-    }
-    val state =
-        rememberSwipeToDismissBoxState(
-            confirmValueChange = { v ->
-                when (v) {
-                    SwipeToDismissBoxValue.StartToEnd -> {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        if (swapSwipe) leftNow() else toggleDone()
-                    }
-
-                    SwipeToDismissBoxValue.EndToStart -> {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        if (swapSwipe) toggleDone() else leftNow()
-                    }
-
-                    SwipeToDismissBoxValue.Settled -> {}
-                }
-                false
-            },
-        )
-    val shape = RoundedCornerShape(16.dp)
-    val swiping = state.dismissDirection != SwipeToDismissBoxValue.Settled
-    SwipeToDismissBox(
-        state = state,
-        modifier = modifier.clip(shape),
-        enableDismissFromStartToEnd = swipeEnabled,
-        enableDismissFromEndToStart = swipeEnabled,
-        backgroundContent = {
-            if (swiping) {
-                // 右滑（StartToEnd）默认显示完成；交换后显示改期
-                val right = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
-                val doneSide = right != swapSwipe
-                val bg = if (doneSide) colors.added else MaterialTheme.colorScheme.tertiary
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .clip(shape)
-                        .background(bg.copy(alpha = 0.18f))
-                        .padding(horizontal = 22.dp),
-                    contentAlignment = if (right) Alignment.CenterStart else Alignment.CenterEnd,
-                ) {
-                    Icon(if (doneSide) Icons.Rounded.Check else Icons.Rounded.Event, null, tint = bg)
-                }
-            }
-        },
-    ) {
-        TodoLine(
-            task,
-            snap,
-            now,
-            modifier = if (swiping) Modifier.background(MaterialTheme.colorScheme.background, shape) else Modifier,
-            selectMode = selectMode,
-            selected = selected,
-            index = index,
-            expanded = expanded,
-            onToggleExpand = onToggleExpand,
-            onClick = onClick,
-            onLongClick = onLongClick,
-        )
-    }
+    val actualIndex = index ?: remember(snap, now) { todoIndexOf(snap, now) }
+    val isExpanded = expanded == true
+    val model =
+        remember(task, actualIndex.due[task.id], actualIndex.progress[task.id], actualIndex.listById[task.listId]) {
+            buildTodoRowModel(
+                task = task,
+                snap = snap,
+                now = now,
+                index = actualIndex,
+                expanded = false,
+                selected = false,
+                context = ctx,
+            )
+        }
+    TodoRow(
+        model = model,
+        swipeEnabled = swipeEnabled,
+        selectMode = selectMode,
+        selected = selected,
+        expanded = isExpanded,
+        swapSwipe = swapSwipe,
+        onToggle = { t, d -> toggle(actions, snap, t, d, now, ctx.getString(R.string.done_toast, t.title)) },
+        onClick = { onClick() },
+        onLongClick = onLongClick?.let { l -> { l() } },
+        onSwipeLeft = { onSwipeLeft() },
+        onToggleExpand = onToggleExpand?.let { e -> { e() } },
+        modifier = modifier,
+    )
 }
 
-/** 展开后缩进显示的子任务行。 */
+/** 展开后缩进显示的子任务行：移除冗余 animateFloatAsState 与行级图层。 */
 @Composable
 internal fun SubRow(
     sub: Task,
@@ -398,25 +605,30 @@ internal fun SubRow(
     val ctx = LocalContext.current
     val nav = LocalNav.current
     val actions = LocalActions.current
-    val subAlpha by animateFloatAsState(if (sub.done) 0.45f else 1f, MintTheme.spec(), label = "sub-alpha")
+    val scheme = MaterialTheme.colorScheme
+    val doneAlpha = 0.65f
+    val titleColor =
+        if (sub.done) {
+            scheme.onSurfaceVariant.copy(alpha = doneAlpha)
+        } else {
+            scheme.onSurface
+        }
     Row(
         modifier
             .fillMaxWidth()
             .padding(start = 40.dp)
             .clip(MaterialTheme.shapes.medium)
-            .graphicsLayer { alpha = subAlpha }
             .mintClickable(pressedScale = 0.98f) { nav.openTask(sub.id) }
             .heightIn(min = 48.dp)
             .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        app.mintcal.ui.components
-            .MintCheck(sub.done, { d -> toggle(actions, snap, sub, d, now, ctx.getString(R.string.done_toast, sub.title)) })
+        MintCheck(sub.done, { d -> toggle(actions, snap, sub, d, now, ctx.getString(R.string.done_toast, sub.title)) })
         Text(
             sub.title,
             Modifier.weight(1f).padding(start = 6.dp),
             style = MaterialTheme.typography.bodyMedium,
-            color = if (sub.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+            color = titleColor,
             textDecoration = if (sub.done) TextDecoration.LineThrough else null,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -452,7 +664,7 @@ internal fun InlineSubAdd(
         leadingIcon = { Spacer(Modifier.width(48.dp)) },
         placeholder = { Text(stringResource(R.string.add_subtask), style = MaterialTheme.typography.bodyMedium) },
         singleLine = true,
-        shape = RoundedCornerShape(12.dp),
+        shape = SubAddFieldShape,
         colors = transparentFieldColors(),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { add() }),
@@ -471,44 +683,48 @@ internal fun SectionHeader(
     modifier: Modifier = Modifier,
     action: (@Composable () -> Unit)? = null,
 ) {
-    val rot by animateFloatAsState(if (collapsed) -90f else 0f, MintTheme.spec(), label = "section-chevron")
     val colors = MintTheme.colors
+    val scheme = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography
+    val smallShape = MaterialTheme.shapes.small
+    val onSurfaceVariant = scheme.onSurfaceVariant
+    val isOverdue = bucket == Bucket.OVERDUE
     // 逾期桶整组用警示色；已完成弱化；其余正常标题色
     val titleColor =
         when (bucket) {
             Bucket.OVERDUE -> colors.removed
-            Bucket.DONE -> MaterialTheme.colorScheme.onSurfaceVariant
-            else -> MaterialTheme.colorScheme.onSurface
+            Bucket.DONE -> onSurfaceVariant
+            else -> scheme.onSurface
         }
-    val pillBg =
-        if (bucket == Bucket.OVERDUE) colors.removed.copy(alpha = 0.1f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
-    val pillFg = if (bucket == Bucket.OVERDUE) colors.removed else MaterialTheme.colorScheme.onSurfaceVariant
+    val pillFg = if (isOverdue) colors.removed else onSurfaceVariant
+    val pillBg = pillFg.copy(alpha = 0.1f)
     val expansion = stringResource(if (collapsed) R.string.state_collapsed else R.string.state_expanded)
+    val chevronMod = if (collapsed) Modifier.rotate(-90f).size(20.dp) else Modifier.size(20.dp)
     Row(
         modifier
             .fillMaxWidth()
-            .clip(MaterialTheme.shapes.small)
+            .clip(smallShape)
             .semantics { stateDescription = expansion }
             .mintClickable(role = Role.Button, pressedScale = 0.98f, onClick = onToggle)
             .heightIn(min = 48.dp)
             .padding(start = 6.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.ExpandMore, null, Modifier.rotate(rot).size(20.dp), tint = titleColor)
+        Icon(Icons.Rounded.ExpandMore, null, chevronMod, tint = titleColor)
         Text(
             stringResource(bucketRes(bucket)),
             Modifier.weight(1f).padding(start = 6.dp),
-            style = MaterialTheme.typography.labelLarge,
+            style = typography.labelLarge,
             color = titleColor,
         )
         // 计数做成小胶囊，不再和标题拼字符串
         Text(
             count.toString(),
             Modifier
-                .clip(MaterialTheme.shapes.small)
+                .clip(smallShape)
                 .background(pillBg)
                 .padding(horizontal = 10.dp, vertical = 3.dp),
-            style = MaterialTheme.typography.labelMedium,
+            style = typography.labelMedium,
             color = pillFg,
         )
         if (action != null) {
@@ -516,52 +732,7 @@ internal fun SectionHeader(
         }
         if (onAdd != null) {
             IconButton(onClick = onAdd, Modifier.size(48.dp)) {
-                Icon(Icons.Rounded.Add, stringResource(R.string.todo_add_here), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-/** 顶部「下一件事」：只报下一节课 + 课前待办的计数胶囊。待办本身在各自分区里出现一次，不在这张卡里重列。 */
-@Composable
-internal fun NextUpCard(
-    up: NextUp,
-    now: LocalDateTime,
-    modifier: Modifier = Modifier,
-) {
-    val ctx = LocalContext.current
-    val today = now.toLocalDate()
-    val nav = LocalNav.current
-    val o = up.occurrence
-    val whenText = (if (o.date == today) "" else ctx.dueLabel(o.date.atStartOfDay(), false, today) + " ") + o.start.hm()
-    val roomText = o.room.takeIf { it.isNotBlank() }?.let { ctx.formatRooms(it) }
-    MintCard(modifier) {
-        Text(stringResource(R.string.todo_next_up), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .mintClickable(role = Role.Button, pressedScale = 0.98f) { nav.push(Route.CourseEdit(o.course.id)) },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    o.course.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    listOfNotNull(whenText, roomText).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (up.tasks.isNotEmpty()) {
-                Tag(up.tasks.size.toString(), MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+                Icon(Icons.Rounded.Add, stringResource(R.string.todo_add_here), tint = onSurfaceVariant)
             }
         }
     }

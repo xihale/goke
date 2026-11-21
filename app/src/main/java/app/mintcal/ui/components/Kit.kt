@@ -2,9 +2,9 @@ package app.mintcal.ui.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -18,8 +18,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.snapping.SnapPosition
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,7 +56,6 @@ import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CalendarViewWeek
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Inbox
@@ -90,12 +90,20 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -107,12 +115,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 import app.mintcal.R
 import app.mintcal.ui.Tab
+import app.mintcal.ui.theme.LocalReduceMotion
 import app.mintcal.ui.theme.MintTheme
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
@@ -218,7 +230,7 @@ fun Tag(
     }
 }
 
-/** 勾选框：两态保持相同轮廓，命中区保底 48dp，使用水波与触觉反馈。 */
+/** 勾选框：两态保持相同轮廓，命中区保底 48dp；轻量单节点直接绘制圆角框与勾选路径，点击不振动，静止零协程。 */
 @Composable
 fun MintCheck(
     checked: Boolean,
@@ -230,37 +242,188 @@ fun MintCheck(
     /** 圈的粗细（如用粗细表示优先级）。 */
     strokeWidth: Dp = 2.dp,
 ) {
-    val shape = MaterialTheme.shapes.extraSmall
-    // 完成态整体退灰：描边与勾都是灰、不再填充清单色/主题色，少占视觉资源
-    val stroke by animateColorAsState(if (checked) MaterialTheme.colorScheme.onSurfaceVariant else (tint ?: MaterialTheme.colorScheme.outline), MintTheme.spec(), label = "check-stroke")
-    val tick by animateFloatAsState(if (checked) 1f else 0f, MintTheme.spec(), label = "check-tick")
-    val haptics = LocalHapticFeedback.current
-    val interaction = remember { MutableInteractionSource() }
+    val scheme = MaterialTheme.colorScheme
+    val checkColor = scheme.onSurfaceVariant
+    val strokeColor = tint ?: scheme.outline
+    val reduceMotion = LocalReduceMotion.current
     Box(
-        modifier
-            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-            .clip(CircleShape)
-            .toggleable(
-                value = checked,
-                role = Role.Checkbox,
-                interactionSource = interaction,
-                indication = null,
-                onValueChange = {
-                    haptics.performHapticFeedback(if (checked) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
-                    onChange(!checked)
-                },
-            ),
-        contentAlignment = Alignment.Center,
+        modifier =
+            modifier
+                .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                .clip(CircleShape)
+                .toggleable(
+                    value = checked,
+                    interactionSource = null,
+                    indication = null,
+                    role = Role.Checkbox,
+                    onValueChange = { onChange(!checked) },
+                ).then(
+                    MintCheckElement(
+                        checked = checked,
+                        boxSize = size,
+                        strokeWidth = strokeWidth,
+                        checkColor = checkColor,
+                        strokeColor = strokeColor,
+                        reduceMotion = reduceMotion,
+                    ),
+                ),
+    )
+}
+
+private data class MintCheckElement(
+    val checked: Boolean,
+    val boxSize: Dp,
+    val strokeWidth: Dp,
+    val checkColor: Color,
+    val strokeColor: Color,
+    val reduceMotion: Boolean,
+) : ModifierNodeElement<MintCheckNode>() {
+    override fun create(): MintCheckNode =
+        MintCheckNode(
+            checked = checked,
+            boxSize = boxSize,
+            strokeWidth = strokeWidth,
+            checkColor = checkColor,
+            strokeColor = strokeColor,
+            reduceMotion = reduceMotion,
+        )
+
+    override fun update(node: MintCheckNode) {
+        node.update(
+            checked = checked,
+            boxSize = boxSize,
+            strokeWidth = strokeWidth,
+            checkColor = checkColor,
+            strokeColor = strokeColor,
+            reduceMotion = reduceMotion,
+        )
+    }
+}
+
+private class MintCheckNode(
+    private var checked: Boolean,
+    private var boxSize: Dp,
+    private var strokeWidth: Dp,
+    private var checkColor: Color,
+    private var strokeColor: Color,
+    private var reduceMotion: Boolean,
+) : Modifier.Node(),
+    DrawModifierNode {
+    private var progress: Float = if (checked) 1f else 0f
+    private var animatable: Animatable<Float, AnimationVector1D>? = null
+    private var animJob: Job? = null
+    private var checkPath: Path? = null
+
+    override fun onAttach() {
+        progress = if (checked) 1f else 0f
+    }
+
+    override fun onDetach() {
+        animJob?.cancel()
+        animJob = null
+        progress = if (checked) 1f else 0f
+    }
+
+    fun update(
+        checked: Boolean,
+        boxSize: Dp,
+        strokeWidth: Dp,
+        checkColor: Color,
+        strokeColor: Color,
+        reduceMotion: Boolean,
     ) {
-        Box(
-            Modifier
-                .size(size)
-                .clip(shape)
-                .border(strokeWidth, stroke, shape),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (tick > 0.01f) Icon(Icons.Rounded.Check, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(size * 0.7f * tick.coerceIn(0f, 1f)))
+        val checkedChanged = this.checked != checked
+        val visualChanged =
+            this.boxSize != boxSize ||
+                this.strokeWidth != strokeWidth ||
+                this.checkColor != checkColor ||
+                this.strokeColor != strokeColor
+        this.checked = checked
+        this.boxSize = boxSize
+        this.strokeWidth = strokeWidth
+        this.checkColor = checkColor
+        this.strokeColor = strokeColor
+        this.reduceMotion = reduceMotion
+
+        if (checkedChanged) {
+            val target = if (checked) 1f else 0f
+            animJob?.cancel()
+            animJob = null
+            if (!isAttached || reduceMotion) {
+                progress = target
+                invalidateDraw()
+            } else {
+                val anim = animatable ?: Animatable(progress).also { animatable = it }
+                animJob =
+                    coroutineScope.launch {
+                        if (anim.value != progress) {
+                            anim.snapTo(progress)
+                        }
+                        anim.animateTo(target, PressScaleSpec) {
+                            progress = value
+                            invalidateDraw()
+                        }
+                        progress = target
+                        invalidateDraw()
+                    }
+            }
+        } else if (visualChanged) {
+            invalidateDraw()
         }
+    }
+
+    override fun ContentDrawScope.draw() {
+        val t = progress.coerceIn(0f, 1f)
+        val boxPx = boxSize.toPx()
+        val strokePx = strokeWidth.toPx()
+        val halfStroke = strokePx / 2f
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val left = cx - boxPx / 2f + halfStroke
+        val top = cy - boxPx / 2f + halfStroke
+        val rectSize = boxPx - strokePx
+        val cornerPx = 4.dp.toPx()
+        val currentStrokeColor =
+            when {
+                t <= 0f -> strokeColor
+                t >= 1f -> checkColor
+                else -> lerp(strokeColor, checkColor, t)
+            }
+        drawRoundRect(
+            color = currentStrokeColor,
+            topLeft = Offset(left, top),
+            size = Size(rectSize, rectSize),
+            cornerRadius = CornerRadius(cornerPx, cornerPx),
+            style = Stroke(width = strokePx),
+        )
+        if (t > 0f) {
+            val checkStrokePx = 2.dp.toPx()
+            val boxLeft = cx - boxPx / 2f
+            val boxTop = cy - boxPx / 2f
+            val path = checkPath ?: Path().also { checkPath = it }
+            path.rewind()
+            path.moveTo(boxLeft + boxPx * 0.28f, boxTop + boxPx * 0.52f)
+            path.lineTo(boxLeft + boxPx * 0.44f, boxTop + boxPx * 0.70f)
+            path.lineTo(boxLeft + boxPx * 0.74f, boxTop + boxPx * 0.34f)
+            val drawBlock: DrawScope.() -> Unit = {
+                drawPath(
+                    path = path,
+                    color = if (t >= 1f) checkColor else checkColor.copy(alpha = t),
+                    style =
+                        Stroke(
+                            width = checkStrokePx,
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round,
+                        ),
+                )
+            }
+            if (t >= 0.999f) {
+                drawBlock()
+            } else {
+                scale(scaleX = t, scaleY = t, pivot = Offset(cx, cy), block = drawBlock)
+            }
+        }
+        drawContent()
     }
 }
 
@@ -272,6 +435,8 @@ fun SwitchRow(
     enabled: Boolean = true,
     onChange: (Boolean) -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography
     Row(
         Modifier
             .fillMaxWidth()
@@ -280,8 +445,8 @@ fun SwitchRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).padding(end = 16.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
-            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(title, style = typography.bodyLarge, color = if (enabled) scheme.onSurface else scheme.onSurfaceVariant)
+            if (subtitle != null) Text(subtitle, style = typography.bodySmall, color = scheme.onSurfaceVariant)
         }
         Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
     }
@@ -296,25 +461,28 @@ fun NavRow(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography
+    val variantColor = scheme.onSurfaceVariant
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .alpha(if (enabled) 1f else 0.38f)
+            .then(if (enabled) Modifier else Modifier.alpha(0.38f))
             .mintClickable(enabled = enabled, pressedScale = 0.98f, onClick = onClick)
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
-            Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            Icon(icon, null, tint = variantColor, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(12.dp))
         }
         Column(Modifier.weight(1f).padding(end = 16.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
-            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(title, style = typography.bodyLarge, color = if (enabled) scheme.onSurface else variantColor)
+            if (subtitle != null) Text(subtitle, style = typography.bodySmall, color = variantColor)
         }
-        if (trailing != null) Text(trailing, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (trailing != null) Text(trailing, style = typography.bodyMedium, color = variantColor)
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = variantColor)
     }
 }
 
@@ -347,17 +515,25 @@ fun FloatingNavBar(
 ) {
     val items = NAV_ITEMS
     val selectedIndex = items.indexOfFirst { it.tab == tab }
-    val haptics = LocalHapticFeedback.current
     val travel = remember { Animatable(selectedIndex.toFloat()) }
-    val spec = MintTheme.spec<Float>()
-    LaunchedEffect(selectedIndex) {
-        travel.animateTo(selectedIndex.toFloat(), spec)
+    val reduce = LocalReduceMotion.current
+    // 色块是「手指下的即时状态」，用 fast spatial：跨 3 格的滑动约 150ms 到位，不再拖尾巴
+    val spec = MintTheme.press<Float>()
+    LaunchedEffect(selectedIndex, reduce) {
+        if (reduce) {
+            travel.snapTo(selectedIndex.toFloat())
+        } else {
+            travel.animateTo(selectedIndex.toFloat(), spec)
+        }
     }
     val scheme = MaterialTheme.colorScheme
     val dark = scheme.background.luminance() < 0.5f
     val bar = if (dark) scheme.surfaceContainerHigh else scheme.surfaceContainer
     // 深色里 surfaceContainerHighest 和岛几乎同色，选中块会糊成一块污渍；往文字色混一档，仍是中性色
     val thumb = if (dark) lerp(bar, scheme.onSurface, 0.16f) else scheme.surfaceContainerHighest
+    val activeColor = scheme.primary
+    val inactiveColor = scheme.onSurfaceVariant
+
     Surface(
         modifier =
             modifier
@@ -389,57 +565,56 @@ fun FloatingNavBar(
             Row(Modifier.fillMaxSize()) {
                 items.forEach { item ->
                     val selected = item.tab == tab
-                    val interaction = remember { MutableInteractionSource() }
-                    val fg by animateColorAsState(
-                        if (selected) scheme.primary else scheme.onSurfaceVariant,
-                        MintTheme.spec(),
-                        label = "nav-fg",
+                    NavBarItemView(
+                        item = item,
+                        selected = selected,
+                        primaryColor = activeColor,
+                        unselectedColor = inactiveColor,
+                        onTab = onTab,
                     )
-                    val pressed by interaction.collectIsPressedAsState()
-                    val pressScale by animateFloatAsState(
-                        if (pressed) 0.96f else 1f,
-                        MintTheme.spec(),
-                        label = "nav-press",
-                    )
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clip(CircleShape)
-                            .selectable(
-                                selected = selected,
-                                interactionSource = interaction,
-                                // 按下不做高亮：选中态由滑动的色块表达，避免闪底色
-                                indication = null,
-                                role = Role.Tab,
-                                onClick = {
-                                    // 重选当前 Tab 也给触觉回执（回顶动效是视觉回执），避免「点了没反应」
-                                    haptics.performHapticFeedback(if (selected) HapticFeedbackType.LongPress else HapticFeedbackType.SegmentTick)
-                                    onTab(item.tab)
-                                },
-                            ),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Box(Modifier.height(26.dp), contentAlignment = Alignment.Center) {
-                            Icon(
-                                item.icon,
-                                null,
-                                tint = fg,
-                                modifier =
-                                    Modifier
-                                        .graphicsLayer {
-                                            scaleX = pressScale
-                                            scaleY = pressScale
-                                        }.size(24.dp),
-                            )
-                        }
-                        Spacer(Modifier.height(2.dp))
-                        Text(stringResource(item.label), style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1)
-                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RowScope.NavBarItemView(
+    item: NavItem,
+    selected: Boolean,
+    primaryColor: Color,
+    unselectedColor: Color,
+    onTab: (Tab) -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val fg = if (selected) primaryColor else unselectedColor
+    Column(
+        Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .clip(CircleShape)
+            .selectable(
+                selected = selected,
+                interactionSource = interaction,
+                // 按下不做高亮：选中态由滑动的色块表达；也不振动——
+                // 标签切换是导航，不是手势，系统组件同样不在这里给触觉
+                indication = null,
+                role = Role.Tab,
+                onClick = { onTab(item.tab) },
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(Modifier.height(26.dp), contentAlignment = Alignment.Center) {
+            Icon(
+                item.icon,
+                null,
+                tint = fg,
+                modifier = Modifier.mintPressScale(interaction, 0.96f).size(24.dp),
+            )
+        }
+        Spacer(Modifier.height(2.dp))
+        Text(stringResource(item.label), style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1)
     }
 }
 
@@ -635,7 +810,10 @@ private fun wheelCenter(state: LazyListState): Int? {
     return visible.minByOrNull { abs((it.offset + it.size / 2) - center) }?.index
 }
 
-/** 统一按压反馈：按下轻微缩放 + 长按触觉；不做背景高亮。用于自绘可点击块（课程格、格子等）。 */
+/**
+ * 统一按压反馈：按下轻微缩放，不做背景高亮。用于自绘可点击块（课程格、格子等）。
+ * 触觉只留给手势本身（长按启动拖动、拖动吸附），普通点击一律不振动。
+ */
 @Composable
 fun Modifier.mintPressable(
     pressedScale: Float = 0.96f,
@@ -643,26 +821,156 @@ fun Modifier.mintPressable(
     onClick: () -> Unit,
 ): Modifier {
     val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) pressedScale else 1f, MintTheme.spec(), label = "press-scale")
-    val haptics = LocalHapticFeedback.current
     return this
-        .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-        }.clickable(
+        .mintPressScale(source, pressedScale, enabled)
+        .clickable(
             interactionSource = source,
             indication = null,
             enabled = enabled,
-        ) {
-            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-            onClick()
+            onClick = onClick,
+        )
+}
+
+private val PressScaleSpec = spring<Float>(dampingRatio = 1f, stiffness = 1400f)
+
+/**
+ * 按压几何回弹：基于 DrawModifierNode 按需监听与绘制，未按下时零协程、零动画对象、零硬件图层；
+ * 仅在按压与回弹期间通过 Canvas scale 缩放绘制内容，静止态直接 drawContent()。
+ */
+fun Modifier.mintPressScale(
+    source: InteractionSource,
+    pressedScale: Float,
+    enabled: Boolean = true,
+): Modifier = this then PressScaleElement(source, pressedScale, enabled)
+
+private data class PressScaleElement(
+    val source: InteractionSource,
+    val pressedScale: Float,
+    val enabled: Boolean,
+) : ModifierNodeElement<PressScaleNode>() {
+    override fun create(): PressScaleNode = PressScaleNode(source, pressedScale, enabled)
+
+    override fun update(node: PressScaleNode) {
+        node.update(source, pressedScale, enabled)
+    }
+}
+
+private class PressScaleNode(
+    private var source: InteractionSource,
+    private var pressedScale: Float,
+    private var enabled: Boolean,
+) : Modifier.Node(),
+    DrawModifierNode {
+    private var currentScale: Float = 1f
+    private var collectJob: Job? = null
+    private var animJob: Job? = null
+    private var animatable: Animatable<Float, AnimationVector1D>? = null
+
+    override fun onAttach() {
+        syncCollector()
+    }
+
+    override fun onDetach() {
+        collectJob?.cancel()
+        collectJob = null
+        animJob?.cancel()
+        animJob = null
+        currentScale = 1f
+    }
+
+    fun update(
+        source: InteractionSource,
+        pressedScale: Float,
+        enabled: Boolean,
+    ) {
+        val sourceChanged = this.source != source
+        val enabledChanged = this.enabled != enabled
+        this.source = source
+        this.pressedScale = pressedScale
+        this.enabled = enabled
+        if (!enabled) {
+            collectJob?.cancel()
+            collectJob = null
+            animJob?.cancel()
+            animJob = null
+            if (currentScale != 1f) {
+                currentScale = 1f
+                invalidateDraw()
+            }
+        } else if (sourceChanged || enabledChanged) {
+            if (sourceChanged) {
+                animJob?.cancel()
+                animJob = null
+                if (currentScale != 1f) {
+                    currentScale = 1f
+                    invalidateDraw()
+                }
+            }
+            syncCollector()
         }
+    }
+
+    private fun syncCollector() {
+        collectJob?.cancel()
+        collectJob = null
+        if (!isAttached || !enabled) return
+        val currentSource = source
+        collectJob =
+            coroutineScope.launch {
+                val activePresses = mutableListOf<PressInteraction.Press>()
+                var isPressed = false
+                currentSource.interactions.collect { interaction ->
+                    when (interaction) {
+                        is PressInteraction.Press -> activePresses.add(interaction)
+                        is PressInteraction.Release -> activePresses.remove(interaction.press)
+                        is PressInteraction.Cancel -> activePresses.remove(interaction.press)
+                    }
+                    val nowPressed = activePresses.isNotEmpty()
+                    if (nowPressed != isPressed) {
+                        isPressed = nowPressed
+                        animateToScale(if (nowPressed && enabled) pressedScale else 1f)
+                    }
+                }
+            }
+    }
+
+    private fun animateToScale(target: Float) {
+        animJob?.cancel()
+        if (!isAttached) {
+            currentScale = target
+            return
+        }
+        val anim = animatable ?: Animatable(currentScale).also { animatable = it }
+        animJob =
+            coroutineScope.launch {
+                if (anim.value != currentScale) {
+                    anim.snapTo(currentScale)
+                }
+                anim.animateTo(target, PressScaleSpec) {
+                    currentScale = value
+                    invalidateDraw()
+                }
+                currentScale = target
+                invalidateDraw()
+            }
+    }
+
+    override fun ContentDrawScope.draw() {
+        val s = currentScale
+        if (s >= 0.999f) {
+            drawContent()
+        } else {
+            scale(scaleX = s, scaleY = s, pivot = center) {
+                this@draw.drawContent()
+            }
+        }
+    }
 }
 
 /**
- * mintPressable 的通用版：可选长按、角色语义、触觉开关。
+ * mintPressable 的通用版：可选长按、角色语义。
  * 全局 NoIndication 下所有自绘可点区域统一走这里，保证「点了有反应」的基线不丢。
+ * 长按的触觉由 combinedClickable 自己发，这里不再叠加一次。
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -671,23 +979,15 @@ fun Modifier.mintClickable(
     pressedScale: Float = 0.96f,
     role: Role? = null,
     selected: Boolean? = null,
-    haptic: Boolean = true,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ): Modifier {
     val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) pressedScale else 1f, MintTheme.spec(), label = "press-scale")
-    val haptics = LocalHapticFeedback.current
-    val click: () -> Unit = {
-        if (haptic) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        onClick()
-    }
     val gesture =
         if (onLongClick != null) {
-            Modifier.combinedClickable(interactionSource = source, indication = null, enabled = enabled, role = role, onClick = click, onLongClick = onLongClick)
+            Modifier.combinedClickable(interactionSource = source, indication = null, enabled = enabled, role = role, onClick = onClick, onLongClick = onLongClick)
         } else {
-            Modifier.clickable(interactionSource = source, indication = null, enabled = enabled, role = role, onClick = click)
+            Modifier.clickable(interactionSource = source, indication = null, enabled = enabled, role = role, onClick = onClick)
         }
     val semanticsMod =
         if (selected != null) {
@@ -696,12 +996,17 @@ fun Modifier.mintClickable(
             Modifier
         }
     return this
-        .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-        }.then(gesture)
+        .mintPressScale(source, pressedScale, enabled)
+        .then(gesture)
         .then(semanticsMod)
 }
+
+/**
+ * 工具栏 / 底栏上的菜单统一用这份 Popup 属性：菜单不抢焦点，键盘保持打开，
+ * 浮层位置也不会跟着 IME 的升降重新算——否则会飘在正文上、底下留一条空。
+ */
+@Composable
+fun rememberNoFocusPopup(): PopupProperties = remember { PopupProperties(focusable = false) }
 
 /** 一次可撤销操作：条还在时持有对应变更集和当时的说明。 */
 data class UndoPrompt(

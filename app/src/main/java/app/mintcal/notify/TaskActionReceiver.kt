@@ -50,7 +50,7 @@ class TaskActionReceiver : BroadcastReceiver() {
                         .putExtra(ReminderReceiver.EXTRA_ID, nid)
                         .putExtra(ReminderReceiver.EXTRA_TASK_ID, taskId)
                         .putExtra(ReminderReceiver.EXTRA_PERSISTENT, intent.getBooleanExtra(ReminderReceiver.EXTRA_PERSISTENT, false))
-                val pi = PendingIntent.getBroadcast(context, 0, again, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                val pi = PendingIntent.getBroadcast(context, taskId.hashCode(), again, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
                 val am = context.getSystemService(AlarmManager::class.java)
                 val at = System.currentTimeMillis() + SNOOZE_MS
                 runCatching {

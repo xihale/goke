@@ -435,8 +435,6 @@ class ScreensSmokeTest {
         rule.onNodeWithContentDescription("更多选项").performClick()
         rule.onNodeWithText("删除").performClick()
         rule.waitForIdle()
-        // 确认对话框的删除按钮
-        rule.onNodeWithText("删除").performClick()
         rule.waitUntil(5_000) {
             app.repo.snapshot.value.tasks
                 .any { it.id == task.id && it.deletedAt != null }

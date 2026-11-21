@@ -80,6 +80,7 @@ import app.mintcal.ui.components.SegmentedPill
 import app.mintcal.ui.components.TimePickerDlg
 import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.components.mintClickable
+import app.mintcal.ui.components.rememberNoFocusPopup
 import app.mintcal.ui.formatRooms
 import app.mintcal.ui.fullDate
 import app.mintcal.ui.hm
@@ -126,9 +127,12 @@ fun EditTimetableScreen(onBack: () -> Unit) {
         onDispose {
             val (n, w, t) = latest
             val s = semNow
-            if (n.isNotBlank() && (n != s.name || w != s.week1Monday || t != s.totalWeeks)) {
-                val upd = s.copy(name = n.trim(), week1Monday = w.with(java.time.DayOfWeek.MONDAY), totalWeeks = t)
-                actions.commit(Edits.save(snapNow, upd, ctx.getString(R.string.edit_semester_desc), System.currentTimeMillis()))
+            val trimmed = n.trim()
+            val monday = w.with(java.time.DayOfWeek.MONDAY)
+            if (trimmed.isNotBlank() && (trimmed != s.name || monday != s.week1Monday || t != s.totalWeeks)) {
+                val upd = s.copy(name = trimmed, week1Monday = monday, totalWeeks = t)
+                val desc = ctx.getString(R.string.edit_semester_desc)
+                actions.commit(Edits.save(snapNow, upd, desc, System.currentTimeMillis()), desc)
             }
         }
     }
@@ -303,6 +307,10 @@ private fun JxfwSyncCard(sem: Semester) {
                     Text(state.progress.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            jxfwCardErrorText(state.lastErrorKind, state.lastError)?.let { err ->
+                Spacer(Modifier.height(6.dp))
+                Text(err, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 FilledTonalButton(
@@ -313,7 +321,7 @@ private fun JxfwSyncCard(sem: Semester) {
                                 app.jxfw.fullSync()
                                 actions.toast(ctx.getString(R.string.jxfw_done_toast))
                             } catch (_: JxfwException) {
-                                // 错误已写入状态，详情页里能看到
+                                // 错误已写入 state.lastError / lastErrorKind 并在卡片内联展示
                             }
                         }
                     },
@@ -328,6 +336,20 @@ private fun JxfwSyncCard(sem: Semester) {
         }
     }
 }
+
+@Composable
+private fun jxfwCardErrorText(
+    kind: JxfwException.Kind?,
+    raw: String?,
+): String? =
+    when (kind) {
+        null -> raw
+        JxfwException.Kind.CREDENTIALS -> stringResource(R.string.jxfw_err_credentials)
+        JxfwException.Kind.CAPTCHA -> stringResource(R.string.jxfw_err_captcha)
+        JxfwException.Kind.SMS -> stringResource(R.string.jxfw_err_sms)
+        JxfwException.Kind.NETWORK -> stringResource(R.string.jxfw_err_network)
+        else -> raw
+    }
 
 /** 一门课一行：植物色竖条 + 课名 + 时段摘要（多时段折叠成「前两个 · N 个时段」）+ 教室 + 右箭头。 */
 @Composable
@@ -400,6 +422,7 @@ fun PeriodsScreen(onBack: () -> Unit) {
     var periods by remember(sem.id) { mutableStateOf(sem.periods.sortedBy { it.index }) }
     var editing by remember { mutableStateOf<Pair<Int, Boolean>?>(null) }
     var menu by remember { mutableStateOf(false) }
+    val noFocusPopup = rememberNoFocusPopup()
     val latest by rememberUpdatedState(periods)
     val semNow by rememberUpdatedState(sem)
     val snapNow by rememberUpdatedState(snap)
@@ -436,7 +459,7 @@ fun PeriodsScreen(onBack: () -> Unit) {
         actions = {
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
-                DropdownMenu(menu, { menu = false }) {
+                DropdownMenu(menu, { menu = false }, properties = noFocusPopup) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.reset_default)) },
                         onClick = {

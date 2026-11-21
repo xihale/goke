@@ -36,17 +36,23 @@ class SyncStore(
         account: SyncAccount,
         token: String,
     ) {
+        // 同账号重新验证时保留游标、水位线与上次同步时间，避免丢弃增量进度
+        val sameAccount = _account.value?.let { it.serverUrl == account.serverUrl && it.username == account.username } == true
         secrets.setSyncToken(token)
         sp
             .edit()
             .putString("url", account.serverUrl)
             .putString("user", account.username)
             .putString("role", account.role)
-            .putLong("cursor", 0)
-            .putLong("watermark", 0)
-            .remove("lastSyncAt")
+            .putBoolean("needsRelogin", false)
             .remove("lastError")
-            .apply()
+            .apply {
+                if (!sameAccount) {
+                    putLong("cursor", 0)
+                    putLong("watermark", 0)
+                    remove("lastSyncAt")
+                }
+            }.apply()
         _account.value = account
     }
 
@@ -62,9 +68,14 @@ class SyncStore(
             .remove("watermark")
             .remove("lastSyncAt")
             .remove("lastError")
+            .remove("needsRelogin")
             .apply()
         _account.value = null
     }
+
+    var needsRelogin: Boolean
+        get() = sp.getBoolean("needsRelogin", false)
+        set(v) = sp.edit().putBoolean("needsRelogin", v).apply()
 
     var cursor: Long
         get() = sp.getLong("cursor", 0)

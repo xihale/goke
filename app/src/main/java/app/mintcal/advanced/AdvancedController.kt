@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.CopyOnWriteArrayList
 
 data class AdvancedState(
     val changeSet: ChangeSet? = null,
@@ -24,6 +25,12 @@ class AdvancedController(
 ) {
     private val _state = MutableStateFlow(AdvancedState())
     val state: StateFlow<AdvancedState> = _state.asStateFlow()
+    private val onConsumedListeners = CopyOnWriteArrayList<(String) -> Unit>()
+
+    fun addOnConsumedListener(listener: (String) -> Unit): () -> Unit {
+        onConsumedListeners += listener
+        return { onConsumedListeners -= listener }
+    }
 
     fun stagePreview(
         changeSet: ChangeSet,
@@ -33,7 +40,9 @@ class AdvancedController(
     }
 
     fun discard() {
+        val cs = _state.value.changeSet
         _state.value = AdvancedState()
+        if (cs != null) notifyConsumed(cs.id)
     }
 
     fun clearIfMatching(previewId: String) {
@@ -50,9 +59,14 @@ class AdvancedController(
             return
         }
         _state.value = AdvancedState()
+        notifyConsumed(cs.id)
         app.scope.launch {
             val committed = app.repo.commit(cs.copy(id = Ids.next(), source = Source.CODE))
             onDone(committed)
         }
+    }
+
+    private fun notifyConsumed(previewId: String) {
+        onConsumedListeners.forEach { it(previewId) }
     }
 }

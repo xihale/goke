@@ -1,7 +1,6 @@
 package app.mintcal.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,10 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -120,7 +117,6 @@ private fun MonthGrid(
 ) {
     val ctx = LocalContext.current
     val first = month.atDay(1).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-    val haptics = LocalHapticFeedback.current
     val today = LocalDate.now()
     Column {
         Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
@@ -150,10 +146,8 @@ private fun MonthGrid(
                         Modifier
                             .weight(1f)
                             .height(48.dp)
-                            .clickable {
-                                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                                onPick(d)
-                            }.semantics(mergeDescendants = true) {
+                            .mintClickable(pressedScale = 0.96f, role = Role.Button) { onPick(d) }
+                            .semantics(mergeDescendants = true) {
                                 role = Role.Button
                                 this.selected = sel
                                 contentDescription = desc

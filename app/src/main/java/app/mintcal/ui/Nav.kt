@@ -33,7 +33,7 @@ sealed interface Route {
 
     @Serializable data object Settings : Route
 
-    /** 权限统一入口：通知 / 精确闹钟 / 自启 / 后台，一页管完。 */
+    /** 权限与可靠性自检入口（Route.Permission 路由已统一指向 ReliabilityScreen）。 */
     @Serializable data object Permission : Route
 
     @Serializable data object Trash : Route
@@ -43,6 +43,8 @@ sealed interface Route {
     @Serializable data object Parcel : Route
 
     @Serializable data object Mcp : Route
+
+    @Serializable data object LanWeb : Route
 
     @Serializable data object Periods : Route
 
@@ -81,6 +83,14 @@ sealed interface Route {
         val courseId: String? = null,
         /** 周历上框选了几天：其余日期（ISO，逗号分隔）跟着一起建。 */
         val extraDates: String? = null,
+        val listId: String? = null,
+        val remindMinutes: Int? = null,
+        val remindPersistent: Boolean = false,
+        val repeatFreq: String? = null,
+        val repeatInterval: Int = 1,
+        val repeatUntil: String? = null,
+        val repeatByDays: String? = null,
+        val repeatByMonths: String? = null,
     ) : Route
 }
 

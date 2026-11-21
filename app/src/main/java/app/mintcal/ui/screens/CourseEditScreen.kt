@@ -92,12 +92,15 @@ import app.mintcal.ui.components.SectionLabel
 import app.mintcal.ui.components.TonalField
 import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.components.mintClickable
+import app.mintcal.ui.components.rememberNoFocusPopup
 import app.mintcal.ui.formatRooms
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
+import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.weekdayShort
+import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 
 /** 一条上课时段（对应一条 Course 记录）：同一门课可以有多个时段，各自带教室与提醒。 */
@@ -190,8 +193,16 @@ fun CourseEditScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
     var pageMenu by remember { mutableStateOf(false) }
+    val noFocusPopup = rememberNoFocusPopup()
     val nameFocus = remember { FocusRequester() }
-    LaunchedEffect(existing == null) { if (existing == null) nameFocus.requestFocus() }
+    val reduce = reduceMotion()
+    LaunchedEffect(existing == null) {
+        if (existing == null) {
+            // 延迟到路由进入动画完成后再拉起软键盘，避免首帧触发同步 IMM/WMS Binder 交易与窗口重排
+            delay(if (reduce) 16L else 280L)
+            nameFocus.requestFocus()
+        }
+    }
 
     val origin = existing
 
@@ -265,19 +276,57 @@ fun CourseEditScreen(
         }
     val dirty = fieldDirty || slots != initialSlots
 
+    // 冲突检测只与已排课表、学期及当前时段配置（星期/节次/周次）相关，
+    // 课程名/教师/颜色/备注变动不改变冲突关系，避免表单打字时每帧触发全学期排课展开
+    val conflictMatches =
+        remember(snap, slots) {
+            val list =
+                slots.mapNotNull { s ->
+                    if (s.weeks.isEmpty()) return@mapNotNull null
+                    val b = s.base
+                    if (b != null) {
+                        b.copy(
+                            dayOfWeek = s.dayOfWeek,
+                            startPeriod = s.startPeriod,
+                            endPeriod = s.endPeriod,
+                            weeks = s.weeks,
+                        )
+                    } else {
+                        Course(
+                            id = s.id,
+                            semesterId = sem.id,
+                            name = "",
+                            teacher = "",
+                            room = s.room,
+                            dayOfWeek = s.dayOfWeek,
+                            startPeriod = s.startPeriod,
+                            endPeriod = s.endPeriod,
+                            weeks = s.weeks,
+                            colorIndex = 0,
+                            remindMinutes = null,
+                            note = "",
+                            source = Source.MANUAL,
+                        )
+                    }
+                }
+            if (list.isEmpty()) {
+                emptyList()
+            } else {
+                val synthetic = snap.apply(Edits.saveAll(snap, list, "", 0), 0)
+                list
+                    .flatMap { c -> Conflicts.detect(synthetic, setOf(c.id)) }
+                    .distinctBy { listOf(it.aId, it.bId, it.start) }
+            }
+        }
+
     val preview =
-        remember(snap, valid, dirty, name, teacher, color, note, slots) {
-            if (!valid || !dirty) {
+        remember(conflictMatches, valid, dirty, name) {
+            if (!valid || !dirty || conflictMatches.isEmpty()) {
                 null
             } else {
-                val list = slots.mapNotNull { materialize(it) }
-                if (list.isEmpty()) {
-                    null
-                } else {
-                    val synthetic = snap.apply(Edits.saveAll(snap, list, "", 0), 0)
-                    list
-                        .flatMap { c -> Conflicts.detect(synthetic, setOf(c.id)) }
-                        .distinctBy { listOf(it.aTitle, it.bTitle, it.start) }
+                val displayName = name.trim()
+                conflictMatches.map { c ->
+                    if (displayName.isNotBlank()) c.copy(aTitle = displayName) else c
                 }
             }
         }
@@ -302,7 +351,7 @@ fun CourseEditScreen(
         val desc = ctx.getString(if (origin == null) R.string.add_course_desc else R.string.edit_course_desc, name.trim())
         actions.commit(
             ChangeSet(Ids.next(), desc, Source.MANUAL, ms, changes),
-            desc.takeIf { changes.any { c -> c is Change.Remove } },
+            desc,
         )
         if (leave) onBack()
     }
@@ -341,7 +390,7 @@ fun CourseEditScreen(
             } else {
                 Box {
                     IconButton(onClick = { pageMenu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
-                    DropdownMenu(pageMenu, { pageMenu = false }) {
+                    DropdownMenu(pageMenu, { pageMenu = false }, properties = noFocusPopup) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.delete)) },
                             leadingIcon = { Icon(Icons.Rounded.Delete, null) },
@@ -460,7 +509,6 @@ fun CourseEditScreen(
                 label = stringResource(R.string.label_teacher),
                 value = teacher,
                 onChange = { teacher = it },
-                placeholder = stringResource(R.string.course_teacher_placeholder),
             )
             Spacer(Modifier.height(4.dp))
             TonalField(
@@ -469,14 +517,15 @@ fun CourseEditScreen(
                 onChange = { note = it },
                 singleLine = false,
                 minLines = 2,
-                placeholder = stringResource(R.string.course_note_placeholder),
             )
 
             if (origin != null) {
                 val related =
-                    snap.tasks.filter { t ->
-                        t.deletedAt == null && t.parentId == null && !t.done && t.courseId != null &&
-                            (t.courseId == origin.id || snap.courses.firstOrNull { it.id == t.courseId }?.name == origin.name)
+                    remember(snap.tasks, snap.courses, origin) {
+                        snap.tasks.filter { t ->
+                            t.deletedAt == null && t.parentId == null && !t.done && t.courseId != null &&
+                                (t.courseId == origin.id || snap.courses.firstOrNull { it.id == t.courseId }?.name == origin.name)
+                        }
                     }
                 SectionLabel(
                     stringResource(R.string.course_todos),
@@ -667,9 +716,11 @@ internal fun SlotEditorSheet(
     val clock = clockRange(periods, slot.startPeriod, slot.endPeriod)
     var rangeAnchor by remember { mutableStateOf<Int?>(null) }
 
+    @Suppress("DEPRECATION")
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
@@ -801,7 +852,6 @@ internal fun SlotEditorSheet(
                 label = stringResource(R.string.label_room),
                 value = slot.room,
                 onChange = { onChange(slot.copy(room = it)) },
-                placeholder = stringResource(R.string.course_slot_room_hint),
             )
 
             // 周次（5 列矩阵：20 周正好 4×5 满行对齐）

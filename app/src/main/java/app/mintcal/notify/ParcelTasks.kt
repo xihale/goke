@@ -16,9 +16,19 @@ object ParcelTasks {
         ctx: Context,
         info: ParcelInfo,
     ): Task {
-        // 取件一般下午/晚上下班后再去，日程排进设置的取件时段（截止仍是驿站给的时刻，管提醒）
+        // 快递不占日历/课表时间块：截止保留驿站给的时刻用于提醒，顺路取件时段仅作扩展元数据存进 extra
         val st = ctx.mintApp.settings.value
         val window = parcelWindow(LocalDateTime.now(), st.parcelWindowStart, st.parcelWindowEnd)
+        val extra =
+            buildMap {
+                put("code", info.code)
+                put("place", info.place)
+                put("company", info.company)
+                if (window != null) {
+                    put("windowStart", "%02d:%02d".format(st.parcelWindowStart / 60, st.parcelWindowStart % 60))
+                    put("windowEnd", "%02d:%02d".format(st.parcelWindowEnd / 60, st.parcelWindowEnd % 60))
+                }
+            }
         return Task(
             id = Ids.next(),
             title = ctx.getString(R.string.parcel_task_title, info.code, info.place.ifBlank { info.company }),
@@ -27,10 +37,8 @@ object ParcelTasks {
             dueHasTime = info.deadline != null,
             priority = 2,
             remindMinutes = if (info.deadline != null) 60 else null,
-            blockStart = window?.first,
-            blockMinutes = window?.second,
             source = Source.PARCEL,
-            extra = mapOf("code" to info.code, "place" to info.place, "company" to info.company),
+            extra = extra,
         )
     }
 }

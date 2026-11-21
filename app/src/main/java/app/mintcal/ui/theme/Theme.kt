@@ -212,6 +212,13 @@ object MintTheme {
      */
     @Composable
     fun <T> spec(): FiniteAnimationSpec<T> = if (LocalReduceMotion.current) snap() else MaterialTheme.motionScheme.defaultSpatialSpec()
+
+    /**
+     * 手指下的即时状态（按下回弹、勾选、选中色块）用 M3 fast spatial（阻尼 1 / 刚度 1400）：
+     * 帧数约为 standard 的一半，没有回弹尾巴——反馈跟手，也不给每帧重组留时间。
+     */
+    @Composable
+    fun <T> press(): FiniteAnimationSpec<T> = if (LocalReduceMotion.current) snap() else MaterialTheme.motionScheme.fastSpatialSpec()
 }
 
 private fun brandLight() =
@@ -220,10 +227,10 @@ private fun brandLight() =
         onPrimary = Color.White,
         primaryContainer = Color(0xFFCDEBE3),
         onPrimaryContainer = Color(0xFF1B473F),
-        secondary = Color(0xFF47645D),
+        secondary = Color(0xFFB4694B),
         onSecondary = Color.White,
-        secondaryContainer = Color(0xFFDCEBE6),
-        onSecondaryContainer = Color(0xFF1B3630),
+        secondaryContainer = Color(0xFFFBE3D6),
+        onSecondaryContainer = Color(0xFF7A4630),
         tertiary = Color(0xFF6C63B5),
         onTertiary = Color.White,
         tertiaryContainer = Color(0xFFE4E0F6),
@@ -254,10 +261,10 @@ private fun brandDark() =
         onPrimary = Color(0xFF0B2A24),
         primaryContainer = Color(0xFF24413B),
         onPrimaryContainer = Color(0xFFBFEDE2),
-        secondary = Color(0xFFAECAC2),
-        onSecondary = Color(0xFF19352F),
-        secondaryContainer = Color(0xFF2D453F),
-        onSecondaryContainer = Color(0xFFCAE6DE),
+        secondary = Color(0xFFF6D5C3),
+        onSecondary = Color(0xFF4A3329),
+        secondaryContainer = Color(0xFF4A3329),
+        onSecondaryContainer = Color(0xFFF6D5C3),
         tertiary = Color(0xFFC9C3F5),
         onTertiary = Color(0xFF2F2C45),
         tertiaryContainer = Color(0xFF2F2C45),
@@ -344,8 +351,8 @@ fun MintCalTheme(
             DarkMode.LIGHT -> false
             DarkMode.DARK -> true
         }
-    // 每次回到前台时重读系统「移除动画」开关（ValueAnimator.areAnimatorsEnabled 覆盖缩放为 0 之外的情况）
-    var reduce by remember { mutableStateOf(false) }
+    // 首帧就按系统「移除动画」开关定调，回前台再重读一次（ValueAnimator.areAnimatorsEnabled 覆盖缩放为 0 之外的情况）
+    var reduce by remember { mutableStateOf(runCatching { !android.animation.ValueAnimator.areAnimatorsEnabled() }.getOrDefault(false)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         reduce = runCatching { !android.animation.ValueAnimator.areAnimatorsEnabled() }.getOrDefault(false)
     }

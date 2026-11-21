@@ -2,6 +2,7 @@ package app.mintcal.ui.screens
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -40,6 +41,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import app.mintcal.R
 import app.mintcal.core.change.Edits
 import app.mintcal.core.model.Course
@@ -257,11 +260,24 @@ fun ParcelScreen(onBack: () -> Unit) {
     var tried by remember { mutableStateOf(false) }
     var sampleDraft by remember { mutableStateOf<RuleDraft?>(null) }
     var showRules by rememberSaveable { mutableStateOf(false) }
-    val granted = listenerEnabled(ctx)
+    var granted by remember { mutableStateOf(listenerEnabled(ctx)) }
     val enabledCount = rulesCfg.user.count { it.enabled } + ParcelRuleEngine.BUILTIN.count { it.id !in rulesCfg.disabledBuiltins }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        granted = listenerEnabled(ctx)
+    }
 
     fun openListenerSettings() {
         runCatching { ctx.startActivity(Intent(AndroidSettings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    fun openAppDetails() {
+        runCatching {
+            ctx.startActivity(
+                Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
     }
 
     // 二级「短信识别规则」视图的返回手势：模板语法不上主页面，只在全屏子页里编辑
@@ -279,18 +295,37 @@ fun ParcelScreen(onBack: () -> Unit) {
         ) {
             // 段 1：自动识别开关 + 通知使用权状态（无框直落纸底）
             FormSection {
-                SwitchRow(stringResource(R.string.parcel_enable), null, st.parcelEnabled) { v -> app.settings.update { it.copy(parcelEnabled = v) } }
+                SwitchRow(stringResource(R.string.parcel_enable), null, st.parcelEnabled) { v ->
+                    app.settings.update { it.copy(parcelEnabled = v) }
+                    if (v && !granted) openListenerSettings()
+                }
                 AnimatedVisibility(
                     visible = st.parcelEnabled,
                     enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
                     exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
                 ) {
-                    ValueRow(
-                        stringResource(R.string.parcel_enable_desc),
-                        stringResource(if (granted) R.string.settings_perm_allowed else R.string.parcel_grant),
-                        valueColor = if (granted) MintTheme.colors.success else MaterialTheme.colorScheme.primary,
-                        onClick = { if (!granted) openListenerSettings() },
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ValueRow(
+                            stringResource(R.string.parcel_enable_desc),
+                            stringResource(if (granted) R.string.settings_perm_allowed else R.string.parcel_grant),
+                            valueColor = if (granted) MintTheme.colors.success else MaterialTheme.colorScheme.primary,
+                            onClick = { if (!granted) openListenerSettings() },
+                        )
+                        if (!granted) {
+                            MintCard {
+                                Text(
+                                    stringResource(R.string.parcel_restricted_settings_hint),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    TextButton(onClick = { openAppDetails() }) {
+                                        Text(stringResource(R.string.parcel_open_app_details))
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             // 段 2：默认取件时段（常驻可见，课表顶栏胶囊同源）
@@ -336,7 +371,6 @@ fun ParcelScreen(onBack: () -> Unit) {
                         },
                         singleLine = false,
                         minLines = 3,
-                        placeholder = stringResource(R.string.parcel_sample_hint),
                     )
                     FilledTonalButton(
                         onClick = {

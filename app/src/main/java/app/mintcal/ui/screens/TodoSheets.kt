@@ -1,9 +1,6 @@
 package app.mintcal.ui.screens
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +12,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -37,7 +35,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -54,7 +51,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -70,6 +66,7 @@ import app.mintcal.core.model.Task
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.components.DatePickerDlg
 import app.mintcal.ui.components.mintClickable
+import app.mintcal.ui.components.rememberNoFocusPopup
 import app.mintcal.ui.dueLabel
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.theme.priorityColor
@@ -309,7 +306,7 @@ private fun TidyActionPill(
     Box(
         modifier =
             Modifier
-                .heightIn(min = 36.dp)
+                .heightIn(min = 48.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .background(containerColor)
                 .mintClickable(pressedScale = 0.96f, role = Role.Button, onClick = onClick)
@@ -325,27 +322,34 @@ private fun TidyActionPill(
     }
 }
 
-/** 批量条图标按钮：全局无水波，这里自己补按下缩放。 */
+/** 批量条动作按钮：图标 + 简洁单行文字，触控区保底 48dp 并带按压回弹。 */
 @Composable
-private fun BulkIconButton(
+private fun BulkActionButton(
     icon: ImageVector,
-    desc: String,
+    label: String,
     tint: Color = MaterialTheme.colorScheme.onSurface,
     onClick: () -> Unit,
 ) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.9f else 1f, MintTheme.spec(), label = "bulk-press")
-    IconButton(
-        onClick = onClick,
-        interactionSource = interaction,
+    Column(
         modifier =
-            Modifier.graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            },
+            Modifier
+                .widthIn(min = 56.dp)
+                .heightIn(min = 48.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .mintClickable(pressedScale = 0.92f, role = Role.Button, onClick = onClick)
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Icon(icon, desc, tint = tint)
+        Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = tint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -362,12 +366,13 @@ internal fun BulkBar(
 ) {
     var listMenu by remember { mutableStateOf(false) }
     var priorityMenu by remember { mutableStateOf(false) }
+    val noFocusPopup = rememberNoFocusPopup()
     Surface(modifier, shape = CircleShape, color = MintTheme.card, shadowElevation = 8.dp, tonalElevation = 2.dp) {
-        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            BulkIconButton(Icons.Rounded.Event, stringResource(R.string.todo_reschedule), onClick = onReschedule)
+        Row(Modifier.padding(horizontal = 10.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            BulkActionButton(Icons.Rounded.Event, stringResource(R.string.todo_reschedule), onClick = onReschedule)
             Box {
-                BulkIconButton(Icons.Rounded.FolderOpen, stringResource(R.string.label_list)) { listMenu = true }
-                DropdownMenu(listMenu, { listMenu = false }) {
+                BulkActionButton(Icons.Rounded.FolderOpen, stringResource(R.string.label_list)) { listMenu = true }
+                DropdownMenu(listMenu, { listMenu = false }, properties = noFocusPopup) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.none)) }, onClick = {
                         listMenu = false
                         onList(null)
@@ -381,8 +386,8 @@ internal fun BulkBar(
                 }
             }
             Box {
-                BulkIconButton(Icons.Rounded.Flag, stringResource(R.string.label_priority)) { priorityMenu = true }
-                DropdownMenu(priorityMenu, { priorityMenu = false }) {
+                BulkActionButton(Icons.Rounded.Flag, stringResource(R.string.label_priority)) { priorityMenu = true }
+                DropdownMenu(priorityMenu, { priorityMenu = false }, properties = noFocusPopup) {
                     listOf(3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1, 0 to R.string.priority_0).forEach { (v, label) ->
                         DropdownMenuItem(
                             text = { Text(stringResource(label)) },
@@ -398,8 +403,8 @@ internal fun BulkBar(
                     }
                 }
             }
-            BulkIconButton(Icons.Rounded.Check, stringResource(R.string.todo_complete), onClick = onDone)
-            BulkIconButton(Icons.Rounded.Delete, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.error, onClick = onDelete)
+            BulkActionButton(Icons.Rounded.Check, stringResource(R.string.todo_complete), onClick = onDone)
+            BulkActionButton(Icons.Rounded.Delete, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.error, onClick = onDelete)
         }
     }
 }

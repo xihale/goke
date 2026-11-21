@@ -22,7 +22,9 @@ object Notifications {
     const val CHANNEL_REMINDER = "reminder"
     const val CHANNEL_PARCEL = "parcel"
     const val CHANNEL_QUICK = "quickadd"
+    const val CHANNEL_LAN_WEB = "lan_web"
     const val NOTIFY_QUICK_ID = 9002
+    const val NOTIFY_LAN_WEB_ID = 9003
 
     fun ensureChannels(ctx: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -35,6 +37,11 @@ object Notifications {
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_QUICK, ctx.getString(R.string.channel_quick), NotificationManager.IMPORTANCE_LOW).apply {
+                setShowBadge(false)
+            },
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_LAN_WEB, ctx.getString(R.string.channel_lan_web), NotificationManager.IMPORTANCE_LOW).apply {
                 setShowBadge(false)
             },
         )
@@ -67,6 +74,89 @@ object Notifications {
 
     fun cancelQuickAdd(ctx: Context) {
         NotificationManagerCompat.from(ctx).cancel(NOTIFY_QUICK_ID)
+    }
+
+    /** 局域网电脑端管理运行时的常驻前台通知，展示访问地址、连接码与「停止」按钮。 */
+    fun buildLanWebNotification(
+        ctx: Context,
+        url: String,
+        pin: String,
+        stopIntent: PendingIntent,
+    ): Notification {
+        val open =
+            PendingIntent.getActivity(
+                ctx,
+                NOTIFY_LAN_WEB_ID,
+                Intent(ctx, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        val text = ctx.getString(R.string.lan_web_notif_text, url, pin)
+        return NotificationCompat
+            .Builder(ctx, CHANNEL_LAN_WEB)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(ctx.getString(R.string.lan_web_notif_title))
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(open)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .addAction(0, ctx.getString(R.string.lan_web_notif_stop), stopIntent)
+            .build()
+    }
+
+    fun updateLanWebNotification(
+        ctx: Context,
+        url: String,
+        pin: String,
+        stopIntent: PendingIntent,
+    ) {
+        if (!canPost(ctx)) return
+        ensureChannels(ctx)
+        runCatching {
+            NotificationManagerCompat.from(ctx).notify(
+                NOTIFY_LAN_WEB_ID,
+                buildLanWebNotification(ctx, url, pin, stopIntent),
+            )
+        }
+    }
+
+    fun cancelLanWebNotification(ctx: Context) {
+        runCatching { NotificationManagerCompat.from(ctx).cancel(NOTIFY_LAN_WEB_ID) }
+    }
+
+    /** 识别到取件通知时在快递渠道发一条静默可划掉的确认通知，点击直达对应待办。 */
+    fun postParcelCaptured(
+        ctx: Context,
+        taskId: String,
+        code: String,
+        placeOrCompany: String,
+    ) {
+        if (!canPost(ctx)) return
+        ensureChannels(ctx)
+        val notifId = ("parcel:$taskId").hashCode()
+        val open =
+            PendingIntent.getActivity(
+                ctx,
+                notifId,
+                Intent(Intent.ACTION_VIEW, DeepLinks.taskUri(taskId), ctx, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        val detail = placeOrCompany.ifBlank { ctx.getString(R.string.parcel_title) }
+        val n =
+            NotificationCompat
+                .Builder(ctx, CHANNEL_PARCEL)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(ctx.getString(R.string.parcel_notif_captured_title))
+                .setContentText(ctx.getString(R.string.parcel_notif_captured_text, code, detail))
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .setSilent(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+        runCatching { NotificationManagerCompat.from(ctx).notify(notifId, n.build()) }
     }
 
     fun canPost(ctx: Context): Boolean =

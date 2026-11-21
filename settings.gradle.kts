@@ -23,3 +23,5 @@ rootProject.name = "mintcal"
 include(":core")
 include(":script")
 include(":app")
+// benchmark 模块可能被临时移除；存在才挂载，避免整个构建无法配置
+if (file("benchmark").exists()) include(":benchmark")

@@ -13,6 +13,7 @@ import app.mintcal.data.Repository
 import app.mintcal.data.SecretStore
 import app.mintcal.data.SettingsStore
 import app.mintcal.jxfw.JxfwManager
+import app.mintcal.lanweb.LanWebManager
 import app.mintcal.mcp.LocalMcpManager
 import app.mintcal.mcp.McpStore
 import app.mintcal.notify.Notifications
@@ -59,6 +60,8 @@ open class MintCalApp : Application() {
         private set
     lateinit var jxfw: JxfwManager
         private set
+    lateinit var lanWeb: LanWebManager
+        private set
 
     /** 外部入口（通知 / 小组件 / 快捷方式 / 分享）待处理的动作，由根组合消费后清空。 */
     val links = MutableStateFlow<DeepLink?>(null)
@@ -80,6 +83,7 @@ open class MintCalApp : Application() {
         sync = SyncManager(repo, SyncStore(this, secrets), scope)
         calendarSync = SystemCalendarSync(this, repo, settings, CalendarSyncStore(this), scope)
         jxfw = JxfwManager(this, repo, secrets)
+        lanWeb = LanWebManager(this, repo)
         // 通知渠道 / 桌面快捷方式都是 Binder IPC，不挡 Application 主线程的首帧
         scope.launch(Dispatchers.Default) {
             Notifications.ensureChannels(this@MintCalApp)
@@ -87,6 +91,8 @@ open class MintCalApp : Application() {
         }
         scope.launch {
             repo.load()
+            // benchmark 变体：首启塞一份可滚动数据（release/debug 里 BENCHMARK=false，常量折叠后整段消失）
+            if (BuildConfig.BENCHMARK) BenchSeed.seed(repo)
             // 一次性迁移：日程并进待办（「有时间的待办」），此后不再产生日程记录
             if (!settings.value.unifiedTasks) {
                 val snap = repo.snapshot.value

@@ -2,13 +2,11 @@ package app.mintcal.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,12 +47,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -104,7 +99,7 @@ fun TonalField(
             focused -> scheme.primary.copy(alpha = 0.65f)
             else -> Color.Transparent
         },
-        MintTheme.spec(),
+        MintTheme.press(),
         label = "field-border",
     )
     val shape = RoundedCornerShape(12.dp)
@@ -236,14 +231,18 @@ fun <T> SegmentedPill(
     if (options.isEmpty()) return
     val rawIndex = options.indexOfFirst { it.first == selected }
     val selectedIndex = rawIndex.coerceAtLeast(0)
-    val thumbAlpha by animateFloatAsState(if (rawIndex >= 0) 1f else 0f, MintTheme.spec(), label = "seg-thumb-alpha")
-    val haptics = LocalHapticFeedback.current
     val travel = remember { Animatable(selectedIndex.toFloat()) }
-    val spec = MintTheme.spec<Float>()
+    // 与底栏同构：滑块是手指下的即时状态，走 fast spatial，不拖尾巴
+    val spec = MintTheme.press<Float>()
     LaunchedEffect(rawIndex) {
-        if (rawIndex >= 0) travel.animateTo(rawIndex.toFloat(), spec)
+        if (rawIndex >= 0 && travel.value != rawIndex.toFloat()) {
+            travel.animateTo(rawIndex.toFloat(), spec)
+        }
     }
     val scheme = MaterialTheme.colorScheme
+    val labelStyle = MaterialTheme.typography.labelLarge
+    val activeFg = scheme.primary
+    val inactiveFg = scheme.onSurfaceVariant
     val dark = scheme.background.luminance() < 0.5f
     val track = if (dark) scheme.surfaceContainerHigh else scheme.surfaceContainerHighest
     val thumb = if (dark) lerp(track, scheme.onSurface, 0.16f) else scheme.surface
@@ -255,14 +254,14 @@ fun <T> SegmentedPill(
             .background(track),
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            if (thumbAlpha > 0.01f) {
+            if (rawIndex >= 0) {
                 val inset = 3.dp.toPx()
                 val slot = size.width / options.size
                 val w = (slot - inset * 2).coerceAtLeast(0f)
                 val h = (size.height - inset * 2).coerceAtLeast(0f)
                 val left = travel.value * slot + inset
                 drawRoundRect(
-                    color = thumb.copy(alpha = thumbAlpha),
+                    color = thumb,
                     topLeft = Offset(left, inset),
                     size = Size(w, h),
                     cornerRadius = CornerRadius(h / 2f, h / 2f),
@@ -273,13 +272,7 @@ fun <T> SegmentedPill(
             options.forEach { (v, label) ->
                 val on = v == selected
                 val interaction = remember { MutableInteractionSource() }
-                val pressed by interaction.collectIsPressedAsState()
-                val scale by animateFloatAsState(if (pressed) 0.96f else 1f, MintTheme.spec(), label = "seg-press")
-                val fg by animateColorAsState(
-                    if (on) scheme.primary else scheme.onSurfaceVariant,
-                    MintTheme.spec(),
-                    label = "seg-fg",
-                )
+                val fg = if (on) activeFg else inactiveFg
                 Box(
                     Modifier
                         .weight(1f)
@@ -290,23 +283,14 @@ fun <T> SegmentedPill(
                             interactionSource = interaction,
                             indication = null,
                             role = Role.RadioButton,
-                            onClick = {
-                                if (!on) {
-                                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                                    onSelect(v)
-                                }
-                            },
+                            onClick = { if (!on) onSelect(v) },
                         ),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         label,
-                        modifier =
-                            Modifier.graphicsLayer {
-                                scaleX = scale
-                                scaleY = scale
-                            },
-                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.mintPressScale(interaction, 0.96f),
+                        style = labelStyle,
                         color = fg,
                         fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
                         maxLines = 1,
@@ -326,44 +310,60 @@ fun <T> ChipChoice(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val scheme = MaterialTheme.colorScheme
     FlowRow(
         modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         options.forEach { (v, label) ->
-            val on = v == selected
-            val bg by animateColorAsState(
-                if (on) scheme.primaryContainer else scheme.surfaceContainerHighest,
-                MintTheme.spec(),
-                label = "chip-bg",
-            )
-            val fg by animateColorAsState(
-                if (on) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
-                MintTheme.spec(),
-                label = "chip-fg",
-            )
-            Box(
-                Modifier
-                    .heightIn(min = 38.dp)
-                    .clip(CircleShape)
-                    .background(bg)
-                    .semantics {
-                        role = Role.RadioButton
-                        this.selected = on
-                    }.mintClickable(pressedScale = 0.96f) { onSelect(v) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = fg,
-                    fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                )
-            }
+            ChipPill(label = label, on = v == selected, onClick = { onSelect(v) })
         }
+    }
+}
+
+/**
+ * 一枚胶囊芯片，芯片视觉的唯一定义：选中走主色容器，未选落清晰底色。
+ * [on] 为 null 表示这是一枚「做事」的芯片（如新建），不带选中语义。
+ * 单选传 [Role.RadioButton]、多选传 [Role.Checkbox]；选中态同时走语义，不只靠颜色。
+ */
+@Composable
+fun ChipPill(
+    label: String,
+    on: Boolean?,
+    modifier: Modifier = Modifier,
+    role: Role = if (on == null) Role.Button else Role.RadioButton,
+    onClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val on = on == true
+    val bg by animateColorAsState(
+        if (on) scheme.primaryContainer else scheme.surfaceContainerHighest,
+        MintTheme.spec(),
+        label = "chip-bg",
+    )
+    val fg by animateColorAsState(
+        if (on) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+        MintTheme.spec(),
+        label = "chip-fg",
+    )
+    Box(
+        modifier
+            .heightIn(min = 38.dp)
+            .clip(CircleShape)
+            .background(bg)
+            .semantics {
+                this.role = role
+                if (role != Role.Button) selected = on
+            }.mintClickable(pressedScale = 0.96f) { onClick() }
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = fg,
+            fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+        )
     }
 }
 

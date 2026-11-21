@@ -41,6 +41,12 @@ class ParcelListenerService : NotificationListenerService() {
             val task = ParcelTasks.build(this@ParcelListenerService, info)
             val cs = Edits.save(snap, task, getString(R.string.parcel_op_desc), System.currentTimeMillis())
             app.repo.commit(cs)
+            Notifications.postParcelCaptured(
+                this@ParcelListenerService,
+                task.id,
+                info.code,
+                info.place.ifBlank { info.company },
+            )
         }
     }
 }

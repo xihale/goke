@@ -1,6 +1,8 @@
 package app.mintcal.ui.screens
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -19,10 +21,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,6 +62,7 @@ import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.components.FieldText
 import app.mintcal.ui.components.FormSection
+import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintCheck
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.SwitchRow
@@ -99,13 +106,15 @@ fun SyncScreen(onBack: () -> Unit) {
                     .padding(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                SystemCalendarSection()
                 val account = cloudState.account
                 if (account == null) {
                     LoginPanel()
                 } else {
-                    AccountPanel(account, cloudState.syncing, cloudState.lastSyncAt, cloudState.lastError)
+                    AccountPanel(account, cloudState.syncing, cloudState.lastSyncAt, cloudState.lastError, cloudState.needsRelogin)
+                    CloudMcpCard(account)
                 }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                SystemCalendarSection()
             }
         }
     }
@@ -175,6 +184,12 @@ private fun SystemCalendarSection() {
                     subtitle = stringResource(R.string.cal_sync_courses_desc),
                     checked = state.prefs.exportCourses,
                     onChange = { app.calendarSync.setExportCourses(it) },
+                )
+                Text(
+                    stringResource(R.string.cal_sync_duplicate_reminder_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                 )
 
                 Text(
@@ -329,6 +344,7 @@ private fun AccountPanel(
     syncing: Boolean,
     lastSyncAt: Long?,
     lastError: String?,
+    needsRelogin: Boolean,
 ) {
     val ctx = LocalContext.current
     val app = LocalApp.current
@@ -337,6 +353,7 @@ private fun AccountPanel(
     val uriHandler = LocalUriHandler.current
     var showPassword by remember { mutableStateOf(false) }
     var showLogout by remember { mutableStateOf(false) }
+    var showRelogin by remember { mutableStateOf(false) }
 
     FormSection(stringResource(R.string.sync_mode_cloud)) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -353,11 +370,31 @@ private fun AccountPanel(
                     else -> stringResource(R.string.sync_never)
                 },
             )
-            if (lastError != null) {
+            if (needsRelogin) {
+                MintCard(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.padding(top = 4.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.sync_relogin_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Text(
+                        stringResource(R.string.sync_relogin_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                    )
+                    Button(onClick = { showRelogin = true }) {
+                        Text(stringResource(R.string.sync_relogin))
+                    }
+                }
+            } else if (lastError != null) {
                 Text(lastError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 2.dp))
             }
             Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(enabled = !syncing, onClick = {
+                Button(enabled = !syncing && !needsRelogin, onClick = {
                     scope.launch {
                         try {
                             val n = app.sync.syncNow()
@@ -382,6 +419,9 @@ private fun AccountPanel(
         }
     }
 
+    if (showRelogin) {
+        ReloginDialog(account = account, onDismiss = { showRelogin = false })
+    }
     if (showLogout) {
         AlertDialog(
             onDismissRequest = { showLogout = false },
@@ -399,6 +439,88 @@ private fun AccountPanel(
     if (showPassword) {
         ChangePasswordDialog(onDismiss = { showPassword = false })
     }
+}
+
+@Composable
+private fun CloudMcpCard(account: SyncAccount) {
+    val ctx = LocalContext.current
+    val app = LocalApp.current
+    val actions = LocalActions.current
+    val endpoint = app.sync.cloudMcpEndpoint() ?: "${account.serverUrl.trimEnd('/')}/mcp"
+
+    FormSection(stringResource(R.string.sync_cloud_mcp_title)) {
+        MintCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(R.string.sync_cloud_mcp_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                InfoLine(stringResource(R.string.sync_cloud_mcp_endpoint), endpoint)
+                FilledTonalButton(
+                    onClick = {
+                        val cfg = app.sync.cloudMcpConfigJson() ?: return@FilledTonalButton
+                        ctx.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("Cloud MCP JSON", cfg))
+                        actions.toast(ctx.getString(R.string.sync_copied_mcp_config))
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Rounded.ContentCopy, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.sync_copy_mcp_config))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReloginDialog(
+    account: SyncAccount,
+    onDismiss: () -> Unit,
+) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    var password by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(stringResource(R.string.sync_relogin_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                InfoLine(stringResource(R.string.sync_server), account.serverUrl)
+                InfoLine(stringResource(R.string.sync_account), account.username)
+                FieldText(stringResource(R.string.sync_password), password, { password = it }, secret = true)
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !busy && password.isNotEmpty(),
+                onClick = {
+                    busy = true
+                    error = null
+                    scope.launch {
+                        try {
+                            app.sync.login(account.serverUrl, account.username, password)
+                            onDismiss()
+                        } catch (e: SyncException) {
+                            error = e.message
+                        } finally {
+                            busy = false
+                        }
+                    }
+                },
+            ) {
+                if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.sync_relogin))
+            }
+        },
+        dismissButton = {
+            TextButton(enabled = !busy, onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    )
 }
 
 @Composable

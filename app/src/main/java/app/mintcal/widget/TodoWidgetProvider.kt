@@ -75,7 +75,8 @@ class TodoWidgetProvider : AppWidgetProvider() {
                     id = t.id,
                     title = cleanTitle,
                     code = code,
-                    due = due?.let { ctx.dueLabel(it, t.dueHasTime, date) },
+                    // 快递行已有取件码胶囊占宽，省略行尾时间以免把驿站名挤成两字
+                    due = if (code != null) null else due?.let { ctx.dueLabel(it, t.dueHasTime, date) },
                     priority = t.priority,
                     overdue = t in overdue,
                 )

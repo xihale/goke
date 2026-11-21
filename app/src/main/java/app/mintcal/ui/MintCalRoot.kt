@@ -15,31 +15,38 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -47,9 +54,12 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -73,10 +83,10 @@ import app.mintcal.ui.screens.EditTimetableScreen
 import app.mintcal.ui.screens.HistoryScreen
 import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.JxfwScreen
+import app.mintcal.ui.screens.LanWebScreen
 import app.mintcal.ui.screens.McpScreen
 import app.mintcal.ui.screens.ParcelScreen
 import app.mintcal.ui.screens.PeriodsScreen
-import app.mintcal.ui.screens.PermissionScreen
 import app.mintcal.ui.screens.ReliabilityScreen
 import app.mintcal.ui.screens.SettingsScreen
 import app.mintcal.ui.screens.SyncScreen
@@ -88,6 +98,25 @@ import app.mintcal.ui.screens.TrashScreen
 import app.mintcal.ui.theme.LocalReduceMotion
 import app.mintcal.ui.theme.MintTheme
 import kotlinx.coroutines.delay
+
+/**
+ * 根级模态宿主接口：供子页面在应用最顶层（覆盖底栏与 NavHost）挂载轻量模态内容（如窗口内底部抽屉），
+ * 避免创建独立 Dialog Window 产生跨进程 Binder 阻塞。
+ */
+interface ModalHost {
+    fun show(content: @Composable () -> Unit)
+
+    fun hide()
+}
+
+val LocalModalHost =
+    compositionLocalOf<ModalHost> {
+        object : ModalHost {
+            override fun show(content: @Composable () -> Unit) {}
+
+            override fun hide() {}
+        }
+    }
 
 @Composable
 fun MintCalRoot(
@@ -101,8 +130,6 @@ fun MintCalRoot(
     val ready by app.repo.ready.collectAsState()
 
     // 可撤销的说明条留到下一次操作，或用户自己关掉。不按秒数收起。
-    // 旧实现「undoPrompt != null 时 undoShown = undoPrompt」是在组合期写状态（多一次根重组）；
-    // 改成 SideEffect 提交，淡出动画期间内容仍保持最后一次的提示。
     val undoPrompt = actions.undo
     val undoShownState = remember { mutableStateOf(undoPrompt) }
     SideEffect { if (undoPrompt != null) undoShownState.value = undoPrompt }
@@ -110,7 +137,7 @@ fun MintCalRoot(
 
     // 是否在压栈页（Tab 层 = home 目的地）。转场与返回栈由标准 navigation-compose 接管。
     val backStack by nav.controller.currentBackStackEntryAsState()
-    val onRoute = backStack?.destination?.route != HOME
+    val onRoute = backStack?.destination?.route != null && backStack?.destination?.route != HOME
 
     // Tab 层：非默认 Tab（周历）返回回周历。压栈页的返回交给 NavHost 默认处理。
     BackHandler(enabled = ready && !onRoute && nav.tab != Tab.TIMETABLE) { nav.back() }
@@ -176,12 +203,9 @@ fun MintCalRoot(
     val exitEase = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
     val slideIn = if (reduce) snap<IntOffset>() else tween<IntOffset>(durationMillis = 260, easing = enterEase)
     val slideOut = if (reduce) snap<IntOffset>() else tween<IntOffset>(durationMillis = 200, easing = exitEase)
-    val fadeInSpec = if (reduce) snap<Float>() else tween<Float>(durationMillis = 200, easing = enterEase)
-    val fadeOutSpec = if (reduce) snap<Float>() else tween<Float>(durationMillis = 150, easing = exitEase)
     val splash = if (reduce) snap<Float>() else tween<Float>(durationMillis = 220, easing = enterEase)
     val splashScale = if (reduce) snap<Float>() else tween<Float>(durationMillis = 280, easing = enterEase)
-    // back 与整张 destination 表都 remember：NavHost 内部按 builder 的函数 identity 记忆图，
-    // 每次 MintCalRoot 重组都传新 lambda 会让整张导航图被替换重建
+
     val back =
         remember(nav) {
             {
@@ -190,7 +214,26 @@ fun MintCalRoot(
             }
         }
 
-    CompositionLocalProvider(LocalApp provides app, LocalActions provides actions, LocalNav provides nav) {
+    var modalContent by remember { mutableStateOf<(@Composable () -> Unit)?>(null) }
+    val modalHost =
+        remember {
+            object : ModalHost {
+                override fun show(content: @Composable () -> Unit) {
+                    modalContent = content
+                }
+
+                override fun hide() {
+                    modalContent = null
+                }
+            }
+        }
+
+    CompositionLocalProvider(
+        LocalApp provides app,
+        LocalActions provides actions,
+        LocalNav provides nav,
+        LocalModalHost provides modalHost,
+    ) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             // 首屏内容从启动屏底下淡出浮现：ready 后不再是一帧硬切
             AnimatedVisibility(
@@ -198,29 +241,38 @@ fun MintCalRoot(
                 enter = fadeIn(splash) + scaleIn(initialScale = 0.985f, animationSpec = splashScale),
             ) {
                 if (ready) {
-                    // HOME 目的地 + 压栈页都在这张表里；表本身 remember，转场参数也在闭包里
-                    val graph: NavGraphBuilder.() -> Unit =
-                        remember(nav, back, slideIn, slideOut, fadeInSpec, fadeOutSpec) {
-                            {
-                                composable(HOME) { Tabs(nav) }
-                                mintDestinations(nav, back)
+                    Box(Modifier.fillMaxSize()) {
+                        // 1. 常驻底层 Tabs：永远不被 NavHost pop/push 销毁。
+                        // 二级页推入与弹出时 Tabs 常驻底层，返回时零重建，滚动位置与状态完全保留。
+                        Tabs(nav, onRoute)
+
+                        // 2. 覆盖层 NavHost：二级页面从右侧推入覆盖常驻 Tabs 之上；
+                        // HOME 目的地为空占位，在 HOME 时底层 Tabs 自然显露。
+                        val graph: NavGraphBuilder.() -> Unit =
+                            remember(nav, back) {
+                                {
+                                    composable(HOME) {
+                                        // 首页空占位：由常驻底层 Tabs 负责渲染与交互
+                                    }
+                                    mintDestinations(nav, back)
+                                }
                             }
-                        }
-                    NavHost(
-                        nav.controller,
-                        startDestination = HOME,
-                        modifier = Modifier.fillMaxSize(),
-                        // 标准 M3 方向性转场：enter/exit = 推入（新页右入 1/3，底层左让位）；
-                        // popEnter/popExit = 返回（顶层右出淡出，底层原位揭露）。
-                        // 开启预测性返回后，库按手势进度逐帧 seek pop 组转场。
-                        enterTransition = { slideInHorizontally(slideIn) { it / 3 } + fadeIn(fadeInSpec) },
-                        exitTransition = { slideOutHorizontally(slideOut) { -it / 10 } },
-                        popEnterTransition = { slideInHorizontally(slideIn) { -it / 10 } },
-                        popExitTransition = { slideOutHorizontally(slideOut) { it / 3 } + fadeOut(fadeOutSpec) },
-                        builder = graph,
-                    )
+                        NavHost(
+                            nav.controller,
+                            startDestination = HOME,
+                            modifier = Modifier.fillMaxSize(),
+                            // 纯水平位移转场：二级页从右侧完全推入覆盖，返回时右滑移出揭露底层；
+                            // 零整屏离屏 Alpha FBO 硬件层混合开销。
+                            enterTransition = { slideInHorizontally(slideIn) { it } },
+                            exitTransition = { slideOutHorizontally(slideOut) { -it / 5 } },
+                            popEnterTransition = { slideInHorizontally(slideIn) { -it / 5 } },
+                            popExitTransition = { slideOutHorizontally(slideOut) { it } },
+                            builder = graph,
+                        )
+                    }
                 }
             }
+
             // 撤销：左下角一个圆钮，3 秒后自己消失。放左边就不和右下角的添加键打架，
             // 也不用一条通栏横条去盖列表内容。
             AnimatedVisibility(
@@ -241,6 +293,9 @@ fun MintCalRoot(
                     UndoButton(prompt.text, prompt.seq, onUndo = { actions.undoNow() }, onTimeout = { actions.dismissUndo() })
                 }
             }
+
+            // 顶层模态插槽（覆盖底栏与 NavHost）
+            modalContent?.invoke()
         }
     }
 }
@@ -253,11 +308,12 @@ fun NavGraphBuilder.mintDestinations(
     composable<Route.EditTimetable> { EditTimetableScreen(back) }
     composable<Route.Appearance> { AppearanceScreen(back) }
     composable<Route.Settings> { SettingsScreen(back) }
-    composable<Route.Permission> { PermissionScreen(back) }
+    composable<Route.Permission> { ReliabilityScreen(back) }
     composable<Route.Trash> { TrashScreen(back) }
     composable<Route.History> { HistoryScreen(back) }
     composable<Route.Parcel> { ParcelScreen(back) }
     composable<Route.Mcp> { McpScreen(back) }
+    composable<Route.LanWeb> { LanWebScreen(back) }
     composable<Route.Periods> { PeriodsScreen(back) }
     composable<Route.About> { AboutScreen(back) }
     composable<Route.Data> { DataScreen(back) }
@@ -271,15 +327,32 @@ fun NavGraphBuilder.mintDestinations(
     }
     composable<Route.TodoEdit> { e ->
         val r = e.toRoute<Route.TodoEdit>()
-        TodoEditScreen(r.id, r.date, r.start, r.end, r.text, r.courseId, r.extraDates, r.note) {
+        TodoEditScreen(
+            id = r.id,
+            dateArg = r.date,
+            startArg = r.start,
+            endArg = r.end,
+            textDraft = r.text,
+            courseArg = r.courseId,
+            extraDatesArg = r.extraDates,
+            noteDraft = r.note,
+            listArg = r.listId,
+            remindArg = r.remindMinutes,
+            remindPersistentArg = r.remindPersistent,
+            repeatFreqArg = r.repeatFreq,
+            repeatIntervalArg = r.repeatInterval,
+            repeatUntilArg = r.repeatUntil,
+            repeatByDaysArg = r.repeatByDays,
+            repeatByMonthsArg = r.repeatByMonths,
+        ) {
             if (nav.controller.currentBackStackEntry == e) back()
         }
     }
 }
 
 /**
- * 撤销浮钮：一枚悬浮的撤销图标，没有文字、没有倒计时进度弧。
- * 视觉 48dp（也就是命中区），到 UNDO_MS 自己消失。
+ * 撤销浮囊：有提示文案时展示紧凑胶囊（图标 + 单行截断说明 +「撤销」），无文案时退化为 56dp 圆钮；
+ * 最大宽度限制为 220dp，保证左侧留足净空，不与右下角 MintFab 或居中 BulkBar 碰撞。到 UNDO_MS 自动收起。
  */
 @Composable
 private fun UndoButton(
@@ -294,23 +367,58 @@ private fun UndoButton(
     }
     val undoText = stringResource(R.string.undo)
     val a11yDesc = if (label.isNotBlank()) "$label，$undoText" else undoText
+    val baseModifier =
+        if (label.isBlank()) {
+            Modifier.size(56.dp)
+        } else {
+            Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp, max = 220.dp)
+        }
     Surface(
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shadowElevation = 3.dp,
         modifier =
-            Modifier
-                .size(48.dp)
-                .mintClickable { onUndo() }
-                .semantics { contentDescription = a11yDesc },
+            baseModifier
+                .mintClickable(role = Role.Button) { onUndo() }
+                .semantics(mergeDescendants = true) { contentDescription = a11yDesc },
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                Icons.AutoMirrored.Rounded.Undo,
-                null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(22.dp),
-            )
+        if (label.isBlank()) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.Undo,
+                    null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
+        } else {
+            Row(
+                Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.Undo,
+                    null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Text(
+                    undoText,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -318,37 +426,63 @@ private fun UndoButton(
 private const val UNDO_MS = 4500
 
 @Composable
-private fun Tabs(nav: Nav) {
-    // 首帧只组装当前 Tab，其余三个随后一帧一个补齐：冷启动首帧从四屏重活降到一屏，
-    // 三帧摊开也不会在启动淡出期间挤出一帧长卡顿。之后仍然全部常驻——切换只动绘制层
-    // （零重组，滚动/筛选/翻页状态不丢），切过去也没有首访尖刺。
-    // 切页本身不做任何位移/淡入：内容瞬切、底栏色块滑过去。位移过渡需要在新页首帧之后才把
-    // 偏移打进去（一帧跳出去再滑回来），线框多的课表/日历上看着就是抖——平台惯例也是瞬切。
-    var staged by remember { mutableIntStateOf(0) }
+private fun Tabs(
+    nav: Nav,
+    onRoute: Boolean,
+) {
+    // 首次访问再懒挂载 + 空闲期静默预热：
+    // 首屏冷启动只挂载默认 Tab（TIMETABLE），保证冷启 TTID/TTFD 零额外负担；
+    // 启动后避开首屏关键路径（500ms 后），在后台每 150ms 逐个静默预热未挂载 Tab，
+    // 使后续切 Tab 几乎零阻塞，消除 TabSwitch 尾帧 OVR P99 尖峰。
+    val visited = remember { mutableStateMapOf<Tab, Boolean>().apply { put(nav.tab, true) } }
+    SideEffect {
+        visited[nav.tab] = true
+    }
     LaunchedEffect(Unit) {
-        repeat(Tab.entries.size) {
-            withFrameNanos {}
-            staged++
+        delay(500)
+        for (tab in Tab.entries) {
+            if (visited[tab] != true) {
+                visited[tab] = true
+                delay(150)
+            }
         }
     }
     val focusManager = LocalFocusManager.current
     LaunchedEffect(nav.tab) { focusManager.clearFocus(force = true) }
-    Box(Modifier.fillMaxSize()) {
-        Tab.entries.forEachIndexed { index, tab ->
-            key(tab) {
-                val current = tab == nav.tab
-                if (current || index < staged) {
+
+    val onRouteState = rememberUpdatedState(onRoute)
+    val notOnRouteState = rememberUpdatedState(!onRoute)
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .tabSemantics(notOnRouteState)
+            .blockPointer(onRouteState),
+    ) {
+        Tab.entries.forEach { tab ->
+            val isCurrentTab = tab == nav.tab
+            if (visited[tab] == true || isCurrentTab) {
+                key(tab) {
+                    val isTabActive = isCurrentTab && !onRoute
+                    val visibleState = remember(tab) { mutableStateOf(isTabActive) }
+                    visibleState.value = isTabActive
+
+                    val blockedState = remember(tab) { mutableStateOf(!isTabActive) }
+                    blockedState.value = !isTabActive
+
+                    // 保持 Modifier 链结构绝对稳定：
+                    // - graphicsLayer 在 draw 阶段读取透明度，切 Tab 时不触发子树重组与 measure/layout
+                    // - tabSemantics 保持 Modifier 节点结构稳定，仅在内部设置 invisibleToUser
+                    // - blockPointer 保持 pointerInput 节点稳定，在触摸事件处理时读取状态并拦截
                     Box(
                         Modifier
-                            .zIndex(if (current) 1f else 0f)
+                            .zIndex(if (isCurrentTab) 1f else 0f)
                             .fillMaxSize()
-                            .graphicsLayer { alpha = if (current) 1f else 0f }
-                            .then(if (current) Modifier else Modifier.clearAndSetSemantics {})
-                            .blockPointer(!current),
+                            .graphicsLayer { alpha = if (isCurrentTab) 1f else 0f }
+                            .tabSemantics(visibleState)
+                            .blockPointer(blockedState),
                     ) {
-                        // 可见性走动态 CompositionLocal，只在 liveSnapshot/rememberNowGated 内部被读：
-                        // 翻转只重组这两个小助手；数据没变时切页零重算，隐藏页也不订阅数据与 30 秒时钟
-                        CompositionLocalProvider(LocalTabVisible provides current) {
+                        CompositionLocalProvider(LocalTabVisible provides visibleState) {
                             when (tab) {
                                 Tab.TODAY -> TodayScreen()
                                 Tab.TIMETABLE -> TimetableScreen()
@@ -360,10 +494,11 @@ private fun Tabs(nav: Nav) {
                 }
             }
         }
+
         // zIndex(2f)：底栏必须压在所有 Tab 绘制层之上，否则被全屏 Tab 层挡住点击。
-        // 快速添加浮层是模态层：浮层展开时底栏淡出，别让它压住输入框底部。
+        // 快速添加浮层是模态层，二级路由已推入覆盖时底栏退场。
         AnimatedVisibility(
-            visible = !nav.composerOpen,
+            visible = !nav.composerOpen && !onRoute,
             enter = fadeIn(MintTheme.spec()) + slideInVertically(MintTheme.spec()) { it / 2 },
             exit = fadeOut(MintTheme.spec()) + slideOutVertically(MintTheme.spec()) { it / 2 },
             modifier = Modifier.align(Alignment.BottomCenter).zIndex(2f),
@@ -373,13 +508,23 @@ private fun Tabs(nav: Nav) {
     }
 }
 
-/** 隐藏页面拦截所有指针事件（Initial 消费），防止穿透到下层 Tab 的滚动/点击。 */
-private fun Modifier.blockPointer(block: Boolean): Modifier =
-    pointerInput(block) {
-        if (!block) return@pointerInput
+/** 隐藏页面拦截所有指针事件（Initial 消费），防止穿透到下层 Tab 的滚动/点击。保持 pointerInput 结构稳定。 */
+private fun Modifier.blockPointer(shouldBlockState: State<Boolean>): Modifier =
+    pointerInput(Unit) {
         awaitPointerEventScope {
             while (true) {
-                awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (shouldBlockState.value) {
+                    event.changes.forEach { it.consume() }
+                }
             }
+        }
+    }
+
+/** 语义门控：隐藏态设置 hideFromAccessibility，保持 Modifier 节点稳定不动态增删。 */
+private fun Modifier.tabSemantics(visibleState: State<Boolean>): Modifier =
+    semantics {
+        if (!visibleState.value) {
+            hideFromAccessibility()
         }
     }

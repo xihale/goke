@@ -7,11 +7,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,7 +33,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
@@ -51,6 +50,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,11 +65,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -78,7 +74,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
@@ -107,24 +102,32 @@ import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Tab
 import app.mintcal.ui.components.AttachmentEditor
+import app.mintcal.ui.components.ChipPill
 import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.ConflictCard
 import app.mintcal.ui.components.MintCheck
+import app.mintcal.ui.components.SegmentedPill
+import app.mintcal.ui.components.Tag
 import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.components.rememberFileAttachmentPicker
 import app.mintcal.ui.components.rememberImageAttachmentPicker
+import app.mintcal.ui.components.rememberNoFocusPopup
 import app.mintcal.ui.dueLabel
-import app.mintcal.ui.durationLabel
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDayWeekday
-import app.mintcal.ui.rememberNow
+import app.mintcal.ui.reduceMotion
+import app.mintcal.ui.rememberToday
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.theme.priorityColor
+import kotlinx.coroutines.delay
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
+
+/** 底栏上方就地展开的选择面板（不弹浮层，键盘不动）。 */
+private enum class BarPanel { LIST, PRIORITY }
 
 /**
  * 唯一的编辑页：新建和修改都是它。版式对齐 TickTick 详情：
@@ -133,6 +136,7 @@ import java.time.LocalDateTime
  * 修改返回即保存（空标题等于放弃）；新建要点顶栏「确定」才落库，返回先确认放弃（空白草稿直接走）。
  * 标题里识别到的日期时间就地高亮，点一下表示认错了。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TodoEditScreen(
     id: String?,
@@ -143,6 +147,14 @@ fun TodoEditScreen(
     courseArg: String? = null,
     extraDatesArg: String? = null,
     noteDraft: String? = null,
+    listArg: String? = null,
+    remindArg: Int? = null,
+    remindPersistentArg: Boolean = false,
+    repeatFreqArg: String? = null,
+    repeatIntervalArg: Int = 1,
+    repeatUntilArg: String? = null,
+    repeatByDaysArg: String? = null,
+    repeatByMonthsArg: String? = null,
     onBack: () -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -150,8 +162,8 @@ fun TodoEditScreen(
     val actions = LocalActions.current
     val snap = liveSnapshot()
     val settings = settingsState()
-    val now by rememberNow()
-    val today = now.toLocalDate()
+    val baseNow = remember { LocalDateTime.now() }
+    val today = rememberToday().value
     val existing = remember(id, snap.tasks) { id?.let { i -> snap.tasks.firstOrNull { it.id == i } } }
     if (id != null && existing == null) {
         LaunchedEffect(Unit) { onBack() }
@@ -161,6 +173,24 @@ fun TodoEditScreen(
     val argDate = remember { dateArg?.let { runCatching { LocalDate.parse(it) }.getOrNull() } }
     val initStart = remember { startArg?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() } }
     val initEnd = remember { endArg?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() } }
+    val initFreq = remember { repeatFreqArg?.let { runCatching { Freq.valueOf(it) }.getOrNull() } }
+    val initUntil = remember { repeatUntilArg?.let { runCatching { LocalDate.parse(it) }.getOrNull() } }
+    val initByDays =
+        remember {
+            repeatByDaysArg
+                .orEmpty()
+                .split(',')
+                .mapNotNull { it.trim().toIntOrNull() }
+                .toSet()
+        }
+    val initByMonths =
+        remember {
+            repeatByMonthsArg
+                .orEmpty()
+                .split(',')
+                .mapNotNull { it.trim().toIntOrNull() }
+                .toSet()
+        }
     val initWhen =
         remember(existing) {
             existing?.let { t ->
@@ -184,7 +214,7 @@ fun TodoEditScreen(
                             .toMinutes()
                             .toInt()
                             .coerceIn(1, 24 * 60)
-                    } ?: settings.defaultBlockMinutes,
+                    },
                 )
             }
         }
@@ -194,40 +224,68 @@ fun TodoEditScreen(
     var attachments by remember { mutableStateOf(existing?.attachments.orEmpty()) }
     var picked by remember { mutableStateOf(initWhen) }
     var cleared by remember { mutableStateOf(false) }
-    var remind by remember { mutableStateOf(existing?.remindMinutes) }
-    var persistent by remember { mutableStateOf(existing?.remindPersistent == true) }
-    var freq by remember { mutableStateOf(existing?.repeat?.freq) }
-    var interval by remember { mutableIntStateOf(existing?.repeat?.interval ?: 1) }
-    var until by remember { mutableStateOf(existing?.repeat?.until) }
-    var byDays by remember { mutableStateOf(existing?.repeat?.byDays ?: emptySet<Int>()) }
-    var byMonths by remember { mutableStateOf(existing?.repeat?.byMonths ?: emptySet<Int>()) }
-    var listId by remember { mutableStateOf(existing?.listId) }
+    var remind by remember { mutableStateOf(if (existing != null) existing.remindMinutes else remindArg) }
+    var persistent by remember { mutableStateOf(if (existing != null) existing.remindPersistent else (remindPersistentArg && remindArg != null)) }
+    var freq by remember { mutableStateOf(if (existing != null) existing.repeat?.freq else initFreq) }
+    var interval by remember { mutableIntStateOf(if (existing != null) (existing.repeat?.interval ?: 1) else repeatIntervalArg.coerceAtLeast(1)) }
+    var until by remember { mutableStateOf(if (existing != null) existing.repeat?.until else initUntil) }
+    var byDays by remember { mutableStateOf(if (existing != null) (existing.repeat?.byDays ?: emptySet()) else initByDays) }
+    var byMonths by remember { mutableStateOf(if (existing != null) (existing.repeat?.byMonths ?: emptySet()) else initByMonths) }
+    var listId by remember { mutableStateOf(if (existing != null) existing.listId else listArg) }
     var priority by remember { mutableIntStateOf(existing?.priority ?: 0) }
-    var ignored by remember { mutableStateOf(setOf<String>()) }
+    val linkedCourseId = existing?.courseId ?: courseArg
+    val linkedCourse = remember(linkedCourseId, snap.courses) { linkedCourseId?.let { cid -> snap.courses.firstOrNull { it.id == cid } } }
+    var dueBeforeNextClass by remember { mutableStateOf(existing?.dueBeforeNextClass ?: (courseArg != null)) }
+    var ignored by remember { mutableStateOf(emptySet<IntRange>()) }
     var timeSheet by remember { mutableStateOf(false) }
     var newSub by remember { mutableStateOf("") }
     var subReset by remember { mutableIntStateOf(0) }
     var subsOpen by remember { mutableStateOf(false) }
-    var confirmDelete by remember { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
-    var listMenu by remember { mutableStateOf(false) }
-    var priorityMenu by remember { mutableStateOf(false) }
+    // 底栏的清单 / 优先级就地展开，不弹浮层：键盘不动，也不会浮层飘在正文上留一块空
+    var barPanel by remember { mutableStateOf<BarPanel?>(null) }
+    // 顶栏「更多」仍在原位弹菜单，但它不抢焦点
+    val noFocusPopup = rememberNoFocusPopup()
     val titleFocus = remember { FocusRequester() }
-    LaunchedEffect(existing == null) { if (existing == null) titleFocus.requestFocus() }
+    val reduce = reduceMotion()
+    LaunchedEffect(existing == null) {
+        if (existing == null) {
+            // 延迟到路由进入动画完成后再拉起软键盘，避免首帧触发同步 IMM/WMS Binder 交易与窗口重排
+            delay(if (reduce) 16L else 280L)
+            titleFocus.requestFocus()
+        }
+    }
     // 附件：图片和文件都在工具栏上，点了直接选
     val pickImage = rememberImageAttachmentPicker { a -> attachments = attachments + a }
     val pickFile = rememberFileAttachmentPicker { a -> attachments = attachments + a }
 
     val text = field.text
-    val parsed = remember(text, now) { if (text.isBlank()) null else QuickAdd.parse(text, now) }
-    val tokens = remember(parsed) { parsed?.tokens?.filter { it.kind == QuickTokenKind.DATE || it.kind == QuickTokenKind.TIME }.orEmpty() }
+    val parsed = remember(text) { if (text.isBlank()) null else QuickAdd.parse(text, baseNow) }
     val masked =
         remember(text, ignored) {
-            var out = text
-            ignored.forEach { ig -> if (ig.isNotEmpty()) out = out.replace(ig, "·".repeat(ig.length)) }
-            out
+            if (ignored.isEmpty()) {
+                text
+            } else {
+                val chars = text.toCharArray()
+                for (r in ignored) {
+                    val start = r.first.coerceAtLeast(0)
+                    val end = r.last.coerceAtMost(chars.lastIndex)
+                    for (i in start..end) chars[i] = '·'
+                }
+                String(chars)
+            }
         }
-    val kept = remember(masked, now) { if (masked.isBlank()) null else QuickAdd.parse(masked, now) }
+    val kept =
+        remember(parsed, masked) {
+            if (masked.isBlank()) {
+                null
+            } else if (masked == text) {
+                parsed
+            } else {
+                QuickAdd.parse(masked, baseNow)
+            }
+        }
+    val tokens = remember(kept) { kept?.tokens?.filter { it.kind == QuickTokenKind.DATE || it.kind == QuickTokenKind.TIME }.orEmpty() }
     val textWhen =
         remember(kept) {
             kept?.due?.let { WhenPick(it.toLocalDate(), if (kept.dueHasTime) it.toLocalTime() else null) }
@@ -250,7 +308,7 @@ fun TodoEditScreen(
                     .orEmpty()
                     .split(',')
                     .mapNotNull { runCatching { LocalDate.parse(it.trim()) }.getOrNull() }
-                    .filter { it != whenPick?.date }
+                    .filter { it != whenPick.date }
             }
         }
     val initialWhen = remember { whenPick }
@@ -260,6 +318,7 @@ fun TodoEditScreen(
         text != existing?.title.orEmpty() || note != existing?.note.orEmpty() ||
             attachments != existing?.attachments.orEmpty() || listId != existing?.listId || priority != (existing?.priority ?: 0) ||
             remind != existing?.remindMinutes || persistent != (existing?.remindPersistent == true) || freq != existing?.repeat?.freq ||
+            dueBeforeNextClass != (existing?.dueBeforeNextClass ?: false) ||
             (
                 freq != null &&
                     (
@@ -271,15 +330,11 @@ fun TodoEditScreen(
 
     // 退出即保存：有内容且有改动就静默落盘；空标题等于放弃这条
     val ranges =
-        remember(text, tokens, ignored) {
-            if (text.isEmpty()) {
+        remember(masked, tokens) {
+            if (masked.isEmpty() || tokens.isEmpty()) {
                 emptyList()
             } else {
-                tokens
-                    .mapNotNull { t ->
-                        val i = text.indexOf(t.text)
-                        if (i < 0 || t.text in ignored) null else i until (i + t.text.length)
-                    }.sortedBy { it.first }
+                tokenRanges(masked, tokens).map { it.second }.sortedBy { it.first }
             }
         }
     val nav = LocalNav.current
@@ -354,6 +409,7 @@ fun TodoEditScreen(
                 attachments = attachments,
                 listId = listId,
                 priority = priority,
+                dueBeforeNextClass = linkedCourseId != null && dueBeforeNextClass,
                 blockStart = blockStartAt,
                 blockMinutes = blockMinutes,
                 due = dueAt,
@@ -378,31 +434,58 @@ fun TodoEditScreen(
                 .split(',')
                 .mapNotNull { runCatching { LocalDate.parse(it.trim()) }.getOrNull() }
                 .filter { it != w?.date }
-        val changes =
-            listOf(Edits.save(snap, next, desc, ms)) +
-                extras.mapNotNull { d ->
-                    val ww = w
-                    if (ww == null || !ww.block || ww.start == null) return@mapNotNull null
-                    val dur = ww.minutes ?: return@mapNotNull null
-                    val s = LocalDateTime.of(d, ww.start)
-                    val t2 =
-                        next.copy(
-                            id = Ids.next(),
-                            blockStart = s,
-                            due = s.plusMinutes(dur.toLong()),
-                            sortOrder = next.sortOrder + 1,
-                        )
-                    Edits.save(snap, t2, ctx.getString(R.string.add_task_desc, t2.title), ms)
-                }
-        // 编辑保存静默；新建单条 Toast；框选多天一次给撤销（与批量预览同一承诺）
+        val mainChanged = existing == null || next != existing
+        val mainChanges =
+            if (mainChanged) {
+                listOf(Edits.save(snap, next, desc, ms)) +
+                    extras.mapNotNull { d ->
+                        val ww = w
+                        if (ww == null || !ww.block || ww.start == null) return@mapNotNull null
+                        val dur = ww.minutes ?: return@mapNotNull null
+                        val s = LocalDateTime.of(d, ww.start)
+                        val t2 =
+                            next.copy(
+                                id = Ids.next(),
+                                blockStart = s,
+                                due = s.plusMinutes(dur.toLong()),
+                                sortOrder = next.sortOrder + 1,
+                            )
+                        Edits.save(snap, t2, ctx.getString(R.string.add_task_desc, t2.title), ms)
+                    }
+            } else {
+                emptyList()
+            }
+        val subTrimmed = newSub.trim()
+        val subChanges =
+            if (existing != null && subTrimmed.isNotEmpty()) {
+                val existingSubs = TaskLogic.subtasks(snap.tasks, existing.id)
+                val sub =
+                    Task(
+                        id = Ids.next(),
+                        title = subTrimmed,
+                        listId = listId,
+                        parentId = existing.id,
+                        sortOrder = (existingSubs.maxOfOrNull { it.sortOrder } ?: 0) + 1,
+                    )
+                listOf(Edits.save(snap, sub, ctx.getString(R.string.add_task_desc, sub.title), ms))
+            } else {
+                emptyList()
+            }
+        val changes = mainChanges + subChanges
+        if (changes.isEmpty()) {
+            onBack()
+            return
+        }
         val feedback =
             when {
-                existing != null -> null
+                existing != null && mainChanged -> desc
+                existing != null && subChanges.isNotEmpty() -> resources.getString(R.string.add_task_desc, subTrimmed)
+                existing != null -> desc
                 changes.size > 1 -> resources.getString(R.string.todo_batch_toast, changes.size)
                 w != null -> resources.getString(R.string.detail_editor_added_date, ctx.dueLabel(w.date.atStartOfDay(), false, today))
                 else -> resources.getString(R.string.detail_editor_added_inbox)
             }
-        actions.commit(ChangeSet(Ids.next(), desc, Source.MANUAL, ms, changes.flatMap { it.changes }), feedback, undoable = changes.size > 1)
+        actions.commit(ChangeSet(Ids.next(), desc, Source.MANUAL, ms, changes.flatMap { it.changes }), feedback, undoable = true)
         onBack()
     }
 
@@ -448,13 +531,18 @@ fun TodoEditScreen(
                     )
                     Box {
                         IconButton(onClick = { pageMenu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
-                        DropdownMenu(pageMenu, { pageMenu = false }) {
+                        DropdownMenu(pageMenu, { pageMenu = false }, properties = noFocusPopup) {
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.delete)) },
                                 leadingIcon = { Icon(Icons.Rounded.Delete, null) },
                                 onClick = {
                                     pageMenu = false
-                                    confirmDelete = true
+                                    // 删除不做二次确认：落库后出撤回浮钮（4.5s），回收站也能恢复
+                                    actions.commit(
+                                        Edits.delete(snap, existing, ctx.getString(R.string.delete_desc, existing.title), System.currentTimeMillis()),
+                                        ctx.getString(R.string.delete_desc, existing.title),
+                                    )
+                                    onBack()
                                 },
                             )
                         }
@@ -473,8 +561,41 @@ fun TodoEditScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
         ) {
-            SmartTitle(field, { field = it }, ranges, titleFocus, done = existing?.done == true) { range ->
-                ignored = ignored + text.substring(range.first, range.last + 1)
+            SmartTitle(
+                field,
+                { updated ->
+                    ignored = adjustIgnoredRanges(field.text, updated.text, ignored)
+                    field = updated
+                },
+                ranges,
+                titleFocus,
+                done = existing?.done == true,
+            )
+            if (ranges.isNotEmpty()) {
+                FlowRow(
+                    Modifier.fillMaxWidth().padding(bottom = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    ranges.forEach { range ->
+                        if (range.first >= 0 && range.last < text.length) {
+                            val tokenText = text.substring(range.first, range.last + 1)
+                            val removeDesc = stringResource(R.string.quick_add_remove_time, tokenText)
+                            Tag(
+                                "$tokenText ×",
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.onPrimaryContainer,
+                                Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .mintClickable(pressedScale = 0.96f, role = Role.Button) {
+                                        ignored = ignored + setOf(range)
+                                    }.semantics {
+                                        contentDescription = removeDesc
+                                    },
+                            )
+                        }
+                    }
+                }
             }
             WhenRow(whenPick, today, remind, freq, interval, until, byDays, byMonths, onClear = {
                 picked = null
@@ -485,6 +606,22 @@ fun TodoEditScreen(
                 byDays = emptySet()
                 byMonths = emptySet()
             }) { timeSheet = true }
+            if (linkedCourse != null) {
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ChipPill(
+                        label = stringResource(R.string.detail_editor_before_class, linkedCourse.name),
+                        on = dueBeforeNextClass,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        role = Role.Checkbox,
+                    ) {
+                        dueBeforeNextClass = !dueBeforeNextClass
+                    }
+                }
+            }
             if (extraDays.isNotEmpty()) {
                 // 周历框选带进来的其它日期：明说会建几条，不再静默生成
                 Text(
@@ -586,7 +723,8 @@ fun TodoEditScreen(
                             TextButton(
                                 onClick = {
                                     val sub = Task(Ids.next(), newSub.trim(), parentId = existing.id, sortOrder = (subs.maxOfOrNull { it.sortOrder } ?: 0) + 1, listId = existing.listId)
-                                    actions.commit(Edits.save(snap, sub, ctx.getString(R.string.add_task_desc, sub.title), System.currentTimeMillis()))
+                                    val subDesc = ctx.getString(R.string.add_task_desc, sub.title)
+                                    actions.commit(Edits.save(snap, sub, subDesc, System.currentTimeMillis()), subDesc, undoable = true)
                                     newSub = ""
                                     subReset++
                                 },
@@ -596,9 +734,54 @@ fun TodoEditScreen(
                 }
             }
         }
+        // 底部快捷操作条直接落在纸面底色上，不再抬高一层白
+        // 清单 / 优先级在栏上方就地展开（与子任务同一套展开方式），不弹浮层
+        AnimatedVisibility(
+            visible = barPanel == BarPanel.PRIORITY,
+            enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+            exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+        ) {
+            SegmentedPill(
+                options =
+                    listOf(3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1, 0 to R.string.priority_0)
+                        .map { it.first to stringResource(it.second) },
+                selected = priority,
+                onSelect = {
+                    priority = it
+                    barPanel = null
+                },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+        AnimatedVisibility(
+            visible = barPanel == BarPanel.LIST,
+            enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+            exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+        ) {
+            FlowRow(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 132.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ChipPill(stringResource(R.string.bucket_inbox), on = listId == null) {
+                    listId = null
+                    barPanel = null
+                }
+                snap.lists.sortedBy { it.sort }.forEach { l ->
+                    ChipPill(l.name, on = listId == l.id) {
+                        listId = l.id
+                        barPanel = null
+                    }
+                }
+            }
+        }
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            color = MaterialTheme.colorScheme.background,
         ) {
             Row(
                 Modifier
@@ -609,55 +792,24 @@ fun TodoEditScreen(
             ) {
                 val currentList = snap.lists.firstOrNull { it.id == listId }
                 val listTint = currentList?.let { MintTheme.colors.fg(it.colorIndex) } ?: MaterialTheme.colorScheme.outline
-                Box {
-                    Row(
-                        Modifier
-                            .widthIn(max = 180.dp)
-                            .heightIn(min = 48.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .mintClickable(pressedScale = 0.95f, role = Role.Button) { listMenu = true }
-                            .padding(horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(listTint))
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            currentList?.name ?: stringResource(R.string.bucket_inbox),
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    DropdownMenu(listMenu, { listMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.bucket_inbox)) },
-                            leadingIcon = {
-                                Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-                                    Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.outline))
-                                }
-                            },
-                            trailingIcon = { if (listId == null) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) },
-                            onClick = {
-                                listMenu = false
-                                listId = null
-                            },
-                        )
-                        snap.lists.sortedBy { it.sort }.forEach { l ->
-                            DropdownMenuItem(
-                                text = { Text(l.name) },
-                                leadingIcon = {
-                                    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-                                        Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(MintTheme.colors.fg(l.colorIndex)))
-                                    }
-                                },
-                                trailingIcon = { if (listId == l.id) Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) },
-                                onClick = {
-                                    listMenu = false
-                                    listId = l.id
-                                },
-                            )
-                        }
-                    }
+                Row(
+                    Modifier
+                        .widthIn(max = 180.dp)
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .mintClickable(pressedScale = 0.95f, role = Role.Button) {
+                            barPanel = if (barPanel == BarPanel.LIST) null else BarPanel.LIST
+                        }.padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(listTint))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        currentList?.name ?: stringResource(R.string.bucket_inbox),
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
                 Spacer(Modifier.weight(1f))
                 if (existing != null) {
@@ -669,22 +821,8 @@ fun TodoEditScreen(
                         )
                     }
                 }
-                Box {
-                    IconButton(onClick = { priorityMenu = true }) {
-                        Icon(Icons.Rounded.Flag, stringResource(R.string.label_priority), tint = priorityColor(priority))
-                    }
-                    DropdownMenu(priorityMenu, { priorityMenu = false }) {
-                        listOf(3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1, 0 to R.string.priority_0).forEach { (v, label) ->
-                            DropdownMenuItem(
-                                text = { Text(stringResource(label)) },
-                                leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = priorityColor(v), modifier = Modifier.size(18.dp)) },
-                                onClick = {
-                                    priorityMenu = false
-                                    priority = v
-                                },
-                            )
-                        }
-                    }
+                IconButton(onClick = { barPanel = if (barPanel == BarPanel.PRIORITY) null else BarPanel.PRIORITY }) {
+                    Icon(Icons.Rounded.Flag, stringResource(R.string.label_priority), tint = priorityColor(priority))
                 }
                 IconButton(onClick = pickImage) { Icon(Icons.Rounded.Image, stringResource(R.string.attach_image)) }
                 IconButton(onClick = pickFile) { Icon(Icons.Rounded.UploadFile, stringResource(R.string.attach_file)) }
@@ -720,6 +858,7 @@ fun TodoEditScreen(
                 } else {
                     picked = wp
                     cleared = false
+                    if (linkedCourse != null) dueBeforeNextClass = false
                     remind = r.remindMinutes
                     persistent = r.remindPersistent
                     freq = r.freq
@@ -742,25 +881,9 @@ fun TodoEditScreen(
             danger = true,
         )
     }
-    if (confirmDelete && existing != null) {
-        ConfirmDialog(
-            stringResource(R.string.delete_task_title),
-            stringResource(R.string.delete_to_trash_hint),
-            stringResource(R.string.delete),
-            onConfirm = {
-                actions.commit(
-                    Edits.delete(snap, existing, ctx.getString(R.string.delete_desc, existing.title), System.currentTimeMillis()),
-                    ctx.getString(R.string.delete_desc, existing.title),
-                )
-                onBack()
-            },
-            onDismiss = { confirmDelete = false },
-            danger = true,
-        )
-    }
 }
 
-/** 标题输入：识别到的日期时间就地染色，点一下取消识别（文字保留）。 */
+/** 标题输入：识别到的日期时间就地染色，下方胶囊可点按取消识别（文字保留）。 */
 @Composable
 private fun SmartTitle(
     value: TextFieldValue,
@@ -768,12 +891,9 @@ private fun SmartTitle(
     ranges: List<IntRange>,
     focus: FocusRequester,
     done: Boolean = false,
-    onCancelRange: (IntRange) -> Unit,
 ) {
     val accent = MaterialTheme.colorScheme.primary
-    val haptics = LocalHapticFeedback.current
     val hint = stringResource(R.string.entry_hint)
-    var layoutState by remember { mutableStateOf<TextLayoutResult?>(null) }
     BasicTextField(
         value = value,
         onValueChange = onChange,
@@ -783,20 +903,7 @@ private fun SmartTitle(
                 .heightIn(min = 48.dp)
                 .focusRequester(focus)
                 .semantics { contentDescription = hint }
-                .pointerInput(ranges) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        val layout = layoutState ?: return@awaitEachGesture
-                        if (layout.layoutInput.text.isEmpty()) return@awaitEachGesture
-                        val off = layout.getOffsetForPosition(down.position)
-                        val hit = ranges.firstOrNull { off in it }
-                        if (hit != null) {
-                            down.consume()
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onCancelRange(hit)
-                        }
-                    }
-                }.padding(vertical = 12.dp),
+                .padding(vertical = 12.dp),
         textStyle =
             MaterialTheme.typography.titleLarge.copy(
                 color = if (done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
@@ -805,7 +912,6 @@ private fun SmartTitle(
             ),
         cursorBrush = SolidColor(accent),
         visualTransformation = TokenPaint(ranges, accent),
-        onTextLayout = { layoutState = it },
         decorationBox = { innerTextField ->
             Box {
                 if (value.text.isEmpty()) {
@@ -823,6 +929,30 @@ private fun SmartTitle(
             }
         },
     )
+}
+
+/** 文本变更后同步平移未受影响的忽略区间，被编辑命中的区间自动失效。 */
+private fun adjustIgnoredRanges(
+    oldText: String,
+    newText: String,
+    current: Set<IntRange>,
+): Set<IntRange> {
+    if (oldText == newText || current.isEmpty()) return current
+    val minLen = minOf(oldText.length, newText.length)
+    var prefix = 0
+    while (prefix < minLen && oldText[prefix] == newText[prefix]) prefix++
+    var suffix = 0
+    while (suffix < minLen - prefix && oldText[oldText.length - 1 - suffix] == newText[newText.length - 1 - suffix]) suffix++
+    val oldEnd = oldText.length - suffix
+    val delta = newText.length - oldText.length
+    return buildSet {
+        for (r in current) {
+            when {
+                r.last < prefix -> add(r)
+                r.first >= oldEnd -> add((r.first + delta)..(r.last + delta))
+            }
+        }
+    }
 }
 
 private class TokenPaint(
@@ -883,7 +1013,7 @@ private fun WhenRow(
             }
 
             else -> {
-                val dur = whenPick.minutes ?: 0
+                val dur = whenPick.minutes
                 val end = whenPick.end?.hm().orEmpty()
                 val endLabel = if (start.hour * 60 + start.minute + dur >= 24 * 60) stringResource(R.string.time_next_day, end) else end
                 "${ctx.dueLabel(whenPick.date.atTime(start), true, today)} – $endLabel"

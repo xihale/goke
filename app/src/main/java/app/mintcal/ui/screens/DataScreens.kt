@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.UploadFile
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
@@ -33,8 +36,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +62,7 @@ import app.mintcal.core.importer.ImportPlanner
 import app.mintcal.core.importer.XlsxTimetableImporter
 import app.mintcal.core.model.Semester
 import app.mintcal.core.time.SemesterCalendar
+import app.mintcal.data.DemoData
 import app.mintcal.share.Sharing
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
@@ -80,6 +86,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 @Composable
 fun DataScreen(onBack: () -> Unit) {
@@ -88,7 +95,6 @@ fun DataScreen(onBack: () -> Unit) {
     val nav = LocalNav.current
     val actions = LocalActions.current
     val scope = rememberCoroutineScope()
-    val snap = liveSnapshot()
     val st = settingsState()
     var restoreBundle by remember { mutableStateOf<ExportBundle?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -114,76 +120,89 @@ fun DataScreen(onBack: () -> Unit) {
         }
 
     MintScreen(title = stringResource(R.string.data_title), onBack = onBack) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .navigationBarsPadding()
-                .padding(bottom = 24.dp),
+        LazyColumn(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .navigationBarsPadding(),
+            contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            FormSection(stringResource(R.string.section_import)) {
-                NavRow(stringResource(R.string.import_file), null, Icons.Rounded.UploadFile) { nav.push(Route.Import(null)) }
-            }
-            FormSection(stringResource(R.string.section_backup)) {
-                SwitchRow(stringResource(R.string.auto_backup), stringResource(R.string.auto_backup_desc, st.backupKeep), st.autoBackup) { v ->
-                    app.settings.update { it.copy(autoBackup = v) }
-                }
-                AnimatedVisibility(
-                    visible = st.autoBackup,
-                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-                ) {
-                    Column {
-                        Text(stringResource(R.string.backup_keep), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
-                        MinutesChoiceRow(listOf(7, 14, 30), st.backupKeep, 1..365, dialogTitle = stringResource(R.string.backup_keep), label = { stringResource(R.string.backup_keep_n, it) }) { v ->
-                            app.settings.update { it.copy(backupKeep = v) }
-                        }
-                    }
+            item(key = "import") {
+                FormSection(stringResource(R.string.section_import)) {
+                    NavRow(stringResource(R.string.import_file), null, Icons.Rounded.UploadFile) { nav.push(Route.Import(null)) }
                 }
             }
-            FormSection(stringResource(R.string.section_export)) {
-                NavRow(stringResource(R.string.export_ics), null, Icons.Rounded.IosShare, enabled = !busy) {
-                    scope.launch {
-                        busy = true
-                        try {
-                            val f = withContext(Dispatchers.IO) { Sharing.exportIcs(ctx, snap) }
-                            Sharing.share(ctx, f, "text/calendar")
-                        } finally {
-                            busy = false
-                        }
+            item(key = "backup") {
+                FormSection(stringResource(R.string.section_backup)) {
+                    SwitchRow(stringResource(R.string.auto_backup), stringResource(R.string.auto_backup_desc, st.backupKeep), st.autoBackup) { v ->
+                        app.settings.update { it.copy(autoBackup = v) }
                     }
-                }
-                NavRow(stringResource(R.string.export_image), null, Icons.Rounded.Image, enabled = !busy) {
-                    scope.launch {
-                        busy = true
-                        try {
-                            val sem = snap.currentSemester
-                            val week = sem?.let { SemesterCalendar(it).currentWeek(LocalDate.now()) } ?: 1
-                            val f = withContext(Dispatchers.Default) { Sharing.exportTimetableImage(ctx, snap, st, week) }
-                            if (f != null) Sharing.share(ctx, f, "image/png") else actions.toast(ctx.getString(R.string.export_failed))
-                        } finally {
-                            busy = false
-                        }
-                    }
-                }
-                NavRow(stringResource(R.string.export_json), null, Icons.Rounded.IosShare, enabled = !busy) {
-                    scope.launch {
-                        busy = true
-                        try {
-                            val f = withContext(Dispatchers.IO) { Sharing.exportJson(ctx, app.repo.snapshot.value) }
-                            Sharing.share(ctx, f, "application/json")
-                        } finally {
-                            busy = false
+                    AnimatedVisibility(
+                        visible = st.autoBackup,
+                        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                    ) {
+                        Column {
+                            Text(stringResource(R.string.backup_keep), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
+                            MinutesChoiceRow(listOf(7, 14, 30), st.backupKeep, 1..365, dialogTitle = stringResource(R.string.backup_keep), label = { stringResource(R.string.backup_keep_n, it) }) { v ->
+                                app.settings.update { it.copy(backupKeep = v) }
+                            }
                         }
                     }
                 }
             }
-            FormSection(stringResource(R.string.section_restore)) {
-                NavRow(stringResource(R.string.restore_json), null, Icons.Rounded.Restore, enabled = !busy) {
-                    pickBackup.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*"))
+            item(key = "export") {
+                FormSection(stringResource(R.string.section_export)) {
+                    NavRow(stringResource(R.string.export_ics), null, Icons.Rounded.IosShare, enabled = !busy) {
+                        scope.launch {
+                            busy = true
+                            try {
+                                val curSnap = app.repo.snapshot.value
+                                val f = withContext(Dispatchers.IO) { Sharing.exportIcs(ctx, curSnap) }
+                                Sharing.share(ctx, f, "text/calendar")
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    }
+                    NavRow(stringResource(R.string.export_image), null, Icons.Rounded.Image, enabled = !busy) {
+                        scope.launch {
+                            busy = true
+                            try {
+                                val curSnap = app.repo.snapshot.value
+                                val sem = curSnap.currentSemester
+                                val week = sem?.let { SemesterCalendar(it).currentWeek(LocalDate.now()) } ?: 1
+                                val f = withContext(Dispatchers.Default) { Sharing.exportTimetableImage(ctx, curSnap, st, week) }
+                                if (f != null) Sharing.share(ctx, f, "image/png") else actions.toast(ctx.getString(R.string.export_failed))
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    }
+                    NavRow(stringResource(R.string.export_json), null, Icons.Rounded.IosShare, enabled = !busy) {
+                        scope.launch {
+                            busy = true
+                            try {
+                                val f = withContext(Dispatchers.IO) { Sharing.exportJson(ctx, app.repo.snapshot.value) }
+                                Sharing.share(ctx, f, "application/json")
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    }
                 }
+            }
+            item(key = "restore") {
+                FormSection(stringResource(R.string.section_restore)) {
+                    NavRow(stringResource(R.string.restore_json), null, Icons.Rounded.Restore, enabled = !busy) {
+                        pickBackup.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*"))
+                    }
+                }
+            }
+            item(key = "demo_data") {
+                DemoDataSection()
             }
         }
     }
@@ -200,6 +219,60 @@ fun DataScreen(onBack: () -> Unit) {
             },
             { restoreBundle = null },
             danger = true,
+        )
+    }
+}
+
+/** 填入一批真实含量的演示数据：整批一次提交，可在操作记录里一步撤销。 */
+@Composable
+private fun DemoDataSection() {
+    val ctx = LocalContext.current
+    val app = LocalApp.current
+    val actions = LocalActions.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf(false) }
+    val snap =
+        app.repo.snapshot
+            .collectAsState()
+            .value
+    val semester = snap.currentSemester
+    val existing = snap.allRecords().count { it !is Semester && it.deletedAt == null }
+
+    fun fill() {
+        val sem = semester ?: return
+        busy = true
+        // 先删后建在同一次提交里：结果只剩演示数据，撤销一步就全部回来
+        val all = snap.allRecords()
+        scope.launch {
+            val cs = DemoData.build(LocalDateTime.now(), sem.id, replace = true, existing = all)
+            app.repo.commit(cs)
+            busy = false
+            actions.toast(ctx.getString(R.string.demo_data_done, cs.changes.count { it is Change.Add }))
+        }
+    }
+
+    FormSection(stringResource(R.string.demo_data_title)) {
+        FilledTonalButton(
+            enabled = !busy && semester != null,
+            onClick = { if (existing > 0) confirm = true else fill() },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(if (busy) R.string.demo_data_running else R.string.demo_data_replace))
+        }
+    }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text(stringResource(R.string.demo_data_confirm_title)) },
+            text = { Text(stringResource(R.string.demo_data_confirm_text, existing)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = false
+                    fill()
+                }) { Text(stringResource(R.string.demo_data_confirm_ok)) }
+            },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }

@@ -6,33 +6,46 @@ import android.content.Context
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,13 +55,27 @@ import app.mintcal.core.agenda.BlockItem
 import app.mintcal.core.agenda.CourseItem
 import app.mintcal.core.agenda.EventItem
 import app.mintcal.core.agenda.TaskItem
+import app.mintcal.core.change.Change
+import app.mintcal.core.change.ChangeSet
+import app.mintcal.core.change.Edits
+import app.mintcal.core.change.Unify
+import app.mintcal.core.model.Event
 import app.mintcal.core.model.EventKind
+import app.mintcal.core.model.Snapshot
+import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
+import app.mintcal.core.util.Ids
 import app.mintcal.ui.Actions
 import app.mintcal.ui.LocalActions
+import app.mintcal.ui.LocalApp
+import app.mintcal.ui.LocalNav
 import app.mintcal.ui.formatRooms
 import app.mintcal.ui.hm
+import app.mintcal.ui.monthDayWeekday
+import app.mintcal.ui.screens.freqLabel
 import app.mintcal.ui.theme.MintTheme
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -138,7 +165,7 @@ private fun RowShell(
     modifier: Modifier = Modifier,
 ) {
     // 过期置灰随时间平滑过渡（30s 心跳）；只淡背景，文字保持独立可读强度
-    val bgAlpha by animateFloatAsState(if (dim) 0.45f else 1f, MintTheme.spec(), label = "row-dim")
+    val bgAlpha by animateFloatAsState(if (dim) 0.45f else 1f, MintTheme.press(), label = "row-dim")
     Row(
         modifier
             .fillMaxWidth()
@@ -170,15 +197,14 @@ fun TaskRow(
     val code = task.parcelCode()
     val titleColor by animateColorAsState(
         if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-        MintTheme.spec(),
+        MintTheme.press(),
         label = "task-title",
     )
-    val rowAlpha by animateFloatAsState(if (task.done) 0.45f else 1f, MintTheme.spec(), label = "task-done-alpha")
+    val rowAlpha by animateFloatAsState(if (task.done) 0.45f else 1f, MintTheme.press(), label = "task-done-alpha")
     Row(
         modifier
             .fillMaxWidth()
             .heightIn(min = 50.dp)
-            .graphicsLayer { alpha = rowAlpha }
             .mintClickable(pressedScale = 0.98f) { onOpen(task.id) }
             .padding(start = 8.dp, end = if (code != null) 4.dp else 12.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -187,13 +213,13 @@ fun TaskRow(
         Spacer(Modifier.width(4.dp))
         Column(Modifier.weight(1f)) {
             if (code != null) {
-                ParcelCodeHeadline(code = code, done = task.done, copyEnabled = true)
+                ParcelCodeHeadline(code = code, done = task.done, copyEnabled = true, alpha = rowAlpha)
                 val detail = listOfNotNull(task.parcelLabel(), subtitle).filter { it.isNotBlank() }.joinToString(" · ")
                 if (detail.isNotEmpty()) {
                     Text(
                         detail,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = rowAlpha),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 1.dp),
@@ -205,14 +231,14 @@ fun TaskRow(
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    color = titleColor,
+                    color = titleColor.copy(alpha = rowAlpha),
                     textDecoration = if (task.done) TextDecoration.LineThrough else TextDecoration.None,
                 )
                 if (subtitle != null) {
                     Text(
                         subtitle,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = rowAlpha),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 1.dp),
@@ -221,7 +247,7 @@ fun TaskRow(
             }
         }
         if (code != null) {
-            ParcelCodeCopyButton(code)
+            ParcelCodeCopyButton(code, alpha = rowAlpha)
         }
     }
 }
@@ -265,12 +291,13 @@ fun ParcelCodeHeadline(
     done: Boolean,
     copyEnabled: Boolean,
     modifier: Modifier = Modifier,
+    alpha: Float = if (done) 0.45f else 1f,
 ) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
     val color by animateColorAsState(
         if (done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
-        MintTheme.spec(),
+        MintTheme.press(),
         label = "parcel-code-color",
     )
     val clickMod =
@@ -285,25 +312,26 @@ fun ParcelCodeHeadline(
         code,
         modifier = modifier.then(clickMod),
         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"),
-        color = color,
+        color = color.copy(alpha = alpha),
         textDecoration = if (done) TextDecoration.LineThrough else TextDecoration.None,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
 }
 
-/** 行尾复制取件码按钮：安静次级图标 + 40dp 触控热区，一键复制不抢主标题焦点。 */
+/** 行尾复制取件码按钮：安静次级图标 + 48dp 触控热区，一键复制不抢主标题焦点。 */
 @Composable
 fun ParcelCodeCopyButton(
     code: String,
     modifier: Modifier = Modifier,
+    alpha: Float = 1f,
 ) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
     val description = stringResource(R.string.parcel_copy_code, code)
     Box(
         modifier
-            .size(40.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .mintClickable(pressedScale = 0.96f, role = Role.Button) { copyParcelCode(ctx, actions, code) }
             .semantics { contentDescription = description },
@@ -313,7 +341,186 @@ fun ParcelCodeCopyButton(
             Icons.Rounded.ContentCopy,
             contentDescription = null,
             modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
+        )
+    }
+}
+
+/**
+ * 日程详情底部抽屉：展示标题、考试/倒数日徽标、时间（或全天）、地点、重复规则与备注；
+ * 支持「转为待办编辑」（统一迁移至待办）与「删除」（带撤销）。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EventDetailSheet(
+    event: Event?,
+    snap: Snapshot,
+    onDismiss: () -> Unit,
+) {
+    val e = event ?: return
+    val ctx = LocalContext.current
+    val app = LocalApp.current
+    val nav = LocalNav.current
+    val actions = LocalActions.current
+    val scope = rememberCoroutineScope()
+    var converting by remember(e.id) { mutableStateOf(false) }
+
+    val colors = MintTheme.colors
+    val startDay = e.start.toLocalDate()
+    val endDay = e.end.toLocalDate()
+    val timeText =
+        if (e.allDay) {
+            val dateRange =
+                if (startDay == endDay) {
+                    ctx.monthDayWeekday(startDay)
+                } else {
+                    "${ctx.monthDayWeekday(startDay)} – ${ctx.monthDayWeekday(endDay)}"
+                }
+            "$dateRange · ${stringResource(R.string.event_detail_all_day)}"
+        } else if (startDay == endDay) {
+            "${ctx.monthDayWeekday(startDay)} ${e.start.hm()}–${e.end.hm()}"
+        } else {
+            "${ctx.monthDayWeekday(startDay)} ${e.start.hm()} – ${ctx.monthDayWeekday(endDay)} ${e.end.hm()}"
+        }
+    val kindLabel =
+        when (e.kind) {
+            EventKind.EXAM -> stringResource(R.string.kind_exam)
+            EventKind.COUNTDOWN -> stringResource(R.string.kind_countdown)
+            EventKind.NORMAL -> null
+        }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .width(4.dp)
+                        .height(22.dp)
+                        .clip(CircleShape)
+                        .background(colors.fg(e.colorIndex)),
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    e.title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                if (kindLabel != null) {
+                    Spacer(Modifier.width(8.dp))
+                    Tag(kindLabel, colors.bg(e.colorIndex), colors.fg(e.colorIndex))
+                }
+            }
+            Text(
+                timeText,
+                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 14.dp),
+            )
+            if (e.location.isNotBlank()) {
+                EventInfoRow(stringResource(R.string.field_location), e.location.trim())
+            }
+            e.recurrence?.let { r ->
+                EventInfoRow(
+                    stringResource(R.string.event_detail_repeat),
+                    freqLabel(r.freq, r.until, r.interval, r.byDays, startDay, byMonths = r.byMonths),
+                )
+            }
+            if (e.note.isNotBlank()) {
+                Text(
+                    e.note.trim(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f))
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(
+                    enabled = !converting,
+                    onClick = {
+                        val desc = ctx.getString(R.string.delete_desc, e.title)
+                        actions.commit(Edits.delete(snap, e, desc, System.currentTimeMillis()), desc)
+                        onDismiss()
+                    },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) {
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
+                }
+                Button(
+                    enabled = !converting,
+                    onClick = {
+                        converting = true
+                        val newId = Ids.next()
+                        val sortOrder = (snap.tasks.maxOfOrNull { it.sortOrder } ?: 0) + 1
+                        val task = Unify.eventToTask(e, newId, sortOrder)
+                        val desc = ctx.getString(R.string.event_detail_convert)
+                        val cs =
+                            ChangeSet(
+                                Ids.next(),
+                                desc,
+                                Source.MANUAL,
+                                System.currentTimeMillis(),
+                                listOf(Change.Add(task), Change.Remove(e)),
+                            )
+                        actions.commit(cs, ctx.getString(R.string.event_detail_converted_toast), undoable = false)
+                        scope.launch {
+                            app.repo.snapshot.first { s -> s.tasks.any { it.id == newId } }
+                            onDismiss()
+                            nav.openTask(newId)
+                        }
+                    },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                ) {
+                    Text(stringResource(R.string.event_detail_convert))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EventInfoRow(
+    label: String,
+    value: String,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(end = 16.dp),
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
         )
     }
 }

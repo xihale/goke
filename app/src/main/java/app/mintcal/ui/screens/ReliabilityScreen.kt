@@ -1,5 +1,6 @@
 package app.mintcal.ui.screens
 
+import android.Manifest
 import android.app.AlarmManager
 import android.app.NotificationManager
 import android.content.Context
@@ -7,6 +8,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -24,6 +27,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -31,10 +35,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,7 +57,21 @@ import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.theme.MintTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import android.provider.Settings as AndroidSettings
+
+private data class ReliabilityState(
+    val notifOn: Boolean = true,
+    val channelOn: Boolean = true,
+    val exactOn: Boolean = true,
+    val batteryOn: Boolean = true,
+    val parcelListenerOn: Boolean = false,
+    val parcelChannelOn: Boolean = true,
+    val dndOn: Boolean = false,
+    val calendarPermOn: Boolean = false,
+)
 
 /**
  * 提醒可靠性自检：逐项检查会让提醒「悄悄失效」的系统设置，并给出一键跳转；
@@ -63,18 +82,45 @@ fun ReliabilityScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
     val app = LocalApp.current
     val actions = LocalActions.current
-    var tick by remember { mutableIntStateOf(0) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { tick++ }
+    var state by remember { mutableStateOf(ReliabilityState()) }
+    val scope = rememberCoroutineScope()
 
-    // tick 参与计算：从系统设置页回来后重新检测
-    val notifOn = tick >= 0 && NotificationManagerCompat.from(ctx).areNotificationsEnabled()
-    val channelOn =
-        tick >= 0 &&
-            (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-                .getNotificationChannel(Notifications.CHANNEL_REMINDER)
-                ?.importance != NotificationManager.IMPORTANCE_NONE
-    val exactOn = tick >= 0 && (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms())
-    val batteryOn = tick >= 0 && (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName)
+    fun refresh() {
+        scope.launch {
+            val s =
+                withContext(Dispatchers.IO) {
+                    val notif = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+                    val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    val channel =
+                        Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+                            nm.getNotificationChannel(Notifications.CHANNEL_REMINDER)?.importance != NotificationManager.IMPORTANCE_NONE
+                    val exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
+                    val battery = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName)
+                    val parcelListener = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
+                    val parcelChannel =
+                        Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+                            nm.getNotificationChannel(Notifications.CHANNEL_PARCEL)?.importance != NotificationManager.IMPORTANCE_NONE
+                    val dnd = nm.isNotificationPolicyAccessGranted
+                    val calendar = app.calendarSync.hasPermissions()
+                    ReliabilityState(notif, channel, exact, battery, parcelListener, parcelChannel, dnd, calendar)
+                }
+            state = s
+        }
+    }
+
+    val calPermLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            refresh()
+        }
+
+    LaunchedEffect(Unit) { refresh() }
+    // 从系统设置页回来后在异步协程中重新检测
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh() }
+
+    val notifOn = state.notifOn
+    val channelOn = state.channelOn
+    val exactOn = state.exactOn
+    val batteryOn = state.batteryOn
     // 已授权的项不再显示一行「已授权」，只把还没过的项列出来；全过时整节隐藏
     val anyIssue = !(notifOn && channelOn && exactOn && batteryOn)
 
@@ -102,7 +148,8 @@ fun ReliabilityScreen(onBack: () -> Unit) {
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
-                .navigationBarsPadding(),
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (!anyIssue) {
@@ -167,12 +214,97 @@ fun ReliabilityScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            FormSection(stringResource(R.string.reliability_section_optional)) {
+                val parcelReady = state.parcelListenerOn && state.parcelChannelOn
+                OptionalCheckRow(
+                    title = stringResource(R.string.reliability_parcel_listener),
+                    desc = stringResource(R.string.reliability_parcel_listener_desc),
+                    ready = parcelReady,
+                    onAction = {
+                        when {
+                            !state.parcelListenerOn -> {
+                                open(Intent(AndroidSettings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                            }
+
+                            !state.parcelChannelOn -> {
+                                open(
+                                    Intent(AndroidSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                                        .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, ctx.packageName)
+                                        .putExtra(AndroidSettings.EXTRA_CHANNEL_ID, Notifications.CHANNEL_PARCEL),
+                                )
+                            }
+
+                            else -> {
+                                open(Intent(AndroidSettings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                            }
+                        }
+                    },
+                )
+                OptionalCheckRow(
+                    title = stringResource(R.string.reliability_dnd_policy),
+                    desc = stringResource(R.string.reliability_dnd_policy_desc),
+                    ready = state.dndOn,
+                    onAction = { open(Intent(AndroidSettings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) },
+                )
+                OptionalCheckRow(
+                    title = stringResource(R.string.reliability_calendar_perm),
+                    desc = stringResource(R.string.reliability_calendar_perm_desc),
+                    ready = state.calendarPermOn,
+                    onAction = {
+                        if (!state.calendarPermOn) {
+                            calPermLauncher.launch(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR))
+                        } else {
+                            open(appDetails)
+                        }
+                    },
+                )
+            }
             FormSection(stringResource(R.string.reliability_test)) {
                 Button(onClick = {
                     val ok = app.reminders.scheduleTest(ctx.getString(R.string.reliability_test_title), ctx.getString(R.string.reliability_test_text), 60)
                     actions.toast(ctx.getString(if (ok) R.string.reliability_test_scheduled else R.string.reliability_test_failed))
                 }) { Text(stringResource(R.string.reliability_test_button)) }
             }
+        }
+    }
+}
+
+@Composable
+private fun OptionalCheckRow(
+    title: String,
+    desc: String,
+    ready: Boolean,
+    onAction: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            if (ready) Icons.Rounded.CheckCircle else Icons.Rounded.Info,
+            null,
+            Modifier.size(24.dp),
+            tint = if (ready) MintTheme.colors.added else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f, fill = false))
+                if (!ready) {
+                    Text(
+                        stringResource(R.string.reliability_status_not_set),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        TextButton(onClick = onAction) {
+            Text(
+                stringResource(if (ready) R.string.reliability_status_ready else R.string.reliability_fix),
+                color = if (ready) MintTheme.colors.added else MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }

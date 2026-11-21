@@ -1,5 +1,7 @@
 package app.mintcal.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -38,10 +41,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
+import app.mintcal.jxfw.JxfwClient
 import app.mintcal.jxfw.JxfwException
 import app.mintcal.jxfw.JxfwState
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
+import app.mintcal.ui.components.ChipChoice
 import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintCard
@@ -93,6 +98,40 @@ private fun errorText(
     }
 
 @Composable
+private fun ErrorGuidance(
+    kind: JxfwException.Kind?,
+    raw: String?,
+) {
+    val msg = errorText(kind, raw) ?: return
+    val ctx = LocalContext.current
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            msg,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+        if (kind == JxfwException.Kind.CAPTCHA || kind == JxfwException.Kind.SMS) {
+            TextButton(
+                onClick = {
+                    runCatching {
+                        ctx.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(JxfwClient.HOST))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }
+                },
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) {
+                Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(JxfwClient.HOST.removePrefix("https://"))
+            }
+        }
+    }
+}
+
+@Composable
 private fun LoginPanel(state: JxfwState) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
@@ -123,14 +162,7 @@ private fun LoginPanel(state: JxfwState) {
             onChange = { password = it },
             secret = true,
         )
-        errorText(state.lastErrorKind, state.lastError)?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
-        }
+        ErrorGuidance(state.lastErrorKind, state.lastError)
         Spacer(Modifier.height(4.dp))
         Button(
             enabled = !busy && user.isNotBlank() && password.isNotEmpty(),
@@ -158,6 +190,12 @@ private fun LoginPanel(state: JxfwState) {
                 Text(stringResource(R.string.jxfw_login))
             }
         }
+        Text(
+            stringResource(R.string.jxfw_keystore_reassurance),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
     }
 }
 
@@ -168,6 +206,9 @@ private fun AccountPanel(state: JxfwState) {
     val actions = LocalActions.current
     val scope = rememberCoroutineScope()
     var showLogout by remember { mutableStateOf(false) }
+    val currentTerm = remember { app.jxfw.currentTerm() }
+    val terms = remember(currentTerm, state.term) { app.jxfw.availableTerms(state.term) }
+    var selectedTerm by remember(state.term) { mutableStateOf(state.term ?: currentTerm) }
 
     MintCard(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -193,9 +234,7 @@ private fun AccountPanel(state: JxfwState) {
             } else {
                 state.lastResult?.let { InfoLine(stringResource(R.string.jxfw_last_result), it) }
             }
-            errorText(state.lastErrorKind, state.lastError)?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            }
+            ErrorGuidance(state.lastErrorKind, state.lastError)
         }
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -204,7 +243,7 @@ private fun AccountPanel(state: JxfwState) {
                 onClick = {
                     scope.launch {
                         try {
-                            app.jxfw.fullSync()
+                            app.jxfw.fullSync(selectedTerm)
                             actions.toast(ctx.getString(R.string.jxfw_done_toast))
                         } catch (_: JxfwException) {
                             // 错误已写入状态并显示
@@ -234,6 +273,18 @@ private fun AccountPanel(state: JxfwState) {
         }
     }
 
+    FormSection(stringResource(R.string.jxfw_term_picker)) {
+        val currentLabel = stringResource(R.string.jxfw_term_current)
+        ChipChoice(
+            options =
+                terms.map { code ->
+                    code to if (code == currentTerm) "$code · $currentLabel" else code
+                },
+            selected = selectedTerm,
+            onSelect = { selectedTerm = it },
+        )
+    }
+
     FormSection {
         SwitchRow(
             title = stringResource(R.string.jxfw_auto),
@@ -241,6 +292,12 @@ private fun AccountPanel(state: JxfwState) {
             onChange = { app.jxfw.setAutoSync(it) },
         )
     }
+    Text(
+        stringResource(R.string.jxfw_keystore_reassurance),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 4.dp),
+    )
     TextButton(onClick = { showLogout = true }) {
         Text(stringResource(R.string.jxfw_logout), color = MaterialTheme.colorScheme.error)
     }

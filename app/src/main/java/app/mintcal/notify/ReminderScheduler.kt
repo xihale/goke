@@ -13,6 +13,7 @@ import app.mintcal.core.agenda.CourseItem
 import app.mintcal.core.agenda.EventItem
 import app.mintcal.core.agenda.TaskItem
 import app.mintcal.core.model.Snapshot
+import app.mintcal.core.model.Source
 import app.mintcal.data.Settings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -264,7 +265,16 @@ class ReminderScheduler(
             for ((date, items) in days) {
                 if (st.dailyDigest) {
                     val courses = items.count { it is CourseItem }
-                    val tasks = items.count { it is TaskItem && !it.task.done }
+                    val tasks =
+                        items
+                            .mapNotNull {
+                                when {
+                                    it is TaskItem && !it.task.done -> it.task.id
+                                    it is BlockItem && !it.task.done -> it.task.id
+                                    else -> null
+                                }
+                            }.toSet()
+                            .size
                     if (courses + tasks > 0) {
                         out += Reminder(date.atTime(LocalTime.of(st.digestHour, st.digestMinute)), ctx.getString(R.string.digest_title), ctx.getString(R.string.today_summary, courses, tasks), "digest$date")
                     }
@@ -273,7 +283,7 @@ class ReminderScheduler(
                     when (item) {
                         is CourseItem -> {
                             val c = item.occ.course
-                            val minutes = c.remindMinutes ?: st.courseRemindMinutes.takeIf { st.remindCourse }
+                            val minutes = (c.remindMinutes ?: st.courseRemindMinutes).takeIf { st.remindCourse }
                             if (minutes != null) {
                                 val loc = item.occ.room.ifBlank { null }
                                 // 「课前要交」的待办一并写进提醒：上课前最后一次想起来
@@ -307,7 +317,8 @@ class ReminderScheduler(
                         is TaskItem -> {
                             val t = item.task
                             val minutes = t.remindMinutes
-                            if (minutes != null && st.remindTask && !t.done) {
+                            val enabled = st.remindTask || (t.source == Source.PARCEL && st.parcelEnabled)
+                            if (minutes != null && enabled && !t.done) {
                                 val base = if (item.hasTime) item.due else date.atTime(ALL_DAY_REMIND_AT)
                                 out += Reminder(base.minusMinutes(minutes.toLong()), t.title, ctx.getString(R.string.remind_task_text), "t${t.id}${item.due}", t.id, t.remindPersistent)
                             }
@@ -316,7 +327,8 @@ class ReminderScheduler(
                         is BlockItem -> {
                             val t = item.task
                             val minutes = t.remindMinutes
-                            if (minutes != null && st.remindTask && !t.done) {
+                            val enabled = st.remindTask || (t.source == Source.PARCEL && st.parcelEnabled)
+                            if (minutes != null && enabled && !t.done) {
                                 out += Reminder(item.start.minusMinutes(minutes.toLong()), t.title, ctx.getString(R.string.remind_task_text), "b${t.id}${item.start}", t.id, t.remindPersistent)
                             }
                         }

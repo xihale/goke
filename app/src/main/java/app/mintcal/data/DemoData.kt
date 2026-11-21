@@ -5,8 +5,6 @@ import app.mintcal.core.change.ChangeSet
 import app.mintcal.core.model.Attachment
 import app.mintcal.core.model.Course
 import app.mintcal.core.model.CourseException
-import app.mintcal.core.model.Event
-import app.mintcal.core.model.EventKind
 import app.mintcal.core.model.ExceptionType
 import app.mintcal.core.model.Freq
 import app.mintcal.core.model.Record
@@ -121,114 +119,6 @@ object DemoData {
                 newRoom = "理科楼305",
             )
 
-        fun event(
-            k: String,
-            title: String,
-            start: LocalDateTime,
-            end: LocalDateTime,
-            allDay: Boolean = false,
-            location: String = "",
-            note: String = "",
-            color: Int = 4,
-            category: String = "",
-            kind: EventKind = EventKind.NORMAL,
-            recurrence: Recurrence? = null,
-            remind: Int? = null,
-        ) = Event(id("ev-$k"), title, start, end, allDay, location, note, color, category, remind, recurrence, kind)
-
-        // ── 日程：考试、倒计时、例会、全天事项 ──
-        records +=
-            event(
-                "exam-math",
-                "期末考试 · 高等数学 A",
-                at(18, LocalTime.of(9, 0)),
-                at(18, LocalTime.of(11, 0)),
-                location = "教1-201",
-                note = "闭卷，带学生证",
-                color = 0,
-                category = "考试",
-                kind = EventKind.EXAM,
-                remind = 60,
-            )
-        records +=
-            event(
-                "quiz-prob",
-                "概率论小测",
-                at(6, LocalTime.of(10, 0)),
-                at(6, LocalTime.of(11, 0)),
-                location = "教2-104",
-                color = 1,
-                category = "考试",
-                kind = EventKind.EXAM,
-                remind = 30,
-            )
-        records +=
-            event(
-                "cet4",
-                "英语四级考试",
-                at(30, LocalTime.of(9, 0)),
-                at(30, LocalTime.of(11, 20)),
-                location = "外语楼",
-                color = 2,
-                category = "考试",
-                kind = EventKind.COUNTDOWN,
-            )
-        records +=
-            event(
-                "club-meet",
-                "摄影社例会",
-                at(2, LocalTime.of(19, 0)),
-                at(2, LocalTime.of(21, 0)),
-                location = "艺术楼 210",
-                color = 3,
-                category = "社团",
-                recurrence = Recurrence(Freq.WEEKLY, byDays = everyWeek(4)),
-                remind = 15,
-            )
-        records +=
-            event(
-                "birthday",
-                "室友生日",
-                at(4, LocalTime.of(0, 0)),
-                at(5, LocalTime.of(0, 0)),
-                allDay = true,
-                color = 5,
-                category = "生活",
-            )
-        records +=
-            event(
-                "hospital",
-                "校医院复诊",
-                at(2, LocalTime.of(15, 30)),
-                at(2, LocalTime.of(16, 10)),
-                location = "校医院三楼",
-                color = 4,
-                category = "生活",
-                remind = 60,
-            )
-        records +=
-            event(
-                "lecture",
-                "讲座：如何准备保研",
-                at(1, LocalTime.of(19, 0)),
-                at(1, LocalTime.of(20, 30)),
-                location = "图书馆报告厅",
-                note = "带简历，现场改",
-                color = 2,
-                category = "讲座",
-                remind = 30,
-            )
-        records +=
-            event(
-                "return-book",
-                "图书馆还书",
-                at(3, LocalTime.of(0, 0)),
-                at(4, LocalTime.of(0, 0)),
-                allDay = true,
-                color = 1,
-                remind = 120,
-            )
-
         fun task(
             k: String,
             title: String,
@@ -279,6 +169,103 @@ object DemoData {
             extra = extra,
             attachments = attachments,
         )
+
+        // ── 日程类待办：考试、倒数日、例会、全天事项 ──
+        records +=
+            task(
+                "t-exam-math",
+                "期末考试 · 高等数学 A",
+                note = "闭卷，带学生证",
+                tags = listOf("考试"),
+                due = at(18, LocalTime.of(11, 0)),
+                dueHasTime = true,
+                blockStart = at(18, LocalTime.of(9, 0)),
+                blockMinutes = 120,
+                remind = 60,
+                extra = mapOf("kind" to "EXAM", "checkable" to "false", "location" to "教1-201"),
+            )
+        records +=
+            task(
+                "t-quiz-prob",
+                "概率论小测",
+                tags = listOf("考试"),
+                due = at(6, LocalTime.of(11, 0)),
+                dueHasTime = true,
+                blockStart = at(6, LocalTime.of(10, 0)),
+                blockMinutes = 60,
+                remind = 30,
+                extra = mapOf("kind" to "EXAM", "checkable" to "false", "location" to "教2-104"),
+            )
+        records +=
+            task(
+                "t-cet4",
+                "英语四级考试",
+                tags = listOf("倒数日", "考试"),
+                due = at(30, LocalTime.of(11, 20)),
+                dueHasTime = true,
+                blockStart = at(30, LocalTime.of(9, 0)),
+                blockMinutes = 140,
+                extra = mapOf("kind" to "COUNTDOWN", "checkable" to "false", "location" to "外语楼"),
+            )
+        records +=
+            task(
+                "t-club-meet",
+                "摄影社例会",
+                list = "list-club",
+                tags = listOf("社团"),
+                due = at(2, LocalTime.of(21, 0)),
+                dueHasTime = true,
+                blockStart = at(2, LocalTime.of(19, 0)),
+                blockMinutes = 120,
+                repeat = Recurrence(Freq.WEEKLY, byDays = everyWeek(4)),
+                remind = 15,
+                extra = mapOf("location" to "艺术楼 210"),
+            )
+        records +=
+            task(
+                "t-birthday",
+                "室友生日",
+                list = "list-life",
+                tags = listOf("生活"),
+                due = at(4, LocalTime.of(23, 59)),
+                dueHasTime = false,
+            )
+        records +=
+            task(
+                "t-hospital",
+                "校医院复诊",
+                list = "list-life",
+                tags = listOf("生活"),
+                due = at(2, LocalTime.of(16, 10)),
+                dueHasTime = true,
+                blockStart = at(2, LocalTime.of(15, 30)),
+                blockMinutes = 40,
+                remind = 60,
+                extra = mapOf("location" to "校医院三楼"),
+            )
+        records +=
+            task(
+                "t-lecture",
+                "讲座：如何准备保研",
+                list = "list-study",
+                tags = listOf("讲座"),
+                note = "带简历，现场改",
+                due = at(1, LocalTime.of(20, 30)),
+                dueHasTime = true,
+                blockStart = at(1, LocalTime.of(19, 0)),
+                blockMinutes = 90,
+                remind = 30,
+                extra = mapOf("location" to "图书馆报告厅"),
+            )
+        records +=
+            task(
+                "t-return-book",
+                "图书馆还书",
+                list = "list-life",
+                due = at(3, LocalTime.of(23, 59)),
+                dueHasTime = false,
+                remind = 120,
+            )
 
         // ── 逾期 ──
         records +=

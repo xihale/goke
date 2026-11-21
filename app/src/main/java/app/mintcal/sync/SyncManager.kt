@@ -15,12 +15,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 
 data class SyncUiState(
     val account: SyncAccount? = null,
     val syncing: Boolean = false,
     val lastSyncAt: Long? = null,
     val lastError: String? = null,
+    val needsRelogin: Boolean = false,
 )
 
 /**
@@ -35,6 +41,7 @@ class SyncManager(
 ) {
     private val mutex = Mutex()
     private var pending: Job? = null
+    private val prettyJson = Json { prettyPrint = true }
     private val _state = MutableStateFlow(snapshotState(false))
     val state: StateFlow<SyncUiState> = _state.asStateFlow()
 
@@ -42,7 +49,7 @@ class SyncManager(
         repo.trackPurges = store.account.value != null
     }
 
-    private fun snapshotState(syncing: Boolean) = SyncUiState(store.account.value, syncing, store.lastSyncAt, store.lastError)
+    private fun snapshotState(syncing: Boolean) = SyncUiState(store.account.value, syncing, store.lastSyncAt, store.lastError, store.needsRelogin)
 
     private fun publish(syncing: Boolean = false) {
         _state.value = snapshotState(syncing)
@@ -50,6 +57,27 @@ class SyncManager(
 
     val lastServerUrl: String get() = store.lastServerUrl
     val lastUsername: String get() = store.lastUsername
+
+    fun cloudMcpEndpoint(): String? = store.account.value?.let { "${it.serverUrl.trimEnd('/')}/mcp" }
+
+    fun cloudMcpConfigJson(): String? {
+        val acct = store.account.value ?: return null
+        val token = store.token()?.takeIf { it.isNotBlank() } ?: return null
+        val endpoint = "${acct.serverUrl.trimEnd('/')}/mcp"
+        val root =
+            buildJsonObject {
+                putJsonObject("mcpServers") {
+                    putJsonObject("mintcal") {
+                        put("type", "http")
+                        put("url", endpoint)
+                        putJsonObject("headers") {
+                            put("Authorization", "Bearer $token")
+                        }
+                    }
+                }
+            }
+        return prettyJson.encodeToString(JsonObject.serializer(), root)
+    }
 
     /** 登录并立刻同步一次。失败时抛出 [SyncException]。 */
     suspend fun login(
@@ -86,9 +114,9 @@ class SyncManager(
         SyncClient(acct.serverUrl, store.token()).changePassword(old, new)
     }
 
-    /** 数据变化或打开 App 时调用：稍后（防抖）同步一次。未登录时无操作。 */
+    /** 数据变化或打开 App 时调用：稍后（防抖）同步一次。未登录或登录失效时无操作。 */
     fun requestSync(delayMs: Long = 4000) {
-        if (store.account.value == null) return
+        if (store.account.value == null || store.needsRelogin) return
         pending?.cancel()
         pending =
             scope.launch {
@@ -152,10 +180,16 @@ class SyncManager(
 
                     store.lastSyncAt = clock()
                     store.lastError = null
+                    store.needsRelogin = false
                     publish()
                     applied
                 } catch (e: SyncException) {
-                    store.lastError = if (e.unauthorized) "登录已失效，请重新登录" else e.message
+                    if (e.unauthorized) {
+                        store.needsRelogin = true
+                        store.lastError = "登录已失效，请重新登录"
+                    } else {
+                        store.lastError = e.message
+                    }
                     publish()
                     throw e
                 }

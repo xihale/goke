@@ -25,7 +25,7 @@ fun LocalTime.hm(): String = format(HM)
 
 fun LocalDateTime.hm(): String = format(HM)
 
-/** 专注时长：不足一小时显示「N 分钟」，超过显示「N 小时 M 分」。 */
+/** 时长文本：不足一小时显示「N 分钟」，超过显示「N 小时 M 分」。 */
 fun Context.durationLabel(millis: Long): String {
     val m = (millis + 59_999) / 60_000
     return if (m >= 60) getString(R.string.dur_h_m, m / 60, m % 60) else getString(R.string.dur_min, m)

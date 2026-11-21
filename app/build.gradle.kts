@@ -1,6 +1,15 @@
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.FileSystemOperations
+import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.FileInputStream
 import java.util.Properties
+import javax.inject.Inject
 
 // release 签名（keystore.properties 不入库；缺文件时 assembleRelease 会明确失败）
 val releaseProps =
@@ -25,6 +34,8 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+        // benchmark 变体置 true：只用来在首启时塞一份可滚动数据（BenchSeed），release/debug 下被常量折叠
+        buildConfigField("boolean", "BENCHMARK", "false")
     }
 
     signingConfigs {
@@ -48,6 +59,17 @@ android {
             // 包名后缀区分：debug 装在 app.mintcal.debug，与 release 并存
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+        }
+        create("benchmark") {
+            // Macrobenchmark 目标：release 的 R8 / 资源收缩（真实流畅度）+ debug 签名（可直接安装）。
+            // 包名再加后缀，避免覆盖用户已装的 release 包与真实数据。
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".bench"
+            versionNameSuffix = "-bench"
+            isDebuggable = false
+            buildConfigField("boolean", "BENCHMARK", "true")
+            proguardFiles("benchmark-rules.pro")
         }
     }
     compileOptions {
@@ -125,4 +147,41 @@ dependencies {
 configurations.matching { it.name.contains("UnitTest") }.configureEach {
     exclude(group = "io.github.dokar3", module = "quickjs-kt")
     exclude(group = "io.github.dokar3", module = "quickjs-kt-android")
+}
+
+// 局域网电脑端网页资源以 server/internal/server/web/app 为唯一真源，通过 Variant API 同步进各变体 assets/lanweb/app。
+abstract class SyncLanWebAssetsTask : DefaultTask() {
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val sourceDir: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @get:Inject
+    abstract val fs: FileSystemOperations
+
+    @TaskAction
+    fun syncAssets() {
+        fs.sync {
+            from(sourceDir) {
+                into("lanweb/app")
+            }
+            into(outputDir.get().asFile)
+        }
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val taskName = "sync${variant.name.replaceFirstChar { it.uppercase() }}LanWebAssets"
+        val syncTask =
+            tasks.register<SyncLanWebAssetsTask>(taskName) {
+                sourceDir.set(layout.projectDirectory.dir("../server/internal/server/web/app"))
+            }
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            syncTask,
+            SyncLanWebAssetsTask::outputDir,
+        )
+    }
 }

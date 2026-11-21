@@ -2,6 +2,11 @@ package app.mintcal.ui.screens
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -56,6 +61,7 @@ import app.mintcal.ui.components.SwitchRow
 import app.mintcal.ui.components.TonalField
 import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.components.mintClickable
+import app.mintcal.ui.theme.MintTheme
 
 @Composable
 fun McpScreen(onBack: () -> Unit) {
@@ -131,6 +137,18 @@ fun McpScreen(onBack: () -> Unit) {
                     checked = state.prefs.allowLan,
                     onChange = { app.mcp.setAllowLan(it) },
                 )
+                AnimatedVisibility(
+                    visible = state.prefs.allowLan,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    Text(
+                        stringResource(R.string.mcp_lan_http_warning),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
+                    )
+                }
                 ValueRow(
                     label = stringResource(R.string.mcp_port),
                     value = state.prefs.port.toString(),
@@ -179,6 +197,13 @@ fun McpScreen(onBack: () -> Unit) {
 
             Text(
                 stringResource(R.string.mcp_footer_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                stringResource(R.string.mcp_keepalive_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 4.dp),

@@ -72,6 +72,12 @@ internal class LocalMcpTools(
             },
         )
 
+    init {
+        advanced?.addOnConsumedListener { previewId ->
+            previews.remove(previewId)
+        }
+    }
+
     val definitions: List<McpToolDef> =
         listOf(
             McpToolDef(

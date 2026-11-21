@@ -9,7 +9,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,8 +62,10 @@ import app.mintcal.core.agenda.Agenda
 import app.mintcal.core.agenda.BlockItem
 import app.mintcal.core.agenda.CourseItem
 import app.mintcal.core.agenda.EventItem
+import app.mintcal.core.agenda.NextUps
 import app.mintcal.core.agenda.TaskItem
 import app.mintcal.core.change.Edits
+import app.mintcal.core.model.EventKind
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
 import app.mintcal.core.time.SemesterCalendar
@@ -76,6 +77,7 @@ import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
 import app.mintcal.ui.components.AgendaRow
 import app.mintcal.ui.components.EmptyState
+import app.mintcal.ui.components.EventDetailSheet
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintFab
 import app.mintcal.ui.components.NavClearance
@@ -90,9 +92,7 @@ import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDayWeekday
 import app.mintcal.ui.reduceMotion
-import app.mintcal.ui.rememberNow
 import app.mintcal.ui.rememberNowGated
-import app.mintcal.ui.rememberToday
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import java.time.LocalDateTime
@@ -143,24 +143,56 @@ fun TodayScreen() {
                 }.orEmpty()
         }
     var quickAddOpen by rememberSaveable { mutableStateOf(false) }
+    var selectedEventId by remember { mutableStateOf<String?>(null) }
 
     // 做完的收在后面一栏，默认折叠：时间线只留还没做的
     fun isDone(i: app.mintcal.core.agenda.AgendaItem): Boolean = (i is TaskItem && i.task.done) || (i is BlockItem && i.task.done)
     val pendingItems = remember(timeline) { timeline.filterNot { isDone(it) } }
     val doneItems = remember(timeline) { timeline.filter { isDone(it) } }
     var showDone by rememberSaveable { mutableStateOf(false) }
+    val todayTaskIds =
+        remember(items) {
+            items
+                .mapNotNull {
+                    when (it) {
+                        is TaskItem -> it.task.id
+                        is BlockItem -> it.task.id
+                        else -> null
+                    }
+                }.toSet()
+        }
+    val doneTaskIds =
+        remember(items) {
+            items
+                .mapNotNull {
+                    when {
+                        it is TaskItem && it.task.done -> it.task.id
+                        it is BlockItem && it.task.done -> it.task.id
+                        else -> null
+                    }
+                }.toSet()
+        }
     val courseCount = items.count { it is CourseItem }
-    // 今天的 + 已逾期的都算「手上的待办」，进度环和文案用同一个基数，别再说两个数
-    val taskTotal = items.count { it is TaskItem || it is BlockItem } + overdue.size
-    val taskDone = items.count { (it is TaskItem && it.task.done) || (it is BlockItem && it.task.done) }
+    val eventCount = items.count { it is EventItem }
+    // 今天的 + 已逾期的都算「手上的待办」，按任务 ID 去重，进度环和文案用同一个基数
+    val taskTotal = (todayTaskIds + overdueIds).size
+    val taskDone = doneTaskIds.size
     val taskProgress = if (taskTotal == 0) 0f else taskDone.toFloat() / taskTotal
     val doneCount = items.count { (it is CourseItem && it.occ.end.isBefore(now)) || (it is EventItem && !it.allDay && it.end.isBefore(now)) || (it is TaskItem && it.task.done) || (it is BlockItem && it.task.done) }
-    val next = items.firstOrNull { it is CourseItem && it.occ.end.isAfter(now) } as? CourseItem
+    val nextUp = remember(snap, now) { NextUps.find(snap, now) }
+    val nextToday =
+        remember(items, now) {
+            items.firstOrNull {
+                (it is CourseItem && it.occ.end.isAfter(now)) ||
+                    (it is EventItem && !it.allDay && it.end.isAfter(now)) ||
+                    (it is BlockItem && !it.task.done && it.end.isAfter(now))
+            }
+        }
     // 完成判定含已下课的课；进度环只计待办。没有安排时不画这张卡片。
     val allDone = items.isNotEmpty() && doneCount == items.size && overdue.isEmpty()
     val dayEmpty = timeline.isEmpty() && overdue.isEmpty() && parcels.isEmpty()
-    // 摘要条：两者都是 0 就不画（今天真的没事，交给空状态）
-    val dayQuiet = courseCount == 0 && taskTotal == 0
+    // 摘要条：课程、日程与待办全为 0 就不画（今天真的没事，交给空状态）
+    val dayQuiet = courseCount == 0 && eventCount == 0 && taskTotal == 0
 
     val reduce = reduceMotion()
     val listState = rememberLazyListState()
@@ -206,11 +238,71 @@ fun TodayScreen() {
                                 ) { t ->
                                     Text(t, style = MaterialTheme.typography.titleMedium)
                                 }
-                                if (next != null) {
+                                val sep = stringResource(R.string.list_sep)
+                                val nextLine =
+                                    when (nextToday) {
+                                        is CourseItem -> {
+                                            val o = nextToday.occ
+                                            stringResource(R.string.today_next_class, o.start.hm(), o.course.name, ctx.formatRooms(o.room)).trim()
+                                        }
+
+                                        is EventItem -> {
+                                            val e = nextToday.event
+                                            val kindPrefix = if (e.kind == EventKind.EXAM) stringResource(R.string.kind_exam) + " · " else ""
+                                            val roomPart =
+                                                ctx
+                                                    .formatRooms(e.location)
+                                                    .takeIf { it.isNotBlank() }
+                                                    ?.let { " · $it" }
+                                                    .orEmpty()
+                                            "${stringResource(R.string.widget_next_label)} · $kindPrefix${nextToday.start.hm()} ${e.title}$roomPart"
+                                        }
+
+                                        is BlockItem -> {
+                                            val t = nextToday.task
+                                            val kindPrefix = if (t.extra["kind"] == EventKind.EXAM.name) stringResource(R.string.kind_exam) + " · " else ""
+                                            val locPart =
+                                                t.extra["location"]
+                                                    ?.let { ctx.formatRooms(it) }
+                                                    ?.takeIf { it.isNotBlank() }
+                                                    ?.let { " · $it" }
+                                                    .orEmpty()
+                                            "${stringResource(R.string.widget_next_label)} · $kindPrefix${nextToday.start.hm()} ${t.title}$locPart"
+                                        }
+
+                                        else -> {
+                                            nextUp?.occurrence?.let { o ->
+                                                stringResource(
+                                                    R.string.today_next_class,
+                                                    ctx.dueLabel(o.start, true, today),
+                                                    o.course.name,
+                                                    ctx.formatRooms(o.room),
+                                                ).trim()
+                                            }
+                                        }
+                                    }
+                                val dueBeforeClass =
+                                    nextUp
+                                        ?.takeIf { up ->
+                                            up.tasks.isNotEmpty() &&
+                                                (nextToday == null || (nextToday is CourseItem && nextToday.occ.course.id == up.occurrence.course.id && nextToday.occ.date == up.occurrence.date) || up.occurrence.date == today)
+                                        }?.tasks
+                                        ?.joinToString(sep) { it.title }
+                                        ?.let { stringResource(R.string.remind_course_tasks, it) }
+                                if (nextLine != null) {
                                     Text(
-                                        stringResource(R.string.today_next_class, next.occ.start.hm(), next.occ.course.name, ctx.formatRooms(next.occ.room)),
+                                        nextLine,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                if (dueBeforeClass != null) {
+                                    Text(
+                                        dueBeforeClass,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
@@ -268,7 +360,7 @@ fun TodayScreen() {
                     now,
                     settings.showTeacher,
                     onOpenCourse = { nav.push(Route.CourseEdit(it)) },
-                    onOpenEvent = { nav.push(Route.TodoEdit(it)) },
+                    onOpenEvent = { selectedEventId = it },
                     onOpenTask = { nav.openTask(it) },
                     onToggleTask = { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) },
                     modifier = Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()),
@@ -347,6 +439,11 @@ fun TodayScreen() {
             acceptShare = false,
             modifier = Modifier.align(Alignment.TopCenter).fillMaxSize(),
         )
+        EventDetailSheet(
+            event = selectedEventId?.let { id -> snap.events.firstOrNull { it.id == id } },
+            snap = snap,
+            onDismiss = { selectedEventId = null },
+        )
     }
 }
 
@@ -375,8 +472,9 @@ fun toggle(
     now: LocalDateTime,
     msg: String,
 ) {
-    val cs = Edits.toggleTask(snap, task, done, System.currentTimeMillis(), now, if (done) msg else task.title)
-    actions.commit(cs, if (done) msg else null)
+    val desc = if (done) msg else task.title
+    val cs = Edits.toggleTask(snap, task, done, System.currentTimeMillis(), now, desc)
+    actions.commit(cs, desc)
 }
 
 @Composable

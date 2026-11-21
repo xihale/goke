@@ -29,20 +29,19 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Label
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.OpenInFull
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -66,11 +65,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -85,7 +81,6 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.PopupProperties
 import app.mintcal.R
 import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
@@ -106,6 +101,9 @@ import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
+import app.mintcal.ui.components.ChipPill
+import app.mintcal.ui.components.ConfirmDialog
+import app.mintcal.ui.components.SegmentedPill
 import app.mintcal.ui.components.Tag
 import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.dueLabel
@@ -116,6 +114,17 @@ import app.mintcal.ui.theme.priorityColor
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+
+/** 工具栏就地展开的选择面板（不弹浮层，键盘不动）。 */
+private enum class QuickPanel { PRIORITY, LIST }
+
+/** 优先级档位的快捷语法文字：`!高` / `!中` / `!低`，与 [QuickAdd] 的解析口径一致。 */
+private fun priorityToken(v: Int): Int =
+    when (v) {
+        3 -> R.string.priority_3
+        2 -> R.string.priority_2
+        else -> R.string.priority_1
+    }
 
 /**
  * 快速添加：右下角加号打开，输入区贴在键盘上方。
@@ -137,14 +146,42 @@ internal fun QuickAddSheet(
     anchorDate: LocalDate? = null,
     acceptShare: Boolean = true,
 ) {
-    val ctx = LocalContext.current
     val nav = LocalNav.current
+    val pending = nav.pendingAddText
+    var batch by remember { mutableStateOf<List<QuickBatchItem>?>(null) }
+
+    LaunchedEffect(pending) {
+        if (acceptShare && pending != null) {
+            nav.pendingAddText = null
+            val items = QuickAdd.parseLines(pending, now)
+            if (items.size > 1) {
+                batch = items
+            }
+        }
+    }
+
+    batch?.let { items ->
+        val actions = LocalActions.current
+        val ctx = LocalContext.current
+        BatchPreviewDialog(items, snap, now, onDismiss = { batch = null }) {
+            val placed = placeOnAnchor(items, anchorDate, defaultBucket)
+            val first = placed.first().result
+            val desc = if (placed.size == 1) ctx.getString(R.string.add_task_desc, first.title) else ctx.getString(R.string.todo_batch_desc, placed.size)
+            val msg = if (placed.size == 1) ctx.getString(R.string.task_added_toast, first.title) else ctx.getString(R.string.todo_batch_toast, placed.size)
+            actions.commit(buildQuickTasks(snap, placed, listFilter, defaultBucket, now, desc), msg, undoable = placed.size > 1)
+            batch = null
+        }
+    }
+
+    // 未展开时真正早退：跳过内部 UI、knownTags 扫描、BackHandler 与焦点逻辑，
+    // 避免今日/日历/待办 3 个 Tab 重复空转与常驻监听。
+    if (!visible) return
+
+    val ctx = LocalContext.current
     val actions = LocalActions.current
-    val haptics = LocalHapticFeedback.current
     var text by rememberSaveable { mutableStateOf("") }
-    var note by rememberSaveable { mutableStateOf("") }
-    var listMenu by remember { mutableStateOf(false) }
-    var priorityMenu by remember { mutableStateOf(false) }
+    // 工具栏的优先级 / 清单同样就地展开，不弹浮层（浮层在键盘上方会留一条空、还遮住输入）
+    var toolPanel by remember { mutableStateOf<QuickPanel?>(null) }
     // 日期面板：日期/时间段 + 提醒 + 重复一次选好；设了就压过文本里识别出的日期
     var whenPanel by remember { mutableStateOf(false) }
     var panelWhen by remember { mutableStateOf<WhenPick?>(null) }
@@ -155,13 +192,11 @@ internal fun QuickAddSheet(
     var panelUntil by remember { mutableStateOf<LocalDate?>(null) }
     var panelByDays by remember { mutableStateOf(emptySet<Int>()) }
     var panelByMonths by remember { mutableStateOf(emptySet<Int>()) }
+    var confirmDiscard by remember { mutableStateOf(false) }
     val settings = settingsState()
-    // 工具栏弹出的菜单都不抢焦点：键盘保持打开，浮层不跟着上下跳
-    val noFocusPopup = remember { PopupProperties(focusable = false) }
-    var batch by remember { mutableStateOf<List<QuickBatchItem>?>(null) }
     val parsed = remember(text, now) { if (text.isBlank()) null else QuickAdd.parse(text, now) }
 
-    /** 已有标签按使用次数排序：标签按钮直接点选，不用手打 @ */
+    /** 已有标签按使用次数排序：展开时才统计，收起时零开销 */
     val knownTags =
         remember(snap.tasks) {
             snap.tasks
@@ -173,49 +208,43 @@ internal fun QuickAddSheet(
                 .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
                 .map { it.key }
         }
-    var tagMenu by remember { mutableStateOf(false) }
-    // 三个 Tab 各挂一份浮层，只有可见的那份向外报状态；隐藏的那份不写，免得互相覆盖。
-    DisposableEffect(visible) {
-        if (visible) nav.composerOpen = true
-        onDispose { if (visible) nav.composerOpen = false }
+    // 只有可见时向外报状态
+    DisposableEffect(Unit) {
+        nav.composerOpen = true
+        onDispose { nav.composerOpen = false }
     }
     val focus = remember { FocusRequester() }
-    val focusManager = LocalFocusManager.current
     val scheme = MaterialTheme.colorScheme
     val colors = MintTheme.colors
+    val tokens = parsed?.tokens.orEmpty()
     val highlight =
-        remember(parsed, scheme, colors) {
-            TokenHighlight(parsed?.tokens.orEmpty()) { kind ->
-                when (kind) {
-                    QuickTokenKind.DATE, QuickTokenKind.TIME, QuickTokenKind.COURSE -> scheme.primary
-
-                    // 优先级高亮走语义色（低灰绿/中金/高红），不再一律错误红
-                    QuickTokenKind.PRIORITY -> colors.priorityColor(parsed?.priority ?: 3) ?: scheme.error
-
-                    QuickTokenKind.LIST -> scheme.tertiary
-
-                    QuickTokenKind.TAG -> scheme.secondary
-                }
+        remember(tokens, scheme.primary, scheme.error, scheme.tertiary, scheme.secondary, colors) {
+            if (tokens.isEmpty()) {
+                VisualTransformation.None
+            } else {
+                val prioColor = colors.priorityColor(parsed?.priority ?: 3) ?: scheme.error
+                TokenHighlight(tokens, scheme.primary, prioColor, scheme.tertiary, scheme.secondary)
             }
         }
 
     LaunchedEffect(focusSignal) { if (focusSignal > 0) focus.requestFocus() }
     // 打开即弹键盘。日期不写进输入框，避免「今天」占掉标题。
-    LaunchedEffect(visible) {
-        if (visible) {
-            focus.requestFocus()
-        } else {
-            focusManager.clearFocus(force = true)
-        }
-    }
+    LaunchedEffect(Unit) { focus.requestFocus() }
 
     /** 去掉某类片段后（可选）追加一个新片段，用于快捷条与标签点按。 */
     fun rewrite(
         kinds: Set<QuickTokenKind>,
         add: String?,
     ) {
+        val removeRanges =
+            tokenRanges(text, parsed?.tokens.orEmpty())
+                .filter { it.first.kind in kinds }
+                .map { it.second }
+                .sortedByDescending { it.first }
         var t = text
-        parsed?.tokens?.filter { it.kind in kinds }?.forEach { t = t.replace(it.text, " ") }
+        for (r in removeRanges) {
+            t = t.substring(0, r.first) + " " + t.substring(r.last + 1)
+        }
         t = t.replace(Regex("\\s+"), " ").trim()
         text =
             if (add == null) {
@@ -228,11 +257,24 @@ internal fun QuickAddSheet(
         focus.requestFocus()
     }
 
-    /** 追加一个已有标签；已经在输入里的标签不重复加。 */
-    fun addTag(name: String) {
-        if (parsed?.tags?.any { it.equals(name, ignoreCase = true) } == true) return
-        val t = text.replace(Regex("\\s+"), " ").trim()
-        text = if (t.isEmpty()) "@$name " else "$t @$name"
+    /** 点选已有标签：输入里没有就加上，已经有就去掉，其它标签不动。 */
+    fun toggleTag(name: String) {
+        val removeRanges =
+            tokenRanges(text, parsed?.tokens.orEmpty())
+                .filter { it.first.kind == QuickTokenKind.TAG && it.first.text.equals("@$name", ignoreCase = true) }
+                .map { it.second }
+                .sortedByDescending { it.first }
+        text =
+            if (removeRanges.isNotEmpty()) {
+                var t = text
+                for (r in removeRanges) {
+                    t = t.substring(0, r.first) + " " + t.substring(r.last + 1)
+                }
+                t.replace(Regex("\\s+"), " ").trim()
+            } else {
+                val t = text.replace(Regex("\\s+"), " ").trim()
+                if (t.isEmpty()) "@$name " else "$t @$name"
+            }
         focus.requestFocus()
     }
 
@@ -274,27 +316,36 @@ internal fun QuickAddSheet(
             } else {
                 null
             }
-        actions.commit(buildQuickTasks(snap, placed, listFilter, defaultBucket, now, desc, ov, note), msg, undoable = placed.size > 1)
-        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        note = ""
+        actions.commit(buildQuickTasks(snap, placed, listFilter, defaultBucket, now, desc, ov), msg, undoable = placed.size > 1)
     }
 
-    /** 收起即丢弃：没点「确定」的草稿不落库。 */
-    fun discard() {
+    fun clearDraft() {
         text = ""
-        note = ""
         panelWhen = null
         panelRemind = null
         panelPersistent = false
         panelFreq = null
+        panelInterval = 1
         panelUntil = null
         panelByDays = emptySet()
         panelByMonths = emptySet()
+    }
+
+    /** 收起即丢弃：没点「确定」的草稿不落库。 */
+    fun discard() {
+        clearDraft()
+        confirmDiscard = false
         onDismiss()
     }
 
-    // 返回 = 收起并丢弃草稿（只有可见的那个浮层认领返回事件）
-    BackHandler(enabled = visible) { discard() }
+    val hasDraft = text.isNotBlank() || panelWhen != null || panelRemind != null || panelFreq != null
+
+    fun requestDiscard() {
+        if (hasDraft) confirmDiscard = true else discard()
+    }
+
+    // 返回 = 空白直接收起，有草稿先确认放弃
+    BackHandler(enabled = true) { requestDiscard() }
 
     /** 点「确定」（或键盘完成键）：写了内容就落库，没写就是取消。 */
     fun finish() {
@@ -303,48 +354,58 @@ internal fun QuickAddSheet(
             return
         }
         commitItems(listOf(QuickBatchItem(parsed, null)))
-        text = ""
-        panelWhen = null
-        panelRemind = null
-        panelPersistent = false
-        panelFreq = null
-        panelUntil = null
-        panelByDays = emptySet()
-        panelByMonths = emptySet()
+        clearDraft()
         onDismiss()
-    }
-
-    /** 外部来的文字（粘贴 / 分享）：多行进批量预览，单行放进输入框。 */
-    fun take(raw: String) {
-        val items = QuickAdd.parseLines(raw, now)
-        when {
-            items.size > 1 -> {
-                batch = items
-            }
-
-            items.size == 1 -> {
-                text = raw.trim().replace(Regex("\\s+"), " ")
-                focus.requestFocus()
-            }
-        }
-    }
-
-    val pending = nav.pendingAddText
-    LaunchedEffect(pending) {
-        if (acceptShare && pending != null) {
-            nav.pendingAddText = null
-            take(pending)
-        }
     }
 
     fun openDetail() {
         val draft = text.ifBlank { null }
-        val draftNote = note.ifBlank { null }
-        // 草稿移交编辑页：浮层清空收起，回来不残留旧文字
-        text = ""
-        note = ""
+        val wp = panelWhen
+        val fallbackDate =
+            anchorDate ?: defaultBucket?.let { b ->
+                when (val d = TaskLogic.dropDate(b, now.toLocalDate())) {
+                    null, TaskLogic.NO_DROP -> if (b == Bucket.TODAY) now.toLocalDate() else null
+                    else -> d
+                }
+            }
+        val dateArg = (wp?.date ?: if (parsed?.due == null) fallbackDate else null)?.toString()
+        val startArg = wp?.start?.let { LocalDateTime.of(wp.date, it).toString() }
+        val endArg = wp?.let { w -> if (w.start != null && w.minutes != null) LocalDateTime.of(w.date, w.start).plusMinutes(w.minutes.toLong()).toString() else null }
+        val resolvedListId = parsed?.listName?.let { n -> snap.lists.firstOrNull { it.name == n }?.id } ?: listFilter
+        val remindArg = panelRemind
+        val persistentArg = panelPersistent && panelRemind != null
+        val freqArg = panelFreq?.name
+        val intervalArg = panelInterval.coerceAtLeast(1)
+        val untilArg = if (panelFreq == null) null else panelUntil?.toString()
+        val byDaysArg =
+            panelByDays
+                .takeIf { it.isNotEmpty() && (panelFreq == Freq.WEEKLY || panelFreq == Freq.MONTHLY || panelFreq == Freq.YEARLY) }
+                ?.sorted()
+                ?.joinToString(",")
+        val byMonthsArg =
+            panelByMonths
+                .takeIf { it.isNotEmpty() && panelFreq == Freq.YEARLY }
+                ?.sorted()
+                ?.joinToString(",")
+        // 草稿移交编辑页：浮层清空收起，回来不残留旧文字与面板状态
+        clearDraft()
         onDismiss()
-        nav.push(Route.TodoEdit(text = draft, note = draftNote))
+        nav.push(
+            Route.TodoEdit(
+                text = draft,
+                date = dateArg,
+                start = startArg,
+                end = endArg,
+                listId = resolvedListId,
+                remindMinutes = remindArg,
+                remindPersistent = persistentArg,
+                repeatFreq = freqArg,
+                repeatInterval = intervalArg,
+                repeatUntil = untilArg,
+                repeatByDays = byDaysArg,
+                repeatByMonths = byMonthsArg,
+            ),
+        )
     }
     val daySet = parsed?.due != null || defaultBucket != null || anchorDate != null || panelWhen != null
     val panelWhenLabel =
@@ -356,274 +417,233 @@ internal fun QuickAddSheet(
                 else -> "$base ${wp.start.hm()}"
             }
         }
-    AnimatedVisibility(
-        visible = visible,
-        modifier = modifier,
-        enter = fadeIn(MintTheme.spec()),
-        exit = fadeOut(MintTheme.spec()),
-    ) {
-        Box(Modifier.fillMaxSize()) {
-            // 遮罩：点空白 = 收起并丢弃草稿。压浅一点，列表还看得见。
-            Box(
+    val pickedTags = remember(parsed?.tags) { parsed?.tags?.toSet().orEmpty() }
+
+    Box(modifier.fillMaxSize()) {
+        // 遮罩：点空白 = 空白直接收起，有草稿先确认放弃。压浅一点，列表还看得见。
+        Box(
+            Modifier
+                .matchParentSize()
+                .background(Color.Black.copy(alpha = 0.2f))
+                .pointerInput(Unit) { detectTapGestures { requestDiscard() } },
+        )
+        Surface(
+            modifier =
                 Modifier
-                    .matchParentSize()
-                    .background(Color.Black.copy(alpha = 0.2f))
-                    .pointerInput(Unit) { detectTapGestures { discard() } },
-            )
-            Surface(
-                modifier =
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shadowElevation = 6.dp,
+        ) {
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 8.dp)) {
+                // 标题：详细编辑同款素面大字输入
+                Box(
                     Modifier
-                        .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shadowElevation = 6.dp,
-            ) {
-                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 8.dp)) {
-                    // 标题：详细编辑同款素面大字输入
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp),
-                    ) {
-                        BasicTextField(
-                            value = text,
-                            onValueChange = { text = it },
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(focus)
-                                    .padding(vertical = 12.dp),
-                            textStyle =
-                                MaterialTheme.typography.titleLarge.copy(
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Normal,
-                                ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            singleLine = true,
-                            visualTransformation = highlight,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = { finish() }),
-                        )
-                        if (text.isEmpty()) {
-                            Text(
-                                stringResource(R.string.quick_add_prompt),
-                                Modifier.padding(vertical = 12.dp),
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Normal),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                    // 空输入时顺带教一下语法：示例来自 quick_add_hint
+                        .heightIn(min = 48.dp),
+                ) {
+                    BasicTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focus)
+                                .padding(vertical = 12.dp),
+                        textStyle =
+                            MaterialTheme.typography.titleLarge.copy(
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Normal,
+                            ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        singleLine = true,
+                        visualTransformation = highlight,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { finish() }),
+                    )
                     if (text.isEmpty()) {
                         Text(
-                            stringResource(R.string.quick_add_hint),
-                            style = MaterialTheme.typography.labelMedium,
+                            stringResource(R.string.quick_add_prompt),
+                            Modifier.padding(vertical = 12.dp),
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Normal),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 2.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    // 备注：详细编辑同款素面输入，可留空
-                    Box(Modifier.fillMaxWidth()) {
-                        BasicTextField(
-                            value = note,
-                            onValueChange = { note = it },
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        )
-                        if (note.isEmpty()) {
-                            Text(
-                                stringResource(R.string.field_note),
-                                Modifier.padding(vertical = 8.dp),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                }
+                // 标签独立子组合：输入普通标题/时间时不随 text 逐字重组
+                TagFlow(
+                    knownTags = knownTags,
+                    pickedTags = pickedTags,
+                    onToggleTag = { toggleTag(it) },
+                    onNewTag = { tagMarker() },
+                )
+                AnimatedVisibility(
+                    visible = toolPanel == QuickPanel.PRIORITY,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    SegmentedPill(
+                        options =
+                            listOf(
+                                3 to stringResource(R.string.priority_3),
+                                2 to stringResource(R.string.priority_2),
+                                1 to stringResource(R.string.priority_1),
+                                0 to stringResource(R.string.priority_0),
+                            ),
+                        selected = parsed?.priority ?: 0,
+                        onSelect = { v ->
+                            rewrite(setOf(QuickTokenKind.PRIORITY), if (v == 0) null else "!" + ctx.getString(priorityToken(v)))
+                            toolPanel = null
+                        },
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
+                AnimatedVisibility(
+                    visible = toolPanel == QuickPanel.LIST,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    FlowRow(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 132.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        snap.lists.sortedBy { it.sort }.forEach { l ->
+                            ChipPill("#" + l.name, on = parsed?.listName == l.name) {
+                                rewrite(setOf(QuickTokenKind.LIST), "#" + l.name)
+                                toolPanel = null
+                            }
                         }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { whenPanel = true }) {
-                            Icon(
-                                Icons.Rounded.Event,
-                                stringResource(R.string.detail_editor_pick_date),
-                                tint = if (daySet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { whenPanel = true }) {
+                        Icon(
+                            Icons.Rounded.Event,
+                            stringResource(R.string.detail_editor_pick_date),
+                            tint = if (daySet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = { toolPanel = if (toolPanel == QuickPanel.PRIORITY) null else QuickPanel.PRIORITY }) {
+                        Icon(
+                            Icons.Rounded.Flag,
+                            stringResource(R.string.label_priority),
+                            tint = colors.priorityColor(parsed?.priority ?: 0) ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    // 清单按钮常驻：还没有自定义清单时点它插入 #，现场输名字即建清单
+                    IconButton(onClick = {
+                        if (snap.lists.isEmpty()) {
+                            rewrite(emptySet(), "#")
+                        } else {
+                            toolPanel = if (toolPanel == QuickPanel.LIST) null else QuickPanel.LIST
                         }
-                        Box {
-                            IconButton(onClick = { priorityMenu = true }) {
-                                Icon(
-                                    Icons.Rounded.Flag,
-                                    stringResource(R.string.label_priority),
-                                    tint = colors.priorityColor(parsed?.priority ?: 0) ?: MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            DropdownMenu(priorityMenu, { priorityMenu = false }, properties = noFocusPopup) {
-                                listOf(
-                                    Triple(3, R.string.priority_3, colors.priorityColor(3)),
-                                    Triple(2, R.string.priority_2, colors.priorityColor(2)),
-                                    Triple(1, R.string.priority_1, colors.priorityColor(1)),
-                                ).forEach { (_, label, color) ->
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(label) + stringResource(R.string.label_priority)) },
-                                        leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = color ?: MaterialTheme.colorScheme.onSurfaceVariant) },
-                                        onClick = {
-                                            priorityMenu = false
-                                            rewrite(setOf(QuickTokenKind.PRIORITY), "!" + ctx.getString(label))
-                                        },
-                                    )
-                                }
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.priority_none)) },
-                                    leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-                                    onClick = {
-                                        priorityMenu = false
-                                        rewrite(setOf(QuickTokenKind.PRIORITY), null)
-                                    },
-                                )
-                            }
-                        }
-                        Box {
-                            IconButton(onClick = { tagMenu = true }) {
-                                Icon(
-                                    Icons.AutoMirrored.Rounded.Label,
-                                    stringResource(R.string.field_tags),
-                                    tint = if (parsed?.tags?.isNotEmpty() == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            DropdownMenu(tagMenu, { tagMenu = false }, properties = noFocusPopup) {
-                                knownTags.forEach { name ->
-                                    DropdownMenuItem(text = { Text("@$name") }, onClick = {
-                                        tagMenu = false
-                                        addTag(name)
-                                    })
-                                }
-                                DropdownMenuItem(text = { Text(stringResource(R.string.quick_tag_new)) }, onClick = {
-                                    tagMenu = false
-                                    tagMarker()
-                                })
-                            }
-                        }
-                        // 清单按钮常驻：还没有自定义清单时点它插入 #，现场输名字即建清单
-                        Box {
-                            IconButton(onClick = {
-                                if (snap.lists.isEmpty()) {
-                                    rewrite(emptySet(), "#")
-                                } else {
-                                    listMenu = true
-                                }
-                            }) {
-                                Icon(Icons.Rounded.Inbox, stringResource(R.string.label_list), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            if (snap.lists.isNotEmpty()) {
-                                DropdownMenu(listMenu, { listMenu = false }, properties = noFocusPopup) {
-                                    snap.lists.sortedBy { it.sort }.forEach { l ->
-                                        DropdownMenuItem(text = { Text(l.name) }, onClick = {
-                                            listMenu = false
-                                            rewrite(setOf(QuickTokenKind.LIST), "#" + l.name)
-                                        })
-                                    }
-                                }
-                            }
-                        }
-                        Spacer(Modifier.weight(1f))
-                        IconButton(onClick = { openDetail() }) {
-                            Icon(Icons.Rounded.OpenInFull, stringResource(R.string.detail_editor_full_edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        // 确定：点了才落库；没写内容置灰
-                        val canAdd = parsed != null
-                        val confirmLabel = stringResource(R.string.confirm)
+                    }) {
+                        Icon(Icons.Rounded.Inbox, stringResource(R.string.label_list), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = { openDetail() }) {
+                        Icon(Icons.Rounded.OpenInFull, stringResource(R.string.detail_editor_full_edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    // 确定：点了才落库；没写内容置灰
+                    val canAdd = parsed != null
+                    val confirmLabel = stringResource(R.string.confirm)
+                    Box(
+                        modifier =
+                            Modifier
+                                .padding(start = 4.dp)
+                                .minimumInteractiveComponentSize()
+                                .clip(CircleShape)
+                                .mintClickable(enabled = canAdd, pressedScale = 0.96f, role = Role.Button) { finish() }
+                                .semantics { contentDescription = confirmLabel },
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Box(
                             modifier =
                                 Modifier
-                                    .padding(start = 4.dp)
-                                    .minimumInteractiveComponentSize()
+                                    .size(36.dp)
                                     .clip(CircleShape)
-                                    .mintClickable(enabled = canAdd, pressedScale = 0.96f, role = Role.Button) { finish() }
-                                    .semantics { contentDescription = confirmLabel },
+                                    .background(if (canAdd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(if (canAdd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    Icons.Rounded.Check,
-                                    null,
-                                    tint =
-                                        if (canAdd) {
-                                            MaterialTheme.colorScheme.onPrimary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
+                            Icon(
+                                Icons.Rounded.Check,
+                                null,
+                                tint =
+                                    if (canAdd) {
+                                        MaterialTheme.colorScheme.onPrimary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                modifier = Modifier.size(20.dp),
+                            )
                         }
                     }
-                    AnimatedVisibility(
-                        visible = panelWhenLabel != null || panelRemind != null || panelFreq != null,
-                        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                }
+                AnimatedVisibility(
+                    visible = panelWhenLabel != null || panelRemind != null || panelFreq != null,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    FlowRow(
+                        Modifier.padding(end = 6.dp, top = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        FlowRow(
-                            Modifier.padding(end = 6.dp, top = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            if (panelWhenLabel != null) {
-                                Tag(
-                                    "$panelWhenLabel ×",
-                                    MaterialTheme.colorScheme.primaryContainer,
-                                    MaterialTheme.colorScheme.onPrimaryContainer,
-                                    Modifier
-                                        .minimumInteractiveComponentSize()
-                                        .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelWhen = null }
-                                        .semantics {
-                                            contentDescription = "移除时间：$panelWhenLabel"
-                                        },
-                                )
-                            }
-                            if (panelRemind != null) {
-                                val rLabel = remindLabel(panelRemind)
-                                Tag(
-                                    "$rLabel ×",
-                                    MaterialTheme.colorScheme.secondaryContainer,
-                                    MaterialTheme.colorScheme.onSecondaryContainer,
-                                    Modifier
-                                        .minimumInteractiveComponentSize()
-                                        .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelRemind = null }
-                                        .semantics {
-                                            contentDescription = "移除提醒：$rLabel"
-                                        },
-                                )
-                            }
-                            if (panelFreq != null) {
-                                val fLabel = freqLabel(panelFreq, panelUntil, panelInterval, panelByDays, panelWhen?.date, byMonths = panelByMonths)
-                                Tag(
-                                    "$fLabel ×",
-                                    MaterialTheme.colorScheme.tertiaryContainer,
-                                    MaterialTheme.colorScheme.onTertiaryContainer,
-                                    Modifier
-                                        .minimumInteractiveComponentSize()
-                                        .mintClickable(pressedScale = 0.96f, role = Role.Button) {
-                                            panelFreq = null
-                                            panelUntil = null
-                                            panelByDays = emptySet()
-                                            panelByMonths = emptySet()
-                                        }.semantics {
-                                            contentDescription = "移除重复：$fLabel"
-                                        },
-                                )
-                            }
+                        if (panelWhenLabel != null) {
+                            val removeWhenDesc = stringResource(R.string.quick_add_remove_time, panelWhenLabel)
+                            Tag(
+                                "$panelWhenLabel ×",
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.onPrimaryContainer,
+                                Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelWhen = null }
+                                    .semantics {
+                                        contentDescription = removeWhenDesc
+                                    },
+                            )
+                        }
+                        if (panelRemind != null) {
+                            val rLabel = remindLabel(panelRemind)
+                            val removeRemindDesc = stringResource(R.string.quick_add_remove_remind, rLabel)
+                            Tag(
+                                "$rLabel ×",
+                                MaterialTheme.colorScheme.secondaryContainer,
+                                MaterialTheme.colorScheme.onSecondaryContainer,
+                                Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelRemind = null }
+                                    .semantics {
+                                        contentDescription = removeRemindDesc
+                                    },
+                            )
+                        }
+                        if (panelFreq != null) {
+                            val fLabel = freqLabel(panelFreq, panelUntil, panelInterval, panelByDays, panelWhen?.date, byMonths = panelByMonths)
+                            val removeRepeatDesc = stringResource(R.string.quick_add_remove_repeat, fLabel)
+                            Tag(
+                                "$fLabel ×",
+                                MaterialTheme.colorScheme.tertiaryContainer,
+                                MaterialTheme.colorScheme.onTertiaryContainer,
+                                Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .mintClickable(pressedScale = 0.96f, role = Role.Button) {
+                                        panelFreq = null
+                                        panelUntil = null
+                                        panelByDays = emptySet()
+                                        panelByMonths = emptySet()
+                                    }.semantics {
+                                        contentDescription = removeRepeatDesc
+                                    },
+                            )
                         }
                     }
                 }
@@ -631,12 +651,6 @@ internal fun QuickAddSheet(
         }
     }
 
-    batch?.let { items ->
-        BatchPreviewDialog(items, snap, now, onDismiss = { batch = null }) {
-            commitItems(items)
-            batch = null
-        }
-    }
     if (whenPanel) {
         WhenPanel(
             initial =
@@ -666,6 +680,71 @@ internal fun QuickAddSheet(
                 whenPanel = false
             },
         )
+    }
+    if (confirmDiscard) {
+        ConfirmDialog(
+            title = stringResource(R.string.detail_editor_discard_title),
+            text = stringResource(R.string.detail_editor_discard_desc),
+            confirm = stringResource(R.string.detail_editor_discard),
+            onConfirm = { discard() },
+            onDismiss = { confirmDiscard = false },
+            danger = true,
+        )
+    }
+}
+
+/** 按文本中非重叠位置匹配解析出的 token 区间，避免替换/高亮误伤同名子串。 */
+internal fun tokenRanges(
+    text: String,
+    tokens: List<QuickToken>,
+): List<Pair<QuickToken, IntRange>> {
+    if (text.isEmpty() || tokens.isEmpty()) return emptyList()
+    val used = BooleanArray(text.length)
+    return tokens.mapNotNull { token ->
+        if (token.text.isEmpty()) return@mapNotNull null
+        var from = 0
+        var found: IntRange? = null
+        while (from <= text.length - token.text.length) {
+            val idx = text.indexOf(token.text, startIndex = from)
+            if (idx < 0) break
+            val end = idx + token.text.length
+            val overlaps = (idx until end).any { used[it] }
+            if (!overlaps) {
+                for (k in idx until end) used[k] = true
+                found = idx until end
+                break
+            }
+            from = idx + 1
+        }
+        found?.let { token to it }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TagFlow(
+    knownTags: List<String>,
+    pickedTags: Set<String>,
+    onToggleTag: (String) -> Unit,
+    onNewTag: () -> Unit,
+) {
+    FlowRow(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(max = 96.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        knownTags.forEach { name ->
+            ChipPill(
+                label = "@$name",
+                on = name in pickedTags,
+                role = Role.Checkbox,
+            ) { onToggleTag(name) }
+        }
+        ChipPill(stringResource(R.string.quick_tag_new), on = null) { onNewTag() }
     }
 }
 
@@ -727,18 +806,42 @@ private fun BatchPreviewDialog(
 
 /** 把解析出的日期 / 课程 / 清单 / 优先级 / 标签片段在输入框里着色（不改文字与光标位置）。 */
 private class TokenHighlight(
-    private val tokens: List<QuickToken>,
-    private val colorOf: (QuickTokenKind) -> Color,
+    val tokens: List<QuickToken>,
+    val primary: Color,
+    val priorityColor: Color,
+    val tertiary: Color,
+    val secondary: Color,
 ) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
-        val b = AnnotatedString.Builder(text.text)
-        for (t in tokens) {
-            val i = text.text.indexOf(t.text)
-            if (i < 0 || t.text.isEmpty()) continue
-            val c = colorOf(t.kind)
-            b.addStyle(SpanStyle(color = c, fontWeight = FontWeight.Medium, background = c.copy(alpha = 0.12f)), i, i + t.text.length)
+        val raw = text.text
+        if (tokens.isEmpty() || raw.isEmpty()) return TransformedText(text, OffsetMapping.Identity)
+        val b = AnnotatedString.Builder(raw)
+        for ((t, r) in tokenRanges(raw, tokens)) {
+            val c =
+                when (t.kind) {
+                    QuickTokenKind.DATE, QuickTokenKind.TIME, QuickTokenKind.COURSE -> primary
+                    QuickTokenKind.PRIORITY -> priorityColor
+                    QuickTokenKind.LIST -> tertiary
+                    QuickTokenKind.TAG -> secondary
+                }
+            b.addStyle(SpanStyle(color = c, fontWeight = FontWeight.Medium, background = c.copy(alpha = 0.12f)), r.first, r.last + 1)
         }
         return TransformedText(b.toAnnotatedString(), OffsetMapping.Identity)
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is TokenHighlight) return false
+        return tokens == other.tokens && primary == other.primary && priorityColor == other.priorityColor && tertiary == other.tertiary && secondary == other.secondary
+    }
+
+    override fun hashCode(): Int {
+        var result = tokens.hashCode()
+        result = 31 * result + primary.hashCode()
+        result = 31 * result + priorityColor.hashCode()
+        result = 31 * result + tertiary.hashCode()
+        result = 31 * result + secondary.hashCode()
+        return result
     }
 }
 

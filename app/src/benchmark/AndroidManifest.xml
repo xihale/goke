@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Macrobenchmark 的目标 APK 必须可被 shell profile；release 构建默认不暴露这个标记。 -->
+    <application>
+        <profileable android:shell="true" />
+    </application>
+</manifest>

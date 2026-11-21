@@ -19,6 +19,9 @@ junit = "6.1.3"
 robolectric = "4.16"
 junit4 = "4.13.2"
 androidxTest = "1.6.1"
+androidxTestExt = "1.3.0"
+benchmark = "1.5.0"
+uiautomator = "2.4.1"
 
 [libraries]
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
@@ -47,6 +50,9 @@ androidx-material-icons-extended = { group = "androidx.compose.material", name =
 junit4 = { group = "junit", name = "junit", version.ref = "junit4" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 androidx-test-core = { group = "androidx.test", name = "core-ktx", version.ref = "androidxTest" }
+androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExt" }
+androidx-test-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
+androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version = "2.9.5" }
@@ -55,6 +61,7 @@ materialkolor = { group = "com.materialkolor", name = "material-kolor", version.
 [plugins]
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 android-application = { id = "com.android.application", version.ref = "agp" }
+android-test = { id = "com.android.test", version.ref = "agp" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
