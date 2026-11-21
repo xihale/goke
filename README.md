@@ -26,7 +26,7 @@
 | `core/` | 纯 Kotlin 核心领域逻辑 |
 | `script/` | QuickJS 脚本沙箱（用于批量修改与预览） |
 | `server/` | Go + SQLite 自建同步服务与内嵌 Web 端 |
-| `landing/` | 静态零构建产品介绍页（可直接部署 GitHub Pages） |
+| `landing/` | 静态零构建产品介绍页（已部署于 [mintcal.xeed.ink](https://mintcal.xeed.ink)） |
 | `benchmark/` | 真机 Macrobenchmark 性能基准测试 |
 
 ## 构建与测试
