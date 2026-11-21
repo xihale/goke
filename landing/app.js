@@ -1,4 +1,4 @@
-/* MintCal landing — 极简交互：Hero 四视图真机切换 */
+/* MintCal landing — Hero 四视图切换 & 同步最新 ARMv8 发行包信息 */
 (function () {
   'use strict';
 
@@ -12,42 +12,87 @@
   var tablist = document.getElementById('heroTabs');
   var screen = document.getElementById('heroScreen');
   var caption = document.getElementById('heroCaption');
-  if (!tablist || !screen) return;
+  if (tablist && screen) {
+    var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
+    var imgs = Array.prototype.slice.call(screen.querySelectorAll('.screen-img'));
+    var thumb = tablist.querySelector('.seg-thumb');
 
-  var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
-  var imgs = Array.prototype.slice.call(screen.querySelectorAll('.screen-img'));
-  var thumb = tablist.querySelector('.seg-thumb');
+    function activate(index, focusTab) {
+      var i = (index + tabs.length) % tabs.length;
+      var key = tabs[i].getAttribute('data-tab');
 
-  function activate(index, focusTab) {
-    var i = (index + tabs.length) % tabs.length;
-    var key = tabs[i].getAttribute('data-tab');
+      tabs.forEach(function (btn, idx) {
+        var on = idx === i;
+        btn.classList.toggle('is-active', on);
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
+        btn.tabIndex = on ? 0 : -1;
+      });
+
+      imgs.forEach(function (img) {
+        img.classList.toggle('is-active', img.getAttribute('data-tab') === key);
+      });
+
+      if (thumb) thumb.style.transform = 'translateX(' + (i * 100) + '%)';
+      if (caption && CAPTIONS[key]) caption.textContent = CAPTIONS[key];
+      if (focusTab) tabs[i].focus();
+    }
 
     tabs.forEach(function (btn, idx) {
-      var on = idx === i;
-      btn.classList.toggle('is-active', on);
-      btn.setAttribute('aria-selected', on ? 'true' : 'false');
-      btn.tabIndex = on ? 0 : -1;
+      btn.addEventListener('click', function () { activate(idx, false); });
+      btn.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowRight') { e.preventDefault(); activate(idx + 1, true); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); activate(idx - 1, true); }
+        else if (e.key === 'Home') { e.preventDefault(); activate(0, true); }
+        else if (e.key === 'End') { e.preventDefault(); activate(tabs.length - 1, true); }
+      });
     });
 
-    imgs.forEach(function (img) {
-      img.classList.toggle('is-active', img.getAttribute('data-tab') === key);
-    });
-
-    if (thumb) thumb.style.transform = 'translateX(' + (i * 100) + '%)';
-    if (caption && CAPTIONS[key]) caption.textContent = CAPTIONS[key];
-    if (focusTab) tabs[i].focus();
+    var initial = tabs.findIndex(function (b) { return b.getAttribute('aria-selected') === 'true'; });
+    activate(initial >= 0 ? initial : 0, false);
   }
 
-  tabs.forEach(function (btn, idx) {
-    btn.addEventListener('click', function () { activate(idx, false); });
-    btn.addEventListener('keydown', function (e) {
-      if (e.key === 'ArrowRight') { e.preventDefault(); activate(idx + 1, true); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); activate(idx - 1, true); }
-      else if (e.key === 'Home') { e.preventDefault(); activate(0, true); }
-      else if (e.key === 'End') { e.preventDefault(); activate(tabs.length - 1, true); }
-    });
-  });
+  function formatMiB(bytes) {
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MiB';
+  }
 
-  var initial = tabs.findIndex(function (b) { return b.getAttribute('aria-selected') === 'true'; });
-  activate(initial >= 0 ? initial : 0, false);
+  function setText(id, text) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  if (typeof fetch === 'function') {
+    fetch('./downloads/releases.json', { cache: 'no-cache' })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (list) {
+        if (!Array.isArray(list) || !list.length) return;
+        var stable = list.find(function (r) { return r && !r.prerelease && r.apk_name; });
+        var latest = stable || list.find(function (r) { return r && r.apk_name; });
+        if (!latest) return;
+
+        var ver = latest.tag_name || ('v' + latest.version);
+        var sizeStr = latest.apk_size ? formatMiB(latest.apk_size) : '3.82 MiB';
+        var href = './downloads/' + latest.apk_name;
+
+        setText('heroVer', ver);
+        setText('heroVerSize', sizeStr);
+        setText('heroLeadSize', sizeStr);
+        setText('heroBtnSize', sizeStr);
+        setText('pillarSize', sizeStr);
+        setText('dlVer', ver);
+        setText('dlApkName', latest.apk_name);
+        setText('dlSize', sizeStr);
+
+        ['heroApkBtn', 'dlApkBtn'].forEach(function (id) {
+          var a = document.getElementById(id);
+          if (a) a.setAttribute('href', href);
+        });
+
+        var shaEl = document.getElementById('dlSha');
+        if (shaEl && latest.apk_sha256) {
+          shaEl.textContent = 'SHA-256: ' + latest.apk_sha256;
+          shaEl.hidden = false;
+        }
+      })
+      .catch(function () {});
+  }
 })();

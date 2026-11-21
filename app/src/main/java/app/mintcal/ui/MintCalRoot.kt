@@ -144,8 +144,11 @@ fun MintCalRoot(
         ) {
             ReleaseInfo(
                 version = settings.pendingUpdateVersion,
-                url = settings.pendingUpdateUrl.ifBlank { UpdateChecker.PROJECT_URL },
+                url = settings.pendingUpdateUrl.ifBlank { UpdateChecker.LANDING_URL },
                 notes = settings.pendingUpdateNotes,
+                apkUrl = settings.pendingUpdateApkUrl,
+                apkSize = settings.pendingUpdateApkSize,
+                apkSha256 = settings.pendingUpdateApkSha256,
             )
         } else {
             null
@@ -327,6 +330,8 @@ fun MintCalRoot(
                 val context = LocalContext.current
                 UpdateAvailableDialog(
                     info = pendingUpdate,
+                    updateChecker = app.updateChecker,
+                    downloadScope = app.scope,
                     onDismiss = { app.updateChecker.dismissUpdatePrompt(pendingUpdate.version) },
                     onOpenUrl = { url -> openExternalUrl(context, url) },
                 )

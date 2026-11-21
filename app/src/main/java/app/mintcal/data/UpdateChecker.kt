@@ -1,5 +1,10 @@
 package app.mintcal.data
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.core.content.FileProvider
 import app.mintcal.BuildConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -10,9 +15,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 /** 一次版本检查的结果。 */
@@ -20,6 +29,9 @@ data class ReleaseInfo(
     val version: String,
     val url: String,
     val notes: String?,
+    val apkUrl: String = "",
+    val apkSize: Long = 0L,
+    val apkSha256: String = "",
 )
 
 sealed interface UpdateCheckResult {
@@ -34,20 +46,57 @@ sealed interface UpdateCheckResult {
     data object Error : UpdateCheckResult
 }
 
+enum class DownloadError {
+    NETWORK,
+    VERIFY,
+    UNAVAILABLE,
+}
+
+enum class InstallLaunchResult {
+    LAUNCHED,
+    NEEDS_PERMISSION,
+    FAILED,
+}
+
+sealed interface UpdateDownloadState {
+    data object Idle : UpdateDownloadState
+
+    data class Downloading(
+        val version: String,
+        val bytesRead: Long,
+        val totalBytes: Long,
+    ) : UpdateDownloadState
+
+    data class ReadyToInstall(
+        val version: String,
+        val file: File,
+        val needsInstallPermission: Boolean = false,
+    ) : UpdateDownloadState
+
+    data class Failed(
+        val version: String,
+        val error: DownloadError,
+    ) : UpdateDownloadState
+}
+
 /**
- * 从 GitHub Releases 检查最新版本。
+ * 从落地页（mintcal.xeed.ink）检查最新版本并下载安装 ARMv8 APK。
  *
  * - 零额外依赖：复用已有的 kotlinx-serialization + java.net.HttpURLConnection。
- * - 支持 SemVer 预发布版（如 0.0.1-beta.1）：当前为预发布版时同时追踪预发布与正式版；当前为正式版时仅提醒正式版。
- * - 默认按天静默检查，仅在有前台 UI 且到周期时触发。
+ * - 支持 SemVer 预发布版（如 0.0.1-beta.3）：当前为预发布版时同时追踪预发布与正式版；当前为正式版时仅提醒正式版。
+ * - 下载落入 cacheDir/updates/ 并校验 SHA-256，随后通过 FileProvider 调起系统安装器。
  */
 class UpdateChecker(
     private val settings: SettingsStore,
     private val currentVersionProvider: () -> String = { BuildConfig.VERSION_NAME },
     private val fetchReleasesJson: suspend () -> String = { defaultFetchReleasesJson() },
+    private val openDownloadStream: suspend (String) -> RemoteStream = { url -> defaultOpenDownloadStream(url) },
 ) {
     private val _checking = MutableStateFlow(false)
     val checking: StateFlow<Boolean> = _checking.asStateFlow()
+
+    private val _downloadState = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
+    val downloadState: StateFlow<UpdateDownloadState> = _downloadState.asStateFlow()
 
     /** 当前安装包版本（去掉可能的 v 前缀）。 */
     fun currentVersion(): String = currentVersionProvider().removePrefix("v").removePrefix("V")
@@ -55,8 +104,8 @@ class UpdateChecker(
     /** 判断候选版本是否高于当前安装版本。 */
     fun isNewerThanCurrent(candidateVersion: String): Boolean = isNewerVersion(candidateVersion, currentVersion())
 
-    /** 覆盖安装升级后清理已失效的待更新标记，避免离线时仍误弹旧版本提示。 */
-    fun clearStalePendingUpdate() {
+    /** 覆盖安装升级后清理已失效的待更新标记与过期缓存包，避免离线时仍误弹旧版本提示。 */
+    fun clearStalePendingUpdate(cacheDir: File? = null) {
         val pending = settings.value.pendingUpdateVersion
         if (pending.isNotBlank() && !isNewerVersion(pending, currentVersion())) {
             settings.update {
@@ -64,13 +113,17 @@ class UpdateChecker(
                     pendingUpdateVersion = "",
                     pendingUpdateUrl = "",
                     pendingUpdateNotes = "",
+                    pendingUpdateApkUrl = "",
+                    pendingUpdateApkSize = 0L,
+                    pendingUpdateApkSha256 = "",
                     dismissedUpdateVersion = "",
                 )
             }
+            cacheDir?.let { File(it, UPDATES_DIR).deleteRecursively() }
         }
     }
 
-    /** 标记某版本在自动弹窗中已被用户处理（去更新 / 以后再说），同版本不再自动弹窗。 */
+    /** 标记某版本在自动弹窗中已被用户处理，同版本不再自动弹窗。 */
     fun dismissUpdatePrompt(version: String) {
         if (version.isBlank()) return
         settings.update { it.copy(dismissedUpdateVersion = version) }
@@ -98,7 +151,7 @@ class UpdateChecker(
             _checking.value = true
             try {
                 val response = fetchReleasesJson()
-                val releases = json.decodeFromString<List<GithubRelease>>(response)
+                val releases = json.decodeFromString<List<RemoteRelease>>(response)
                 val current = currentVersion()
                 val allowPrerelease = parseSemVer(current)?.preRelease?.isNotEmpty() == true
 
@@ -116,14 +169,18 @@ class UpdateChecker(
                         }.maxWithOrNull { a, b -> compareSemVer(a.first, b.first) }
 
                 if (best != null) {
+                    val release = best.third
                     val info =
                         ReleaseInfo(
                             version = best.second,
-                            url = best.third.htmlUrl,
+                            url = release.htmlUrl.ifBlank { LANDING_URL },
                             notes =
-                                best.third.body
+                                release.body
                                     ?.trim()
                                     ?.takeIf { it.isNotEmpty() },
+                            apkUrl = release.apkUrl.trim(),
+                            apkSize = release.apkSize.coerceAtLeast(0L),
+                            apkSha256 = release.apkSha256.trim().lowercase(),
                         )
                     settings.update {
                         it.copy(
@@ -131,6 +188,9 @@ class UpdateChecker(
                             pendingUpdateVersion = info.version,
                             pendingUpdateUrl = info.url,
                             pendingUpdateNotes = info.notes.orEmpty(),
+                            pendingUpdateApkUrl = info.apkUrl,
+                            pendingUpdateApkSize = info.apkSize,
+                            pendingUpdateApkSha256 = info.apkSha256,
                         )
                     }
                     UpdateCheckResult.Newer(info)
@@ -141,6 +201,9 @@ class UpdateChecker(
                             pendingUpdateVersion = "",
                             pendingUpdateUrl = "",
                             pendingUpdateNotes = "",
+                            pendingUpdateApkUrl = "",
+                            pendingUpdateApkSize = 0L,
+                            pendingUpdateApkSha256 = "",
                             dismissedUpdateVersion = "",
                         )
                     }
@@ -156,9 +219,165 @@ class UpdateChecker(
             }
         }
 
+    /**
+     * 下载指定版本 APK 到 [updatesDir] 并校验大小与 SHA-256。
+     * 若本地已有同版本且校验通过的 APK，直接复用避免重复流量消耗。
+     */
+    suspend fun downloadApk(
+        info: ReleaseInfo,
+        updatesDir: File,
+    ): File? =
+        withContext(Dispatchers.IO) {
+            val active = _downloadState.value
+            if (active is UpdateDownloadState.Downloading && active.version == info.version) {
+                return@withContext null
+            }
+            val url = info.apkUrl.trim()
+            if (url.isBlank()) {
+                _downloadState.value = UpdateDownloadState.Failed(info.version, DownloadError.UNAVAILABLE)
+                return@withContext null
+            }
+
+            updatesDir.mkdirs()
+            val safeVer = info.version.replace(Regex("""[^0-9A-Za-z._-]"""), "_")
+            val targetFile = File(updatesDir, "MintCal-$safeVer-arm64-v8a.apk")
+            if (isCachedApkValid(targetFile, info.apkSize, info.apkSha256)) {
+                pruneOtherFiles(updatesDir, keepName = targetFile.name)
+                _downloadState.value = UpdateDownloadState.ReadyToInstall(info.version, targetFile)
+                return@withContext targetFile
+            }
+
+            val partFile = File(updatesDir, "${targetFile.name}.part")
+            partFile.delete()
+            _downloadState.value = UpdateDownloadState.Downloading(info.version, 0L, info.apkSize)
+
+            try {
+                val remote = openDownloadStream(url)
+                val total = remote.contentLength.takeIf { it > 0L } ?: info.apkSize
+                val digest = MessageDigest.getInstance("SHA-256")
+                var bytesRead = 0L
+                var lastReportBytes = 0L
+                var lastReportAt = System.currentTimeMillis()
+
+                remote.stream.use { input ->
+                    FileOutputStream(partFile).use { output ->
+                        val buf = ByteArray(16 * 1024)
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            output.write(buf, 0, n)
+                            digest.update(buf, 0, n)
+                            bytesRead += n
+                            val now = System.currentTimeMillis()
+                            if (bytesRead - lastReportBytes >= 64 * 1024 || now - lastReportAt >= 120L) {
+                                _downloadState.value = UpdateDownloadState.Downloading(info.version, bytesRead, total)
+                                lastReportBytes = bytesRead
+                                lastReportAt = now
+                            }
+                        }
+                    }
+                }
+                remote.close()
+
+                val expectedSha = info.apkSha256.trim().lowercase()
+                val actualSha = digest.digest().joinToString("") { "%02x".format(it) }
+                val sizeMismatch = info.apkSize > 0L && bytesRead != info.apkSize
+                val shaMismatch = expectedSha.isNotEmpty() && actualSha != expectedSha
+                if (bytesRead <= 0L || sizeMismatch || shaMismatch) {
+                    partFile.delete()
+                    _downloadState.value = UpdateDownloadState.Failed(info.version, DownloadError.VERIFY)
+                    return@withContext null
+                }
+
+                pruneOtherFiles(updatesDir, keepName = partFile.name)
+                if (targetFile.exists()) targetFile.delete()
+                if (!partFile.renameTo(targetFile)) {
+                    partFile.delete()
+                    _downloadState.value = UpdateDownloadState.Failed(info.version, DownloadError.NETWORK)
+                    return@withContext null
+                }
+                _downloadState.value = UpdateDownloadState.ReadyToInstall(info.version, targetFile)
+                targetFile
+            } catch (e: CancellationException) {
+                partFile.delete()
+                _downloadState.value = UpdateDownloadState.Idle
+                throw e
+            } catch (_: Exception) {
+                partFile.delete()
+                _downloadState.value = UpdateDownloadState.Failed(info.version, DownloadError.NETWORK)
+                null
+            }
+        }
+
+    /** 下载（若尚未就绪）并调起 Android 系统包安装器。 */
+    suspend fun downloadAndInstall(
+        context: Context,
+        info: ReleaseInfo,
+    ): InstallLaunchResult {
+        val file = downloadApk(info, File(context.cacheDir, UPDATES_DIR)) ?: return InstallLaunchResult.FAILED
+        return launchSystemInstaller(context, info.version, file)
+    }
+
+    /** 调起系统安装器安装已下载好的 [apkFile]；若未授权“安装未知应用”，引导至系统授权页。 */
+    fun launchSystemInstaller(
+        context: Context,
+        version: String,
+        apkFile: File,
+    ): InstallLaunchResult {
+        if (!apkFile.exists()) {
+            _downloadState.value = UpdateDownloadState.Failed(version, DownloadError.NETWORK)
+            return InstallLaunchResult.FAILED
+        }
+        if (!context.packageManager.canRequestPackageInstalls()) {
+            _downloadState.value =
+                UpdateDownloadState.ReadyToInstall(
+                    version = version,
+                    file = apkFile,
+                    needsInstallPermission = true,
+                )
+            val permIntent =
+                Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:${context.packageName}"),
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            return if (runCatching { context.startActivity(permIntent) }.isSuccess) {
+                InstallLaunchResult.NEEDS_PERMISSION
+            } else {
+                InstallLaunchResult.FAILED
+            }
+        }
+
+        _downloadState.value =
+            UpdateDownloadState.ReadyToInstall(
+                version = version,
+                file = apkFile,
+                needsInstallPermission = false,
+            )
+        val launched =
+            runCatching {
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", apkFile)
+                val intent =
+                    Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, APK_MIME)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                context.startActivity(intent)
+            }.isSuccess
+        return if (launched) InstallLaunchResult.LAUNCHED else InstallLaunchResult.FAILED
+    }
+
+    fun resetDownloadState() {
+        _downloadState.value = UpdateDownloadState.Idle
+    }
+
     companion object {
+        const val LANDING_URL = "https://mintcal.xeed.ink"
         const val PROJECT_URL = "https://github.com/xihale/mintcal"
-        private const val RELEASES_API_URL = "https://api.github.com/repos/xihale/mintcal/releases?per_page=10"
+        private const val RELEASES_MANIFEST_URL = "https://mintcal.xeed.ink/downloads/releases.json"
+        private const val UPDATES_DIR = "updates"
+        private const val APK_MIME = "application/vnd.android.package-archive"
+
         private val json =
             Json {
                 ignoreUnknownKeys = true
@@ -167,19 +386,91 @@ class UpdateChecker(
 
         private suspend fun defaultFetchReleasesJson(): String =
             withContext(Dispatchers.IO) {
-                var conn: HttpURLConnection? = null
+                val conn = openRedirectedConnection(RELEASES_MANIFEST_URL, "application/json")
                 try {
-                    conn = URL(RELEASES_API_URL).openConnection() as HttpURLConnection
-                    conn.connectTimeout = 10_000
-                    conn.readTimeout = 15_000
-                    conn.setRequestProperty("Accept", "application/vnd.github+json")
-                    conn.setRequestProperty("User-Agent", "mintcal-android")
-                    if (conn.responseCode !in 200..299) throw IOException("HTTP ${conn.responseCode}")
                     conn.inputStream.use { it.readBytes().decodeToString() }
                 } finally {
-                    conn?.disconnect()
+                    conn.disconnect()
                 }
             }
+
+        private suspend fun defaultOpenDownloadStream(url: String): RemoteStream =
+            withContext(Dispatchers.IO) {
+                val conn = openRedirectedConnection(url, "*/*")
+                RemoteStream(
+                    stream = conn.inputStream,
+                    contentLength = conn.contentLengthLong,
+                    onClose = { conn.disconnect() },
+                )
+            }
+
+        private fun openRedirectedConnection(
+            startUrl: String,
+            accept: String,
+        ): HttpURLConnection {
+            var currentUrl = startUrl
+            repeat(5) {
+                val conn = URL(currentUrl).openConnection() as HttpURLConnection
+                conn.connectTimeout = 10_000
+                conn.readTimeout = 30_000
+                conn.instanceFollowRedirects = false
+                conn.setRequestProperty("Accept", accept)
+                conn.setRequestProperty("User-Agent", "mintcal-android/${BuildConfig.VERSION_NAME}")
+                val code = conn.responseCode
+                if (code in 300..399) {
+                    val location = conn.getHeaderField("Location")
+                    conn.disconnect()
+                    if (location.isNullOrBlank()) throw IOException("Empty redirect location")
+                    currentUrl = URL(URL(currentUrl), location).toString()
+                    return@repeat
+                }
+                if (code !in 200..299) {
+                    conn.disconnect()
+                    throw IOException("HTTP $code")
+                }
+                return conn
+            }
+            throw IOException("Too many redirects")
+        }
+    }
+}
+
+class RemoteStream(
+    val stream: InputStream,
+    val contentLength: Long = -1L,
+    private val onClose: () -> Unit = {},
+) {
+    fun close() = onClose()
+}
+
+private fun isCachedApkValid(
+    file: File,
+    expectedSize: Long,
+    expectedSha256: String,
+): Boolean {
+    if (!file.isFile || file.length() <= 0L) return false
+    if (expectedSize > 0L && file.length() != expectedSize) return false
+    val sha = expectedSha256.trim().lowercase()
+    if (sha.isEmpty()) return true
+    val digest = MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+        val buf = ByteArray(16 * 1024)
+        while (true) {
+            val n = input.read(buf)
+            if (n < 0) break
+            digest.update(buf, 0, n)
+        }
+    }
+    val actual = digest.digest().joinToString("") { "%02x".format(it) }
+    return actual == sha
+}
+
+private fun pruneOtherFiles(
+    dir: File,
+    keepName: String,
+) {
+    dir.listFiles()?.forEach { f ->
+        if (f.name != keepName) f.deleteRecursively()
     }
 }
 
@@ -267,10 +558,13 @@ internal fun isNewerVersion(
 }
 
 @Serializable
-private data class GithubRelease(
+private data class RemoteRelease(
     @SerialName("tag_name") val tagName: String,
-    @SerialName("html_url") val htmlUrl: String,
+    @SerialName("html_url") val htmlUrl: String = UpdateChecker.LANDING_URL,
     val prerelease: Boolean = false,
     val draft: Boolean = false,
     val body: String? = null,
+    @SerialName("apk_url") val apkUrl: String = "",
+    @SerialName("apk_size") val apkSize: Long = 0L,
+    @SerialName("apk_sha256") val apkSha256: String = "",
 )

@@ -37,29 +37,27 @@
     <section class="hero" id="top">
       <div class="wrap hero-grid">
         <div class="hero-copy">
-          <a class="ver-link" href="https://github.com/xihale/mintcal/releases/tag/v0.0.1-beta.2">
+          <a class="ver-link" href="#download">
             <span class="ver-dot" aria-hidden="true"></span>
-            <span class="mono">v0.0.1-beta.2</span>
+            <span class="mono" id="heroVer">v0.0.1-beta.2</span>
             <span class="ver-sep" aria-hidden="true">/</span>
-            <span>arm64-v8a 仅 <strong class="mono">3.82 MiB</strong></span>
+            <span>ARMv8 仅 <strong class="mono" id="heroVerSize">3.82 MiB</strong></span>
           </a>
 
           <h1 class="display">课表、待办与取件，<br>安放在一张薄荷宣纸上</h1>
-          <p class="lead">开源、本地优先的广工校园日程应用。内置 Compose 界面、本地 SQLite、QuickJS 沙箱、局域网 Web 与本地 MCP，经 R8 收缩与分架构打包后仅 <strong class="mono">3.82 MiB</strong>。</p>
+          <p class="lead">开源、本地优先的广工校园日程应用。内置 Compose 界面、SQLite、QuickJS 沙箱、局域网 Web 与本地 MCP，R8 收缩后仅 <strong class="mono" id="heroLeadSize">3.82 MiB</strong>。</p>
 
           <div class="cta-row">
-            <a class="btn btn-primary btn-lg" href="https://github.com/xihale/mintcal/releases/download/v0.0.1-beta.2/MintCal-0.0.1-beta.2-arm64-v8a.apk">
+            <a class="btn btn-primary btn-lg" id="heroApkBtn" href="./downloads/MintCal-latest-arm64-v8a.apk">
               <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>
-              <span>下载 arm64-v8a</span>
-              <span class="btn-meta mono">3.82 MiB</span>
+              <span>下载 Android APK</span>
+              <span class="btn-meta mono" id="heroBtnSize">3.82 MiB</span>
             </a>
-            <a class="btn btn-tonal btn-lg" href="#download">选择其他架构</a>
+            <a class="btn btn-tonal btn-lg" href="https://github.com/xihale/mintcal">查看源码</a>
           </div>
 
           <p class="abi-hint">
-            <span>现代 64 位 Android 推荐 arm64-v8a；32 位旧机选</span>
-            <a href="https://github.com/xihale/mintcal/releases/download/v0.0.1-beta.2/MintCal-0.0.1-beta.2-armeabi-v7a.apk">armeabi-v7a <span class="mono">(3.57 MiB)</span></a><span>，不确定可选</span>
-            <a href="https://github.com/xihale/mintcal/releases/download/v0.0.1-beta.2/MintCal-0.0.1-beta.2-universal.apk">universal <span class="mono">(6.23 MiB)</span></a><span>。</span>
+            <span>仅分发 ARMv8 (<span class="mono">arm64-v8a</span>) 正式包 · 软件内支持直接下载与安装更新 · 其他架构请</span><a href="https://github.com/xihale/mintcal#构建与测试">从源码编译</a><span>。</span>
           </p>
         </div>
 
@@ -134,16 +132,16 @@
 
         <div class="pillars">
           <div class="pillar">
-            <h3>3.82 MiB 轻巧本体</h3>
-            <p>Jetpack Compose UI、SQLite、QuickJS 脚本沙箱、局域网 Web 与本地 MCP 全部内置，R8 收缩 + 分架构打包后 <span class="mono">arm64-v8a</span> 仅 3.82 MiB。</p>
+            <h3><span id="pillarSize">3.82 MiB</span> 轻巧本体</h3>
+            <p>Jetpack Compose UI、SQLite、QuickJS 脚本沙箱、局域网 Web 与本地 MCP 全部内置，R8 收缩且仅保留 <span class="mono">arm64-v8a</span>。</p>
           </div>
           <div class="pillar">
-            <h3>纯本地，免注册可用</h3>
-            <p>默认离线运行、零广告；支持上课自动勿扰、快递短信本机出码、系统日历双向同步与国产机型保活自检。</p>
+            <h3>纯本地，应用内直装更新</h3>
+            <p>默认离线运行、零广告；支持上课自动勿扰、快递短信出码，以及从本站直连拉包、校验并调起系统安装器更新。</p>
           </div>
           <div class="pillar">
             <h3>按需连电脑与 AI</h3>
-            <p>同 Wi-Fi 可开启局域网 Web 大屏排课；内置本地 MCP（<span class="mono">127.0.0.1:17530</span>）与可选 Go 自建同步，AI 修改前先预览、随时可撤销。</p>
+            <p>同 Wi-Fi 可开启局域网 Web 大屏排课；内置本地 MCP（<span class="mono">127.0.0.1:17530</span>）与可选 Go 自建同步，修改前先预览。</p>
           </div>
         </div>
       </div>
@@ -152,56 +150,31 @@
     <section class="section" id="download">
       <div class="wrap">
         <div class="section-head">
-          <h2 class="h2">分架构下载</h2>
-          <p class="section-sub">当前公测版 <span class="mono">v0.0.1-beta.2</span>，支持 Android 8.0+，按手机架构选装。</p>
+          <h2 class="h2">下载 ARMv8 安装包</h2>
+          <p class="section-sub">当前版本 <span class="mono" id="dlVer">v0.0.1-beta.2</span> · Android 8.0+ · 由本站直接分发。其他架构请从源码编译。</p>
         </div>
 
         <div class="dl-sheet">
           <div class="dl-row dl-row--rec">
             <div class="dl-info">
               <div class="dl-title">
-                <span class="abi-name mono">arm64-v8a</span>
-                <span class="tag-rec">推荐</span>
+                <span class="abi-name mono" id="dlApkName">MintCal-latest-arm64-v8a.apk</span>
+                <span class="tag-rec">arm64-v8a</span>
               </div>
-              <p>现代 64 位 Android 主力机型（近六年绝大多数手机均适用）</p>
+              <p>64 位 Android 安装包（近六年绝大多数手机均适用），校内直连下载并同步作为应用内更新源。</p>
+              <p class="dl-meta mono" id="dlSha" hidden></p>
             </div>
             <div class="dl-act">
-              <span class="dl-size mono" title="4,007,057 字节">3.82 MiB</span>
-              <a class="btn btn-primary btn-sm" href="https://github.com/xihale/mintcal/releases/download/v0.0.1-beta.2/MintCal-0.0.1-beta.2-arm64-v8a.apk">下载 APK</a>
-            </div>
-          </div>
-
-          <div class="dl-row">
-            <div class="dl-info">
-              <div class="dl-title">
-                <span class="abi-name mono">armeabi-v7a</span>
-              </div>
-              <p>32 位老旧 Android 设备兼容包，安装包更轻巧</p>
-            </div>
-            <div class="dl-act">
-              <span class="dl-size mono" title="3,739,113 字节">3.57 MiB</span>
-              <a class="btn btn-tonal btn-sm" href="https://github.com/xihale/mintcal/releases/download/v0.0.1-beta.2/MintCal-0.0.1-beta.2-armeabi-v7a.apk">下载 APK</a>
-            </div>
-          </div>
-
-          <div class="dl-row">
-            <div class="dl-info">
-              <div class="dl-title">
-                <span class="abi-name mono">universal</span>
-              </div>
-              <p>全架构通用安装包，不确定手机架构时可直接选择</p>
-            </div>
-            <div class="dl-act">
-              <span class="dl-size mono" title="6,533,358 字节">6.23 MiB</span>
-              <a class="btn btn-tonal btn-sm" href="https://github.com/xihale/mintcal/releases/download/v0.0.1-beta.2/MintCal-0.0.1-beta.2-universal.apk">下载 APK</a>
+              <span class="dl-size mono" id="dlSize">3.82 MiB</span>
+              <a class="btn btn-primary btn-sm" id="dlApkBtn" href="./downloads/MintCal-latest-arm64-v8a.apk">直接下载 APK</a>
             </div>
           </div>
         </div>
 
         <div class="dl-foot">
-          <a href="https://github.com/xihale/mintcal/releases/tag/v0.0.1-beta.2">v0.0.1-beta.2 发布说明</a>
-          <a href="https://github.com/xihale/mintcal/releases/latest">GitHub Releases 总览</a>
-          <a href="https://github.com/xihale/mintcal">查看开源代码（AGPL-3.0）</a>
+          <a href="./downloads/releases.json">releases.json 更新清单</a>
+          <a href="https://github.com/xihale/mintcal/releases">GitHub Releases 归档</a>
+          <a href="https://github.com/xihale/mintcal#构建与测试">自行编译其他架构（AGPL-3.0）</a>
         </div>
       </div>
     </section>

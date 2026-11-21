@@ -145,6 +145,10 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else null
+            ndk {
+                // 仅分发 ARMv8（arm64-v8a）包体，其余架构由开发者自行编译
+                abiFilters += "arm64-v8a"
+            }
         }
         debug {
             // 包名后缀区分：debug 装在 app.mintcal.debug，与 release 并存
@@ -161,22 +165,6 @@ android {
             isDebuggable = false
             buildConfigField("boolean", "BENCHMARK", "true")
             proguardFiles("benchmark-rules.pro")
-        }
-    }
-    // 仅在发布构建（assembleRelease / -PsplitAbi=true）开启按 ABI 拆包，避免破坏 debug CI 与 benchmark 变体
-    val enableAbiSplits =
-        providers.gradleProperty("splitAbi").orNull == "true" ||
-            gradle.startParameter.taskNames.any {
-                it.endsWith("assembleRelease") || it.endsWith("bundleRelease")
-            }
-    if (enableAbiSplits) {
-        splits {
-            abi {
-                isEnable = true
-                reset()
-                include("arm64-v8a", "armeabi-v7a")
-                isUniversalApk = true
-            }
         }
     }
 

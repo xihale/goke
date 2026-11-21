@@ -89,7 +89,7 @@ open class MintCalApp : Application() {
         jxfw = JxfwManager(this, repo, secrets)
         lanWeb = LanWebManager(this, repo)
         updateChecker = UpdateChecker(settings)
-        updateChecker.clearStalePendingUpdate()
+        updateChecker.clearStalePendingUpdate(cacheDir)
         // 通知渠道 / 桌面快捷方式都是 Binder IPC，不挡 Application 主线程的首帧
         scope.launch(Dispatchers.Default) {
             Notifications.ensureChannels(this@MintCalApp)

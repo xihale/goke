@@ -61,6 +61,7 @@ import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
@@ -96,10 +97,13 @@ import app.mintcal.BuildConfig
 import app.mintcal.R
 import app.mintcal.core.jxfw.JxfwParse
 import app.mintcal.data.DarkMode
+import app.mintcal.data.DownloadError
+import app.mintcal.data.InstallLaunchResult
 import app.mintcal.data.ReleaseInfo
 import app.mintcal.data.ThemeSource
 import app.mintcal.data.UpdateCheckResult
 import app.mintcal.data.UpdateChecker
+import app.mintcal.data.UpdateDownloadState
 import app.mintcal.data.UpdateInterval
 import app.mintcal.notify.Notifications
 import app.mintcal.ui.LocalApp
@@ -122,6 +126,7 @@ import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.theme.Preset
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -778,14 +783,24 @@ fun AboutScreen(onBack: () -> Unit) {
     var showLicenseDialog by remember { mutableStateOf(false) }
     var dialogInfo by remember { mutableStateOf<ReleaseInfo?>(null) }
     val pendingInfo =
-        remember(st.pendingUpdateVersion, st.pendingUpdateUrl, st.pendingUpdateNotes) {
+        remember(
+            st.pendingUpdateVersion,
+            st.pendingUpdateUrl,
+            st.pendingUpdateNotes,
+            st.pendingUpdateApkUrl,
+            st.pendingUpdateApkSize,
+            st.pendingUpdateApkSha256,
+        ) {
             if (st.pendingUpdateVersion.isNotBlank() &&
                 app.updateChecker.isNewerThanCurrent(st.pendingUpdateVersion)
             ) {
                 ReleaseInfo(
                     version = st.pendingUpdateVersion,
-                    url = st.pendingUpdateUrl.ifBlank { UpdateChecker.PROJECT_URL },
+                    url = st.pendingUpdateUrl.ifBlank { UpdateChecker.LANDING_URL },
                     notes = st.pendingUpdateNotes,
+                    apkUrl = st.pendingUpdateApkUrl,
+                    apkSize = st.pendingUpdateApkSize,
+                    apkSha256 = st.pendingUpdateApkSha256,
                 )
             } else {
                 null
@@ -995,6 +1010,8 @@ fun AboutScreen(onBack: () -> Unit) {
     dialogInfo?.let { info ->
         UpdateAvailableDialog(
             info = info,
+            updateChecker = app.updateChecker,
+            downloadScope = app.scope,
             onDismiss = {
                 app.updateChecker.dismissUpdatePrompt(info.version)
                 dialogInfo = null
@@ -1173,34 +1190,198 @@ private fun LicenseTextDialog(
 @Composable
 internal fun UpdateAvailableDialog(
     info: ReleaseInfo,
+    updateChecker: UpdateChecker,
+    downloadScope: CoroutineScope,
     onDismiss: () -> Unit,
     onOpenUrl: (String) -> Unit,
 ) {
+    val ctx = LocalContext.current
+    val dlState by updateChecker.downloadState.collectAsState()
+    var waitingInstallPermission by remember(info.version) { mutableStateOf(false) }
+
+    fun triggerDownload() {
+        if (info.apkUrl.isBlank()) {
+            onOpenUrl(info.url.ifBlank { UpdateChecker.LANDING_URL })
+            onDismiss()
+            return
+        }
+        downloadScope.launch {
+            when (updateChecker.downloadAndInstall(ctx.applicationContext, info)) {
+                InstallLaunchResult.LAUNCHED -> onDismiss()
+                InstallLaunchResult.NEEDS_PERMISSION -> waitingInstallPermission = true
+                InstallLaunchResult.FAILED -> Unit
+            }
+        }
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (!waitingInstallPermission) return@LifecycleEventEffect
+        waitingInstallPermission = false
+        val st = updateChecker.downloadState.value
+        if (st is UpdateDownloadState.ReadyToInstall &&
+            st.version == info.version &&
+            ctx.packageManager.canRequestPackageInstalls()
+        ) {
+            when (updateChecker.launchSystemInstaller(ctx.applicationContext, info.version, st.file)) {
+                InstallLaunchResult.LAUNCHED -> {
+                    onDismiss()
+                }
+
+                InstallLaunchResult.FAILED -> {
+                    Toast.makeText(ctx, R.string.update_install_launch_failed, Toast.LENGTH_SHORT).show()
+                }
+
+                InstallLaunchResult.NEEDS_PERMISSION -> {}
+            }
+        }
+    }
+
+    val stateForVersion =
+        when (val s = dlState) {
+            is UpdateDownloadState.Downloading if s.version == info.version -> s
+            is UpdateDownloadState.ReadyToInstall if s.version == info.version -> s
+            is UpdateDownloadState.Failed if s.version == info.version -> s
+            else -> UpdateDownloadState.Idle
+        }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.update_new_version_title, info.version)) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Text(
                     info.notes?.takeIf { it.isNotBlank() }
                         ?: stringResource(R.string.update_new_version_body),
                 )
+                if (info.apkSize > 0L) {
+                    Text(
+                        text = stringResource(R.string.update_apk_size_hint, formatMiB(info.apkSize)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                when (stateForVersion) {
+                    is UpdateDownloadState.Downloading -> {
+                        if (stateForVersion.totalBytes > 0L) {
+                            LinearProgressIndicator(
+                                progress = {
+                                    (stateForVersion.bytesRead.toFloat() / stateForVersion.totalBytes)
+                                        .coerceIn(0f, 1f)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text(
+                                text =
+                                    stringResource(
+                                        R.string.update_download_progress,
+                                        formatMiB(stateForVersion.bytesRead),
+                                        formatMiB(stateForVersion.totalBytes),
+                                    ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            Text(
+                                text = formatMiB(stateForVersion.bytesRead),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    is UpdateDownloadState.ReadyToInstall -> {
+                        if (stateForVersion.needsInstallPermission && !ctx.packageManager.canRequestPackageInstalls()) {
+                            Text(
+                                text = stringResource(R.string.update_install_permission_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+
+                    is UpdateDownloadState.Failed -> {
+                        val errRes =
+                            if (stateForVersion.error == DownloadError.VERIFY) {
+                                R.string.update_verify_failed
+                            } else {
+                                R.string.update_download_failed
+                            }
+                        Text(
+                            text = stringResource(errRes),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+
+                    UpdateDownloadState.Idle -> {}
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                onOpenUrl(info.url)
-                onDismiss()
-            }) {
-                Text(stringResource(R.string.update_go))
+            when (stateForVersion) {
+                is UpdateDownloadState.Downloading -> {
+                    TextButton(onClick = {}, enabled = false) {
+                        Text(stringResource(R.string.update_downloading))
+                    }
+                }
+
+                is UpdateDownloadState.ReadyToInstall -> {
+                    TextButton(onClick = {
+                        when (updateChecker.launchSystemInstaller(ctx.applicationContext, info.version, stateForVersion.file)) {
+                            InstallLaunchResult.LAUNCHED -> {
+                                onDismiss()
+                            }
+
+                            InstallLaunchResult.NEEDS_PERMISSION -> {
+                                waitingInstallPermission = true
+                            }
+
+                            InstallLaunchResult.FAILED -> {
+                                Toast.makeText(ctx, R.string.update_install_launch_failed, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }) {
+                        Text(stringResource(R.string.update_install_now))
+                    }
+                }
+
+                is UpdateDownloadState.Failed -> {
+                    TextButton(onClick = { triggerDownload() }) {
+                        Text(stringResource(R.string.update_install_retry))
+                    }
+                }
+
+                UpdateDownloadState.Idle -> {
+                    TextButton(onClick = { triggerDownload() }) {
+                        Text(stringResource(R.string.update_go))
+                    }
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.update_later))
+            if (stateForVersion is UpdateDownloadState.Failed) {
+                TextButton(onClick = {
+                    onOpenUrl(info.url.ifBlank { UpdateChecker.LANDING_URL })
+                    onDismiss()
+                }) {
+                    Text(stringResource(R.string.update_open_landing))
+                }
+            } else {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.update_later))
+                }
             }
         },
     )
+}
+
+private fun formatMiB(bytes: Long): String {
+    val mib = bytes.toDouble() / (1024.0 * 1024.0)
+    return String.format(java.util.Locale.US, "%.2f MiB", mib)
 }
 
 internal fun openExternalUrl(

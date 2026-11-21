@@ -45,13 +45,16 @@ data class Settings(
     val weekStartsMonday: Boolean = true,
     /** 一次性迁移标记：日程已并入待办。 */
     val unifiedTasks: Boolean = false,
-    /** 自动检查更新频率，默认每天检查一次（兼顾校园网共享出口 IP 下的 GitHub API 频控）。 */
+    /** 自动检查更新频率，默认每天检查一次（从落地页获取更新清单）。 */
     val updateInterval: UpdateInterval = UpdateInterval.DAILY,
     val lastUpdateCheckAt: Long = 0L,
     val pendingUpdateVersion: String = "",
     val pendingUpdateUrl: String = "",
     val pendingUpdateNotes: String = "",
-    /** 已在弹窗中点过「以后再说」或「去更新」的版本，同版本不再重复自动弹窗，仍保留在设置页提示。 */
+    val pendingUpdateApkUrl: String = "",
+    val pendingUpdateApkSize: Long = 0L,
+    val pendingUpdateApkSha256: String = "",
+    /** 已在弹窗中点过「以后再说」的版本，同版本不再重复自动弹窗，仍保留在设置页提示。 */
     val dismissedUpdateVersion: String = "",
 )
 
@@ -95,6 +98,9 @@ class SettingsStore(
             pendingUpdateVersion = sp.getString("pendingUpdateVersion", d.pendingUpdateVersion)!!,
             pendingUpdateUrl = sp.getString("pendingUpdateUrl", d.pendingUpdateUrl)!!,
             pendingUpdateNotes = sp.getString("pendingUpdateNotes", d.pendingUpdateNotes)!!,
+            pendingUpdateApkUrl = sp.getString("pendingUpdateApkUrl", d.pendingUpdateApkUrl)!!,
+            pendingUpdateApkSize = sp.getLong("pendingUpdateApkSize", d.pendingUpdateApkSize),
+            pendingUpdateApkSha256 = sp.getString("pendingUpdateApkSha256", d.pendingUpdateApkSha256)!!,
             dismissedUpdateVersion = sp.getString("dismissedUpdateVersion", d.dismissedUpdateVersion)!!,
         )
     }
@@ -132,6 +138,9 @@ class SettingsStore(
             .putString("pendingUpdateVersion", n.pendingUpdateVersion)
             .putString("pendingUpdateUrl", n.pendingUpdateUrl)
             .putString("pendingUpdateNotes", n.pendingUpdateNotes)
+            .putString("pendingUpdateApkUrl", n.pendingUpdateApkUrl)
+            .putLong("pendingUpdateApkSize", n.pendingUpdateApkSize)
+            .putString("pendingUpdateApkSha256", n.pendingUpdateApkSha256)
             .putString("dismissedUpdateVersion", n.dismissedUpdateVersion)
             .apply()
         _flow.value = n

@@ -1,18 +1,25 @@
 package app.mintcal.data
 
 import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import app.mintcal.SmokeTestApp
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.io.ByteArrayInputStream
+import java.io.File
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
@@ -193,4 +200,118 @@ class UpdateCheckerTest {
             assertNull(checker.maybeAutoCheck(nowMs = dayMs * 10))
             assertEquals(2, calls)
         }
+
+    @Test
+    fun `落地页更新清单字段保存与下载校验闭环`(): Unit =
+        runBlocking {
+            val payload = "fake-apk-bytes-v3".toByteArray()
+            val sha =
+                MessageDigest
+                    .getInstance("SHA-256")
+                    .digest(payload)
+                    .joinToString("") { "%02x".format(it) }
+            val manifest =
+                """
+                [
+                  {
+                    "tag_name": "v0.0.1-beta.3",
+                    "html_url": "https://mintcal.xeed.ink/",
+                    "prerelease": true,
+                    "draft": false,
+                    "body": "ARMv8 仅 3.8 MiB",
+                    "apk_url": "https://mintcal.xeed.ink/downloads/MintCal-0.0.1-beta.3-arm64-v8a.apk",
+                    "apk_size": ${payload.size},
+                    "apk_sha256": "$sha"
+                  }
+                ]
+                """.trimIndent()
+
+            var downloadCalls = 0
+            val checker =
+                UpdateChecker(
+                    settings = store,
+                    currentVersionProvider = { "0.0.1-beta.2" },
+                    fetchReleasesJson = { manifest },
+                    openDownloadStream = {
+                        downloadCalls++
+                        RemoteStream(ByteArrayInputStream(payload), payload.size.toLong())
+                    },
+                )
+
+            val res = checker.checkNow(nowMs = 5_000L)
+            assertTrue(res is UpdateCheckResult.Newer)
+            val info = (res as UpdateCheckResult.Newer).info
+            assertEquals("https://mintcal.xeed.ink/downloads/MintCal-0.0.1-beta.3-arm64-v8a.apk", info.apkUrl)
+            assertEquals(payload.size.toLong(), info.apkSize)
+            assertEquals(sha, info.apkSha256)
+            assertEquals(sha, store.value.pendingUpdateApkSha256)
+
+            val ctx = ApplicationProvider.getApplicationContext<Context>()
+            val updatesDir = File(ctx.cacheDir, "updates-test").apply { deleteRecursively() }
+            val downloaded = checker.downloadApk(info, updatesDir)
+            assertNotNull(downloaded)
+            assertTrue(downloaded!!.exists())
+            assertEquals(1, downloadCalls)
+            assertTrue(checker.downloadState.value is UpdateDownloadState.ReadyToInstall)
+
+            // 命中本地已校验包时直接复用，不重复请求网络
+            val cached = checker.downloadApk(info, updatesDir)
+            assertEquals(downloaded.absolutePath, cached?.absolutePath)
+            assertEquals(1, downloadCalls)
+            updatesDir.deleteRecursively()
+        }
+
+    @Test
+    fun `安装包 SHA256 不匹配时删除残包并标记失败`(): Unit =
+        runBlocking {
+            val payload = "corrupted-apk".toByteArray()
+            val checker =
+                UpdateChecker(
+                    settings = store,
+                    currentVersionProvider = { "0.0.1-beta.2" },
+                    fetchReleasesJson = { "[]" },
+                    openDownloadStream = { RemoteStream(ByteArrayInputStream(payload), payload.size.toLong()) },
+                )
+            val ctx = ApplicationProvider.getApplicationContext<Context>()
+            val updatesDir = File(ctx.cacheDir, "updates-bad").apply { deleteRecursively() }
+            val info =
+                ReleaseInfo(
+                    version = "0.0.1-beta.3",
+                    url = UpdateChecker.LANDING_URL,
+                    notes = null,
+                    apkUrl = "https://mintcal.xeed.ink/downloads/MintCal-0.0.1-beta.3-arm64-v8a.apk",
+                    apkSize = payload.size.toLong(),
+                    apkSha256 = "0".repeat(64),
+                )
+            val result = checker.downloadApk(info, updatesDir)
+            assertNull(result)
+            val st = checker.downloadState.value
+            assertTrue(st is UpdateDownloadState.Failed && st.error == DownloadError.VERIFY)
+            assertTrue(updatesDir.listFiles().isNullOrEmpty())
+            updatesDir.deleteRecursively()
+        }
+
+    @Test
+    fun `调起系统安装器处理未知来源权限与 FileProvider Intent`() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val updatesDir = File(ctx.cacheDir, "updates").apply { mkdirs() }
+        val apk = File(updatesDir, "MintCal-0.0.1-beta.3-arm64-v8a.apk").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+        val checker = UpdateChecker(settings = store)
+        val shadowPm = shadowOf(ctx.packageManager)
+
+        shadowPm.setCanRequestPackageInstalls(false)
+        assertEquals(InstallLaunchResult.NEEDS_PERMISSION, checker.launchSystemInstaller(ctx, "0.0.1-beta.3", apk))
+        val permIntent: Intent = shadowOf(ctx as android.app.Application).nextStartedActivity
+        assertEquals(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, permIntent.action)
+
+        shadowPm.setCanRequestPackageInstalls(true)
+        assertEquals(InstallLaunchResult.LAUNCHED, checker.launchSystemInstaller(ctx, "0.0.1-beta.3", apk))
+        val installIntent: Intent = shadowOf(ctx).nextStartedActivity
+        assertEquals(Intent.ACTION_VIEW, installIntent.action)
+        assertEquals("application/vnd.android.package-archive", installIntent.type)
+        assertEquals("content", installIntent.data?.scheme)
+        assertTrue((installIntent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0)
+
+        updatesDir.deleteRecursively()
+    }
 }
