@@ -60,13 +60,21 @@ jobs:
           SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
-        run: ./gradlew :app:assembleRelease
+        run: ./gradlew :app:assembleRelease -PsplitAbi=true
 
-      - name: Prepare release asset
+      - name: Prepare release assets
         id: meta
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          cp app/build/outputs/apk/release/app-release.apk "MintCal-${VERSION}.apk"
+          for abi in arm64-v8a armeabi-v7a universal; do
+            src="app/build/outputs/apk/release/app-${abi}-release.apk"
+            if [ ! -f "$src" ]; then
+              echo "::error::缺少构建产物: $src"
+              exit 1
+            fi
+            cp "$src" "MintCal-${VERSION}-${abi}.apk"
+          done
+          ls -lh MintCal-*.apk
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           if [[ "$VERSION" == *-* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
