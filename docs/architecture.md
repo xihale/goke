@@ -24,7 +24,7 @@ app/src/main/java/app/mintcal/
 │   ├── components/         # ★ 可复用 UI 组件（Kit / Rows / FormKit / MonthPager / DialPickers …）
 │   └── screens/            # 按功能分文件，一屏一文件
 ├── data/                   # Repository / Settings / Attachments / SecretStore …
-├── calendar/ jxfw/ links/ mcp/ notify/ share/ sync/ widget/ advanced/
+├── calendar/ jxfw/ lanweb/ links/ mcp/ notify/ share/ sync/ widget/ advanced/
 core/src/main/kotlin/app/mintcal/core/
 ├── model/ agenda/ change/ recurrence/ todo/ time/ importer/ export/ sync/ jxfw/ parcel/ util/
 script/                     # QuickJS 沙箱
@@ -53,7 +53,8 @@ server/internal/server/web/app/   # Web 客户端（js/views + app.css）
 | 课表管理 / 节次 | `EditTimetableScreen()` / `PeriodsScreen()` | `EditTimetableScreen.kt` |
 | 设置 / 外观 / 权限 / 关于 | `SettingsScreen` / `AppearanceScreen` / `PermissionScreen` / `AboutScreen` | `SettingsScreens.kt` |
 | 桌面小组件 | `WidgetsScreen()` | `WidgetsScreen.kt` |
-| 账号与同步 / 教务系统 / 本地 MCP | `SyncScreen()` / `JxfwScreen()` / `McpScreen()` | `SyncScreen.kt` / `JxfwScreen.kt` / `McpScreen.kt` |
+| 账号与同步 / 教务系统 / 成绩与绩点 | `SyncScreen()` / `JxfwScreen()` / `GradesScreen()` | `SyncScreen.kt` / `JxfwScreen.kt` / `GradesScreen.kt` |
+| 本地 MCP / 局域网管理 | `McpScreen()` / `LanWebScreen()` | `McpScreen.kt` / `LanWebScreen.kt` |
 | 数据与备份 / 导入文件 | `DataScreen()` / `ImportScreen(...)` | `DataScreens.kt` |
 | 快递取件 / 回收站 / 操作历史 | `ParcelScreen` / `TrashScreen` / `HistoryScreen` | `ManageScreens.kt`（短信规则表单 `RuleEditSheet` 在 `ParcelRules.kt`） |
 | 提醒自检 | `ReliabilityScreen()` | `ReliabilityScreen.kt` |

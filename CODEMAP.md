@@ -10,7 +10,7 @@
 | `:script` | `script/src/main/kotlin/app/mintcal/script/ScriptRunner.kt` · `resources/mintcal/{sdk.js,mintcal.d.ts}` | QuickJS sandbox for batch mutations + dry-run preview (no IO) |
 | `:app` core | `app/src/main/java/app/mintcal/{MintCalApp,MainActivity,DeepLink,BenchSeed}.kt` | App container, Activity entry, deep links, benchmark seeding |
 | `:app` UI | `app/src/main/java/app/mintcal/ui/{MintCalRoot,Nav,Common,Format}.kt` · `ui/theme/Theme.kt` · `ui/components/` · `ui/screens/` | Compose M3 Expressive UI, `Route` table, CompositionLocal state |
-| `:app` data/sys | `app/src/main/java/app/mintcal/{data,calendar,jxfw,mcp,notify,sync,widget,advanced}/` | Handwritten SQLite (`MintDb.kt`), Reminders, 5 Widgets, `jxfw`, System Calendar, Local MCP |
+| `:app` data/sys | `app/src/main/java/app/mintcal/{data,calendar,jxfw,lanweb,mcp,notify,sync,widget,advanced}/` | Handwritten SQLite (`MintDb.kt`), Reminders, 5 Widgets, `jxfw`, LAN Web, System Calendar, Local MCP |
 | `server` (Go) | `server/cmd/mintcal-server/main.go` · `server/internal/{server,store,mcp}/` · `server/openapi.yaml` | Go + SQLite self-hosted sync server (`auth`, `sync`, `admin`, `POST /mcp`) |
 | `server` (Web) | `server/internal/server/web/app/{index.html,app.css,js/*.js,js/views/*.js}` · `web/admin/` | Zero-build Vanilla ESM web client (`go:embed`, CSP `self`) + admin console |
 | `:benchmark` | `benchmark/src/main/java/app/mintcal/benchmark/{Startup,TabSwitch,Navigation,Today,Timetable,Calendar,Todo}Benchmark.kt` | Macrobenchmark suites (`app.mintcal.bench`, physical device only) |
@@ -18,7 +18,7 @@
 ## 2. Key Entry Points & UI Mapping
 
 - **Android App**: `MintCalApp.kt` (wires `Repository`, `SettingsStore`, `ParcelRuleStore`, `SecretStore`, `ReminderScheduler`, `AdvancedController`, `LocalMcpManager`, `SyncManager`, `SystemCalendarSync`, `JxfwManager`) -> `MainActivity.kt` -> `ui/MintCalRoot.kt` (`Tabs`: `TODAY`, `TIMETABLE`, `CALENDAR`, `TODO`; `mintDestinations` stack) & `ui/Nav.kt` (`Route`, `Actions.commit`).
-- **Screens (`app/src/main/java/app/mintcal/ui/screens/`)**: `TodayScreen.kt`, `TimetableScreen.kt`, `CalendarScreen.kt`, `TodoScreen.kt` (`TodoRows.kt`, `TodoModel.kt`, `QuickAddBar.kt`, `TodoSheets.kt`), `TodoEditScreen.kt`, `EventTimeSheet.kt`, `CourseEditScreen.kt`, `EditTimetableScreen.kt`, `SettingsScreens.kt`, `SyncScreen.kt`, `JxfwScreen.kt`, `McpScreen.kt`, `DataScreens.kt`, `ManageScreens.kt`, `ParcelRules.kt`, `ReliabilityScreen.kt`.
+- **Screens (`app/src/main/java/app/mintcal/ui/screens/`)**: `TodayScreen.kt`, `TimetableScreen.kt`, `CalendarScreen.kt`, `TodoScreen.kt` (`TodoRows.kt`, `TodoModel.kt`, `QuickAddBar.kt`, `TodoSheets.kt`), `TodoEditScreen.kt`, `EventTimeSheet.kt`, `CourseEditScreen.kt`, `EditTimetableScreen.kt`, `SettingsScreens.kt`, `WidgetsScreen.kt`, `SyncScreen.kt`, `JxfwScreen.kt`, `GradesScreen.kt`, `McpScreen.kt`, `LanWebScreen.kt`, `DataScreens.kt`, `ManageScreens.kt`, `ParcelRules.kt`, `ReliabilityScreen.kt`.
 - **Server & Web**: `server/cmd/mintcal-server/main.go` -> `internal/server/server.go` (`sync.go`, `auth.go`, `admin.go`, `mcp.go`); Web entry `server/internal/server/web/app/js/main.js` -> `views/{today,timetable,calendar,todo,settings,shared}.js`.
 
 ## 3. Platform & Architecture Rules (Critical)
