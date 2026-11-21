@@ -17,7 +17,7 @@
 
 ## 2. Key Entry Points & UI Mapping
 
-- **Android App**: `MintCalApp.kt` (wires `Repository`, `SettingsStore`, `ParcelRuleStore`, `SecretStore`, `ReminderScheduler`, `AdvancedController`, `LocalMcpManager`, `SyncManager`, `SystemCalendarSync`, `JxfwManager`) -> `MainActivity.kt` -> `ui/MintCalRoot.kt` (`Tabs`: `TODAY`, `TIMETABLE`, `CALENDAR`, `TODO`; `mintDestinations` stack) & `ui/Nav.kt` (`Route`, `Actions.commit`).
+- **Android App**: `MintCalApp.kt` (wires `Repository`, `SettingsStore`, `ParcelRuleStore`, `SecretStore`, `ReminderScheduler`, `AdvancedController`, `LocalMcpManager`, `SyncManager`, `SystemCalendarSync`, `JxfwManager`) -> `MainActivity.kt` -> `ui/MintCalRoot.kt` (`Tabs`: `TODAY`, `TIMETABLE`, `CALENDAR`, `TODO`, `ME`; `mintDestinations` stack) & `ui/Nav.kt` (`Route`, `Actions.commit`).
 - **Screens (`app/src/main/java/app/mintcal/ui/screens/`)**: `TodayScreen.kt`, `TimetableScreen.kt`, `CalendarScreen.kt`, `TodoScreen.kt` (`TodoRows.kt`, `TodoModel.kt`, `QuickAddBar.kt`, `TodoSheets.kt`), `TodoEditScreen.kt`, `EventTimeSheet.kt`, `CourseEditScreen.kt`, `EditTimetableScreen.kt`, `SettingsScreens.kt`, `WidgetsScreen.kt`, `SyncScreen.kt`, `JxfwScreen.kt`, `GradesScreen.kt`, `McpScreen.kt`, `LanWebScreen.kt`, `DataScreens.kt`, `ManageScreens.kt`, `ParcelRules.kt`, `ReliabilityScreen.kt`.
 - **Server & Web**: `server/cmd/mintcal-server/main.go` -> `internal/server/server.go` (`sync.go`, `auth.go`, `admin.go`, `mcp.go`); Web entry `server/internal/server/web/app/js/main.js` -> `views/{today,timetable,calendar,todo,settings,shared}.js`.
 

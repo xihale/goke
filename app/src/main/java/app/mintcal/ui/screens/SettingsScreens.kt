@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,8 +33,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -77,6 +81,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -89,6 +94,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
@@ -108,11 +114,14 @@ import app.mintcal.data.UpdateInterval
 import app.mintcal.notify.Notifications
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
+import app.mintcal.ui.LocalTabVisible
 import app.mintcal.ui.Route
+import app.mintcal.ui.Tab
 import app.mintcal.ui.components.ChipChoice
 import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.MinutesDialSheet
+import app.mintcal.ui.components.NavListInset
 import app.mintcal.ui.components.NavRow
 import app.mintcal.ui.components.SectionLabel
 import app.mintcal.ui.components.SegmentedPill
@@ -123,6 +132,7 @@ import app.mintcal.ui.components.TonalField
 import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.liveSnapshot
+import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.theme.Preset
@@ -135,17 +145,20 @@ import java.util.Locale
 import android.provider.Settings as AndroidSettings
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen() {
     val ctx = LocalContext.current
     val app = LocalApp.current
     val nav = LocalNav.current
     val st = settingsState()
+    val reduce = reduceMotion()
+    val listState = rememberLazyListState()
+    val tabVisibleState = LocalTabVisible.current
     val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     fun ensureNotifPermission() {
         if (Build.VERSION.SDK_INT >= 33 && !Notifications.canPost(ctx)) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
-    // 权限入口行与桌面小组件行需要实时状态：从系统设置或桌面回来后在异步协程中重算
+    // 权限入口行与桌面小组件行需要实时状态：切到本 Tab 或从子页/系统设置回来后在异步协程中重算
     var permOkCount by remember { mutableIntStateOf(4) }
     var widgetAddedCount by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
@@ -160,17 +173,50 @@ fun SettingsScreen(onBack: () -> Unit) {
             if (widgetAddedCount != widgets) widgetAddedCount = widgets
         }
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refreshStatus() }
+    LaunchedEffect(tabVisibleState) {
+        snapshotFlow { tabVisibleState.value }.collect { visible ->
+            if (visible) refreshStatus()
+        }
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (tabVisibleState.value) refreshStatus()
+    }
+    LaunchedEffect(nav.reselect, reduce) {
+        if (nav.reselect > 0 && nav.tab == Tab.ME) {
+            if (reduce) listState.scrollToItem(0) else listState.animateScrollToItem(0)
+        }
+    }
 
-    MintScreen(title = stringResource(R.string.settings), onBack = onBack) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding(),
+        contentAlignment = Alignment.TopCenter,
+    ) {
         LazyColumn(
+            state = listState,
             modifier =
                 Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp)
-                    .navigationBarsPadding(),
-            contentPadding = PaddingValues(bottom = 24.dp),
+                    .fillMaxHeight()
+                    .widthIn(max = 680.dp)
+                    .fillMaxWidth(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = NavListInset),
         ) {
+            item(key = "header", contentType = "header") {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(64.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        stringResource(R.string.tab_me),
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
             item(key = "appearance", contentType = "nav_row") {
                 val themeSource =
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && st.themeSource == ThemeSource.DYNAMIC) {

@@ -45,10 +45,10 @@
     <string name="tab_timetable">课表</string>
     <string name="tab_calendar">日历</string>
     <string name="tab_todo">待办</string>
+    <string name="tab_me">我的</string>
     <string name="today">今天</string>
     <string name="tomorrow">明天</string>
     <string name="yesterday">昨天</string>
-    <string name="settings">设置</string>
     <string name="new_entry">新建</string>
     <string name="new_course">新建课程</string>
     <string name="fmt_month_day">%1$d月%2$d日</string>

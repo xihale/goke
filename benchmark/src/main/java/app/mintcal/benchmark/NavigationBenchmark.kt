@@ -28,21 +28,17 @@ class NavigationBenchmark {
             setupBlock = {
                 startActivityAndWait()
                 waitForSeed()
-                tapTab(TAB_TODAY)
+                tapTab(TAB_ME)
             },
         ) {
-            if (tapByDesc(DESC_SETTINGS)) {
-                device.wait(Until.hasObject(By.text("外观")), 3_000L)
-                if (tapByText("外观")) {
-                    settle(250L)
-                    device.pressBack()
-                    settle(250L)
-                }
-                if (tapByText("数据与备份")) {
-                    settle(250L)
-                    device.pressBack()
-                    settle(250L)
-                }
+            device.wait(Until.hasObject(By.text("外观")), 3_000L)
+            if (tapByText("外观")) {
+                settle(250L)
+                device.pressBack()
+                settle(250L)
+            }
+            if (tapByText("数据与备份")) {
+                settle(250L)
                 device.pressBack()
                 settle(250L)
             }

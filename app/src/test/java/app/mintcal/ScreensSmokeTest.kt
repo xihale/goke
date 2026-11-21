@@ -278,7 +278,7 @@ class ScreensSmokeTest {
                 "periods" to { PeriodsScreen {} },
                 "appearance" to { AppearanceScreen {} },
                 "widgets" to { WidgetsScreen {} },
-                "settings" to { SettingsScreen {} },
+                "settings" to { SettingsScreen() },
                 "data" to { DataScreen {} },
                 "sync" to { SyncScreen {} },
                 "jxfw" to { JxfwScreen {} },
@@ -457,7 +457,7 @@ class ScreensSmokeTest {
 
     @Test
     fun settingsOpensWidgetsScreenAndHandlesUnsupportedPin() {
-        rule.setContent { Host { SettingsScreen {} } }
+        rule.setContent { Host { SettingsScreen() } }
         rule.onNodeWithText(app.getString(R.string.widgets_title)).performClick()
         rule.waitForIdle()
         rule.onNodeWithText(app.getString(R.string.widget_today_name)).assertIsDisplayed()

@@ -16,7 +16,7 @@
 app/src/main/java/app/mintcal/
 ├── MintCalApp.kt / MainActivity.kt / DeepLink.kt / BenchSeed.kt
 ├── ui/
-│   ├── MintCalRoot.kt      # Tabs（4 个常驻 Tab）+ mintDestinations 路由表 + 撤销浮钮
+│   ├── MintCalRoot.kt      # Tabs（5 个常驻 Tab）+ mintDestinations 路由表 + 撤销浮钮
 │   ├── Nav.kt              # Route sealed interface、Nav 门面、Actions（变更集）
 │   ├── Common.kt           # LocalTabVisible / gated / liveSnapshot / rememberNow
 │   ├── Format.kt
@@ -36,7 +36,7 @@ server/internal/server/web/app/   # Web 客户端（js/views + app.css）
 - **无 ViewModel**：状态经 `LocalApp` / `LocalActions` / `LocalNav` CompositionLocal 与参数下传，屏幕保持纯函数。
 - **写操作统一走变更集**：页面通过 `LocalActions.current.commit(cs, message, undoable)` 提交 `ChangeSet`，可撤销操作通过左下角撤销浮钮回滚，不可撤销操作退化为系统 Toast。
 - **路由表**：`Route` 为 `@Serializable sealed interface`（`ui/Nav.kt`），压栈页统一注册在 `ui/MintCalRoot.kt` 的 `NavGraphBuilder.mintDestinations`。
-- **Tab 层常驻**：`HOME` 目的地承载 `Tab.TODAY` / `Tab.TIMETABLE` / `Tab.CALENDAR` / `Tab.TODO` 四个常驻 Tab，切换零重组，不参与压栈转场。
+- **Tab 层常驻**：`HOME` 目的地承载 `Tab.TODAY` / `Tab.TIMETABLE` / `Tab.CALENDAR` / `Tab.TODO` / `Tab.ME` 五个常驻 Tab，切换零重组，不参与压栈转场。
 
 ## 屏幕 ↔ 文件映射
 
@@ -46,12 +46,13 @@ server/internal/server/web/app/   # Web 客户端（js/views + app.css）
 | 课表 | `TimetableScreen()`（`Tab.TIMETABLE`） | `TimetableScreen.kt`（含私有 `SlotSheet`/`CourseSheet`） |
 | 日历 | `CalendarScreen()`（`Tab.CALENDAR`） | `CalendarScreen.kt` |
 | 待办 | `TodoScreen()`（`Tab.TODO`） | `TodoScreen.kt` + `TodoRows.kt` + `TodoModel.kt` + `QuickAddBar.kt` |
+| 我的（设置中心） | `SettingsScreen()`（`Tab.ME`） | `SettingsScreens.kt` |
 | 待办编辑 | `TodoEditScreen(...)` | `TodoEditScreen.kt` |
 | 时间面板 | `WhenPanel(...)` | `EventTimeSheet.kt` |
 | 快速添加 | `QuickAddSheet(...)` | `QuickAddBar.kt` |
 | 课程编辑 | `CourseEditScreen(...)` | `CourseEditScreen.kt` |
 | 课表管理 / 节次 | `EditTimetableScreen()` / `PeriodsScreen()` | `EditTimetableScreen.kt` |
-| 设置 / 外观 / 权限 / 关于 | `SettingsScreen` / `AppearanceScreen` / `PermissionScreen` / `AboutScreen` | `SettingsScreens.kt` |
+| 外观 / 权限 / 关于 | `AppearanceScreen` / `PermissionScreen` / `AboutScreen` | `SettingsScreens.kt` |
 | 桌面小组件 | `WidgetsScreen()` | `WidgetsScreen.kt` |
 | 账号与同步 / 教务系统 / 成绩与绩点 | `SyncScreen()` / `JxfwScreen()` / `GradesScreen()` | `SyncScreen.kt` / `JxfwScreen.kt` / `GradesScreen.kt` |
 | 本地 MCP / 局域网管理 | `McpScreen()` / `LanWebScreen()` | `McpScreen.kt` / `LanWebScreen.kt` |

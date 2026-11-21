@@ -59,6 +59,7 @@ import androidx.compose.material.icons.rounded.CalendarViewWeek
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material.icons.rounded.WbSunny
@@ -505,6 +506,7 @@ private val NAV_ITEMS =
         NavItem(Tab.TIMETABLE, Icons.Rounded.CalendarViewWeek, R.string.tab_timetable),
         NavItem(Tab.CALENDAR, Icons.Rounded.CalendarMonth, R.string.tab_calendar),
         NavItem(Tab.TODO, Icons.Rounded.CheckCircle, R.string.tab_todo),
+        NavItem(Tab.ME, Icons.Rounded.Person, R.string.tab_me),
     )
 
 @Composable

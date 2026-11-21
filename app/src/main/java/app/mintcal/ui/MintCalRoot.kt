@@ -348,7 +348,6 @@ fun NavGraphBuilder.mintDestinations(
     composable<Route.EditTimetable> { EditTimetableScreen(back) }
     composable<Route.Appearance> { AppearanceScreen(back) }
     composable<Route.Widgets> { WidgetsScreen(back) }
-    composable<Route.Settings> { SettingsScreen(back) }
     composable<Route.Permission> { ReliabilityScreen(back) }
     composable<Route.Trash> { TrashScreen(back) }
     composable<Route.History> { HistoryScreen(back) }
@@ -530,6 +529,7 @@ private fun Tabs(
                                 Tab.TIMETABLE -> TimetableScreen()
                                 Tab.CALENDAR -> CalendarScreen()
                                 Tab.TODO -> TodoScreen()
+                                Tab.ME -> SettingsScreen()
                             }
                         }
                     }

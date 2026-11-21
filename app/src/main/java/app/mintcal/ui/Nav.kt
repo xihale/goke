@@ -20,9 +20,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
-enum class Tab { TODAY, TIMETABLE, CALENDAR, TODO }
+enum class Tab { TODAY, TIMETABLE, CALENDAR, TODO, ME }
 
-/** Tab 层目的地（四个 Tab 共用的常驻容器），不参与压栈转场。 */
+/** Tab 层目的地（五个 Tab 共用的常驻容器），不参与压栈转场。 */
 const val HOME = "home"
 
 @Serializable
@@ -32,8 +32,6 @@ sealed interface Route {
     @Serializable data object Appearance : Route
 
     @Serializable data object Widgets : Route
-
-    @Serializable data object Settings : Route
 
     /** 权限与可靠性自检入口（Route.Permission 路由已统一指向 ReliabilityScreen）。 */
     @Serializable data object Permission : Route

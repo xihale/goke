@@ -9,14 +9,14 @@ import androidx.test.uiautomator.Until
 /** benchmark 变体的包名（`:app` 的 benchmark buildType：applicationIdSuffix = ".bench"）。 */
 const val TARGET_PACKAGE = "app.mintcal.bench"
 
-/** 底栏四个 Tab 的文案，对应 strings.xml 的 tab_*。 */
+/** 底栏五个 Tab 的文案，对应 strings.xml 的 tab_*。 */
 const val TAB_TODAY = "今日"
 const val TAB_TIMETABLE = "课表"
 const val TAB_CALENDAR = "日历"
 const val TAB_TODO = "待办"
+const val TAB_ME = "我的"
 
 /** 常用按钮 / 入口文案与 contentDescription。 */
-const val DESC_SETTINGS = "设置"
 const val DESC_ADD = "添加"
 const val DESC_ADD_TASK = "新建待办"
 const val DESC_SEARCH = "搜索"
