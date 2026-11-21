@@ -3,12 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>薄荷广工 MintCal：课表、待办与取件，写在一张薄荷宣纸上</title>
-  <meta name="description" content="薄荷广工（MintCal）是开源、本地优先的 Android 校园日程工具：直连广工教务同步课表与考试，收纳每日待办、快递取件码与成绩均绩。AGPL-3.0，Android 8.0+。">
-  <meta name="theme-color" content="#F1F6F4">
+  <title>薄荷广工 MintCal — 3.82 MiB 极简本地校园日程工具</title>
+  <meta name="description" content="薄荷广工（MintCal）是开源、本地优先的广工校园日程应用：直连教务同步课表与考试，收纳待办、快递取件码与成绩均绩，arm64-v8a 安装包仅 3.82 MiB。">
+  <meta name="theme-color" content="#F2F7F5">
+  <link rel="canonical" href="https://mintcal.xeed.ink/">
   <meta property="og:title" content="薄荷广工 MintCal">
-  <meta property="og:description" content="课表、待办与取件，写在一张薄荷宣纸上。开源、本地优先的 Android 校园日程工具。">
+  <meta property="og:description" content="课表、待办与取件，安放在一张薄荷宣纸上。开源本地优先，arm64-v8a 仅 3.82 MiB。">
   <meta property="og:type" content="website">
+  <meta property="og:url" content="https://mintcal.xeed.ink/">
   <link rel="icon" href="./assets/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
   <script src="./app.js" defer></script>
@@ -16,389 +18,207 @@
 <body>
   <a class="skip-link" href="#main">跳到正文</a>
 
-  <header class="topbar" id="topbar">
+  <header class="topbar">
     <div class="wrap topbar-in">
       <a class="brand" href="#top" aria-label="薄荷广工 MintCal 首页">
-        <img src="./assets/logo.svg" alt="" width="30" height="30">
+        <img src="./assets/logo.svg" alt="" width="28" height="28">
         <span>薄荷广工</span>
       </a>
       <nav class="topnav" aria-label="页面导航">
-        <a href="#jxfw">教务同步</a>
-        <a href="#views">四个视图</a>
-        <a href="#desktop">桌面与系统</a>
-        <a href="#open">电脑与 AI</a>
+        <a href="#features">界面</a>
+        <a href="#download">下载</a>
+        <a href="https://github.com/xihale/mintcal">GitHub</a>
       </nav>
-      <div class="topbar-act">
-        <a class="textlink" href="https://github.com/xihale/mintcal">GitHub</a>
-        <a class="btn btn-primary btn-sm" href="https://github.com/xihale/mintcal/releases/latest">下载 APK</a>
-      </div>
+      <a class="btn btn-primary btn-sm" href="#download">下载 APK</a>
     </div>
   </header>
 
   <main id="main">
-    <!-- Band 1 · Hero -->
     <section class="hero" id="top">
       <div class="wrap hero-grid">
         <div class="hero-copy">
-          <p class="version-note"><span class="pill-ver">v0.0.1-beta.1</span> 公测版</p>
-          <h1 class="display">课表、待办与取件，<br>写在一张薄荷宣纸上。</h1>
-          <p class="lead">直连广工教务，把课表、考试、待办与取件码收进一个本地 Android 应用。</p>
+          <a class="ver-link" href="https://github.com/xihale/mintcal/releases/tag/v0.0.1-beta.2">
+            <span class="ver-dot" aria-hidden="true"></span>
+            <span class="mono">v0.0.1-beta.2</span>
+            <span class="ver-sep" aria-hidden="true">/</span>
+            <span>arm64-v8a 仅 <strong class="mono">3.82 MiB</strong></span>
+          </a>
+
+          <h1 class="display">课表、待办与取件，<br>安放在一张薄荷宣纸上</h1>
+          <p class="lead">开源、本地优先的广工校园日程应用。内置 Compose 界面、本地 SQLite、QuickJS 沙箱、局域网 Web 与本地 MCP，经 R8 收缩与分架构打包后仅 <strong class="mono">3.82 MiB</strong>。</p>
+
           <div class="cta-row">
-            <a class="btn btn-primary btn-lg" href="https://github.com/xihale/mintcal/releases/latest">
-              <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>
-              <span>下载 Android APK</span>
+            <a class="btn btn-primary btn-lg" href="https://github.com/xihale/mintcal/releases/download/v0.0.1-beta.2/MintCal-0.0.1-beta.2-arm64-v8a.apk">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>
+              <span>下载 arm64-v8a</span>
+              <span class="btn-meta mono">3.82 MiB</span>
             </a>
-            <a class="btn btn-tonal btn-lg" href="https://github.com/xihale/mintcal">查看源码</a>
+            <a class="btn btn-tonal btn-lg" href="#download">选择其他架构</a>
           </div>
-          <ul class="facts" aria-label="核心特性">
-            <li>纯本地 SQLite</li>
-            <li>不登录可用</li>
-            <li>Android 8.0+</li>
-            <li>AGPL-3.0 开源</li>
-          </ul>
+
+          <p class="abi-hint">
+            <span>现代 64 位 Android 推荐 arm64-v8a；32 位旧机选</span>
+            <a href="https://github.com/xihale/mintcal/releases/download/v0.0.1-beta.2/MintCal-0.0.1-beta.2-armeabi-v7a.apk">armeabi-v7a <span class="mono">(3.57 MiB)</span></a><span>，不确定可选</span>
+            <a href="https://github.com/xihale/mintcal/releases/download/v0.0.1-beta.2/MintCal-0.0.1-beta.2-universal.apk">universal <span class="mono">(6.23 MiB)</span></a><span>。</span>
+          </p>
         </div>
 
-        <div class="stage" id="heroStage" data-theme-preset="mint" data-color-mode="light" aria-label="可操作的薄荷广工界面预览">
-          <div class="stage-glow" aria-hidden="true"></div>
-          <div class="theme-bar" id="themeBar" role="group" aria-label="预览主题">
-            <div class="dots">
-              <button type="button" class="dot" style="--dot:#3D6B5E" data-preset="mint" aria-pressed="true" aria-label="薄荷"></button>
-              <button type="button" class="dot" style="--dot:#C97D63" data-preset="peach" aria-pressed="false" aria-label="蜜桃"></button>
-              <button type="button" class="dot" style="--dot:#7466B5" data-preset="lavender" aria-pressed="false" aria-label="薰衣草"></button>
-              <button type="button" class="dot" style="--dot:#5A87C5" data-preset="sky" aria-pressed="false" aria-label="天空"></button>
-              <button type="button" class="dot" style="--dot:#B95D78" data-preset="rose" aria-pressed="false" aria-label="玫瑰"></button>
-              <button type="button" class="dot" style="--dot:#B5973B" data-preset="lemon" aria-pressed="false" aria-label="柠檬"></button>
-            </div>
-            <span class="theme-div" aria-hidden="true"></span>
-            <output class="theme-name" id="themeName" aria-live="polite">薄荷</output>
-            <button type="button" class="mode-btn" id="modeToggle" aria-pressed="false" aria-label="切换到深色模式">
-              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
-              <span class="mode-label">浅色</span>
-            </button>
+        <div class="hero-stage">
+          <div class="phone-frame" id="heroScreen">
+            <img class="screen-img" data-tab="today" src="./assets/shot-today.webp" width="1280" height="2772" alt="薄荷广工今日页真机截图：下一节课摘要、大号取件码与今日时间线">
+            <img class="screen-img is-active" data-tab="timetable" src="./assets/shot-timetable.webp" width="1280" height="2772" alt="薄荷广工周课表真机截图：植物柔和色块与实验课多机房折叠">
+            <img class="screen-img" data-tab="calendar" src="./assets/shot-calendar.webp" width="1280" height="2772" alt="薄荷广工日历页真机截图：月历总览与当日课程安排">
+            <img class="screen-img" data-tab="todo" src="./assets/shot-todo.webp" width="1280" height="2772" alt="薄荷广工待办页真机截图：今日待办与考试安排分组">
           </div>
-          <div class="phone-shell">
-            <div class="phone">
-              <div class="ap" id="heroApp" data-theme-preset="mint" data-color-mode="light"></div>
-            </div>
+
+          <div class="seg-pill" id="heroTabs" role="tablist" aria-label="切换四个主视图预览">
+            <span class="seg-thumb" aria-hidden="true"></span>
+            <button type="button" role="tab" data-tab="today" aria-selected="false" tabindex="-1">今日</button>
+            <button type="button" role="tab" data-tab="timetable" aria-selected="true" class="is-active">课表</button>
+            <button type="button" role="tab" data-tab="calendar" aria-selected="false" tabindex="-1">日历</button>
+            <button type="button" role="tab" data-tab="todo" aria-selected="false" tabindex="-1">待办</button>
           </div>
-          <p class="stage-note">可直接操作：切底栏、点实验课看 8 处机房、复制取件码或换主题</p>
+          <p class="stage-caption" id="heroCaption" aria-live="polite">广工四校区节次预设，多机房自动折叠为「实4&#8209;401 等 8 处」。</p>
         </div>
       </div>
     </section>
 
-    <!-- Band 2 · 广工教务原生 -->
-    <section class="band" id="jxfw">
-      <div class="wrap jxfw-grid">
-        <div class="shot-stage">
-          <div class="shot-pair">
-            <figure class="shot-item" data-shot="jxfw">
-              <div class="shot shot--sm">
-                <img src="./assets/shot-jxfw.webp" alt="薄荷广工教务系统页面真机截图：同步学期与每周日晚自动同步开关">
-              </div>
-              <figcaption>教务同步</figcaption>
-            </figure>
-            <figure class="shot-item shot-item--drop" data-shot="grades">
-              <div class="shot shot--sm">
-                <img src="./assets/shot-grades.webp" alt="薄荷广工成绩与绩点页面真机截图：加权均绩 GPA 与各学期课程成绩">
-              </div>
-              <figcaption>成绩与绩点</figcaption>
-            </figure>
-          </div>
-        </div>
-        <div class="jxfw-copy">
-          <h2 class="h2">直连广工教务，开学一次同步</h2>
-          <p class="lead">账号密码经 Android Keystore 本机加密，直连学校教务，不经过第三方服务器。</p>
-          <div class="spec-rows">
-            <div class="spec-row">
-              <h3 class="h3">每周日晚自动查调停课</h3>
-              <p>后台比对下周课表变动，不覆盖手动备注。</p>
-            </div>
-            <div class="spec-row">
-              <h3 class="h3">四校区作息与多机房折叠</h3>
-              <p>内置大学城、龙洞、东风路、揭阳作息；多机房收拢为「实4-401 等 8 处」。</p>
-            </div>
-            <div class="spec-row">
-              <h3 class="h3">本机只读查成绩与 GPA</h3>
-              <p>按学期看成绩与加权均绩，仅存本地。</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Band 3 · 四个底栏入口 -->
-    <section class="band band-tint" id="views">
+    <section class="section" id="features">
       <div class="wrap">
-        <div class="views-head">
-          <div class="band-head">
-            <h2 class="h2">四个底栏视图，各司其职</h2>
-            <p class="lead">不藏多层菜单，打开直达。</p>
-          </div>
-
-          <div class="pill-tabs pill-tabs--4" id="viewTabs" role="tablist" aria-label="四个主视图">
-            <span class="pill-thumb" aria-hidden="true"></span>
-            <button type="button" role="tab" id="tab-today" aria-controls="v-today" aria-selected="true" class="is-on">今日与取件</button>
-            <button type="button" role="tab" id="tab-timetable" aria-controls="v-timetable" aria-selected="false" tabindex="-1">周课表</button>
-            <button type="button" role="tab" id="tab-calendar" aria-controls="v-calendar" aria-selected="false" tabindex="-1">月日联动</button>
-            <button type="button" role="tab" id="tab-todo" aria-controls="v-todo" aria-selected="false" tabindex="-1">自然语言待办</button>
-          </div>
+        <div class="section-head">
+          <h2 class="h2">真机即所见，克制而不简陋</h2>
+          <p class="section-sub">打开直达四个核心视图，教务、成绩、小组件与外观都落在一套薄荷纸面上。</p>
         </div>
 
-        <div class="views-stage">
-          <div class="view-panel" id="v-today" role="tabpanel" aria-labelledby="tab-today">
-            <div class="view-copy">
-              <h3 class="h3-lg">下一节课与待取快递，一眼看清</h3>
-              <p class="body">顶部卡片汇总今日课表与进度，快递取件码置顶显示。</p>
-              <dl class="detail-list">
-                <div><dt>取件码</dt><dd>大号等宽字，点一下复制，勾选即划掉。</dd></div>
-                <div><dt>时间线</dt><dd>按时间排好当日待办，随手打勾。</dd></div>
-              </dl>
+        <div class="shot-grid">
+          <figure class="shot-card">
+            <div class="shot-frame">
+              <img src="./assets/shot-jxfw.webp" width="1280" height="2772" alt="薄荷广工教务系统页面真机截图：同步学期与每周日晚自动同步开关">
             </div>
-            <div class="view-media">
-              <figure class="shot" data-shot="today">
-                <img src="./assets/shot-today.webp" alt="薄荷广工今日页真机截图：下一节课摘要、待取快递与今日时间线">
-              </figure>
-            </div>
-          </div>
+            <figcaption>
+              <h3>广工教务直连</h3>
+              <p>Keystore 本机加密保存，每周日晚自动查调停课，不经过第三方服务器。</p>
+            </figcaption>
+          </figure>
 
-          <div class="view-panel" id="v-timetable" role="tabpanel" aria-labelledby="tab-timetable" hidden>
-            <div class="view-copy">
-              <h3 class="h3-lg">手势排课，多机房一触展开</h3>
-              <p class="body">长按拖动换时段、拉边缘改时长，空白格直接新建日程。</p>
-              <dl class="detail-list">
-                <div><dt>多机房</dt><dd>长地址收拢为「等 8 处」，点开看全部分室。</dd></div>
-                <div><dt>冲突叠放</dt><dd>同时段多门课自动叠放，点角标切换。</dd></div>
-              </dl>
+          <figure class="shot-card">
+            <div class="shot-frame">
+              <img src="./assets/shot-grades.webp" width="1280" height="2772" alt="薄荷广工成绩与绩点页面真机截图：加权均绩 GPA 与各学期课程成绩">
             </div>
-            <div class="view-media">
-              <figure class="shot" data-shot="timetable">
-                <img src="./assets/shot-timetable.webp" alt="薄荷广工周课表真机截图：第 12 周粉彩课程卡与实验课多机房折叠">
-              </figure>
-            </div>
-          </div>
+            <figcaption>
+              <h3>本机成绩与 GPA</h3>
+              <p>按学期查阅课程分数与加权均绩，只读缓存于本地数据库。</p>
+            </figcaption>
+          </figure>
 
-          <div class="view-panel" id="v-calendar" role="tabpanel" aria-labelledby="tab-calendar" hidden>
-            <div class="view-copy">
-              <h3 class="h3-lg">月历总览，点哪天看哪天</h3>
-              <p class="body">色条与圆点标出课程和待办，点任意日期展开当日安排。</p>
-              <dl class="detail-list">
-                <div><dt>同源配色</dt><dd>日程横卡沿用课表粉彩，扫一眼就能分清。</dd></div>
-                <div><dt>月周切换</dt><dd>右上角切月/周视图，随时一键「回今天」。</dd></div>
-              </dl>
+          <figure class="shot-card">
+            <div class="shot-frame">
+              <img src="./assets/shot-widgets.webp" width="1280" height="2772" alt="薄荷广工桌面小组件真机截图：今日安排、今日课表、待办清单与待取快递">
             </div>
-            <div class="view-media">
-              <figure class="shot" data-shot="calendar">
-                <img src="./assets/shot-calendar.webp" alt="薄荷广工日历页真机截图：11月月历卡与当日课程横卡">
-              </figure>
-            </div>
-          </div>
+            <figcaption>
+              <h3>五款桌面小组件</h3>
+              <p>今日安排、课表、待办、取件与下一件事，桌面与主应用同源配色。</p>
+            </figcaption>
+          </figure>
 
-          <div class="view-panel" id="v-todo" role="tabpanel" aria-labelledby="tab-todo" hidden>
-            <div class="view-copy">
-              <h3 class="h3-lg">打一句话，自动拆出时间与优先级</h3>
-              <p class="body">输入「周五 18:00 交实验报告 !高」实时高亮解析，考试与快递自动归档。</p>
-              <dl class="detail-list">
-                <div><dt>分组收纳</dt><dd>按「今天」「之后」「收集箱」折叠，支持按优先级排序。</dd></div>
-                <div><dt>快捷手势</dt><dd>右滑完成、左滑改期，支持多选批量处理。</dd></div>
-              </dl>
+          <figure class="shot-card">
+            <div class="shot-frame">
+              <img src="./assets/shot-appearance.webp" width="1280" height="2772" alt="薄荷广工外观设置真机截图：六套预设主题色与深浅模式切换">
             </div>
-            <div class="view-media">
-              <figure class="shot" data-shot="todo">
-                <img src="./assets/shot-todo.webp" alt="薄荷广工待办页真机截图：今天、之后与考试安排分组列表">
-              </figure>
-            </div>
+            <figcaption>
+              <h3>六套植物色主题</h3>
+              <p>薄荷默认开箱即用，支持壁纸动态取色与深浅双模式同步切换。</p>
+            </figcaption>
+          </figure>
+        </div>
+
+        <div class="pillars">
+          <div class="pillar">
+            <h3>3.82 MiB 轻巧本体</h3>
+            <p>Jetpack Compose UI、SQLite、QuickJS 脚本沙箱、局域网 Web 与本地 MCP 全部内置，R8 收缩 + 分架构打包后 <span class="mono">arm64-v8a</span> 仅 3.82 MiB。</p>
+          </div>
+          <div class="pillar">
+            <h3>纯本地，免注册可用</h3>
+            <p>默认离线运行、零广告；支持上课自动勿扰、快递短信本机出码、系统日历双向同步与国产机型保活自检。</p>
+          </div>
+          <div class="pillar">
+            <h3>按需连电脑与 AI</h3>
+            <p>同 Wi-Fi 可开启局域网 Web 大屏排课；内置本地 MCP（<span class="mono">127.0.0.1:17530</span>）与可选 Go 自建同步，AI 修改前先预览、随时可撤销。</p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Band 4 · 桌面同源与安静细节 -->
-    <section class="band" id="desktop">
+    <section class="section" id="download">
       <div class="wrap">
-        <div class="band-head">
-          <h2 class="h2">回到手机桌面，还是同一套薄荷色</h2>
+        <div class="section-head">
+          <h2 class="h2">分架构下载</h2>
+          <p class="section-sub">当前公测版 <span class="mono">v0.0.1-beta.2</span>，支持 Android 8.0+，按手机架构选装。</p>
         </div>
 
-        <div class="bento-pair">
-          <article class="bento-card">
-            <div class="bento-well">
-              <figure class="shot shot--crop" data-shot="widgets">
-                <img src="./assets/shot-widgets.webp" alt="薄荷广工桌面小组件真机截图：今日安排、今日课表、待办清单与待取快递预览">
-              </figure>
-            </div>
-            <div class="bento-copy">
-              <h3 class="h3">五款桌面小组件</h3>
-              <p class="body">今日安排、今日课表、待办清单、待取快递与下一件事，设置页实时预览并一键添加。</p>
-            </div>
-          </article>
-
-          <article class="bento-card">
-            <div class="bento-well">
-              <figure class="shot shot--crop" data-shot="appearance">
-                <img src="./assets/shot-appearance.webp" alt="薄荷广工外观设置真机截图：六套预设主题色与深浅模式切换">
-              </figure>
-            </div>
-            <div class="bento-copy">
-              <h3 class="h3">六套预设，深浅双模式</h3>
-              <p class="body">薄荷、蜜桃、薰衣草、天空、玫瑰、柠檬六套配色，也支持壁纸取色，小组件同步跟随。</p>
-            </div>
-          </article>
-        </div>
-
-        <div class="sys-grid">
-          <div class="sys-item">
-            <h3 class="h3">上课自动勿扰</h3>
-            <p>按节次自动静音，下课恢复响铃。</p>
-          </div>
-          <div class="sys-item">
-            <h3 class="h3">快递通知解析</h3>
-            <p>本机识别取件短信与通知，自动出码。</p>
-          </div>
-          <div class="sys-item">
-            <h3 class="h3">系统日历互通</h3>
-            <p>与原生系统日历双向同步，不污染撤销记录。</p>
-          </div>
-          <div class="sys-item">
-            <h3 class="h3">保活自检指引</h3>
-            <p>识别小米、OPPO、vivo、华为机型，只给本机要改的 3 步。</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Band 5 · 电脑端与 AI 开放能力 -->
-    <section class="band band-tint" id="open">
-      <div class="wrap open-grid">
-        <div class="open-copy">
-          <h2 class="h2">默认纯本地，<br>按需连电脑与 AI</h2>
-          <p class="lead">不登录就能用完全部功能并本地备份；需要大屏排课或跨设备同步时再打开。</p>
-          <ul class="open-list" id="openList">
-            <li>
-              <button type="button" class="open-item is-on" data-open-idx="0">
-                <b>本地 MCP（17530 端口）</b>
-                <span>内置 QuickJS 沙箱，AI 改日程前先预览，随时可撤销。</span>
-              </button>
-            </li>
-            <li>
-              <button type="button" class="open-item" data-open-idx="1">
-                <b>局域网 Web 管理</b>
-                <span>同一 Wi-Fi 下用电脑浏览器排课改待办，闲置自动停服。</span>
-              </button>
-            </li>
-            <li>
-              <button type="button" class="open-item" data-open-idx="2">
-                <b>Go 自建同步服务</b>
-                <span>单二进制跑在自有服务器或软路由，数据完全留给自己。</span>
-              </button>
-            </li>
-          </ul>
-        </div>
-
-        <div class="open-stage">
-          <div class="pill-tabs pill-tabs--3" id="openTabs" role="tablist" aria-label="电脑端与 AI 接入方式">
-            <span class="pill-thumb" aria-hidden="true"></span>
-            <button type="button" role="tab" id="otab-mcp" aria-controls="o-mcp" aria-selected="true" class="is-on">本地 MCP</button>
-            <button type="button" role="tab" id="otab-lan" aria-controls="o-lan" aria-selected="false" tabindex="-1">局域网 Web</button>
-            <button type="button" role="tab" id="otab-sync" aria-controls="o-sync" aria-selected="false" tabindex="-1">Go 自建同步</button>
-          </div>
-
-          <div class="open-panel" id="o-mcp" role="tabpanel" aria-labelledby="otab-mcp">
-            <p class="body">默认仅监听本机 <code>127.0.0.1:17530</code>，配合 <code>adb forward</code> 或开启局域网监听接入。</p>
-            <div class="code">
-              <div class="code-bar">
-                <span class="code-name">mcp-client-config.json</span>
-                <button type="button" class="copy-btn" data-copy-target="c-mcp"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M15 9V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v5a3 3 0 0 0 3 3h2"/></svg><span>复制</span></button>
+        <div class="dl-sheet">
+          <div class="dl-row dl-row--rec">
+            <div class="dl-info">
+              <div class="dl-title">
+                <span class="abi-name mono">arm64-v8a</span>
+                <span class="tag-rec">推荐</span>
               </div>
-              <pre><code id="c-mcp"><span class="tk-p">{</span>
-  <span class="tk-k">"mcpServers"</span><span class="tk-p">: {</span>
-    <span class="tk-k">"mintcal"</span><span class="tk-p">: {</span>
-      <span class="tk-k">"url"</span><span class="tk-p">:</span> <span class="tk-s">"http://127.0.0.1:17530/mcp"</span><span class="tk-p">,</span>
-      <span class="tk-k">"headers"</span><span class="tk-p">: {</span>
-        <span class="tk-k">"Authorization"</span><span class="tk-p">:</span> <span class="tk-s">"Bearer &lt;在 App 里复制的令牌&gt;"</span>
-      <span class="tk-p">}</span>
-    <span class="tk-p">}</span>
-  <span class="tk-p">}</span>
-<span class="tk-p">}</span></code></pre>
+              <p>现代 64 位 Android 主力机型（近六年绝大多数手机均适用）</p>
+            </div>
+            <div class="dl-act">
+              <span class="dl-size mono" title="4,007,057 字节">3.82 MiB</span>
+              <a class="btn btn-primary btn-sm" href="https://github.com/xihale/mintcal/releases/download/v0.0.1-beta.2/MintCal-0.0.1-beta.2-arm64-v8a.apk">下载 APK</a>
             </div>
           </div>
 
-          <div class="open-panel" id="o-lan" role="tabpanel" aria-labelledby="otab-lan" hidden>
-            <p class="body">同一 Wi-Fi 或热点下，在设置里打开共享服务即可访问。</p>
-            <div class="code">
-              <div class="code-bar">
-                <span class="code-name">局域网电脑端管理</span>
-                <button type="button" class="copy-btn" data-copy-target="c-lan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M15 9V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v5a3 3 0 0 0 3 3h2"/></svg><span>复制</span></button>
+          <div class="dl-row">
+            <div class="dl-info">
+              <div class="dl-title">
+                <span class="abi-name mono">armeabi-v7a</span>
               </div>
-              <pre><code id="c-lan"><span class="tk-c"># 1. 手机与电脑连接同一个 Wi-Fi 或热点</span>
-<span class="tk-c"># 2. App：设置 → 局域网电脑端管理 → 开启共享服务</span>
-<span class="tk-c"># 3. 电脑浏览器打开 App 显示的地址</span>
-<span class="tk-s">http://&lt;手机局域网 IP&gt;:&lt;App 显示的端口&gt;/</span></code></pre>
+              <p>32 位老旧 Android 设备兼容包，安装包更轻巧</p>
+            </div>
+            <div class="dl-act">
+              <span class="dl-size mono" title="3,739,113 字节">3.57 MiB</span>
+              <a class="btn btn-tonal btn-sm" href="https://github.com/xihale/mintcal/releases/download/v0.0.1-beta.2/MintCal-0.0.1-beta.2-armeabi-v7a.apk">下载 APK</a>
             </div>
           </div>
 
-          <div class="open-panel" id="o-sync" role="tabpanel" aria-labelledby="otab-sync" hidden>
-            <p class="body">仓库自带 Go + SQLite 服务端与 Web 界面，支持 Docker Compose 一键跑起。</p>
-            <div class="code">
-              <div class="code-bar">
-                <span class="code-name">terminal</span>
-                <button type="button" class="copy-btn" data-copy-target="c-sync"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M15 9V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v5a3 3 0 0 0 3 3h2"/></svg><span>复制</span></button>
+          <div class="dl-row">
+            <div class="dl-info">
+              <div class="dl-title">
+                <span class="abi-name mono">universal</span>
               </div>
-              <pre><code id="c-sync"><span class="tk-c"># Docker 部署（推荐）</span>
-git clone https://github.com/xihale/mintcal.git
-cd mintcal/server
-docker compose up -d
-docker compose logs mintcal | grep 管理员
-
-<span class="tk-c"># 或本地运行（需 Go 1.26+）</span>
-go run ./cmd/mintcal-server
-
-<span class="tk-c"># 将云端 MCP 接入 Claude Code</span>
-claude mcp add --transport http mintcal https://<span class="tk-s">你的域名</span>/mcp \
-  --header "Authorization: Bearer &lt;token&gt;"</code></pre>
+              <p>全架构通用安装包，不确定手机架构时可直接选择</p>
+            </div>
+            <div class="dl-act">
+              <span class="dl-size mono" title="6,533,358 字节">6.23 MiB</span>
+              <a class="btn btn-tonal btn-sm" href="https://github.com/xihale/mintcal/releases/download/v0.0.1-beta.2/MintCal-0.0.1-beta.2-universal.apk">下载 APK</a>
             </div>
           </div>
         </div>
-      </div>
-    </section>
 
-    <!-- Band 6 · 收尾 CTA -->
-    <section class="band closing" id="get">
-      <div class="wrap">
-        <div class="closing-card">
-          <img class="closing-mark" src="./assets/logo.svg" alt="" width="44" height="44">
-          <h2 class="h2">把这一学期的日程，安顿干净</h2>
-          <p class="lead">开源免费（AGPL-3.0），支持 Android 8.0 及以上设备。</p>
-          <div class="cta-row cta-row--center">
-            <a class="btn btn-primary btn-lg" href="https://github.com/xihale/mintcal/releases/latest">
-              <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>
-              <span>下载 Android APK</span>
-            </a>
-            <a class="btn btn-tonal btn-lg" href="https://github.com/xihale/mintcal/releases">查看 Releases</a>
-          </div>
-          <p class="closing-note">不注册、无广告，教务账号仅通过 Android Keystore 加密留在你的手机里。</p>
+        <div class="dl-foot">
+          <a href="https://github.com/xihale/mintcal/releases/tag/v0.0.1-beta.2">v0.0.1-beta.2 发布说明</a>
+          <a href="https://github.com/xihale/mintcal/releases/latest">GitHub Releases 总览</a>
+          <a href="https://github.com/xihale/mintcal">查看开源代码（AGPL-3.0）</a>
         </div>
       </div>
     </section>
   </main>
 
   <footer class="footer">
-    <div class="wrap footer-grid">
+    <div class="wrap footer-in">
       <div class="footer-brand">
-        <a class="brand brand--dark" href="#top"><img src="./assets/logo.svg" alt="" width="30" height="30"><span>薄荷广工 MintCal</span></a>
-        <p>广工人的本地优先校园日程工具。</p>
-        <p class="footer-ver">v0.0.1-beta.1，支持 Android 8.0+</p>
+        <img src="./assets/logo.svg" alt="" width="22" height="22">
+        <span>薄荷广工 MintCal</span>
+        <span class="footer-sep" aria-hidden="true">/</span>
+        <span class="footer-note">AGPL-3.0 · Android 8.0+</span>
       </div>
-      <div class="footer-col">
-        <h2>项目与文档</h2>
-        <a href="https://github.com/xihale/mintcal">GitHub 仓库</a>
-        <a href="https://github.com/xihale/mintcal/blob/main/docs/architecture.md">架构说明</a>
-        <a href="https://github.com/xihale/mintcal/blob/main/DESIGN.md">视觉与组件规范</a>
-        <a href="https://github.com/xihale/mintcal/tree/main/server">自建同步服务端</a>
-      </div>
-      <div class="footer-col">
-        <h2>下载与协议</h2>
-        <a href="https://github.com/xihale/mintcal/releases">Releases APK</a>
-        <a href="https://github.com/xihale/mintcal/blob/main/LICENSE">AGPL-3.0 协议</a>
+      <div class="footer-links">
+        <a href="https://github.com/xihale/mintcal">GitHub</a>
+        <a href="https://github.com/xihale/mintcal/releases/latest">Releases</a>
+        <a href="https://github.com/xihale/mintcal/blob/main/DESIGN.md">设计规范</a>
         <a href="https://github.com/xihale/mintcal/issues">反馈问题</a>
       </div>
     </div>
