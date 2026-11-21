@@ -769,9 +769,8 @@
     <string name="mcp_lan_ip_unavailable">未检测到 Wi‑Fi 局域网地址</string>
     <string name="about_tagline">广工学子的课表 · 日程 · 待办</string>
     <!-- Wave 2 UX & Parity -->
-    <string name="quick_add_remove_time">移除时间：%1$s</string>
-    <string name="quick_add_remove_remind">移除提醒：%1$s</string>
-    <string name="quick_add_remove_repeat">移除重复：%1$s</string>
+    <string name="quick_add_new_list">+ 新清单</string>
+    <string name="quick_add_new_tag">+ 新标签</string>
     <string name="todo_clear_filter">清除筛选</string>
     <string name="todo_done_truncated">仅显示最近 %1$d 项，共 %2$d 项</string>
     <string name="event_detail_convert">转为待办编辑</string>

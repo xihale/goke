@@ -30,25 +30,21 @@
             android:textSize="15sp"
             android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/sched_week"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:background="@drawable/widget_pill_bg"
-            android:paddingBottom="1dp"
-            android:paddingEnd="7dp"
-            android:paddingStart="7dp"
-            android:paddingTop="1dp"
-            android:textColor="@color/widget_pill_fg"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
-
         <FrameLayout
             android:layout_width="0dp"
             android:layout_height="1dp"
             android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/sched_week"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:fontFeatureSettings="tnum"
+            android:maxLines="1"
+            android:textColor="@color/widget_muted"
+            android:textSize="12sp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <TextView

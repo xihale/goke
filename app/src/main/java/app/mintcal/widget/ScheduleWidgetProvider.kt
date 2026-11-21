@@ -182,6 +182,8 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
             }
 
             views.setOnClickPendingIntent(R.id.sched_header, openTimetable)
+            views.setOnClickPendingIntent(R.id.sched_empty, openTimetable)
+            views.setOnClickPendingIntent(R.id.sched_more, openTimetable)
             views.setOnClickPendingIntent(R.id.widget_root, openTimetable)
             return views
         }

@@ -569,8 +569,12 @@ private fun TodayWidgetPreview(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(ctx.monthDayWeekday(today), style = typography.titleSmall, fontWeight = FontWeight.Bold)
             if (weekBadge != null) {
-                Spacer(Modifier.width(6.dp))
-                Tag(weekBadge, scheme.primaryContainer, scheme.onPrimaryContainer)
+                Text(
+                    " · $weekBadge",
+                    style = typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
             }
             Spacer(Modifier.weight(1f))
             PreviewAddPill()
@@ -631,11 +635,15 @@ private fun ScheduleWidgetPreview(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(ctx.monthDayWeekday(today), style = typography.titleSmall, fontWeight = FontWeight.Bold)
-            if (weekBadge != null) {
-                Spacer(Modifier.width(6.dp))
-                Tag(weekBadge, scheme.primaryContainer, scheme.onPrimaryContainer)
-            }
             Spacer(Modifier.weight(1f))
+            if (weekBadge != null) {
+                Text(
+                    weekBadge,
+                    style = typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
         }
         if (courses.isNotEmpty()) {
             courses.forEach { item ->

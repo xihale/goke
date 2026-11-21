@@ -88,7 +88,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -137,13 +136,14 @@ import app.mintcal.ui.components.mintPressScale
 import app.mintcal.ui.dueLabel
 import app.mintcal.ui.formatRooms
 import app.mintcal.ui.hm
+import app.mintcal.ui.screens.QuickAddComposer
 import app.mintcal.ui.screens.QuickOverride
+import app.mintcal.ui.screens.QuickPanel
 import app.mintcal.ui.screens.TokenHighlight
 import app.mintcal.ui.screens.WhenPanel
 import app.mintcal.ui.screens.WhenPick
 import app.mintcal.ui.screens.buildQuickTasks
 import app.mintcal.ui.screens.freqLabel
-import app.mintcal.ui.screens.remindLabel
 import app.mintcal.ui.screens.tokenRanges
 import app.mintcal.ui.theme.MintCalTheme
 import app.mintcal.ui.theme.MintTheme
@@ -586,14 +586,6 @@ internal fun WidgetOverlayRoot(
     }
 }
 
-private fun priorityTokenRes(v: Int): Int =
-    when (v) {
-        3 -> R.string.priority_3
-        2 -> R.string.priority_2
-        else -> R.string.priority_1
-    }
-
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OverlayQuickAddCard(
     snap: Snapshot,
@@ -612,7 +604,7 @@ private fun OverlayQuickAddCard(
     val linkedCourse = remember(snap, initialCourseId) { initialCourseId?.let { id -> snap.courses.firstOrNull { it.id == id } } }
 
     var text by remember(initialText) { mutableStateOf(initialText) }
-    var toolPanel by remember { mutableStateOf<OverlayQuickPanel?>(null) }
+    var toolPanel by remember { mutableStateOf<QuickPanel?>(null) }
     var whenPanel by remember { mutableStateOf(false) }
     var panelWhen by remember { mutableStateOf<WhenPick?>(null) }
     var panelRemind by remember { mutableStateOf<Int?>(null) }
@@ -728,225 +720,42 @@ private fun OverlayQuickAddCard(
         onCommit(cs, msg)
     }
 
-    val daySet = parsed?.due != null || panelWhen != null
-    val panelWhenLabel =
-        panelWhen?.let { wp ->
-            val base = ctx.dueLabel(wp.date.atStartOfDay(), false, now.toLocalDate())
-            when {
-                wp.start == null -> base
-                wp.block -> "$base ${wp.start.hm()}–${wp.end?.hm().orEmpty()}"
-                else -> "$base ${wp.start.hm()}"
-            }
-        }
+    val hasBodyText = parsed != null && !(parsed.tokens.isNotEmpty() && parsed.title == text.trim())
 
-    if (linkedCourse != null) {
-        Tag(
-            linkedCourse.name,
-            colors.bg(linkedCourse.colorIndex),
-            colors.fg(linkedCourse.colorIndex),
-            modifier = Modifier.padding(bottom = 2.dp),
-        )
-    }
-
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp),
-    ) {
-        BasicTextField(
-            value = text,
-            onValueChange = { text = it },
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester)
-                    .padding(vertical = 12.dp),
-            textStyle =
-                MaterialTheme.typography.titleLarge.copy(
-                    color = scheme.onSurface,
-                    fontWeight = FontWeight.Normal,
-                ),
-            cursorBrush = SolidColor(scheme.primary),
-            visualTransformation = highlight,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { submit() }),
-            maxLines = 4,
-        )
-        if (text.isEmpty()) {
-            Text(
-                stringResource(R.string.quick_add_prompt),
-                modifier = Modifier.padding(start = 3.dp, top = 12.dp, bottom = 12.dp).clearAndSetSemantics {},
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Normal),
-                color = scheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-
-    AnimatedVisibility(
-        visible = toolPanel == OverlayQuickPanel.PRIORITY,
-        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-    ) {
-        SegmentedPill(
-            options =
-                listOf(
-                    3 to stringResource(R.string.priority_3),
-                    2 to stringResource(R.string.priority_2),
-                    1 to stringResource(R.string.priority_1),
-                    0 to stringResource(R.string.priority_0),
-                ),
-            selected = parsed?.priority ?: 0,
-            onSelect = { v ->
-                rewriteToken(setOf(QuickTokenKind.PRIORITY), if (v == 0) null else "!" + ctx.getString(priorityTokenRes(v)))
-                toolPanel = null
-            },
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-    }
-
-    AnimatedVisibility(
-        visible = toolPanel == OverlayQuickPanel.LIST,
-        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-    ) {
-        FlowRow(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 132.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            snap.lists.sortedBy { it.sort }.forEach { l ->
-                ChipPill("#${l.name}", on = parsed?.listName == l.name) {
-                    rewriteToken(setOf(QuickTokenKind.LIST), "#${l.name}")
-                    toolPanel = null
-                }
-            }
-        }
-    }
-
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        OverlayIconBtn(
-            icon = Icons.Rounded.Event,
-            contentDescription = stringResource(R.string.detail_editor_pick_date),
-            tint = if (daySet) scheme.primary else scheme.onSurfaceVariant,
-            onClick = { whenPanel = true },
-        )
-        OverlayIconBtn(
-            icon = Icons.Rounded.Flag,
-            contentDescription = stringResource(R.string.label_priority),
-            tint = colors.priorityColor(parsed?.priority ?: 0) ?: scheme.onSurfaceVariant,
-            onClick = { toolPanel = if (toolPanel == OverlayQuickPanel.PRIORITY) null else OverlayQuickPanel.PRIORITY },
-        )
-        OverlayIconBtn(
-            icon = Icons.Rounded.Inbox,
-            contentDescription = stringResource(R.string.label_list),
-            tint = if (parsed?.listName != null) scheme.primary else scheme.onSurfaceVariant,
-            onClick = {
-                if (snap.lists.isEmpty()) {
-                    rewriteToken(emptySet(), "#")
-                } else {
-                    toolPanel = if (toolPanel == OverlayQuickPanel.LIST) null else OverlayQuickPanel.LIST
-                }
-            },
-        )
-        Spacer(Modifier.weight(1f))
-        OverlayIconBtn(
-            icon = Icons.Rounded.OpenInFull,
-            contentDescription = stringResource(R.string.widget_overlay_expand_app),
-            tint = scheme.onSurfaceVariant,
-            onClick = { onExpand(text) },
-        )
-        val canAdd = parsed != null
-        val addLabel = stringResource(R.string.widgets_add_action)
-        Box(
-            modifier =
-                Modifier
-                    .padding(start = 4.dp)
-                    .minimumInteractiveComponentSize()
-                    .clip(CircleShape)
-                    .mintClickable(enabled = canAdd, pressedScale = 0.96f, role = Role.Button) { submit() }
-                    .semantics { contentDescription = addLabel },
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(if (canAdd) scheme.primary else scheme.surfaceVariant),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Rounded.Check,
-                    null,
-                    tint = if (canAdd) scheme.onPrimary else scheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-    }
-
-    AnimatedVisibility(
-        visible = panelWhenLabel != null || panelRemind != null || panelFreq != null,
-        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-    ) {
-        FlowRow(
-            Modifier.padding(end = 6.dp, top = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            if (panelWhenLabel != null) {
-                val removeWhenDesc = stringResource(R.string.quick_add_remove_time, panelWhenLabel)
-                Tag(
-                    "$panelWhenLabel ×",
-                    scheme.primaryContainer,
-                    scheme.onPrimaryContainer,
-                    Modifier
-                        .minimumInteractiveComponentSize()
-                        .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelWhen = null }
-                        .semantics { contentDescription = removeWhenDesc },
-                )
-            }
-            if (panelRemind != null) {
-                val rLabel = remindLabel(panelRemind)
-                val removeRemindDesc = stringResource(R.string.quick_add_remove_remind, rLabel)
-                Tag(
-                    "$rLabel ×",
-                    scheme.secondaryContainer,
-                    scheme.onSecondaryContainer,
-                    Modifier
-                        .minimumInteractiveComponentSize()
-                        .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelRemind = null }
-                        .semantics { contentDescription = removeRemindDesc },
-                )
-            }
-            if (panelFreq != null) {
-                val fLabel = freqLabel(panelFreq, panelUntil, panelInterval, panelByDays, panelWhen?.date, byMonths = panelByMonths)
-                val removeRepeatDesc = stringResource(R.string.quick_add_remove_repeat, fLabel)
-                Tag(
-                    "$fLabel ×",
-                    scheme.tertiaryContainer,
-                    scheme.onTertiaryContainer,
-                    Modifier
-                        .minimumInteractiveComponentSize()
-                        .mintClickable(pressedScale = 0.96f, role = Role.Button) {
-                            panelFreq = null
-                            panelUntil = null
-                            panelByDays = emptySet()
-                            panelByMonths = emptySet()
-                        }.semantics { contentDescription = removeRepeatDesc },
-                )
-            }
-        }
-    }
+    QuickAddComposer(
+        snap = snap,
+        now = now,
+        text = text,
+        onTextChange = { text = it },
+        parsed = parsed,
+        highlight = highlight,
+        focusRequester = focusRequester,
+        toolPanel = toolPanel,
+        onToolPanelChange = { toolPanel = it },
+        panelWhen = panelWhen,
+        panelRemind = panelRemind,
+        panelFreq = panelFreq,
+        panelInterval = panelInterval,
+        panelByDays = panelByDays,
+        panelByMonths = panelByMonths,
+        linkedCourse = linkedCourse,
+        expandLabel = stringResource(R.string.widget_overlay_expand_app),
+        onExpand = { onExpand(text) },
+        submitLabel = stringResource(R.string.widgets_add_action),
+        canSubmit = hasBodyText,
+        onSubmit = { submit() },
+        onOpenWhenPanel = { whenPanel = true },
+        onClearWhenOverrides = {
+            panelWhen = null
+            panelRemind = null
+            panelPersistent = false
+            panelFreq = null
+            panelUntil = null
+            panelByDays = emptySet()
+            panelByMonths = emptySet()
+        },
+        onRewriteToken = ::rewriteToken,
+    )
 
     if (whenPanel) {
         WhenPanel(

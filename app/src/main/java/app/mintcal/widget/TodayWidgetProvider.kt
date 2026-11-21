@@ -290,9 +290,11 @@ class TodayWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_title, ctx.monthDayWeekday(today))
             val weekBadge = WidgetKit.weekBadge(ctx, snap?.live()?.currentSemester, today)
             if (weekBadge != null) {
+                views.setViewVisibility(R.id.today_week_sep, View.VISIBLE)
                 views.setViewVisibility(R.id.today_week, View.VISIBLE)
                 views.setTextViewText(R.id.today_week, weekBadge)
             } else {
+                views.setViewVisibility(R.id.today_week_sep, View.GONE)
                 views.setViewVisibility(R.id.today_week, View.GONE)
             }
             views.setRemoteAdapter(
@@ -309,7 +311,10 @@ class TodayWidgetProvider : AppWidgetProvider() {
                     PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
                 ),
             )
-            views.setOnClickPendingIntent(R.id.today_header, WidgetKit.mainActivityIntent(ctx, 20, DeepLinks.todayUri()))
+            val openToday = WidgetKit.mainActivityIntent(ctx, 20, DeepLinks.todayUri())
+            views.setOnClickPendingIntent(R.id.today_header, openToday)
+            views.setOnClickPendingIntent(R.id.today_empty, openToday)
+            views.setOnClickPendingIntent(R.id.widget_root, openToday)
             views.setOnClickPendingIntent(R.id.today_add, WidgetKit.overlayIntent(ctx, 21, WidgetOverlayActivity.addIntent(ctx)))
             return views
         }

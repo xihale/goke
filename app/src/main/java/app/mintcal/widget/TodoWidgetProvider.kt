@@ -111,7 +111,10 @@ class TodoWidgetProvider : AppWidgetProvider() {
                     PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
                 ),
             )
-            views.setOnClickPendingIntent(R.id.widget_header, WidgetKit.mainActivityIntent(ctx, 10, DeepLinks.todoUri()))
+            val openTodo = WidgetKit.mainActivityIntent(ctx, 10, DeepLinks.todoUri())
+            views.setOnClickPendingIntent(R.id.widget_header, openTodo)
+            views.setOnClickPendingIntent(R.id.widget_empty, openTodo)
+            views.setOnClickPendingIntent(R.id.widget_root, openTodo)
             views.setOnClickPendingIntent(R.id.widget_add, WidgetKit.overlayIntent(ctx, 11, WidgetOverlayActivity.addIntent(ctx)))
             return views
         }

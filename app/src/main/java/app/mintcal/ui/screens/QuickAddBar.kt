@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -37,15 +38,18 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.NotificationsNone
 import androidx.compose.material.icons.rounded.OpenInFull
+import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -67,10 +71,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -85,6 +91,7 @@ import androidx.compose.ui.unit.dp
 import app.mintcal.R
 import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
+import app.mintcal.core.model.Course
 import app.mintcal.core.model.Freq
 import app.mintcal.core.model.Recurrence
 import app.mintcal.core.model.Snapshot
@@ -94,6 +101,7 @@ import app.mintcal.core.model.TaskList
 import app.mintcal.core.time.SemesterCalendar
 import app.mintcal.core.todo.Bucket
 import app.mintcal.core.todo.QuickAdd
+import app.mintcal.core.todo.QuickAddResult
 import app.mintcal.core.todo.QuickBatchItem
 import app.mintcal.core.todo.QuickToken
 import app.mintcal.core.todo.QuickTokenKind
@@ -117,10 +125,10 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 
 /** 工具栏就地展开的选择面板（不弹浮层，键盘不动）。 */
-private enum class QuickPanel { PRIORITY, LIST }
+internal enum class QuickPanel { PRIORITY, LIST, TAG, MORE }
 
 /** 优先级档位的快捷语法文字：`!高` / `!中` / `!低`，与 [QuickAdd] 的解析口径一致。 */
-private fun priorityToken(v: Int): Int =
+internal fun priorityToken(v: Int): Int =
     when (v) {
         3 -> R.string.priority_3
         2 -> R.string.priority_2
@@ -370,16 +378,14 @@ internal fun QuickAddSheet(
             ),
         )
     }
-    val daySet = parsed?.due != null || defaultBucket != null || anchorDate != null || panelWhen != null
-    val panelWhenLabel =
-        panelWhen?.let { wp ->
-            val base = ctx.dueLabel(wp.date.atStartOfDay(), false, now.toLocalDate())
-            when {
-                wp.start == null -> base
-                wp.block -> "$base ${wp.start.hm()}–${wp.end?.hm().orEmpty()}"
-                else -> "$base ${wp.start.hm()}"
-            }
+    val defaultDateLabel =
+        when {
+            anchorDate != null -> ctx.dueLabel(anchorDate.atStartOfDay(), false, now.toLocalDate())
+            defaultBucket == Bucket.TODAY -> stringResource(R.string.today)
+            else -> null
         }
+    val defaultListLabel = remember(snap.lists, listFilter) { listFilter?.let { id -> snap.lists.firstOrNull { it.id == id }?.name } }
+    val hasBodyText = parsed != null && !(parsed.tokens.isNotEmpty() && parsed.title == text.trim())
 
     Box(modifier.fillMaxSize()) {
         // 遮罩：点空白 = 空白直接收起，有草稿先确认放弃。压浅一点，列表还看得见。
@@ -404,218 +410,42 @@ internal fun QuickAddSheet(
                     thickness = 0.5.dp,
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
                 )
-                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 8.dp)) {
-                    // 标题：详细编辑同款素面大字输入
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp),
-                    ) {
-                        BasicTextField(
-                            value = text,
-                            onValueChange = { text = it },
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(focus)
-                                    .padding(vertical = 12.dp),
-                            textStyle =
-                                MaterialTheme.typography.titleLarge.copy(
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Normal,
-                                ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            singleLine = true,
-                            visualTransformation = highlight,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = { finish() }),
-                        )
-                        if (text.isEmpty()) {
-                            Text(
-                                stringResource(R.string.quick_add_prompt),
-                                Modifier.padding(vertical = 12.dp),
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Normal),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                    AnimatedVisibility(
-                        visible = toolPanel == QuickPanel.PRIORITY,
-                        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-                    ) {
-                        SegmentedPill(
-                            options =
-                                listOf(
-                                    3 to stringResource(R.string.priority_3),
-                                    2 to stringResource(R.string.priority_2),
-                                    1 to stringResource(R.string.priority_1),
-                                    0 to stringResource(R.string.priority_0),
-                                ),
-                            selected = parsed?.priority ?: 0,
-                            onSelect = { v ->
-                                rewrite(setOf(QuickTokenKind.PRIORITY), if (v == 0) null else "!" + ctx.getString(priorityToken(v)))
-                                toolPanel = null
-                            },
-                            modifier = Modifier.padding(bottom = 8.dp),
-                        )
-                    }
-                    AnimatedVisibility(
-                        visible = toolPanel == QuickPanel.LIST,
-                        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-                    ) {
-                        FlowRow(
-                            Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 132.dp)
-                                .verticalScroll(rememberScrollState())
-                                .padding(bottom = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            snap.lists.sortedBy { it.sort }.forEach { l ->
-                                ChipPill("#" + l.name, on = parsed?.listName == l.name) {
-                                    rewrite(setOf(QuickTokenKind.LIST), "#" + l.name)
-                                    toolPanel = null
-                                }
-                            }
-                        }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { whenPanel = true }) {
-                            Icon(
-                                Icons.Rounded.Event,
-                                stringResource(R.string.detail_editor_pick_date),
-                                tint = if (daySet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        IconButton(onClick = { toolPanel = if (toolPanel == QuickPanel.PRIORITY) null else QuickPanel.PRIORITY }) {
-                            Icon(
-                                Icons.Rounded.Flag,
-                                stringResource(R.string.label_priority),
-                                tint = colors.priorityColor(parsed?.priority ?: 0) ?: MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        // 清单按钮常驻：还没有自定义清单时点它插入 #，现场输名字即建清单
-                        IconButton(onClick = {
-                            if (snap.lists.isEmpty()) {
-                                rewrite(emptySet(), "#")
-                            } else {
-                                toolPanel = if (toolPanel == QuickPanel.LIST) null else QuickPanel.LIST
-                            }
-                        }) {
-                            Icon(Icons.Rounded.Inbox, stringResource(R.string.label_list), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Spacer(Modifier.weight(1f))
-                        IconButton(onClick = { openDetail() }) {
-                            Icon(Icons.Rounded.OpenInFull, stringResource(R.string.detail_editor_full_edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        // 确定：点了才落库；没写正文（如只点了优先级/清单标签）置灰
-                        val hasBodyText = parsed != null && !(parsed.tokens.isNotEmpty() && parsed.title == text.trim())
-                        val canAdd = hasBodyText
-                        val confirmLabel = stringResource(R.string.confirm)
-                        Box(
-                            modifier =
-                                Modifier
-                                    .padding(start = 4.dp)
-                                    .minimumInteractiveComponentSize()
-                                    .clip(CircleShape)
-                                    .mintClickable(enabled = canAdd, pressedScale = 0.96f, role = Role.Button) { finish() }
-                                    .semantics { contentDescription = confirmLabel },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(if (canAdd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    Icons.Rounded.Check,
-                                    null,
-                                    tint =
-                                        if (canAdd) {
-                                            MaterialTheme.colorScheme.onPrimary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                        }
-                    }
-                    AnimatedVisibility(
-                        visible = panelWhenLabel != null || panelRemind != null || panelFreq != null,
-                        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-                    ) {
-                        FlowRow(
-                            Modifier.padding(end = 6.dp, top = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            if (panelWhenLabel != null) {
-                                val removeWhenDesc = stringResource(R.string.quick_add_remove_time, panelWhenLabel)
-                                Tag(
-                                    "$panelWhenLabel ×",
-                                    MaterialTheme.colorScheme.primaryContainer,
-                                    MaterialTheme.colorScheme.onPrimaryContainer,
-                                    Modifier
-                                        .minimumInteractiveComponentSize()
-                                        .mintClickable(pressedScale = 0.96f, role = Role.Button) {
-                                            panelWhen = null
-                                            panelRemind = null
-                                            panelPersistent = false
-                                            panelFreq = null
-                                            panelUntil = null
-                                            panelByDays = emptySet()
-                                            panelByMonths = emptySet()
-                                        }.semantics {
-                                            contentDescription = removeWhenDesc
-                                        },
-                                )
-                            }
-                            if (panelRemind != null) {
-                                val rLabel = remindLabel(panelRemind)
-                                val removeRemindDesc = stringResource(R.string.quick_add_remove_remind, rLabel)
-                                Tag(
-                                    "$rLabel ×",
-                                    MaterialTheme.colorScheme.secondaryContainer,
-                                    MaterialTheme.colorScheme.onSecondaryContainer,
-                                    Modifier
-                                        .minimumInteractiveComponentSize()
-                                        .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelRemind = null }
-                                        .semantics {
-                                            contentDescription = removeRemindDesc
-                                        },
-                                )
-                            }
-                            if (panelFreq != null) {
-                                val fLabel = freqLabel(panelFreq, panelUntil, panelInterval, panelByDays, panelWhen?.date, byMonths = panelByMonths)
-                                val removeRepeatDesc = stringResource(R.string.quick_add_remove_repeat, fLabel)
-                                Tag(
-                                    "$fLabel ×",
-                                    MaterialTheme.colorScheme.tertiaryContainer,
-                                    MaterialTheme.colorScheme.onTertiaryContainer,
-                                    Modifier
-                                        .minimumInteractiveComponentSize()
-                                        .mintClickable(pressedScale = 0.96f, role = Role.Button) {
-                                            panelFreq = null
-                                            panelUntil = null
-                                            panelByDays = emptySet()
-                                            panelByMonths = emptySet()
-                                        }.semantics {
-                                            contentDescription = removeRepeatDesc
-                                        },
-                                )
-                            }
-                        }
-                    }
+                Column(Modifier.padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 8.dp)) {
+                    QuickAddComposer(
+                        snap = snap,
+                        now = now,
+                        text = text,
+                        onTextChange = { text = it },
+                        parsed = parsed,
+                        highlight = highlight,
+                        focusRequester = focus,
+                        toolPanel = toolPanel,
+                        onToolPanelChange = { toolPanel = it },
+                        panelWhen = panelWhen,
+                        panelRemind = panelRemind,
+                        panelFreq = panelFreq,
+                        panelInterval = panelInterval,
+                        panelByDays = panelByDays,
+                        panelByMonths = panelByMonths,
+                        defaultDateLabel = defaultDateLabel,
+                        defaultListLabel = defaultListLabel,
+                        expandLabel = stringResource(R.string.detail_editor_full_edit),
+                        onExpand = { openDetail() },
+                        submitLabel = stringResource(R.string.confirm),
+                        canSubmit = hasBodyText,
+                        onSubmit = { finish() },
+                        onOpenWhenPanel = { whenPanel = true },
+                        onClearWhenOverrides = {
+                            panelWhen = null
+                            panelRemind = null
+                            panelPersistent = false
+                            panelFreq = null
+                            panelUntil = null
+                            panelByDays = emptySet()
+                            panelByMonths = emptySet()
+                        },
+                        onRewriteToken = ::rewrite,
+                    )
                 }
             }
         }
@@ -660,6 +490,425 @@ internal fun QuickAddSheet(
             onDismiss = { confirmDiscard = false },
             danger = true,
         )
+    }
+}
+
+/**
+ * 快速添加的统一输入体 + 工具栏（应用内浮层与桌面小组件悬浮层共用）：
+ * 右上角展开全屏编辑，中部留白输入区带行内语法着色，底栏单行呈现日期/优先级/标签/清单/更多与发送，
+ * 选中属性直接体现在底栏图标或文案上，不再在下方堆砌胶囊。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun QuickAddComposer(
+    snap: Snapshot,
+    now: LocalDateTime,
+    text: String,
+    onTextChange: (String) -> Unit,
+    parsed: QuickAddResult?,
+    highlight: VisualTransformation,
+    focusRequester: FocusRequester,
+    toolPanel: QuickPanel?,
+    onToolPanelChange: (QuickPanel?) -> Unit,
+    panelWhen: WhenPick?,
+    panelRemind: Int?,
+    panelFreq: Freq?,
+    panelInterval: Int,
+    panelByDays: Set<Int>,
+    panelByMonths: Set<Int>,
+    expandLabel: String,
+    onExpand: () -> Unit,
+    submitLabel: String,
+    canSubmit: Boolean,
+    onSubmit: () -> Unit,
+    onOpenWhenPanel: () -> Unit,
+    onClearWhenOverrides: () -> Unit,
+    onRewriteToken: (Set<QuickTokenKind>, String?) -> Unit,
+    defaultDateLabel: String? = null,
+    defaultListLabel: String? = null,
+    linkedCourse: Course? = null,
+) {
+    val ctx = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val colors = MintTheme.colors
+    val today = now.toLocalDate()
+
+    val existingTags =
+        remember(snap.tasks) {
+            snap.tasks
+                .asSequence()
+                .filter { it.deletedAt == null }
+                .flatMap { it.tags.asSequence() }
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .take(12)
+                .toList()
+        }
+    val activeCourses =
+        remember(snap.courses) {
+            snap.courses.filter { it.deletedAt == null }.take(10)
+        }
+
+    val parsedDue = parsed?.due
+    val whenLabel =
+        when {
+            panelWhen != null -> {
+                val base = ctx.dueLabel(panelWhen.date.atStartOfDay(), false, today)
+                val time = panelWhen.start?.hm()
+                if (time != null) "$base $time" else base
+            }
+
+            parsedDue != null -> {
+                ctx.dueLabel(parsedDue, parsed.dueHasTime, today)
+            }
+
+            panelFreq != null -> {
+                freqLabel(panelFreq, null, panelInterval, panelByDays, null, withUntil = false, byMonths = panelByMonths)
+            }
+
+            panelRemind != null -> {
+                remindLabel(panelRemind)
+            }
+
+            else -> {
+                defaultDateLabel
+            }
+        }
+    val whenActive = panelWhen != null || parsed?.due != null || panelFreq != null || panelRemind != null || defaultDateLabel != null
+
+    val listLabel = parsed?.listName ?: defaultListLabel ?: stringResource(R.string.bucket_inbox)
+    val listActive = parsed?.listName != null || defaultListLabel != null
+
+    val tagActive = parsed?.tags?.isNotEmpty() == true
+    val moreActive = toolPanel == QuickPanel.MORE || parsed?.courseName != null
+
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Column(Modifier.weight(1f)) {
+            if (linkedCourse != null) {
+                Tag(
+                    linkedCourse.name,
+                    colors.bg(linkedCourse.colorIndex),
+                    colors.fg(linkedCourse.colorIndex),
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+            }
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 60.dp),
+            ) {
+                BasicTextField(
+                    value = text,
+                    onValueChange = onTextChange,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester)
+                            .padding(top = 6.dp, bottom = 10.dp),
+                    textStyle =
+                        MaterialTheme.typography.titleLarge.copy(
+                            color = scheme.onSurface,
+                            fontWeight = FontWeight.Normal,
+                        ),
+                    cursorBrush = SolidColor(scheme.primary),
+                    maxLines = 4,
+                    visualTransformation = highlight,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { onSubmit() }),
+                )
+                if (text.isEmpty()) {
+                    Text(
+                        stringResource(R.string.quick_add_prompt),
+                        Modifier
+                            .padding(start = 2.dp, top = 6.dp, bottom = 10.dp)
+                            .clearAndSetSemantics {},
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Normal),
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        Box(
+            modifier =
+                Modifier
+                    .minimumInteractiveComponentSize()
+                    .clip(CircleShape)
+                    .mintClickable(pressedScale = 0.96f, role = Role.Button) { onExpand() }
+                    .semantics { contentDescription = expandLabel },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Rounded.OpenInFull,
+                null,
+                tint = scheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+
+    AnimatedVisibility(
+        visible = toolPanel == QuickPanel.PRIORITY,
+        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+    ) {
+        SegmentedPill(
+            options =
+                listOf(
+                    3 to stringResource(R.string.priority_3),
+                    2 to stringResource(R.string.priority_2),
+                    1 to stringResource(R.string.priority_1),
+                    0 to stringResource(R.string.priority_0),
+                ),
+            selected = parsed?.priority ?: 0,
+            onSelect = { v ->
+                onRewriteToken(setOf(QuickTokenKind.PRIORITY), if (v == 0) null else "!" + ctx.getString(priorityToken(v)))
+                onToolPanelChange(null)
+            },
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+    }
+
+    AnimatedVisibility(
+        visible = toolPanel == QuickPanel.LIST,
+        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+    ) {
+        FlowRow(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 132.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ChipPill(stringResource(R.string.bucket_inbox), on = parsed?.listName == null && defaultListLabel == null) {
+                onRewriteToken(setOf(QuickTokenKind.LIST), null)
+                onToolPanelChange(null)
+            }
+            snap.lists.sortedBy { it.sort }.forEach { l ->
+                ChipPill("#${l.name}", on = parsed?.listName == l.name) {
+                    onRewriteToken(setOf(QuickTokenKind.LIST), "#${l.name}")
+                    onToolPanelChange(null)
+                }
+            }
+            ChipPill(stringResource(R.string.quick_add_new_list), on = false) {
+                onRewriteToken(setOf(QuickTokenKind.LIST), "#")
+                onToolPanelChange(null)
+            }
+        }
+    }
+
+    AnimatedVisibility(
+        visible = toolPanel == QuickPanel.TAG,
+        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+    ) {
+        FlowRow(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 132.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            existingTags.forEach { tag ->
+                val selected = tag in parsed?.tags.orEmpty()
+                ChipPill("@$tag", on = selected) {
+                    if (selected) {
+                        val cleaned = text.replace(Regex("@${Regex.escape(tag)}\\s*"), "").replace(Regex("\\s+"), " ").trimStart()
+                        onTextChange(cleaned)
+                    } else {
+                        onRewriteToken(emptySet(), "@$tag")
+                    }
+                    onToolPanelChange(null)
+                }
+            }
+            ChipPill(stringResource(R.string.quick_add_new_tag), on = false) {
+                onRewriteToken(emptySet(), "@")
+                onToolPanelChange(null)
+            }
+        }
+    }
+
+    AnimatedVisibility(
+        visible = toolPanel == QuickPanel.MORE,
+        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+    ) {
+        FlowRow(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 132.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ChipPill(stringResource(R.string.date_and_repeat), on = panelRemind != null || panelFreq != null) {
+                onToolPanelChange(null)
+                onOpenWhenPanel()
+            }
+            if (panelWhen != null || panelRemind != null || panelFreq != null) {
+                ChipPill(stringResource(R.string.clear_time), on = false) {
+                    onClearWhenOverrides()
+                    onToolPanelChange(null)
+                }
+            }
+            if (linkedCourse == null) {
+                activeCourses.forEach { c ->
+                    val shortName = c.name.replace(" ", "")
+                    val selected = parsed?.courseName?.equals(shortName, ignoreCase = true) == true
+                    ChipPill("/$shortName", on = selected) {
+                        onRewriteToken(setOf(QuickTokenKind.COURSE), if (selected) null else "/$shortName")
+                        onToolPanelChange(null)
+                    }
+                }
+            }
+        }
+    }
+
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        val pickDateDesc = stringResource(R.string.detail_editor_pick_date)
+        Row(
+            modifier =
+                Modifier
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .mintClickable(pressedScale = 0.96f, role = Role.Button) { onOpenWhenPanel() }
+                    .semantics { if (whenLabel == null) contentDescription = pickDateDesc }
+                    .padding(horizontal = 6.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Icon(
+                Icons.Rounded.Event,
+                null,
+                tint = if (whenActive) scheme.primary else scheme.onSurfaceVariant,
+                modifier = Modifier.size(19.dp),
+            )
+            if (whenLabel != null) {
+                Text(
+                    whenLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (whenActive) scheme.primary else scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 96.dp),
+                )
+            }
+            if (panelFreq != null && panelWhen != null) {
+                Icon(Icons.Rounded.Repeat, null, tint = scheme.primary, modifier = Modifier.size(14.dp))
+            }
+            if (panelRemind != null && (panelWhen != null || panelFreq != null)) {
+                Icon(Icons.Rounded.NotificationsNone, null, tint = scheme.primary, modifier = Modifier.size(14.dp))
+            }
+        }
+
+        QuickComposerIconBtn(
+            icon = Icons.Rounded.Flag,
+            contentDescription = stringResource(R.string.label_priority),
+            tint = colors.priorityColor(parsed?.priority ?: 0) ?: scheme.onSurfaceVariant,
+            onClick = { onToolPanelChange(if (toolPanel == QuickPanel.PRIORITY) null else QuickPanel.PRIORITY) },
+        )
+
+        QuickComposerIconBtn(
+            icon = Icons.Outlined.LocalOffer,
+            contentDescription = stringResource(R.string.field_tags),
+            tint = if (tagActive) scheme.secondary else scheme.onSurfaceVariant,
+            onClick = {
+                if (existingTags.isEmpty()) {
+                    onRewriteToken(emptySet(), "@")
+                    onToolPanelChange(null)
+                } else {
+                    onToolPanelChange(if (toolPanel == QuickPanel.TAG) null else QuickPanel.TAG)
+                }
+            },
+        )
+
+        val listDesc = stringResource(R.string.label_list)
+        Row(
+            modifier =
+                Modifier
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .mintClickable(pressedScale = 0.96f, role = Role.Button) {
+                        if (snap.lists.isEmpty()) {
+                            onRewriteToken(emptySet(), "#")
+                            onToolPanelChange(null)
+                        } else {
+                            onToolPanelChange(if (toolPanel == QuickPanel.LIST) null else QuickPanel.LIST)
+                        }
+                    }.semantics { contentDescription = listDesc }
+                    .padding(horizontal = 6.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Icon(
+                Icons.Rounded.Inbox,
+                null,
+                tint = if (listActive) scheme.primary else scheme.onSurfaceVariant,
+                modifier = Modifier.size(19.dp),
+            )
+            Text(
+                listLabel,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (listActive) scheme.primary else scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 76.dp),
+            )
+        }
+
+        QuickComposerIconBtn(
+            icon = Icons.Rounded.MoreHoriz,
+            contentDescription = stringResource(R.string.more_options),
+            tint = if (moreActive) scheme.primary else scheme.onSurfaceVariant,
+            onClick = { onToolPanelChange(if (toolPanel == QuickPanel.MORE) null else QuickPanel.MORE) },
+        )
+
+        Spacer(Modifier.weight(1f))
+
+        Box(
+            modifier =
+                Modifier
+                    .minimumInteractiveComponentSize()
+                    .clip(CircleShape)
+                    .mintClickable(enabled = canSubmit, pressedScale = 0.96f, role = Role.Button) { onSubmit() }
+                    .semantics { contentDescription = submitLabel },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.AutoMirrored.Rounded.Send,
+                null,
+                tint = if (canSubmit) scheme.primary else scheme.onSurfaceVariant.copy(alpha = 0.38f),
+                modifier = Modifier.size(22.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickComposerIconBtn(
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .mintClickable(pressedScale = 0.96f, role = Role.Button, onClick = onClick)
+                .semantics { this.contentDescription = contentDescription },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(19.dp))
     }
 }
 

@@ -227,11 +227,19 @@ class WidgetsAndCalendarSyncTest {
                     items = todayRows.map { TodayWidgetService.itemView(app, it) },
                 )
             assertEquals("第 3 周", todayView.findViewById<TextView>(R.id.today_week).text.toString())
+            assertEquals(null, todayView.findViewById<TextView>(R.id.today_week).background)
+            assertTrue(todayView.findViewById<View>(R.id.widget_root).hasOnClickListeners())
+            assertTrue(todayView.findViewById<View>(R.id.today_empty).hasOnClickListeners())
 
-            // 4. 今日课表小组件
+            // 4. 今日课表小组件（含无课日点击背景直达课表）
             val schedView = renderRemoteViews("widget_schedule", ScheduleWidgetProvider.build(app, snap, st, now), 320, 210)
             assertEquals("第 3 周", schedView.findViewById<TextView>(R.id.sched_week).text.toString())
+            assertEquals(null, schedView.findViewById<TextView>(R.id.sched_week).background)
             assertEquals("高等数学", schedView.findViewById<TextView>(R.id.sched_name0).text.toString())
+            assertTrue(schedView.findViewById<View>(R.id.widget_root).hasOnClickListeners())
+            val emptySchedView = renderRemoteViews("widget_schedule_empty", ScheduleWidgetProvider.build(app, snap, st, now.plusDays(1)), 320, 210)
+            assertTrue(emptySchedView.findViewById<View>(R.id.sched_empty).hasOnClickListeners())
+            assertTrue(emptySchedView.findViewById<View>(R.id.widget_root).hasOnClickListeners())
 
             // 5. 下一件事 4×1 胶囊小组件 + 深链路由
             val nextSummary = NextWidgetProvider.pickSummary(app, snap, st, now)

@@ -107,7 +107,10 @@ class ParcelWidgetProvider : AppWidgetProvider() {
                     PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
                 ),
             )
-            views.setOnClickPendingIntent(R.id.parcel_header, WidgetKit.mainActivityIntent(ctx, 30, DeepLinks.parcelUri()))
+            val openParcel = WidgetKit.mainActivityIntent(ctx, 30, DeepLinks.parcelUri())
+            views.setOnClickPendingIntent(R.id.parcel_header, openParcel)
+            views.setOnClickPendingIntent(R.id.parcel_empty, openParcel)
+            views.setOnClickPendingIntent(R.id.widget_root, openParcel)
             views.setOnClickPendingIntent(R.id.parcel_add, WidgetKit.overlayIntent(ctx, 31, WidgetOverlayActivity.addIntent(ctx)))
             return views
         }
