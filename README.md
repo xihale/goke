@@ -2,6 +2,12 @@
 
 开源、本地优先的 Android 校园日程工具，将 **课表、日历、待办与取件提醒** 整合在一个轻量应用里。支持广东工业大学教务同步、局域网电脑端管理、本地/云端 MCP 接入外部 AI 助手，以及可选的自建多端同步服务。
 
+## 界面预览
+
+| 周课表 | 今日与取件 | 成绩与均绩 | 桌面小组件 |
+| :---: | :---: | :---: | :---: |
+| ![周课表](landing/assets/shot-timetable.webp) | ![今日与取件](landing/assets/shot-today.webp) | ![成绩与均绩](landing/assets/shot-grades.webp) | ![桌面小组件](landing/assets/shot-widgets.webp) |
+
 ## 功能概览
 
 - **四核心视图**：底部导航常驻 **今日 · 课表 · 日历 · 待办**，Material 3 风格，支持多套植物主题、自定义主题色与 Android 12+ 动态取色。
@@ -20,6 +26,7 @@
 | `core/` | 纯 Kotlin 核心领域逻辑 |
 | `script/` | QuickJS 脚本沙箱（用于批量修改与预览） |
 | `server/` | Go + SQLite 自建同步服务与内嵌 Web 端 |
+| `landing/` | 静态零构建产品介绍页（可直接部署 GitHub Pages） |
 | `benchmark/` | 真机 Macrobenchmark 性能基准测试 |
 
 ## 构建与测试
