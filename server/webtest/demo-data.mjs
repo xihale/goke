@@ -24,14 +24,14 @@ export function seedDemo(state) {
   C('西方哲学导论', '教4-310', 4, 10, 12, 2);
   const today = U.todayNum();
   const dt = (d, hm) => `${U.fmtDate(today + d)}T${hm}`;
-  recs.push(M.newEvent({ title: '社团例会', location: '学生活动中心', start: dt(0, '20:00'), end: dt(0, '21:30'), colorIndex: 4 }, now));
-  recs.push(M.newEvent({ title: '高数期中考试', location: '教1-101', kind: 'EXAM', start: dt(3, '14:30'), end: dt(3, '16:30'), colorIndex: 6 }, now));
-  recs.push(M.newEvent({ title: '校运动会', allDay: true, start: dt(5, '00:00'), end: dt(6, '00:00'), colorIndex: 1 }, now));
-  recs.push(M.newEvent({ title: '周会', start: dt(-3, '19:00'), end: dt(-3, '20:00'), recurrence: M.newRecurrence('WEEKLY'), colorIndex: 2 }, now));
   const l1 = M.newList({ name: '学习', colorIndex: 1, sort: 0 }, now);
   const l2 = M.newList({ name: '生活', colorIndex: 4, sort: 1 }, now);
   recs.push(l1, l2);
   const T = (f) => recs.push(M.newTask(f, now));
+  recs.push({ ...M.newTask({ title: '社团例会', listId: l2.id, note: '学生活动中心', due: dt(0, '21:30'), dueHasTime: true, estimateMinutes: 90, tags: ['社团'] }, now), blockStart: dt(0, '20:00'), blockMinutes: 90 });
+  recs.push({ ...M.newTask({ title: '高数期中考试', listId: l1.id, note: '教1-101', priority: 3, due: dt(3, '16:30'), dueHasTime: true, estimateMinutes: 120, tags: ['考试'] }, now), blockStart: dt(3, '14:30'), blockMinutes: 120 });
+  T({ title: '校运动会', startDate: U.fmtDate(today + 5), due: dt(5, '23:59'), tags: ['活动'] });
+  recs.push({ ...M.newTask({ title: '周会', due: dt(-3, '20:00'), dueHasTime: true, estimateMinutes: 60, repeat: M.newRecurrence('WEEKLY') }, now), blockStart: dt(-3, '19:00'), blockMinutes: 60 });
   T({ title: '交概率论第三章作业', listId: l1.id, priority: 3, due: dt(0, '00:00') });
   T({ title: '数据结构实验报告', listId: l1.id, priority: 2, due: dt(2, '23:00'), dueHasTime: true });
   T({ title: '预习下周英语课文', listId: l1.id, priority: 1, due: dt(1, '00:00') });

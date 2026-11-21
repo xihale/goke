@@ -40,6 +40,7 @@ export function createApi({ base = '', getToken = () => null, onUnauthorized = (
   }
 
   return {
+    mode: () => request('GET', '/api/v1/mode', undefined, { auth: false }),
     login: (username, password, deviceName) => request('POST', '/api/v1/login', { username, password, deviceName }, { auth: false }),
     logout: () => request('POST', '/api/v1/logout'),
     me: () => request('GET', '/api/v1/me'),

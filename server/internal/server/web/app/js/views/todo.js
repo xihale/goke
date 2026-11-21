@@ -71,7 +71,7 @@ export const todoView = {
       h('button', { type: 'button', class: 'nav-chip add-list', onclick: () => openListForm() }, icon('plus', 18), h('span', { class: 'nav-chip-label' }, '新建清单')));
 
     const input = h('input', {
-      class: 'input quick-input', type: 'text', placeholder: list ? `添加到「${list.name}」，回车确认` : '添加待办，回车确认', 'aria-label': '快速添加待办', maxLength: 120, dataset: { keep: 'quick-add' },
+      class: 'input quick-input', type: 'text', placeholder: list ? `添加到「${list.name}」` : '添加待办', 'aria-label': '快速添加待办', maxLength: 120, dataset: { keep: 'quick-add' },
     });
     const quick = h('form', {
       class: 'quick-add',

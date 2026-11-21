@@ -3,7 +3,7 @@
 import { ApiError, NetworkError, createApi } from './api.js';
 import { ctx } from './ctx.js';
 import { h, icon, toast } from './dom.js';
-import { createStore } from './store.js';
+import { createStore, syncPollMs } from './store.js';
 import { applyTheme, loadTheme } from './theme.js';
 import { calendarView } from './views/calendar.js';
 import { settingsView, syncText } from './views/settings.js';
@@ -21,10 +21,11 @@ let token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY)
 let shell = null;
 let route = 'today';
 let timers = [];
+let lanMode = false;
 
 const api = createApi({ getToken: () => token, onUnauthorized: () => logout(true) });
 const store = createStore({ api, storage: localStorage });
-Object.assign(ctx, { store, api, rerender: render, go, logout });
+Object.assign(ctx, { store, api, lanMode: false, rerender: render, go, logout });
 
 applyTheme(loadTheme());
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { applyTheme(loadTheme()); if (shell) render(); });
@@ -112,11 +113,60 @@ function buildShell(user) {
 function showLogin(message = '') {
   stopTimers();
   shell = null;
+  const err = h('p', { class: 'form-error', role: 'alert', hidden: !message }, message);
+  const btn = h('button', { type: 'submit', class: 'btn primary wide-btn' }, lanMode ? '连接' : '登录');
+
+  if (lanMode) {
+    const pin = h('input', {
+      class: 'input',
+      name: 'pin',
+      type: 'text',
+      inputmode: 'numeric',
+      autocomplete: 'one-time-code',
+      maxlength: 6,
+      pattern: '[0-9]{6}',
+      placeholder: '输入 6 位数字连接码',
+      required: true,
+      autocapitalize: 'none',
+      spellcheck: false,
+    });
+    const form = h('form', { class: 'login-card card', onsubmit: async (e) => {
+      e.preventDefault();
+      err.hidden = true;
+      btn.disabled = true;
+      try {
+        const device = `网页（${navigator.userAgentData?.platform || navigator.platform || '浏览器'}）`;
+        const res = await api.login('lan', pin.value.trim(), device);
+        token = res.token;
+        localStorage.removeItem(TOKEN_KEY);
+        sessionStorage.removeItem(TOKEN_KEY);
+        localStorage.setItem(TOKEN_KEY, token);
+        const loggedUser = res.user?.mode ? res.user : { ...res.user, mode: 'lan' };
+        localStorage.setItem(USER_KEY, JSON.stringify(loggedUser));
+        startApp(loggedUser);
+      } catch (ex) {
+        err.textContent = ex instanceof NetworkError ? '无法连接手机服务，请检查网络或确认共享仍处于开启状态' : ex.message || '连接码错误';
+        err.hidden = false;
+        btn.disabled = false;
+        pin.value = '';
+        pin.focus();
+      }
+    } },
+    h('img', { class: 'login-logo', src: '/app/icon.svg', alt: '', width: 72, height: 72 }),
+    h('h1', {}, '薄荷广工'),
+    h('p', { class: 'login-sub' }, '手机局域网直连：输入手机端显示的 6 位连接码，实时管理课表与待办'),
+    h('label', { class: 'field' }, h('span', { class: 'field-label' }, '6 位连接码（PIN）'), pin),
+    err, btn,
+    h('p', { class: 'hint center' }, '连接码仅本次共享有效；20 分钟无操作手机端将自动停止。'));
+    root.replaceChildren(h('main', { class: 'login' }, form));
+    document.title = '连接手机 · 薄荷广工';
+    pin.focus();
+    return;
+  }
+
   const user = h('input', { class: 'input', name: 'username', autocomplete: 'username', required: true, autocapitalize: 'none', spellcheck: false });
   const pass = h('input', { class: 'input', name: 'password', type: 'password', autocomplete: 'current-password', required: true });
   const keepBox = h('input', { type: 'checkbox', checked: true });
-  const err = h('p', { class: 'form-error', role: 'alert', hidden: !message }, message);
-  const btn = h('button', { type: 'submit', class: 'btn primary wide-btn' }, '登录');
   const form = h('form', { class: 'login-card card', onsubmit: async (e) => {
     e.preventDefault();
     err.hidden = true;
@@ -167,17 +217,22 @@ async function logout(auto = false) {
 
 // ---------- 启动 ----------
 
-function stopTimers() { timers.forEach(clearInterval); timers = []; }
+function stopTimers() {
+  timers.forEach(clearInterval);
+  timers = [];
+  store.stopPolling();
+}
 
 function startApp(user) {
   ctx.user = user;
+  ctx.lanMode = lanMode || user?.mode === 'lan';
   store.load(user);
   route = routeFromHash();
   shell = buildShell(user);
   render();
   store.sync().catch(() => {});
   stopTimers();
-  timers.push(setInterval(() => { if (!document.hidden) store.sync().catch(() => {}); }, 30000));
+  store.startPolling(syncPollMs(user, ctx.lanMode), () => !document.hidden);
   timers.push(setInterval(() => { if (!document.hidden) render(); }, 60000)); // 「现在」随时间推移
 }
 
@@ -200,13 +255,30 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'n' && view.add) { e.preventDefault(); view.add(); }
 });
 
+async function detectMode() {
+  try {
+    const info = await api.mode();
+    lanMode = info?.mode === 'lan';
+  } catch {
+    lanMode = false;
+  }
+  ctx.lanMode = lanMode;
+  return lanMode;
+}
+
 async function boot() {
+  await detectMode();
   if (!token) { showLogin(); return; }
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem(USER_KEY) || 'null'); } catch (e) { cached = null; }
   try {
     const me = await api.me();
-    const user = { id: me.id, username: me.username, role: me.role };
+    const mode = me.mode || (lanMode ? 'lan' : undefined);
+    const user = { id: me.id, username: me.username, role: me.role, ...(mode ? { mode } : {}) };
+    if (user.mode === 'lan') {
+      lanMode = true;
+      ctx.lanMode = true;
+    }
     localStorage.setItem(USER_KEY, JSON.stringify(user));
     if (token) startApp(user);
   } catch (e) {

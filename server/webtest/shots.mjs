@@ -41,7 +41,7 @@ all.push(...await session('m', { width: 390, height: 844 }, 'light', routes, asy
   await page.waitForTimeout(300);
   await page.click('.fab');
   await page.waitForTimeout(400);
-  await page.click('.add-item:nth-child(3)');
+  await page.click('.add-item:nth-child(2)');
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${out}/${n}-taskform.png` });
 }));

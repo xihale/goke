@@ -63,7 +63,7 @@ export const todayView = {
         card));
     }
     if (!ag.timed.length && !ag.allDay.length) {
-      timeline.append(emptyState('coffee', sem ? '今天没有课程和日程' : '还没有学期，先创建一个开始排课表吧',
+      timeline.append(emptyState('coffee', sem ? '今天没有课程和日程' : '还没有学期',
         sem ? null : h('button', { class: 'btn primary', type: 'button', onclick: () => openSemesterForm({ create: true }) }, '创建学期')));
     }
 

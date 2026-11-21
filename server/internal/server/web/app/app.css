@@ -134,6 +134,7 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--primary)
 .check-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; cursor: pointer; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .grid-3 { display: grid; grid-template-columns: 1.1fr 1.4fr 1.4fr; gap: 10px; }
+.stack-sm { display: flex; flex-direction: column; gap: 8px; }
 .seg { display: flex; padding: 4px; gap: 4px; background: var(--surface-variant); border-radius: 16px; }
 .seg-btn { flex: 1; min-height: 38px; padding: 6px 10px; border: 0; border-radius: 12px; background: transparent; color: var(--on-surface-variant); white-space: nowrap; }
 .seg-btn[aria-pressed="true"] { background: var(--surface); color: var(--on-surface); font-weight: 700; box-shadow: var(--shadow-sm); }
@@ -268,7 +269,10 @@ dialog.sheet::backdrop { background: rgba(14, 26, 22, .5); backdrop-filter: blur
 .tt-time span { font-size: 9px; color: var(--on-surface-variant); }
 .tt-cell { border-top: 1px solid var(--outline-variant); }
 .tt-cell.today { background: color-mix(in srgb, var(--primary) 6%, transparent); }
-.tt-cell.addable:hover { background: var(--primary-container); cursor: copy; }
+.tt-cell.addable { cursor: pointer; }
+@media (hover: hover) {
+  .tt-cell.addable:hover { background: var(--primary-container); cursor: copy; }
+}
 .tt-block {
   position: relative; z-index: 1; justify-self: start; width: calc(100% / var(--lanes) - 4px); margin: 2px 2px 2px calc(100% / var(--lanes) * var(--lane) + 2px);
   padding: 5px 5px; border: 0; border-radius: 12px; text-align: left; display: flex; flex-direction: column; gap: 2px; overflow: hidden; line-height: 1.25;
@@ -363,6 +367,12 @@ dialog.sheet::backdrop { background: rgba(14, 26, 22, .5); backdrop-filter: blur
 .theme-swatch[aria-pressed="true"] { border-color: var(--primary); font-weight: 700; }
 .custom-color { display: inline-flex; align-items: center; gap: 10px; }
 .color-input { width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: none; }
+.code-box {
+  margin: 0; padding: 12px 14px; border-radius: 14px; background: var(--surface-variant); color: var(--on-surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5;
+  overflow-x: auto; user-select: all;
+}
+.copy-scratch { position: fixed; left: -9999px; top: 0; opacity: 0; }
 
 /* ---------- 登录 ---------- */
 .login { min-height: 100dvh; display: grid; place-items: center; padding: 20px; }

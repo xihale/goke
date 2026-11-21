@@ -70,7 +70,7 @@ export const timetableView = {
     const s = state();
     const { store } = ctx;
     if (!s) {
-      return emptyState('grid', '还没有学期。创建学期后就可以添加课程了',
+      return emptyState('grid', '还没有学期',
         h('button', { class: 'btn primary', type: 'button', onclick: () => openSemesterForm({ create: true }) }, '创建学期'));
     }
     const { sem, cal, today, week } = s;
@@ -96,16 +96,16 @@ export const timetableView = {
       grid.append(h('div', { class: `tt-head${day === today ? ' today' : ''}`, style: { 'grid-column': d + 1, 'grid-row': 1 } },
         h('b', {}, WEEKDAYS[d - 1]), h('span', {}, md(day))));
     }
-    const canHover = matchMedia('(hover: hover)').matches;
+    let touchMoved = false;
     cal.periods.forEach((p, i) => {
       grid.append(h('div', { class: 'tt-time', style: { 'grid-row': i + 2, 'grid-column': 1 } }, h('b', {}, p.index), h('span', {}, p.start)));
       for (let d = 1; d <= 7; d++) {
         const day = cal.dateOf(week, d);
         grid.append(h('div', {
-          class: `tt-cell${day === today ? ' today' : ''}${canHover ? ' addable' : ''}${i > 0 && (p.index === 5 || p.index === 10) ? ' gap' : ''}`,
+          class: `tt-cell${day === today ? ' today' : ''} addable${i > 0 && (p.index === 5 || p.index === 10) ? ' gap' : ''}`,
           style: { 'grid-row': i + 2, 'grid-column': d + 1 },
-          title: canHover ? '添加课程' : null,
-          onclick: canHover ? () => openCourseForm({ day: d, period: p.index }) : null,
+          title: '添加课程',
+          onclick: () => { if (!touchMoved) openCourseForm({ day: d, period: p.index }); },
         }));
       }
     });
@@ -126,13 +126,24 @@ export const timetableView = {
 
     const wrap = h('div', { class: 'tt-wrap' }, grid);
     let sx = 0; let sy = 0;
-    wrap.addEventListener('touchstart', (e) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+    wrap.addEventListener('touchstart', (e) => {
+      const t = e.touches[0];
+      if (!t) return;
+      sx = t.clientX; sy = t.clientY; touchMoved = false;
+    }, { passive: true });
+    wrap.addEventListener('touchmove', (e) => {
+      const t = e.touches[0];
+      if (!t) return;
+      if (Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) touchMoved = true;
+    }, { passive: true });
     wrap.addEventListener('touchend', (e) => {
-      const dx = e.changedTouches[0].clientX - sx;
-      const dy = e.changedTouches[0].clientY - sy;
+      const t = e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - sx;
+      const dy = t.clientY - sy;
       if (Math.abs(dx) > 70 && Math.abs(dy) < 50) go(dx < 0 ? 1 : -1);
     }, { passive: true });
-    const note = occs.length ? null : h('p', { class: 'tt-empty' }, '这一周没有课。点网格里的空白处，或右上角「添加」来加课程。');
+    const note = occs.length ? null : h('p', { class: 'tt-empty' }, '这一周没有课');
     return h('div', { class: 'tt' }, bar, wrap, note);
   },
 };

@@ -5,6 +5,13 @@ import { NetworkError, ApiError } from './api.js';
 import { liveView, toWire } from './model.js';
 
 const PUSH_BATCH = 500;
+export const DEFAULT_POLL_MS = 30000;
+export const LAN_POLL_MS = 4000;
+
+/** 根据会话模式返回可见时的轮询同步间隔（毫秒）。 */
+export function syncPollMs(user, lanMode = false) {
+  return lanMode || user?.mode === 'lan' ? LAN_POLL_MS : DEFAULT_POLL_MS;
+}
 
 export function createStore({ api, storage = null, clock = () => Date.now(), debounceMs = 400, retryMs = 15000 } = {}) {
   const records = new Map();
@@ -20,6 +27,7 @@ export function createStore({ api, storage = null, clock = () => Date.now(), deb
   let timer = null;
   let retryTimer = null;
   let persistTimer = null;
+  let pollTimer = null;
   const listeners = new Set();
 
   const emit = (kind) => listeners.forEach((fn) => fn(kind));
@@ -52,9 +60,22 @@ export function createStore({ api, storage = null, clock = () => Date.now(), deb
     lastSync = null;
   }
 
+  function stopPolling() {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  function startPolling(intervalMs = DEFAULT_POLL_MS, isVisible = () => true) {
+    stopPolling();
+    pollTimer = setInterval(() => {
+      if (isVisible()) sync().catch(() => {});
+    }, intervalMs);
+  }
+
   function load(user) {
     clearTimeout(timer);
     clearTimeout(retryTimer);
+    stopPolling();
     reset();
     userKey = `mintcal-cache:${user.id}`;
     if (storage) {
@@ -74,6 +95,7 @@ export function createStore({ api, storage = null, clock = () => Date.now(), deb
     clearTimeout(timer);
     clearTimeout(retryTimer);
     clearTimeout(persistTimer);
+    stopPolling();
     if (clearCache && storage && userKey) storage.removeItem(userKey);
     userKey = null;
     reset();
@@ -202,6 +224,8 @@ export function createStore({ api, storage = null, clock = () => Date.now(), deb
     load,
     unload,
     sync,
+    startPolling,
+    stopPolling,
     put,
     get: (id) => records.get(id),
     view() {

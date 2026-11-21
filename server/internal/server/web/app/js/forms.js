@@ -8,7 +8,7 @@ import {
 } from './formkit.js';
 import {
   GDUT_PERIODS, WeekSets, courseConflicts, currentSemester, newCourse, newEvent, newException, newList, newRecurrence,
-  newSemester, newTask, semesterCalendar, subtasks, tombstone, touch,
+  newSemester, newTask, restore, semesterCalendar, subtasks, tombstone, touch,
 } from './model.js';
 import { removeCourse, removeList, removeRecords, removeTask, setCurrentSemester } from './actions.js';
 import {
@@ -34,7 +34,7 @@ export function openSemesterForm({ semester, create = false } = {}) {
   const { store } = ctx;
   const cur = semester || currentSemester(store.view());
   const isNew = create || !semester;
-  const name = textInput(isNew ? '' : cur.name, { placeholder: '例如：大一下', maxLength: 40 });
+  const name = textInput(isNew ? '' : cur.name, { placeholder: '学期名称', maxLength: 40 });
   const monday = dateInput(isNew ? fmtDate(mondayOf(todayNum())) : cur.week1Monday);
   const weeks = numberInput(isNew ? 20 : cur.totalWeeks, { min: 1, max: 60 });
   const copy = h('input', { type: 'checkbox', checked: !!cur });
@@ -51,7 +51,7 @@ export function openSemesterForm({ semester, create = false } = {}) {
   renderPeriods();
   const fields = [
     field('学期名称', name),
-    field('第 1 周的周一', monday, '选其他日期会自动对齐到当周周一'),
+    field('第 1 周的周一', monday, '自动对齐到周一'),
     field('总周数', weeks),
     group('节次时间', h('div', {}, list, h('div', { class: 'row-actions left' },
       h('button', { type: 'button', class: 'btn tonal small', onclick: () => { periods.push({ index: periods.length + 1, start: '', end: '' }); renderPeriods(); } }, '添加一节'),
@@ -115,7 +115,7 @@ export function openCourseForm({ course, day, period } = {}) {
   const remind = remindSelect(c?.remindMinutes, '默认（按设置）');
   const color = colorSwatches(c?.colorIndex ?? store.view().courses.length % 8);
   const chosen = new Set(c ? c.weeks : WeekSets.all(Math.min(16, sem.totalWeeks)));
-  const weekText = textInput(WeekSets.format([...chosen]), { placeholder: '如 1-16、1,3,5-9、2-16双', 'aria-label': '周次' });
+  const weekText = textInput(WeekSets.format([...chosen]), { placeholder: '1-16、1,3,5-9、2-16双', 'aria-label': '周次' });
   const grid = h('div', { class: 'week-grid' });
   const conflict = h('p', { class: 'warn', hidden: true });
   const syncWeeks = (fromText) => {
@@ -218,7 +218,7 @@ function openRescheduleForm(c, week, existing) {
   const nd = select(WEEKDAY_OPTIONS, ex?.newDayOfWeek ?? c.dayOfWeek);
   const sp = select(popts, ex?.newStartPeriod ?? c.startPeriod);
   const ep = select(popts, ex?.newEndPeriod ?? c.endPeriod);
-  const room = textInput(ex?.newRoom ?? '', { placeholder: c.room ? `不填则沿用「${c.room}」` : '教室（可不填）' });
+  const room = textInput(ex?.newRoom ?? '', { placeholder: c.room ? `沿用「${c.room}」` : '教室' });
   formSheet({
     title: `调课：第 ${week} 周「${c.name}」`,
     fields: [h('div', { class: 'grid-2' }, field('调到', nw), field('星期', nd)), h('div', { class: 'grid-2' }, field('开始节', sp), field('结束节', ep)), field('新教室', room)],
@@ -237,6 +237,29 @@ function openRescheduleForm(c, week, existing) {
 // ---------- 日程 ----------
 
 const FREQ_OPTIONS = [['', '不重复'], ['DAILY', '每天'], ['WEEKLY', '每周'], ['MONTHLY', '每月'], ['YEARLY', '每年']];
+
+export function convertEventToTask(ev, now = Date.now()) {
+  const s0 = parseDateTime(ev.start);
+  const e0 = parseDateTime(ev.end);
+  const timed = !ev.allDay && s0 && e0;
+  const durMin = timed
+    ? Math.min(24 * 60, Math.max(15, (e0.day * 1440 + e0.min) - (s0.day * 1440 + s0.min)))
+    : null;
+  const mergedNote = [ev.note?.trim(), ev.location?.trim()].filter(Boolean).join('\n');
+  return {
+    ...newTask({
+      title: ev.title,
+      note: mergedNote,
+      due: timed ? ev.end : (s0 ? fmtDateTime(s0.day, 23 * 60 + 59) : null),
+      dueHasTime: !!timed,
+      remindMinutes: ev.remindMinutes ?? null,
+      repeat: ev.recurrence ? { ...ev.recurrence } : null,
+    }, now),
+    blockStart: timed ? ev.start : null,
+    blockMinutes: timed ? durMin : null,
+    source: ev.source || 'MANUAL',
+  };
+}
 
 export function openEventForm({ event, date } = {}) {
   const { store } = ctx;
@@ -294,7 +317,27 @@ export function openEventForm({ event, date } = {}) {
       field('备注', note),
       ev?.recurrence ? h('p', { class: 'hint' }, '这是重复日程：修改与删除会作用于整个系列。') : null,
     ],
-    extraActions: ev ? [h('button', { type: 'button', class: 'btn danger-ghost', onclick: async () => { if (await confirmDialog(`删除日程「${ev.title}」${ev.recurrence ? '（整个重复系列）' : ''}？`, '删除', { danger: true })) { document.querySelector('dialog.sheet[open]')?.close(); removeRecords([ev], ev.title); } } }, '删除')] : [],
+    extraActions: ev ? [
+      h('button', {
+        type: 'button',
+        class: 'btn tonal',
+        onclick: () => {
+          const now = Date.now();
+          const task = convertEventToTask(ev, now);
+          const dead = tombstone(ev, now);
+          document.querySelector('dialog.sheet[open]')?.close();
+          store.put(task, dead);
+          toast(`已将「${ev.title}」转为待办`, {
+            action: '撤销',
+            onAction: () => {
+              const t = Date.now();
+              store.put(tombstone(store.get(task.id) || task, t), restore(store.get(ev.id) || ev, t));
+            },
+          });
+        },
+      }, '转为待办'),
+      h('button', { type: 'button', class: 'btn danger-ghost', onclick: async () => { if (await confirmDialog(`删除日程「${ev.title}」${ev.recurrence ? '（整个重复系列）' : ''}？`, '删除', { danger: true })) { document.querySelector('dialog.sheet[open]')?.close(); removeRecords([ev], ev.title); } } }, '删除'),
+    ] : [],
     onSubmit: async () => {
       const t = title.value.trim();
       if (!t) throw new Error('请填写标题');
@@ -335,18 +378,26 @@ export function openTaskForm({ task, listId, due } = {}) {
   const view = store.view();
   const t = task;
   const dueP = t?.due ? parseDateTime(t.due) : null;
+  const blockP = t?.blockStart ? parseDateTime(t.blockStart) : null;
   const title = textInput(t?.title || '', { placeholder: '要做什么？', maxLength: 120 });
   const note = textarea(t?.note || '', { rows: 2 });
   const list = select([['', '无清单'], ...view.lists.map((l) => [l.id, l.name])], t ? t.listId || '' : listId || '');
   const prio = segmented(PRIORITIES, t?.priority || 0);
   const dueDate = dateInput(dueP ? fmtDate(dueP.day) : due != null ? fmtDate(due) : '');
   const dueTime = timeInput(dueP && t.dueHasTime ? fmtTime(dueP.min) : '');
+  const dueBeforeNext = h('input', { type: 'checkbox', checked: !!t?.dueBeforeNextClass });
+  const blockDate = dateInput(blockP ? fmtDate(blockP.day) : '');
+  const blockTime = timeInput(blockP ? fmtTime(blockP.min) : '');
+  const blockDur = numberInput(t?.blockMinutes ?? '', { min: 1, max: 1440, placeholder: '分钟（默认 60）' });
   const est = numberInput(t?.estimateMinutes ?? '', { min: 1, max: 1440, placeholder: '分钟' });
   const remind = remindSelect(t?.remindMinutes);
+  const remindPersistent = h('input', { type: 'checkbox', checked: !!t?.remindPersistent });
   const repeat = select(REPEATS, t?.repeat?.freq || '');
+  const tagsInput = textInput((t?.tags || []).join(', '), { placeholder: '如：学习, 重要（逗号或空格分隔）' });
+  const dropped = h('input', { type: 'checkbox', checked: !!t?.dropped });
   const subs = (t ? subtasks(view.tasks, t.id) : []).map((s) => ({ rec: s, title: s.title, done: s.done, removed: false }));
   const subBox = h('div', { class: 'subtasks' });
-  const subInput = textInput('', { placeholder: '添加子任务，回车确认', 'aria-label': '添加子任务' });
+  const subInput = textInput('', { placeholder: '子任务', 'aria-label': '添加子任务' });
   const renderSubs = () => subBox.replaceChildren(...subs.filter((s) => !s.removed).map((s) => h('div', { class: 'sub-row' },
     h('input', { type: 'checkbox', checked: s.done, 'aria-label': '完成子任务', onchange: (e) => { s.done = e.target.checked; } }),
     h('input', { class: 'input sub-title', type: 'text', value: s.title, 'aria-label': '子任务标题', onchange: (e) => { s.title = e.target.value; } }),
@@ -364,10 +415,17 @@ export function openTaskForm({ task, listId, due } = {}) {
     wide: true,
     fields: [
       field('标题', title),
-      h('div', { class: 'grid-2' }, field('截止日期', dueDate), field('具体时间（可选）', dueTime)),
+      h('div', { class: 'grid-2' }, field('截止日期', dueDate), field('时间', dueTime)),
+      h('label', { class: 'check-row' }, dueBeforeNext, h('span', {}, '课前要交')),
+      group('日历时间块', h('div', { class: 'stack-sm' },
+        h('div', { class: 'grid-2' }, field('日期', blockDate), field('开始时间', blockTime)),
+        field('时长（分钟）', blockDur, '设了日期与开始时间后，会在「今日」和「日历」时间轴占用时间段'))),
       group('优先级', prio.el),
-      h('div', { class: 'grid-2' }, field('清单', list), field('预计耗时（分钟）', est)),
+      h('div', { class: 'grid-2' }, field('清单', list), field('预计分钟', est)),
+      field('标签', tagsInput),
       h('div', { class: 'grid-2' }, field('提醒', remind), field('重复', repeat)),
+      h('label', { class: 'check-row' }, remindPersistent, h('span', {}, '持续提醒')),
+      h('label', { class: 'check-row' }, dropped, h('span', {}, '不做了')),
       field('备注', note),
       group('子任务', h('div', {}, subBox, subInput)),
     ],
@@ -384,13 +442,39 @@ export function openTaskForm({ task, listId, due } = {}) {
         dueStr = fmtDateTime(dd, hasTime ? tm : 0);
       }
       const estimate = est.value ? Number(est.value) : null;
+      let blockStart = null;
+      let blockMinutes = null;
+      if (blockDate.value && !blockTime.value) throw new Error('请填写时间块开始时间');
+      if (!blockDate.value && blockTime.value) throw new Error('请选择时间块日期');
+      if (blockDate.value && blockTime.value) {
+        const bd = parseDate(blockDate.value);
+        const bt = parseTime(blockTime.value);
+        if (Number.isNaN(bd) || Number.isNaN(bt)) throw new Error('时间块日期或时间格式无效');
+        blockStart = fmtDateTime(bd, bt);
+        if (blockDur.value !== '') {
+          const bm = Number(blockDur.value);
+          if (!Number.isInteger(bm) || bm < 1 || bm > 1440) throw new Error('时间块时长需在 1–1440 分钟之间');
+          blockMinutes = bm;
+        } else {
+          blockMinutes = estimate || 60;
+        }
+      }
+      const tags = [...new Set(tagsInput.value.split(/[,，\s]+/).map((s) => s.trim()).filter(Boolean))];
+      const now = Date.now();
+      const isDropped = dropped.checked;
+      const isDone = isDropped ? true : (t?.dropped ? false : !!t?.done);
+      const doneAt = isDropped ? (t?.doneAt || now) : (t?.dropped ? null : (t?.doneAt ?? null));
       const f = {
         title: text, note: note.value, listId: list.value || null, priority: prio.get(), due: dueStr, dueHasTime: hasTime,
+        dueBeforeNextClass: dueBeforeNext.checked,
+        blockStart, blockMinutes,
         estimateMinutes: estimate, remindMinutes: remindValue(remind),
+        remindPersistent: remindPersistent.checked,
+        tags,
+        dropped: isDropped, done: isDone, doneAt,
         repeat: repeat.value ? { ...(t?.repeat || newRecurrence(repeat.value)), freq: repeat.value } : null,
       };
-      const main = t ? touch(t, f) : newTask(f);
-      const now = Date.now();
+      const main = t ? touch(t, f, now) : { ...newTask(f, now), ...f };
       const out = [main];
       subs.forEach((s, i) => {
         const title2 = s.title.trim();
@@ -461,8 +545,7 @@ export function openAddMenu({ date } = {}) {
   const item = (ic, label, desc, fn) => h('button', { type: 'button', class: 'add-item', onclick: pick(fn) }, icon(ic, 24), h('span', {}, h('b', {}, label), h('small', {}, desc)));
   const body = h('div', { class: 'add-menu' },
     h('div', { class: 'sheet-head' }, h('h2', {}, '添加'), h('button', { type: 'button', class: 'icon-btn', 'aria-label': '关闭', onclick: () => d.close() }, icon('x'))),
-    item('calendar', '日程', '有开始和结束时间的安排', () => openEventForm({ date })),
-    item('check', '待办', '要完成的事，可设截止时间', () => openTaskForm({ due: date })),
+    item('check', '待办', '要完成的事，可设截止时间或时间块', () => openTaskForm({ due: date })),
     item('grid', '课程', '添加到课表', () => openCourseForm()));
   const d = openDialog(body, { label: '添加' });
 }
