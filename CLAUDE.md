@@ -6,6 +6,7 @@
 
 冲突时优先级：**实际代码 > `DESIGN.md` > `docs/*`**。
 
+- **代码地图与模块索引**：[CODEMAP.md](CODEMAP.md)（入口、端能力差异、高频文件与检索守则）
 - **设计系统与 UI 约束**：[DESIGN.md](DESIGN.md)（Token 真源、视觉层级、组件库索引、图标/资产、无障碍与改设计检查清单）
 - **工程结构与导航路由**：[docs/architecture.md](docs/architecture.md)（模块划分、目录树、状态流、屏幕 ↔ 文件映射）
 - **构建、测试与 Benchmark**：[docs/testing.md](docs/testing.md)（单测、Robolectric 截图、Spotless、E2E、Macrobenchmark）

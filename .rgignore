@@ -1,0 +1,18 @@
+# High-noise build, lockfile, binary sample, screenshot, and cache paths for ripgrep (rg)
+build/
+*/build/
+.gradle/
+.kotlin/
+.cxx/
+.csearch/
+app/build/shots/
+gradle/wrapper/gradle-wrapper.jar
+server/go.sum
+*.lock
+*.log
+*.png
+*.xlsx
+*.ics
+core/src/test/resources/samples/
+core/src/test/resources/web-records.json
+server/internal/server/web/app/icon-*.png

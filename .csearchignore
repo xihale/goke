@@ -1,0 +1,17 @@
+# Semantic index exclusions for csearch (preserve all real source code & CODEMAP.md)
+# Note: DESIGN.md is excluded here (UI token spec; see CODEMAP.md / CLAUDE.md / rg).
+DESIGN.md
+**/values*/strings.xml
+core/src/test/resources/
+gradle/wrapper/
+server/internal/server/web/app/icon*
+server/go.sum
+app/build/
+build/
+*/build/
+*.lock
+*.log
+*.png
+*.xlsx
+*.ics
+*.jar

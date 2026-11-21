@@ -50,43 +50,43 @@ colors:
   course-mist-fg: "#454F7A"
 typography:
   headline-medium:
-    fontFamily: "Noto Sans SC, sans-serif"
+    fontFamily: "sans-serif"
     fontSize: "26px"
     fontWeight: 600
     lineHeight: 1.23
     letterSpacing: "0em"
   title-large:
-    fontFamily: "Noto Sans SC, sans-serif"
+    fontFamily: "sans-serif"
     fontSize: "22px"
     fontWeight: 600
     lineHeight: 1.27
     letterSpacing: "0em"
   title-medium:
-    fontFamily: "Noto Sans SC, sans-serif"
+    fontFamily: "sans-serif"
     fontSize: "16px"
     fontWeight: 500
     lineHeight: 1.5
     letterSpacing: "0em"
   body-large:
-    fontFamily: "Noto Sans SC, sans-serif"
+    fontFamily: "sans-serif"
     fontSize: "16px"
     fontWeight: 400
     lineHeight: 1.5
     letterSpacing: "0em"
   body-medium:
-    fontFamily: "Noto Sans SC, sans-serif"
+    fontFamily: "sans-serif"
     fontSize: "14px"
     fontWeight: 400
     lineHeight: 1.43
     letterSpacing: "0em"
   label-large:
-    fontFamily: "Noto Sans SC, sans-serif"
+    fontFamily: "sans-serif"
     fontSize: "14px"
     fontWeight: 500
     lineHeight: 1.43
     letterSpacing: "0em"
   label-medium:
-    fontFamily: "Noto Sans SC, sans-serif"
+    fontFamily: "sans-serif"
     fontSize: "12px"
     fontWeight: 500
     lineHeight: 1.33
@@ -200,7 +200,7 @@ components:
 
 ## Typography
 
-全局采用 **Noto Sans SC** 无衬线字族，所有字阶的字距（`letterSpacing`）统一归零（`0em` / `0sp`）以收紧中文排版；时间列与取件码读数保持紧凑对齐。
+全局采用系统默认无衬线字族（按 [ADR-0004](docs/adr/0004-defaults.md) 暂不内置打包字体文件，待后续选定圆润标题字体后再接入），所有字阶的字距（`letterSpacing`）统一归零（`0em` / `0sp`）以收紧中文排版；时间列与取件码读数保持紧凑对齐。
 
 - **无框大标题与主读数（Headline Medium 26px / Title Large 22px, SemiBold）**：用于待办与课程编辑页首行无框标题、今日日期主标题及二级页顶栏标题，靠字重而非边框建立锚点。
 - **行内主体与课程名（Title Medium 16px Medium / Body Large 16px Regular）**：用于课程块标题、无框待办行标题、表单值与设置主行，常规单行或最多两行截断。
@@ -305,7 +305,7 @@ components:
 | `FloatingNavBar` / `MintFab` / `EmptyState` / `ConflictCard` | `Kit.kt` | 68dp 浮动胶囊底栏（3dp 阴影）；primaryContainer 悬浮新建键；空状态；冲突提示卡 |
 | `ConfirmDialog` / `DatePickerDlg` / `TimePickerDlg` / `TimeWheels` | `Kit.kt` | 28dp 圆角对话框；滚轮时间选择（行高 36dp × 5 行） |
 | `mintPressable` / `mintPressScale` / `mintClickable` | `Kit.kt` | 统一按压缩放手势反馈（大行 `0.98f`、紧凑控件 `0.96f`，只在 draw 阶段读动画值） |
-| `AgendaRow` / `TaskRow` / `ParcelCodeHeadline` / `ParcelCodeCopyButton` | `Rows.kt` | 16dp 植物色日程块；无框宣纸待办行；取件码主标题与行尾独立复制按钮 |
+| `AgendaRow` / `TaskRow` / `EventDetailSheet` / `ParcelCodeHeadline` / `ParcelCodeCopyButton` | `Rows.kt` | 16dp 植物色日程块（新建统一收口至 `Task` 时间块）；无框宣纸待办行；历史 `Event` 详情抽屉（支持「转为待办编辑」与删除）；取件码主标题与行尾独立复制按钮 |
 | `TonalField` / `FieldText` / `SegmentedPill` / `ChipChoice` / `ValueRow` / `FormSection` | `FormKit.kt` | 12dp 微底托输入框；无框输入；2–4 项胶囊分段器；流式多选芯片；属性行；表单分组 |
 | `MonthPager` / `DialPickers` / `AttachmentEditor` / `ChangeList` | 同名文件 | 月视图翻页、拨盘选择器、附件编辑器、变更集预览列表 |
 

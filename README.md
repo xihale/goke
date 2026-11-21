@@ -2,7 +2,7 @@
 
 开源、本地优先的 Android 日程工具：**课表 + 日历 + 待办 + 校园取件** 一体化管理。内置广工教务（`jxfw`）课表/考试同步与 QuickJS「高级修改」沙箱，并通过 **本地 MCP** 与 **自建同步服务（含 Web 端与云端 MCP）** 接入外部 AI 助手。
 
-> 工程入口与硬红线见 [CLAUDE.md](CLAUDE.md)，视觉与组件规范见 [DESIGN.md](DESIGN.md)，模块架构见 [docs/architecture.md](docs/architecture.md)，功能规格索引见 [docs/specs/README.md](docs/specs/README.md)。
+> 代码地图见 [CODEMAP.md](CODEMAP.md)，工程入口与硬红线见 [CLAUDE.md](CLAUDE.md)，视觉与组件规范见 [DESIGN.md](DESIGN.md)，模块架构见 [docs/architecture.md](docs/architecture.md)，功能规格索引见 [docs/specs/README.md](docs/specs/README.md)。
 
 ## 核心特性
 
