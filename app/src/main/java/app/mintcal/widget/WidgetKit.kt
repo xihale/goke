@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.core.graphics.ColorUtils
 import app.mintcal.MainActivity
+import app.mintcal.MintCalApp
 import app.mintcal.R
 import app.mintcal.core.model.Semester
 import app.mintcal.core.model.Source
@@ -112,4 +113,26 @@ internal object WidgetKit {
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+
+    fun overlayIntent(
+        ctx: Context,
+        requestCode: Int,
+        intent: Intent,
+    ): PendingIntent =
+        PendingIntent.getActivity(
+            ctx,
+            requestCode,
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+
+    fun refreshAllWidgets(app: MintCalApp) {
+        val snap = app.repo.snapshot.value
+        val st = app.settings.value
+        TodoWidgetProvider.refreshAll(app)
+        ParcelWidgetProvider.refreshAll(app)
+        TodayWidgetProvider.refreshAll(app, snap, st)
+        ScheduleWidgetProvider.refreshAll(app, snap, st)
+        NextWidgetProvider.refreshAll(app, snap, st)
+    }
 }

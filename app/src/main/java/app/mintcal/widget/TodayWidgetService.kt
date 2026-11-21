@@ -100,10 +100,25 @@ class TodayWidgetService : RemoteViewsService() {
             val open =
                 Intent().apply {
                     putExtra(TodoWidgetProvider.EXTRA_OP, TodoWidgetProvider.OP_OPEN)
-                    if (r.taskId != null) {
-                        putExtra(TodoWidgetProvider.EXTRA_TASK_ID, r.taskId)
-                    } else {
-                        putExtra(TodoWidgetProvider.EXTRA_URI, r.targetUri)
+                    when {
+                        r.taskId != null -> {
+                            putExtra(TodoWidgetProvider.EXTRA_TASK_ID, r.taskId)
+                        }
+
+                        r.courseId != null -> {
+                            putExtra(WidgetActionActivity.EXTRA_COURSE_ID, r.courseId)
+                            if (r.courseDate != null) putExtra(WidgetActionActivity.EXTRA_DATE, r.courseDate)
+                            if (r.startPeriod != null) putExtra(WidgetActionActivity.EXTRA_START_PERIOD, r.startPeriod)
+                            if (r.endPeriod != null) putExtra(WidgetActionActivity.EXTRA_END_PERIOD, r.endPeriod)
+                        }
+
+                        r.eventId != null -> {
+                            putExtra(WidgetActionActivity.EXTRA_EVENT_ID, r.eventId)
+                        }
+
+                        else -> {
+                            putExtra(TodoWidgetProvider.EXTRA_URI, r.targetUri)
+                        }
                     }
                 }
             v.setOnClickFillInIntent(R.id.today_item_root, open)

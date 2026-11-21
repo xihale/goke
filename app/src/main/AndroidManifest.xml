@@ -82,6 +82,16 @@
             android:taskAffinity=""
             android:theme="@style/Theme.MintCalTransparent" />
 
+        <!-- 桌面小组件悬浮快速查看 / 快速添加层：不进入主应用即可完成、查看或放大展开 -->
+        <activity
+            android:name=".widget.WidgetOverlayActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.MintCalOverlay" />
+
         <receiver android:name=".notify.TaskActionReceiver" android:exported="false" />
 
         <receiver android:name=".widget.TodoWidgetProvider" android:exported="true" android:label="@string/widget_todo_name">

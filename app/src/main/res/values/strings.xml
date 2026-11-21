@@ -879,6 +879,20 @@
     <string name="widgets_sample_parcel_place">东门菜鸟驿站 · 顺丰</string>
     <string name="widgets_sample_due_today">今天 18:00</string>
     <string name="widgets_sample_due_parcel">今天 22:00</string>
+    <string name="widget_overlay_quick_add">桌面快速添加</string>
+    <string name="widget_overlay_expand_app">展开完整编辑</string>
+    <string name="widget_overlay_open_in_app">在应用内打开</string>
+    <string name="widget_overlay_course_tasks">关联待办</string>
+    <string name="widget_overlay_course_detail">课程详情</string>
+    <string name="widget_overlay_parcel_done">已取件</string>
+    <string name="widget_overlay_parcel_done_toast">已标记「%1$s」取件完成</string>
+    <string name="widget_overlay_task_done">完成</string>
+    <string name="widget_overlay_task_done_toast">已完成「%1$s」</string>
+    <string name="widget_overlay_postpone_tomorrow">顺延到明天</string>
+    <string name="widget_overlay_postpone_toast">已顺延到明天</string>
+    <string name="widget_overlay_deleted_toast">已删除「%1$s」</string>
+    <string name="widget_overlay_subtasks">子任务</string>
+    <string name="widget_overlay_priority_none">无优先级</string>
     <!-- Today overdue tidy handoff -->
     <string name="today_overdue_tidy_hint">积压待办可去待办页批量整理</string>
     <string name="today_overdue_tidy_action">去整理</string>

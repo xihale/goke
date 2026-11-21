@@ -343,6 +343,7 @@ fun resolveColorScheme(
 @Composable
 fun MintCalTheme(
     settings: Settings,
+    transparentBackground: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val dark =
@@ -366,8 +367,12 @@ fun MintCalTheme(
     ) {
         MaterialTheme(colorScheme = scheme, motionScheme = MotionScheme.standard(), shapes = MintShapes, typography = MintTypography) {
             CompositionLocalProvider(LocalIndication provides remember(scheme.primary) { FocusRingIndication(scheme.primary) }) {
-                // 提供默认内容色：没有 Surface 包裹时文字会是黑色，深色模式下看不见
-                androidx.compose.material3.Surface(color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground, content = content)
+                // 提供默认内容色：没有 Surface 包裹时文字会是黑色，深色模式下看不见；悬浮覆盖层需透出底层桌面
+                androidx.compose.material3.Surface(
+                    color = if (transparentBackground) Color.Transparent else MaterialTheme.colorScheme.background,
+                    contentColor = MaterialTheme.colorScheme.onBackground,
+                    content = content,
+                )
             }
         }
     }

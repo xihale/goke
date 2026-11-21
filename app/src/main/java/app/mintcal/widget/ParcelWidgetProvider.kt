@@ -108,7 +108,7 @@ class ParcelWidgetProvider : AppWidgetProvider() {
                 ),
             )
             views.setOnClickPendingIntent(R.id.parcel_header, WidgetKit.mainActivityIntent(ctx, 30, DeepLinks.parcelUri()))
-            views.setOnClickPendingIntent(R.id.parcel_add, WidgetKit.mainActivityIntent(ctx, 31, DeepLinks.addUri()))
+            views.setOnClickPendingIntent(R.id.parcel_add, WidgetKit.overlayIntent(ctx, 31, WidgetOverlayActivity.addIntent(ctx)))
             return views
         }
     }

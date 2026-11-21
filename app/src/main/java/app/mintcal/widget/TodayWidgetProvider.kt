@@ -67,6 +67,11 @@ class TodayWidgetProvider : AppWidgetProvider() {
         val ongoing: Boolean,
         val taskId: String?,
         val targetUri: String,
+        val courseId: String? = null,
+        val eventId: String? = null,
+        val courseDate: String? = null,
+        val startPeriod: Int? = null,
+        val endPeriod: Int? = null,
     )
 
     companion object {
@@ -172,7 +177,11 @@ class TodayWidgetProvider : AppWidgetProvider() {
                                 overdue = false,
                                 ongoing = ongoing,
                                 taskId = null,
-                                targetUri = DeepLinks.timetableUri().toString(),
+                                targetUri = DeepLinks.courseUri(o.course.id).toString(),
+                                courseId = o.course.id,
+                                courseDate = o.date.toString(),
+                                startPeriod = o.startPeriod,
+                                endPeriod = o.endPeriod,
                             )
                     }
 
@@ -191,6 +200,7 @@ class TodayWidgetProvider : AppWidgetProvider() {
                                 ongoing = ongoing,
                                 taskId = null,
                                 targetUri = DeepLinks.todayUri().toString(),
+                                eventId = item.event.id,
                             )
                     }
 
@@ -301,7 +311,7 @@ class TodayWidgetProvider : AppWidgetProvider() {
                 ),
             )
             views.setOnClickPendingIntent(R.id.today_header, WidgetKit.mainActivityIntent(ctx, 20, DeepLinks.todayUri()))
-            views.setOnClickPendingIntent(R.id.today_add, WidgetKit.mainActivityIntent(ctx, 21, DeepLinks.addUri()))
+            views.setOnClickPendingIntent(R.id.today_add, WidgetKit.overlayIntent(ctx, 21, WidgetOverlayActivity.addIntent(ctx)))
             return views
         }
     }

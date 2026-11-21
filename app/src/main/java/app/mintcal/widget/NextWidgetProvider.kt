@@ -58,6 +58,11 @@ class NextWidgetProvider : AppWidgetProvider() {
         val title: String,
         val barColor: Int,
         val uri: Uri,
+        val taskId: String? = null,
+        val courseId: String? = null,
+        val courseDate: String? = null,
+        val startPeriod: Int? = null,
+        val endPeriod: Int? = null,
     )
 
     companion object {
@@ -140,7 +145,11 @@ class NextWidgetProvider : AppWidgetProvider() {
                                 sub = listOfNotNull("${o.start.hm()}–${o.end.hm()}", o.room.takeIf { it.isNotBlank() }).joinToString(" · "),
                                 title = o.course.name,
                                 barColor = WidgetKit.courseFg(ctx, o.course.colorIndex),
-                                uri = DeepLinks.timetableUri(),
+                                uri = DeepLinks.courseUri(o.course.id),
+                                courseId = o.course.id,
+                                courseDate = o.date.toString(),
+                                startPeriod = o.startPeriod,
+                                endPeriod = o.endPeriod,
                             )
                         }
                     }
@@ -153,6 +162,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                                 title = item.task.title,
                                 barColor = WidgetKit.priorityColor(ctx, item.task.priority),
                                 uri = DeepLinks.taskUri(item.task.id),
+                                taskId = item.task.id,
                             )
                         }
                     }
@@ -175,7 +185,11 @@ class NextWidgetProvider : AppWidgetProvider() {
                     sub = o.room.takeIf { it.isNotBlank() },
                     title = o.course.name,
                     barColor = WidgetKit.courseFg(ctx, o.course.colorIndex),
-                    uri = DeepLinks.timetableUri(),
+                    uri = DeepLinks.courseUri(o.course.id),
+                    courseId = o.course.id,
+                    courseDate = o.date.toString(),
+                    startPeriod = o.startPeriod,
+                    endPeriod = o.endPeriod,
                 )
             }
             if (upcomingTimed is BlockItem) {
@@ -187,6 +201,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                     title = if (code != null) WidgetKit.cleanTitleWithCode(ctx, t) else t.title,
                     barColor = WidgetKit.priorityColor(ctx, t.priority),
                     uri = DeepLinks.taskUri(t.id),
+                    taskId = t.id,
                 )
             }
 
@@ -200,6 +215,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                     title = WidgetKit.cleanTitleWithCode(ctx, parcel),
                     barColor = WidgetKit.priorityColor(ctx, parcel.priority),
                     uri = DeepLinks.taskUri(parcel.id),
+                    taskId = parcel.id,
                 )
             }
 
@@ -213,6 +229,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                     title = topTask.title,
                     barColor = WidgetKit.priorityColor(ctx, topTask.priority, overdue != null),
                     uri = DeepLinks.taskUri(topTask.id),
+                    taskId = topTask.id,
                 )
             }
 
@@ -225,7 +242,11 @@ class NextWidgetProvider : AppWidgetProvider() {
                     sub = listOfNotNull(o.start.hm(), o.room.takeIf { it.isNotBlank() }).joinToString(" · "),
                     title = o.course.name,
                     barColor = WidgetKit.courseFg(ctx, o.course.colorIndex),
-                    uri = DeepLinks.timetableUri(),
+                    uri = DeepLinks.courseUri(o.course.id),
+                    courseId = o.course.id,
+                    courseDate = o.date.toString(),
+                    startPeriod = o.startPeriod,
+                    endPeriod = o.endPeriod,
                 )
             }
 
@@ -256,9 +277,27 @@ class NextWidgetProvider : AppWidgetProvider() {
             }
             views.setTextViewText(R.id.next_title, s.title)
 
-            views.setOnClickPendingIntent(R.id.next_body, WidgetKit.mainActivityIntent(ctx, 50, s.uri))
-            views.setOnClickPendingIntent(R.id.widget_root, WidgetKit.mainActivityIntent(ctx, 50, s.uri))
-            views.setOnClickPendingIntent(R.id.next_add, WidgetKit.mainActivityIntent(ctx, 52, DeepLinks.addUri()))
+            val bodyPending =
+                when {
+                    s.taskId != null -> {
+                        WidgetKit.overlayIntent(ctx, 50, WidgetOverlayActivity.taskIntent(ctx, s.taskId))
+                    }
+
+                    s.courseId != null -> {
+                        WidgetKit.overlayIntent(
+                            ctx,
+                            50,
+                            WidgetOverlayActivity.courseIntent(ctx, s.courseId, s.courseDate, s.startPeriod, s.endPeriod),
+                        )
+                    }
+
+                    else -> {
+                        WidgetKit.mainActivityIntent(ctx, 50, s.uri)
+                    }
+                }
+            views.setOnClickPendingIntent(R.id.next_body, bodyPending)
+            views.setOnClickPendingIntent(R.id.widget_root, bodyPending)
+            views.setOnClickPendingIntent(R.id.next_add, WidgetKit.overlayIntent(ctx, 52, WidgetOverlayActivity.addIntent(ctx)))
             return views
         }
     }

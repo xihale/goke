@@ -14,9 +14,15 @@ sealed interface DeepLink {
         val id: String,
     ) : DeepLink
 
+    /** 打开某门课程的详情/编辑页。 */
+    data class Course(
+        val id: String,
+    ) : DeepLink
+
     /** 新建待办；[text] 会按快速添加语法解析后带进编辑页，可为空。 */
     data class Add(
         val text: String,
+        val courseId: String? = null,
     ) : DeepLink
 
     data object Today : DeepLink
@@ -40,13 +46,26 @@ object DeepLinks {
             .appendPath(id)
             .build()
 
-    fun addUri(text: String? = null): Uri =
+    fun courseUri(id: String): Uri =
+        Uri
+            .Builder()
+            .scheme(SCHEME)
+            .authority("course")
+            .appendPath(id)
+            .build()
+
+    fun addUri(
+        text: String? = null,
+        courseId: String? = null,
+    ): Uri =
         Uri
             .Builder()
             .scheme(SCHEME)
             .authority("add")
-            .apply { if (!text.isNullOrBlank()) appendQueryParameter("text", text) }
-            .build()
+            .apply {
+                if (!text.isNullOrBlank()) appendQueryParameter("text", text)
+                if (!courseId.isNullOrBlank()) appendQueryParameter("courseId", courseId)
+            }.build()
 
     fun todayUri(): Uri =
         Uri
@@ -80,7 +99,8 @@ object DeepLinks {
         if (uri.scheme != SCHEME) return null
         return when (uri.host) {
             "task" -> uri.lastPathSegment?.takeIf { it.isNotBlank() }?.let { DeepLink.Task(it) }
-            "add" -> DeepLink.Add(uri.getQueryParameter("text").orEmpty())
+            "course" -> uri.lastPathSegment?.takeIf { it.isNotBlank() }?.let { DeepLink.Course(it) }
+            "add" -> DeepLink.Add(uri.getQueryParameter("text").orEmpty(), uri.getQueryParameter("courseId")?.takeIf { it.isNotBlank() })
             "today" -> DeepLink.Today
             "todo" -> DeepLink.Todo
             "timetable" -> DeepLink.Timetable

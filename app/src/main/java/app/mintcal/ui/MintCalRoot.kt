@@ -165,6 +165,10 @@ fun MintCalRoot(
                 nav.openTask(l.id)
             }
 
+            is DeepLink.Course -> {
+                nav.push(Route.CourseEdit(id = l.id))
+            }
+
             DeepLink.Today -> {
                 nav.clearToRoot()
                 nav.tab = Tab.TODAY
@@ -193,7 +197,7 @@ fun MintCalRoot(
                     nav.pendingAddText = l.text
                     return@LaunchedEffect
                 }
-                nav.push(Route.TodoEdit(text = l.text))
+                nav.push(Route.TodoEdit(text = l.text, courseId = l.courseId))
             }
         }
     }

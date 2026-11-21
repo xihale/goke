@@ -132,7 +132,6 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
 
             val shown = courses.filter { it.occ.end.isAfter(now) }.ifEmpty { courses.takeLast(6) }.take(6)
             val openTimetable = WidgetKit.mainActivityIntent(ctx, 40, DeepLinks.timetableUri())
-            val openToday = WidgetKit.mainActivityIntent(ctx, 41, DeepLinks.todayUri())
 
             for (i in rows.indices) {
                 val c = shown.getOrNull(i)
@@ -164,7 +163,14 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
                         if (current) ctx.getString(R.string.widget_schedule_now) else null,
                     ).joinToString(" · ")
                 views.setTextViewText(metas[i], meta)
-                views.setOnClickPendingIntent(rows[i], openToday)
+                views.setOnClickPendingIntent(
+                    rows[i],
+                    WidgetKit.overlayIntent(
+                        ctx,
+                        41 + i,
+                        WidgetOverlayActivity.courseIntent(ctx, o.course.id, o.date.toString(), o.startPeriod, o.endPeriod),
+                    ),
+                )
             }
 
             val remaining = courses.count { it.occ.end.isAfter(now) } - shown.size

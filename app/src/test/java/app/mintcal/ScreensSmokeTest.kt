@@ -102,6 +102,9 @@ import app.mintcal.ui.screens.TrashScreen
 import app.mintcal.ui.screens.WhenPanel
 import app.mintcal.ui.screens.WidgetsScreen
 import app.mintcal.ui.theme.MintCalTheme
+import app.mintcal.widget.OverlayTarget
+import app.mintcal.widget.WidgetKit
+import app.mintcal.widget.WidgetOverlayRoot
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -469,5 +472,83 @@ class ScreensSmokeTest {
         rule.onNode(hasScrollAction()).performScrollToIndex(4)
         rule.waitForIdle()
         rule.onNodeWithText(app.getString(R.string.widget_next_name)).assertIsDisplayed()
+    }
+
+    @Test
+    fun widgetOverlayQuickAddCourseParcelAndTodoWorkInPlace() {
+        val snap = app.repo.snapshot.value
+        val course = snap.courses.first()
+        val parcel = snap.tasks.first { WidgetKit.isParcel(it) && !it.done }
+        val todo = snap.tasks.first { !WidgetKit.isParcel(it) && !it.done }
+        val target = androidx.compose.runtime.mutableStateOf<OverlayTarget>(OverlayTarget.Add())
+        var openedUri: android.net.Uri? = null
+        var dismissed = false
+
+        rule.setContent {
+            val st by app.settings.flow.collectAsState()
+            val curSnap by app.repo.snapshot.collectAsState()
+            MintCalTheme(st) {
+                WidgetOverlayRoot(
+                    app = app,
+                    ready = true,
+                    snap = curSnap,
+                    target = target.value,
+                    onChangeTarget = { target.value = it },
+                    onOpenInApp = { openedUri = it },
+                    onDismiss = { dismissed = true },
+                )
+            }
+        }
+        rule.waitForIdle()
+        shot("overlay_add")
+
+        // 1. 快速添加草稿点放大携带文本与跳转到编辑页，不立即落库
+        rule.onNode(hasSetTextAction()).performTextInput("带伞 明天")
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription(app.getString(R.string.widget_overlay_expand_app)).performClick()
+        assertEquals(DeepLinks.addUri("带伞 明天"), openedUri)
+
+        // 2. 直接提交快速添加落库，不进主应用
+        rule.onNodeWithText(app.getString(R.string.widgets_add_action)).performClick()
+        rule.waitUntil(5_000) {
+            dismissed &&
+                app.repo.snapshot.value.tasks
+                    .any { it.title == "带伞" }
+        }
+
+        // 3. 课程悬浮卡片：展示详情并可展开至课程详情页
+        dismissed = false
+        openedUri = null
+        rule.runOnIdle { target.value = OverlayTarget.CourseDetail(course.id) }
+        rule.waitForIdle()
+        shot("overlay_course")
+        rule.onNodeWithText(course.name).assertIsDisplayed()
+        rule.onNodeWithContentDescription(app.getString(R.string.widget_overlay_course_detail)).performClick()
+        assertEquals(DeepLinks.courseUri(course.id), openedUri)
+
+        // 4. 快递悬浮卡片：展示取件码并就地标记已取件
+        dismissed = false
+        rule.runOnIdle { target.value = OverlayTarget.TaskDetail(parcel.id) }
+        rule.waitForIdle()
+        shot("overlay_parcel")
+        rule.onNodeWithText("4-2-1086").assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.widget_overlay_parcel_done)).performClick()
+        rule.waitUntil(5_000) {
+            app.repo.snapshot.value.tasks
+                .first { it.id == parcel.id }
+                .done
+        }
+
+        // 5. 待办悬浮卡片：就地完成待办
+        rule.runOnIdle { target.value = OverlayTarget.TaskDetail(todo.id) }
+        rule.waitForIdle()
+        shot("overlay_todo")
+        rule.onNodeWithText(todo.title).assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.widget_overlay_task_done)).performClick()
+        rule.waitUntil(5_000) {
+            app.repo.snapshot.value.tasks
+                .first { it.id == todo.id }
+                .done
+        }
     }
 }

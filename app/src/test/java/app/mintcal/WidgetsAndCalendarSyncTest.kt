@@ -211,9 +211,9 @@ class WidgetsAndCalendarSyncTest {
                 items = todoRows.map { TodoWidgetService.itemView(app, it) },
             )
 
-            // 3. 今日安排统一小组件
+            // 3. 今日安排统一小组件（含课程 ID 直达悬浮详情）
             val todayRows = TodayWidgetProvider.buildRows(app, snap, st, now)
-            assertTrue(todayRows.any { it.title == "高等数学" && it.ongoing })
+            assertTrue(todayRows.any { it.title == "高等数学" && it.ongoing && it.courseId == course1.id })
             assertTrue(todayRows.any { it.code == "4-2-1086" })
             assertTrue(todayRows.any { it.title == "提交操作系统实验报告" })
             val todayView =
@@ -233,10 +233,14 @@ class WidgetsAndCalendarSyncTest {
             assertEquals("第 3 周", schedView.findViewById<TextView>(R.id.sched_week).text.toString())
             assertEquals("高等数学", schedView.findViewById<TextView>(R.id.sched_name0).text.toString())
 
-            // 5. 下一件事 4×1 胶囊小组件
+            // 5. 下一件事 4×1 胶囊小组件 + 深链路由
+            val nextSummary = NextWidgetProvider.pickSummary(app, snap, st, now)
+            assertEquals(course1.id, nextSummary.courseId)
             val nextView = renderRemoteViews("widget_next", NextWidgetProvider.build(app, snap, st, now), 340, 68)
             assertEquals(app.getString(R.string.widget_ongoing), nextView.findViewById<TextView>(R.id.next_badge).text.toString())
             assertEquals("高等数学", nextView.findViewById<TextView>(R.id.next_title).text.toString())
+            assertEquals(DeepLink.Course("c1"), DeepLinks.parseUri(DeepLinks.courseUri("c1")))
+            assertEquals(DeepLink.Add("买牛奶", "c1"), DeepLinks.parseUri(DeepLinks.addUri("买牛奶", "c1")))
             Unit
         }
 

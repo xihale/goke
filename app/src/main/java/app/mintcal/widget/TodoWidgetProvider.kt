@@ -112,7 +112,7 @@ class TodoWidgetProvider : AppWidgetProvider() {
                 ),
             )
             views.setOnClickPendingIntent(R.id.widget_header, WidgetKit.mainActivityIntent(ctx, 10, DeepLinks.todoUri()))
-            views.setOnClickPendingIntent(R.id.widget_add, WidgetKit.mainActivityIntent(ctx, 11, DeepLinks.addUri()))
+            views.setOnClickPendingIntent(R.id.widget_add, WidgetKit.overlayIntent(ctx, 11, WidgetOverlayActivity.addIntent(ctx)))
             return views
         }
     }

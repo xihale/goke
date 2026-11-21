@@ -728,7 +728,7 @@ private fun BatchPreviewDialog(
 }
 
 /** 把解析出的日期 / 课程 / 清单 / 优先级 / 标签片段在输入框里着色（不改文字与光标位置）。 */
-private class TokenHighlight(
+internal class TokenHighlight(
     val tokens: List<QuickToken>,
     val primary: Color,
     val priorityColor: Color,
