@@ -1767,14 +1767,6 @@ private fun CourseSheet(
                     ) { Text(stringResource(R.string.edit)) }
                     FilledTonalButton(
                         onClick = {
-                            onDismiss()
-                            nav.push(Route.TodoEdit(courseId = c.id))
-                        },
-                        modifier = Modifier.heightIn(min = 48.dp),
-                        colors = secondaryColors,
-                    ) { Text(stringResource(R.string.course_todos_add)) }
-                    FilledTonalButton(
-                        onClick = {
                             val ex = CourseException(Ids.next(), c.id, origWeek(snap, c, o.date, cal), ExceptionType.CANCEL)
                             val old = snap.exceptions.firstOrNull { it.courseId == c.id && it.week == ex.week }
                             val cs = Edits.save(snap, if (old != null) ex.copy(id = old.id) else ex, ctx.getString(R.string.cancel_class_desc, c.name), System.currentTimeMillis())

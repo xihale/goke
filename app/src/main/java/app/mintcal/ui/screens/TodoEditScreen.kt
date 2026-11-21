@@ -50,7 +50,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -107,7 +106,6 @@ import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.ConflictCard
 import app.mintcal.ui.components.MintCheck
 import app.mintcal.ui.components.SegmentedPill
-import app.mintcal.ui.components.Tag
 import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.components.rememberFileAttachmentPicker
 import app.mintcal.ui.components.rememberImageAttachmentPicker
@@ -134,7 +132,7 @@ private enum class BarPanel { LIST, PRIORITY }
  * 勾选在顶栏右侧，标题从左缘起，日期、备注、附件依次全宽铺在页面里。
  * 底部左侧是清单名，右侧是子任务、优先级、图片和附件；子任务点清单图标在栏上方展开。
  * 修改返回即保存（空标题等于放弃）；新建要点顶栏「确定」才落库，返回先确认放弃（空白草稿直接走）。
- * 标题里识别到的日期时间就地高亮，点一下表示认错了。
+ * 标题里识别到的日期时间就地高亮。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -236,7 +234,6 @@ fun TodoEditScreen(
     val linkedCourseId = existing?.courseId ?: courseArg
     val linkedCourse = remember(linkedCourseId, snap.courses) { linkedCourseId?.let { cid -> snap.courses.firstOrNull { it.id == cid } } }
     var dueBeforeNextClass by remember { mutableStateOf(existing?.dueBeforeNextClass ?: (courseArg != null)) }
-    var ignored by remember { mutableStateOf(emptySet<IntRange>()) }
     var timeSheet by remember { mutableStateOf(false) }
     var newSub by remember { mutableStateOf("") }
     var subReset by remember { mutableIntStateOf(0) }
@@ -261,34 +258,10 @@ fun TodoEditScreen(
 
     val text = field.text
     val parsed = remember(text) { if (text.isBlank()) null else QuickAdd.parse(text, baseNow) }
-    val masked =
-        remember(text, ignored) {
-            if (ignored.isEmpty()) {
-                text
-            } else {
-                val chars = text.toCharArray()
-                for (r in ignored) {
-                    val start = r.first.coerceAtLeast(0)
-                    val end = r.last.coerceAtMost(chars.lastIndex)
-                    for (i in start..end) chars[i] = '·'
-                }
-                String(chars)
-            }
-        }
-    val kept =
-        remember(parsed, masked) {
-            if (masked.isBlank()) {
-                null
-            } else if (masked == text) {
-                parsed
-            } else {
-                QuickAdd.parse(masked, baseNow)
-            }
-        }
-    val tokens = remember(kept) { kept?.tokens?.filter { it.kind == QuickTokenKind.DATE || it.kind == QuickTokenKind.TIME }.orEmpty() }
+    val tokens = remember(parsed) { parsed?.tokens?.filter { it.kind == QuickTokenKind.DATE || it.kind == QuickTokenKind.TIME }.orEmpty() }
     val textWhen =
-        remember(kept) {
-            kept?.due?.let { WhenPick(it.toLocalDate(), if (kept.dueHasTime) it.toLocalTime() else null) }
+        remember(parsed) {
+            parsed?.due?.let { WhenPick(it.toLocalDate(), if (parsed.dueHasTime) it.toLocalTime() else null) }
         }
     val whenPick =
         when {
@@ -330,11 +303,11 @@ fun TodoEditScreen(
 
     // 退出即保存：有内容且有改动就静默落盘；空标题等于放弃这条
     val ranges =
-        remember(masked, tokens) {
-            if (masked.isEmpty() || tokens.isEmpty()) {
+        remember(text, tokens) {
+            if (text.isEmpty() || tokens.isEmpty()) {
                 emptyList()
             } else {
-                tokenRanges(masked, tokens).map { it.second }.sortedBy { it.first }
+                tokenRanges(text, tokens).map { it.second }.sortedBy { it.first }
             }
         }
     val nav = LocalNav.current
@@ -563,40 +536,11 @@ fun TodoEditScreen(
         ) {
             SmartTitle(
                 field,
-                { updated ->
-                    ignored = adjustIgnoredRanges(field.text, updated.text, ignored)
-                    field = updated
-                },
+                { field = it },
                 ranges,
                 titleFocus,
                 done = existing?.done == true,
             )
-            if (ranges.isNotEmpty()) {
-                FlowRow(
-                    Modifier.fillMaxWidth().padding(bottom = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    ranges.forEach { range ->
-                        if (range.first >= 0 && range.last < text.length) {
-                            val tokenText = text.substring(range.first, range.last + 1)
-                            val removeDesc = stringResource(R.string.quick_add_remove_time, tokenText)
-                            Tag(
-                                "$tokenText ×",
-                                MaterialTheme.colorScheme.primaryContainer,
-                                MaterialTheme.colorScheme.onPrimaryContainer,
-                                Modifier
-                                    .minimumInteractiveComponentSize()
-                                    .mintClickable(pressedScale = 0.96f, role = Role.Button) {
-                                        ignored = ignored + setOf(range)
-                                    }.semantics {
-                                        contentDescription = removeDesc
-                                    },
-                            )
-                        }
-                    }
-                }
-            }
             WhenRow(whenPick, today, remind, freq, interval, until, byDays, byMonths, onClear = {
                 picked = null
                 cleared = true
@@ -883,7 +827,7 @@ fun TodoEditScreen(
     }
 }
 
-/** 标题输入：识别到的日期时间就地染色，下方胶囊可点按取消识别（文字保留）。 */
+/** 标题输入：识别到的日期时间就地染色。 */
 @Composable
 private fun SmartTitle(
     value: TextFieldValue,
@@ -929,30 +873,6 @@ private fun SmartTitle(
             }
         },
     )
-}
-
-/** 文本变更后同步平移未受影响的忽略区间，被编辑命中的区间自动失效。 */
-private fun adjustIgnoredRanges(
-    oldText: String,
-    newText: String,
-    current: Set<IntRange>,
-): Set<IntRange> {
-    if (oldText == newText || current.isEmpty()) return current
-    val minLen = minOf(oldText.length, newText.length)
-    var prefix = 0
-    while (prefix < minLen && oldText[prefix] == newText[prefix]) prefix++
-    var suffix = 0
-    while (suffix < minLen - prefix && oldText[oldText.length - 1 - suffix] == newText[newText.length - 1 - suffix]) suffix++
-    val oldEnd = oldText.length - suffix
-    val delta = newText.length - oldText.length
-    return buildSet {
-        for (r in current) {
-            when {
-                r.last < prefix -> add(r)
-                r.first >= oldEnd -> add((r.first + delta)..(r.last + delta))
-            }
-        }
-    }
 }
 
 private class TokenPaint(
