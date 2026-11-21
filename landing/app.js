@@ -681,6 +681,7 @@
   /* ---------- 启动 ---------- */
   function boot() {
     var heroRoot = $('#heroApp');
+    var heroStage = $('#heroStage');
     if (heroRoot) {
       mountApp(heroRoot, { tab: 'timetable' });
       var bar = $('#themeBar');
@@ -690,6 +691,7 @@
       $$('[data-preset]', bar).forEach(function (b) {
         b.addEventListener('click', function () {
           heroRoot.dataset.themePreset = b.dataset.preset;
+          if (heroStage) heroStage.dataset.themePreset = b.dataset.preset;
           $$('[data-preset]', bar).forEach(function (x) { x.setAttribute('aria-pressed', x === b); });
           nameOut.textContent = names[b.dataset.preset];
         });
@@ -697,6 +699,7 @@
       modeBtn.addEventListener('click', function () {
         var dark = heroRoot.dataset.colorMode !== 'dark';
         heroRoot.dataset.colorMode = dark ? 'dark' : 'light';
+        if (heroStage) heroStage.dataset.colorMode = dark ? 'dark' : 'light';
         modeBtn.setAttribute('aria-pressed', dark);
         modeBtn.setAttribute('aria-label', dark ? '切换到浅色模式' : '切换到深色模式');
         $('.mode-label', modeBtn).textContent = dark ? '深色' : '浅色';
@@ -712,11 +715,42 @@
       });
     }
 
-    /* Band 5 电脑与 AI Tab */
+    /* Band 5 电脑与 AI Tab + 左侧列表双向联动 */
     var oTabs = $('#openTabs');
     if (oTabs) {
       var oPanels = $$('.open-panel');
-      initTabs(oTabs, function (i) { oPanels.forEach(function (p, k) { p.hidden = k !== i; }); });
+      var oItems = $$('#openList .open-item');
+      var oTabBtns = $$('[role="tab"]', oTabs);
+      initTabs(oTabs, function (i) {
+        oPanels.forEach(function (p, k) { p.hidden = k !== i; });
+        oItems.forEach(function (item, k) { item.classList.toggle('is-on', k === i); });
+      });
+      oItems.forEach(function (item) {
+        item.addEventListener('click', function () {
+          var idx = +item.dataset.openIdx;
+          if (oTabBtns[idx]) oTabBtns[idx].click();
+        });
+      });
+    }
+
+    /* 顶栏滚动浮层与导航高亮 */
+    var topbar = $('#topbar');
+    if (topbar) {
+      var syncBar = function () { topbar.classList.toggle('is-scrolled', window.scrollY > 12); };
+      syncBar();
+      window.addEventListener('scroll', syncBar, { passive: true });
+    }
+    var navLinks = $$('.topnav a[href^="#"]');
+    if (navLinks.length && 'IntersectionObserver' in window) {
+      var secMap = navLinks.map(function (a) { return { a: a, el: $(a.getAttribute('href')) }; }).filter(function (x) { return x.el; });
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) {
+            secMap.forEach(function (x) { x.a.classList.toggle('is-active', x.el === en.target); });
+          }
+        });
+      }, { rootMargin: '-32% 0px -56% 0px' });
+      secMap.forEach(function (x) { io.observe(x.el); });
     }
 
     /* 代码块一键复制 */
