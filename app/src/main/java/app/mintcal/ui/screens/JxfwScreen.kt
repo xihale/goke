@@ -141,7 +141,6 @@ internal fun JxfwErrorGuidance(
 @Composable
 private fun LoginPanel(state: JxfwState) {
     val app = LocalApp.current
-    val scope = rememberCoroutineScope()
     var user by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -175,7 +174,7 @@ private fun LoginPanel(state: JxfwState) {
             enabled = !busy && user.isNotBlank() && password.isNotEmpty(),
             onClick = {
                 busy = true
-                scope.launch {
+                app.scope.launch {
                     try {
                         app.jxfw.login(user, password)
                         password = ""
