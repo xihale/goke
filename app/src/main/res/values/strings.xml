@@ -971,4 +971,39 @@
     <string name="me_hub_bind_jxfw_sub">同步课表、考试与成绩</string>
     <string name="me_hub_bound_id">学号 %1$s</string>
     <string name="lan_web_usb_toggle">校园网隔离？使用 USB 连接电脑</string>
+    <!-- Deep Flow UX Polish: Reschedule & Course Exceptions -->
+    <string name="reschedule_pick_on_grid">课表选位</string>
+    <string name="reschedule_pick_banner">正在为「%1$s」选新时段，翻周并点击课表格子</string>
+    <string name="reschedule_orig_week_chip">原周（第%1$d周）</string>
+    <string name="reschedule_next_week_chip">下周（第%1$d周）</string>
+    <string name="reschedule_prev_week_chip">上周（第%1$d周）</string>
+    <string name="reschedule_other_week">选周次</string>
+    <string name="reschedule_summary_line">第 %1$d 周 %2$s · %3$s</string>
+    <string name="reschedule_from_hint">原第 %1$d 周 %2$s 第 %3$d–%4$d 节调至此处</string>
+    <string name="reschedule_from_hint_single">原第 %1$d 周 %2$s 第 %3$d 节调至此处</string>
+    <string name="reschedule_confirm">确认调课</string>
+    <string name="reschedule_clash_item">与「%1$s」冲突（第 %2$d–%3$d 节）</string>
+    <string name="reschedule_clash_item_single">与「%1$s」冲突（第 %2$d 节）</string>
+    <string name="reschedule_unchanged_toast">时间与教室未改动</string>
+    <string name="course_exceptions_section">单周调停课</string>
+    <string name="course_exception_cancel">第 %1$d 周 · 已停课</string>
+    <string name="course_exception_move">第 %1$d 周 → 第 %2$d 周 %3$s 第 %4$d–%5$d 节</string>
+    <string name="course_exception_move_single">第 %1$d 周 → 第 %2$d 周 %3$s 第 %4$d 节</string>
+    <string name="course_exception_restore">恢复</string>
+    <!-- Deep Flow UX Polish: Semester, Periods, Todo & Parcel -->
+    <string name="semester_create_title">新建学期</string>
+    <string name="semester_create_default_name">新学期</string>
+    <string name="semester_create_action">创建学期</string>
+    <string name="semester_switch_title">切换学期</string>
+    <string name="semester_current_tag">当前</string>
+    <string name="semester_switched_toast">已切换至「%1$s」</string>
+    <string name="semester_delete">删除学期</string>
+    <string name="semester_delete_confirm">删除「%1$s」？该学期下的课程也会一并移入回收站。</string>
+    <string name="semester_deleted_toast">已删除学期「%1$s」</string>
+    <string name="semester_name_required">请填写学期名称</string>
+    <string name="period_time_invalid">结束时间须晚于开始时间</string>
+    <string name="parcel_task_added">已加入待办</string>
+    <string name="todo_reschedule_bulk_desc">批量改期（%1$d 项）</string>
+    <string name="todo_drop_bulk_desc">批量放弃（%1$d 项）</string>
+    <string name="todo_today_untimed_toast">已移到今天（全天）</string>
 </resources>

@@ -143,7 +143,8 @@ private fun LoginPanel(state: JxfwState) {
     val app = LocalApp.current
     var user by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
+    var localBusy by remember { mutableStateOf(false) }
+    val busy = localBusy || state.busy
 
     Column(
         Modifier.padding(top = 4.dp),
@@ -173,7 +174,7 @@ private fun LoginPanel(state: JxfwState) {
         Button(
             enabled = !busy && user.isNotBlank() && password.isNotEmpty(),
             onClick = {
-                busy = true
+                localBusy = true
                 app.scope.launch {
                     try {
                         app.jxfw.login(user, password)
@@ -181,7 +182,7 @@ private fun LoginPanel(state: JxfwState) {
                     } catch (_: JxfwException) {
                         // 错误已写入状态并显示
                     } finally {
-                        busy = false
+                        localBusy = false
                     }
                 }
             },

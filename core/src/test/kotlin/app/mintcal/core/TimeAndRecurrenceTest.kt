@@ -186,6 +186,22 @@ class TimeAndRecurrenceTest {
         assertEquals(LocalDateTime.of(2026, 9, 10, 13, 50), w2[0].start)
         assertEquals("教1-101", w2[0].room)
         assertTrue(w2[0].rescheduled)
+        assertEquals(2, w2[0].originalWeek)
+    }
+
+    @Test fun `cross-week reschedule into occupied week preserves originalWeek`() {
+        val ex =
+            listOf(
+                CourseException("e-cross", "c1", week = 1, type = ExceptionType.RESCHEDULE, newWeek = 2, newDayOfWeek = 5, newStartPeriod = 3, newEndPeriod = 4, newRoom = "B302"),
+            )
+        val w2 = CourseExpander.occurrencesInWeek(TestUtil.semester, listOf(course), ex, 2)
+        assertEquals(2, w2.size)
+        val normal = w2.first { !it.rescheduled }
+        val moved = w2.first { it.rescheduled }
+        assertEquals(2, normal.originalWeek)
+        assertEquals(1, moved.originalWeek)
+        assertEquals(2, moved.week)
+        assertEquals("B302", moved.room)
     }
 
     @Test fun `event expansion across range`() {

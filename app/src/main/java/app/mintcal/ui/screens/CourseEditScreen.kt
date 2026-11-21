@@ -76,6 +76,7 @@ import app.mintcal.core.change.Conflicts
 import app.mintcal.core.change.Edits
 import app.mintcal.core.change.apply
 import app.mintcal.core.model.Course
+import app.mintcal.core.model.ExceptionType
 import app.mintcal.core.model.PeriodTime
 import app.mintcal.core.model.Source
 import app.mintcal.core.time.WeekSets
@@ -358,6 +359,8 @@ fun CourseEditScreen(
 
     fun requestBack() {
         when {
+            name.isBlank() && dirty -> confirmDiscard = true
+
             name.isBlank() -> onBack()
 
             !valid -> actions.toast(ctx.getString(R.string.weeks_invalid))
@@ -520,6 +523,74 @@ fun CourseEditScreen(
             )
 
             if (origin != null) {
+                val courseIds =
+                    remember(snap.courses, sem.id, origin) {
+                        snap.courses
+                            .filter { it.deletedAt == null && it.semesterId == sem.id && it.name == origin.name }
+                            .map { it.id }
+                            .toSet() + origin.id
+                    }
+                val courseExceptions =
+                    remember(snap.exceptions, courseIds) {
+                        snap.exceptions
+                            .filter { it.deletedAt == null && it.courseId in courseIds }
+                            .sortedWith(compareBy({ it.week }, { it.id }))
+                    }
+                if (courseExceptions.isNotEmpty()) {
+                    val coursesById = remember(snap.courses) { snap.courses.associateBy { it.id } }
+                    SectionLabel(
+                        stringResource(R.string.course_exceptions_section),
+                        trailing = courseExceptions.size.toString(),
+                        modifier = Modifier.padding(top = 16.dp),
+                    )
+                    courseExceptions.forEach { ex ->
+                        val baseCourse = coursesById[ex.courseId] ?: origin
+                        val summary =
+                            if (ex.type == ExceptionType.CANCEL) {
+                                stringResource(R.string.course_exception_cancel, ex.week)
+                            } else {
+                                val targetWeek = ex.newWeek ?: ex.week
+                                val targetDow = ex.newDayOfWeek ?: baseCourse.dayOfWeek
+                                val sp = ex.newStartPeriod ?: baseCourse.startPeriod
+                                val ep = ex.newEndPeriod ?: baseCourse.endPeriod
+                                val dowLabel = ctx.getString(R.string.weekday_prefix, ctx.weekdayShort(targetDow))
+                                val baseText =
+                                    if (sp == ep) {
+                                        stringResource(R.string.course_exception_move_single, ex.week, targetWeek, dowLabel, sp)
+                                    } else {
+                                        stringResource(R.string.course_exception_move, ex.week, targetWeek, dowLabel, sp, ep)
+                                    }
+                                val roomNote = ex.newRoom?.takeIf { it.isNotBlank() && it != baseCourse.room }
+                                if (roomNote != null) "$baseText · $roomNote" else baseText
+                            }
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .padding(horizontal = 4.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                summary,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = {
+                                actions.commit(
+                                    ChangeSet(
+                                        Ids.next(),
+                                        ctx.getString(R.string.restore_class_desc, origin.name),
+                                        Source.MANUAL,
+                                        System.currentTimeMillis(),
+                                        listOf(Change.Remove(ex)),
+                                    ),
+                                    ctx.getString(R.string.restore_class_toast),
+                                )
+                            }) { Text(stringResource(R.string.course_exception_restore)) }
+                        }
+                    }
+                }
                 val related =
                     remember(snap.tasks, snap.courses, origin) {
                         snap.tasks.filter { t ->

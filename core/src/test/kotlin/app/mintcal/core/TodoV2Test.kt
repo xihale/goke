@@ -100,6 +100,20 @@ class TodoV2Test {
         )
     }
 
+    @Test fun `reschedule to today clears past time when requested`() {
+        val now = today.atTime(14, 0)
+        val pastToday = t("past", today.atTime(9, 0), hasTime = true)
+        val futureToday = t("future", today.atTime(18, 0), hasTime = true)
+        val cs = Edits.reschedule(listOf(pastToday, futureToday), today, "移到今天", 3L, clearTimeIfPast = now)
+        val snap = Snapshot(tasks = listOf(pastToday, futureToday)).apply(cs).live()
+        val p = snap.tasks.first { it.id == "past" }
+        val f = snap.tasks.first { it.id == "future" }
+        assertFalse(p.dueHasTime)
+        assertEquals(today.atTime(23, 59), p.due)
+        assertTrue(f.dueHasTime)
+        assertEquals(today.atTime(18, 0), f.due)
+    }
+
     @Test fun `drop task and reopen`() {
         val a = t("a", today.atTime(23, 59))
         val cs = Edits.dropTasks(listOf(a), "不做了", 5L)

@@ -87,12 +87,12 @@ import app.mintcal.core.agenda.EventItem
 import app.mintcal.core.agenda.TaskItem
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Task
-import app.mintcal.core.todo.Bucket
 import app.mintcal.ui.Actions
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Nav
 import app.mintcal.ui.Route
+import app.mintcal.ui.Tab
 import app.mintcal.ui.components.AgendaRow
 import app.mintcal.ui.components.DatePickerDlg
 import app.mintcal.ui.components.EmptyState
@@ -162,13 +162,13 @@ fun CalendarScreen() {
     val reduce = reduceMotion()
     val scope = rememberCoroutineScope()
 
-    // 翻页锚点：进入某个模式时，以当时选中日期所在月/周为准，仅在模式变化时读取初值，不参与点选日期的根重组
+    // 翻页锚点：进入某个模式或切换周一起始时，以当时选中日期所在月/周为准
     val anchor =
-        rememberSaveable(mode, saver = localDateSaver) {
+        rememberSaveable(mode, first, saver = localDateSaver) {
             val init = selectedDateState.value
             if (mode == CalMode.MONTH) init.withDayOfMonth(1) else init.with(TemporalAdjusters.previousOrSame(first))
         }
-    val pager = key(mode) { rememberPagerState(initialPage = PAGE_CENTER) { PAGE_CENTER * 2 } }
+    val pager = key(mode, first) { rememberPagerState(initialPage = PAGE_CENTER) { PAGE_CENTER * 2 } }
     var lastPage by remember(pager) { mutableIntStateOf(pager.currentPage) }
 
     fun periodStart(page: Int): LocalDate =
@@ -221,8 +221,10 @@ fun CalendarScreen() {
 
     val listState = rememberLazyListState()
     LaunchedEffect(nav.reselect, reduce) {
-        if (reduce) listState.scrollToItem(0) else listState.animateScrollToItem(0)
-        if (nav.reselect > 0) goto(today)
+        if (nav.reselect > 0 && nav.tab == Tab.CALENDAR) {
+            if (reduce) listState.scrollToItem(0) else listState.animateScrollToItem(0)
+            goto(today)
+        }
     }
 
     // 按 Snapshot 与设置缓存月份网格模型及每日 Agenda 列表，点选日期时零重新计算
@@ -322,7 +324,7 @@ fun CalendarScreen() {
             snap = snap,
             now = now,
             listFilter = null,
-            defaultBucket = if (selectedDateState.value == today) Bucket.TODAY else null,
+            defaultBucket = null,
             focusSignal = 0,
             visible = quickAddOpen,
             onDismiss = { quickAddOpen = false },

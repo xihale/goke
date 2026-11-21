@@ -260,8 +260,13 @@ fun TodoEditScreen(
     val parsed = remember(text) { if (text.isBlank()) null else QuickAdd.parse(text, baseNow) }
     val tokens = remember(parsed) { parsed?.tokens?.filter { it.kind == QuickTokenKind.DATE || it.kind == QuickTokenKind.TIME }.orEmpty() }
     val textWhen =
-        remember(parsed) {
-            parsed?.due?.let { WhenPick(it.toLocalDate(), if (parsed.dueHasTime) it.toLocalTime() else null) }
+        remember(parsed, existing, text) {
+            // 已有无日期任务刚打开时，不因标题自带日期词而擅自套上日期；仅用户修改标题后才识别
+            if (existing != null && existing.due == null && existing.blockStart == null && text == existing.title) {
+                null
+            } else {
+                parsed?.due?.let { WhenPick(it.toLocalDate(), if (parsed.dueHasTime) it.toLocalTime() else null) }
+            }
         }
     val whenPick =
         when {
@@ -545,7 +550,9 @@ fun TodoEditScreen(
                 picked = null
                 cleared = true
                 remind = null
+                persistent = false
                 freq = null
+                interval = 1
                 until = null
                 byDays = emptySet()
                 byMonths = emptySet()
@@ -587,10 +594,15 @@ fun TodoEditScreen(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
                                 .mintClickable(pressedScale = 0.98f) {
-                                    nav.focusDate = c.at.toLocalDate()
-                                    nav.tab = Tab.TIMETABLE
-                                    // 修改照旧落盘跳转；新建草稿没有「确定」不落库
-                                    if (existing != null && title.isNotEmpty()) commit() else onBack()
+                                    if (existing == null && hasChanges) {
+                                        // 新建草稿尚未落库：走确认提示，不静默丢弃草稿
+                                        confirmDiscard = true
+                                    } else {
+                                        nav.focusDate = c.at.toLocalDate()
+                                        nav.tab = Tab.TIMETABLE
+                                        if (existing != null && title.isNotEmpty()) commit()
+                                        nav.clearToRoot()
+                                    }
                                 }.padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -666,7 +678,7 @@ fun TodoEditScreen(
                         if (newSub.isNotBlank()) {
                             TextButton(
                                 onClick = {
-                                    val sub = Task(Ids.next(), newSub.trim(), parentId = existing.id, sortOrder = (subs.maxOfOrNull { it.sortOrder } ?: 0) + 1, listId = existing.listId)
+                                    val sub = Task(Ids.next(), newSub.trim(), parentId = existing.id, sortOrder = (subs.maxOfOrNull { it.sortOrder } ?: 0) + 1, listId = listId)
                                     val subDesc = ctx.getString(R.string.add_task_desc, sub.title)
                                     actions.commit(Edits.save(snap, sub, subDesc, System.currentTimeMillis()), subDesc, undoable = true)
                                     newSub = ""

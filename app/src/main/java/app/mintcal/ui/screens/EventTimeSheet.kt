@@ -195,6 +195,7 @@ internal fun WhenPanel(
                     QuickChip(Icons.Rounded.CalendarToday, stringResource(R.string.today), date == today && !isTonight, Modifier.weight(1f)) {
                         date = today
                         datePicked = true
+                        if (isTonight) startMin = -1
                     }
                     QuickChip(Icons.Rounded.WbSunny, stringResource(R.string.tomorrow), date == today.plusDays(1), Modifier.weight(1f)) {
                         date = today.plusDays(1)
@@ -283,7 +284,13 @@ internal fun WhenPanel(
     }
 
     if (timeDlg) {
-        TimeDialSheet(initial = start ?: LocalTime.of(18, 0), onDismiss = { timeDlg = false }) { t ->
+        TimeDialSheet(
+            initial = start ?: LocalTime.of(18, 0),
+            onDismiss = {
+                timeDlg = false
+                wantDur = false
+            },
+        ) { t ->
             startMin = t.hour * 60 + t.minute
             timeDlg = false
             // 点的是「持续」但还没有开始时间：选完时刻接着弹时长

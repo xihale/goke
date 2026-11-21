@@ -333,6 +333,7 @@ internal fun QuickAddSheet(
         val startArg = wp?.start?.let { LocalDateTime.of(wp.date, it).toString() }
         val endArg = wp?.let { w -> if (w.start != null && w.minutes != null) LocalDateTime.of(w.date, w.start).plusMinutes(w.minutes.toLong()).toString() else null }
         val resolvedListId = parsed?.listName?.let { n -> snap.lists.firstOrNull { it.name == n }?.id } ?: listFilter
+        val resolvedCourseId = parsed?.courseName?.let { n -> snap.courses.firstOrNull { it.deletedAt == null && it.name.contains(n, ignoreCase = true) }?.id }
         val remindArg = panelRemind
         val persistentArg = panelPersistent && panelRemind != null
         val freqArg = panelFreq?.name
@@ -357,6 +358,7 @@ internal fun QuickAddSheet(
                 date = dateArg,
                 start = startArg,
                 end = endArg,
+                courseId = resolvedCourseId,
                 listId = resolvedListId,
                 remindMinutes = remindArg,
                 remindPersistent = persistentArg,
@@ -511,8 +513,9 @@ internal fun QuickAddSheet(
                         IconButton(onClick = { openDetail() }) {
                             Icon(Icons.Rounded.OpenInFull, stringResource(R.string.detail_editor_full_edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        // 确定：点了才落库；没写内容置灰
-                        val canAdd = parsed != null
+                        // 确定：点了才落库；没写正文（如只点了优先级/清单标签）置灰
+                        val hasBodyText = parsed != null && !(parsed.tokens.isNotEmpty() && parsed.title == text.trim())
+                        val canAdd = hasBodyText
                         val confirmLabel = stringResource(R.string.confirm)
                         Box(
                             modifier =
@@ -564,8 +567,15 @@ internal fun QuickAddSheet(
                                     MaterialTheme.colorScheme.onPrimaryContainer,
                                     Modifier
                                         .minimumInteractiveComponentSize()
-                                        .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelWhen = null }
-                                        .semantics {
+                                        .mintClickable(pressedScale = 0.96f, role = Role.Button) {
+                                            panelWhen = null
+                                            panelRemind = null
+                                            panelPersistent = false
+                                            panelFreq = null
+                                            panelUntil = null
+                                            panelByDays = emptySet()
+                                            panelByMonths = emptySet()
+                                        }.semantics {
                                             contentDescription = removeWhenDesc
                                         },
                                 )

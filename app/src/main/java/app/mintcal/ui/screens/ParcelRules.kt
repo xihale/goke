@@ -191,10 +191,17 @@ fun RuleEditSheet(
             )
             if (rule.deadline is DeadlineSpec.Const) {
                 val c = rule.deadline as DeadlineSpec.Const
+                var hoursText by remember(draft.rule.id) { mutableStateOf(c.hours.toString()) }
                 FieldText(
                     stringResource(R.string.parcel_deadline_const_hours),
-                    c.hours.toString(),
-                    { rule = rule.copy(deadline = DeadlineSpec.Const(it.toIntOrNull()?.coerceIn(1, 96) ?: 18)) },
+                    hoursText,
+                    { raw ->
+                        val digits = raw.filter { it.isDigit() }.take(2)
+                        hoursText = digits
+                        digits.toIntOrNull()?.takeIf { it in 1..96 }?.let { h ->
+                            rule = rule.copy(deadline = DeadlineSpec.Const(h))
+                        }
+                    },
                     number = true,
                 )
             }
@@ -224,7 +231,7 @@ fun RuleEditSheet(
             }
 
             Row {
-                if (draft.originBuiltinId == null) {
+                if (draft.originBuiltinId == null && !draft.isNew) {
                     TextButton({
                         store.remove(rule.id)
                         onDismiss()

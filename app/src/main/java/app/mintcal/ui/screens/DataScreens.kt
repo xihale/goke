@@ -498,7 +498,7 @@ fun ImportScreen(
                                 Button(onClick = {
                                     actions.commit(cs, ctx.getString(R.string.imported_toast))
                                     nav.tab = Tab.TIMETABLE
-                                    onBack()
+                                    nav.clearToRoot()
                                 }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.apply_changes)) }
                             }
                         }

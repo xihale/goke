@@ -170,7 +170,17 @@ fun TrashScreen(onBack: () -> Unit) {
             stringResource(R.string.delete_forever),
             stringResource(R.string.delete_forever_confirm, target.displayTitle),
             stringResource(R.string.delete_forever),
-            { scope.launch { app.repo.purge(listOf(target)) } },
+            {
+                scope.launch {
+                    val deps: List<Record> =
+                        when (target) {
+                            is Course -> snap.exceptions.filter { it.courseId == target.id && it.deletedAt != null }
+                            is Task -> snap.tasks.filter { it.parentId == target.id && it.deletedAt != null }
+                            else -> emptyList()
+                        }
+                    app.repo.purge(listOf(target) + deps)
+                }
+            },
             { purgeTarget = null },
             danger = true,
         )
@@ -418,13 +428,16 @@ fun ParcelScreen(onBack: () -> Unit) {
                                     modifier = Modifier.padding(top = 2.dp),
                                 )
                             }
+                            var addedForResult by remember(r) { mutableStateOf(false) }
                             Button(
+                                enabled = !addedForResult,
                                 onClick = {
+                                    addedForResult = true
                                     val desc = ctx.getString(R.string.parcel_op_desc)
                                     actions.commit(Edits.save(snap, ParcelTasks.build(ctx, r), desc, System.currentTimeMillis()), desc)
                                 },
                                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                            ) { Text(stringResource(R.string.parcel_add_task)) }
+                            ) { Text(stringResource(if (addedForResult) R.string.parcel_task_added else R.string.parcel_add_task)) }
                         }
                     }
                 }

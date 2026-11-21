@@ -19,6 +19,7 @@ data class CourseOccurrence(
     val end: LocalDateTime,
     val room: String,
     val rescheduled: Boolean,
+    val originalWeek: Int = week,
 )
 
 object CourseExpander {
@@ -57,6 +58,7 @@ object CourseExpander {
                         end = e,
                         room = (if (ex?.type == ExceptionType.RESCHEDULE) ex.newRoom else null) ?: c.room,
                         rescheduled = ex?.type == ExceptionType.RESCHEDULE,
+                        originalWeek = w,
                     )
             }
         }

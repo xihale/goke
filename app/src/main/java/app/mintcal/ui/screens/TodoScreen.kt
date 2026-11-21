@@ -388,7 +388,9 @@ fun TodoScreen() {
     val reduce = reduceMotion()
     val listState = rememberLazyListState()
     LaunchedEffect(nav.reselect, reduce) {
-        if (reduce) listState.scrollToItem(0) else listState.animateScrollToItem(0)
+        if (nav.reselect > 0 && nav.tab == Tab.TODO) {
+            if (reduce) listState.scrollToItem(0) else listState.animateScrollToItem(0)
+        }
     }
     LaunchedEffect(searching) { if (searching) searchFocus.requestFocus() }
     var pendingTidyOpen by remember { mutableStateOf(false) }

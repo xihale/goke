@@ -199,7 +199,9 @@ fun TodayScreen() {
     val reduce = reduceMotion()
     val listState = rememberLazyListState()
     LaunchedEffect(nav.reselect, reduce) {
-        if (reduce) listState.scrollToItem(0) else listState.animateScrollToItem(0)
+        if (nav.reselect > 0 && nav.tab == Tab.TODAY) {
+            if (reduce) listState.scrollToItem(0) else listState.animateScrollToItem(0)
+        }
     }
     val slideSpec = MintTheme.spec<IntOffset>()
     val fadeSpec = MintTheme.spec<Float>()

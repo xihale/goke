@@ -105,8 +105,17 @@ internal fun RescheduleSheet(
     }
 
     fun moveTo(d: LocalDate?) {
-        val desc = ctx.getString(R.string.todo_reschedule_desc, title)
-        finish(Edits.reschedule(tasks, d, desc, System.currentTimeMillis()), ctx.getString(R.string.todo_moved_toast, tasks.size))
+        val desc =
+            if (tasks.size > 1) {
+                ctx.getString(R.string.todo_reschedule_bulk_desc, tasks.size)
+            } else {
+                ctx.getString(R.string.todo_reschedule_desc, title)
+            }
+        val nowDt = LocalDateTime.now()
+        finish(
+            Edits.reschedule(tasks, d, desc, System.currentTimeMillis(), clearTimeIfPast = if (d == today) nowDt else null),
+            ctx.getString(R.string.todo_moved_toast, tasks.size),
+        )
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
@@ -192,6 +201,11 @@ internal fun MorningSheet(
     val actions = LocalActions.current
     val sheet = rememberModalSheetState()
     val today = now.toLocalDate()
+    var lastTasks by remember { mutableStateOf(tasks) }
+    LaunchedEffect(tasks) {
+        if (tasks.isNotEmpty()) lastTasks = tasks
+    }
+    val displayTasks = if (tasks.isNotEmpty()) tasks else lastTasks
 
     // 全部处理完就自动收起
     LaunchedEffect(tasks.isEmpty()) {
@@ -205,15 +219,36 @@ internal fun MorningSheet(
         list: List<Task>,
         d: LocalDate,
     ) {
+        val desc =
+            if (list.size > 1) {
+                ctx.getString(R.string.todo_reschedule_bulk_desc, list.size)
+            } else {
+                ctx.getString(R.string.todo_reschedule_desc, list.first().title)
+            }
+        val clearedPastTime =
+            d == today &&
+                list.any { t ->
+                    t.dueHasTime && t.due?.toLocalTime()?.let { LocalDateTime.of(d, it).isBefore(now) } == true
+                }
         actions.commit(
-            Edits.reschedule(list, d, ctx.getString(R.string.todo_reschedule_desc, list.first().title), System.currentTimeMillis()),
-            ctx.getString(R.string.todo_moved_to_toast, ctx.dueLabel(d.atStartOfDay(), false, today)),
+            Edits.reschedule(list, d, desc, System.currentTimeMillis(), clearTimeIfPast = if (d == today) now else null),
+            if (clearedPastTime) {
+                ctx.getString(R.string.todo_today_untimed_toast)
+            } else {
+                ctx.getString(R.string.todo_moved_to_toast, ctx.dueLabel(d.atStartOfDay(), false, today))
+            },
         )
     }
 
     fun drop(list: List<Task>) {
+        val desc =
+            if (list.size > 1) {
+                ctx.getString(R.string.todo_drop_bulk_desc, list.size)
+            } else {
+                ctx.getString(R.string.todo_drop_desc, list.first().title)
+            }
         actions.commit(
-            Edits.dropTasks(list, ctx.getString(R.string.todo_drop_desc, list.first().title), System.currentTimeMillis()),
+            Edits.dropTasks(list, desc, System.currentTimeMillis()),
             ctx.getString(R.string.todo_dropped_toast, list.size),
         )
     }
@@ -221,17 +256,18 @@ internal fun MorningSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
             Text(
-                stringResource(R.string.todo_tidy_title, tasks.size),
+                stringResource(R.string.todo_tidy_title, displayTasks.size),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(bottom = 12.dp),
             )
-            if (tasks.size > 1) {
+            if (displayTasks.size > 1) {
                 Row(
                     Modifier.fillMaxWidth().padding(bottom = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     FilledTonalButton(
                         onClick = { move(tasks, today) },
+                        enabled = tasks.isNotEmpty(),
                         modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                         colors =
                             ButtonDefaults.filledTonalButtonColors(
@@ -241,6 +277,7 @@ internal fun MorningSheet(
                     ) { Text(stringResource(R.string.todo_all_to_today)) }
                     FilledTonalButton(
                         onClick = { drop(tasks) },
+                        enabled = tasks.isNotEmpty(),
                         modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                         colors =
                             ButtonDefaults.filledTonalButtonColors(
@@ -251,7 +288,7 @@ internal fun MorningSheet(
                 }
             }
             LazyColumn(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(tasks, key = { it.id }) { t ->
+                items(displayTasks, key = { it.id }) { t ->
                     Surface(
                         shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,

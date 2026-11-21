@@ -47,12 +47,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarViewWeek
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -129,6 +133,8 @@ import app.mintcal.core.model.Semester
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
+import app.mintcal.core.recurrence.CourseExpander
+import app.mintcal.core.recurrence.CourseOccurrence
 import app.mintcal.core.time.SemesterCalendar
 import app.mintcal.core.time.WeekSets
 import app.mintcal.core.util.Ids
@@ -137,11 +143,13 @@ import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
 import app.mintcal.ui.Tab
+import app.mintcal.ui.components.ConflictCard
 import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.FieldText
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.NavListInset
 import app.mintcal.ui.components.TaskRow
+import app.mintcal.ui.components.TonalField
 import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.components.mintPressable
@@ -150,6 +158,7 @@ import app.mintcal.ui.dueLabel
 import app.mintcal.ui.formatRooms
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
+import app.mintcal.ui.monthDay
 import app.mintcal.ui.monthDayWeekday
 import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberToday
@@ -243,6 +252,10 @@ fun TimetableScreen() {
     val scope = rememberCoroutineScope()
     val scroll = rememberScrollState()
     var selected by remember { mutableStateOf<TimetableCell?>(null) }
+    // 调课「课表选位」模式：选定课程后翻周点击目标格，自动带入周/星期/节次进入调课确认面板
+    var pickingRescheduleFor by remember { mutableStateOf<CourseOccurrence?>(null) }
+    var reschedulePrefill by remember { mutableStateOf<ReschedulePrefill?>(null) }
+    BackHandler(enabled = pickingRescheduleFor != null) { pickingRescheduleFor = null }
     // 同一时段多条安排：先列出让人挑，再进各自的详情
     var slotPick by remember { mutableStateOf<List<SlotEntry>?>(null) }
     var parcelSheet by remember { mutableStateOf<Pair<LocalDate, List<Task>>?>(null) }
@@ -260,7 +273,7 @@ fun TimetableScreen() {
     val afterSnap = remember(previewCs, snap) { previewCs?.let { snap.apply(it, 0).live() } }
 
     // 抽屉展开时隐藏底栏与撤销条，避免与应用内轻量抽屉重叠
-    val sheetOpen = selected != null || slotPick != null || parcelSheet != null
+    val sheetOpen = selected != null || slotPick != null || parcelSheet != null || reschedulePrefill != null
     DisposableEffect(sheetOpen) {
         if (sheetOpen) nav.composerOpen = true
         onDispose { if (sheetOpen) nav.composerOpen = false }
@@ -281,8 +294,12 @@ fun TimetableScreen() {
             }
         }
     }
-    // 再次点按「课表」Tab：跳回本周
-    LaunchedEffect(nav.reselect) { pager.scrollToPage(startPage) }
+    // 再次点按「课表」Tab：跳回本周（仅在当前就是课表 Tab 时响应）
+    LaunchedEffect(nav.reselect) {
+        if (nav.reselect > 0 && nav.tab == Tab.TIMETABLE) {
+            pager.scrollToPage(startPage)
+        }
+    }
     // 冲突面板「去查看」：跳到那一天所在的周并选中它
     LaunchedEffect(nav.focusDate) {
         val d = nav.focusDate ?: return@LaunchedEffect
@@ -367,6 +384,19 @@ fun TimetableScreen() {
                         it,
                         onApply = { app.advanced.apply { actions.toast(ctx.getString(R.string.applied_toast, it.changes.size)) } },
                         onDiscard = { app.advanced.discard() },
+                    )
+                }
+            }
+
+            AnimatedVisibility(
+                visible = pickingRescheduleFor != null,
+                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+            ) {
+                pickingRescheduleFor?.let { occ ->
+                    ReschedulePickBanner(
+                        courseName = occ.course.name,
+                        onCancel = { pickingRescheduleFor = null },
                     )
                 }
             }
@@ -464,7 +494,18 @@ fun TimetableScreen() {
                                 translationX = off * 12.dp.toPx()
                             },
                         periods = periods,
-                        onClick = { selected = it },
+                        onClick = { cell ->
+                            val picking = pickingRescheduleFor
+                            if (picking != null) {
+                                val span = (picking.endPeriod - picking.startPeriod).coerceAtLeast(0)
+                                val sp = cell.occ.startPeriod.coerceIn(1, periods.size)
+                                val ep = (sp + span).coerceAtMost(periods.size)
+                                reschedulePrefill = ReschedulePrefill(picking, week, cell.occ.date.dayOfWeek.value, sp, ep, picking.room)
+                                pickingRescheduleFor = null
+                            } else {
+                                selected = cell
+                            }
+                        },
                         onOpenTask = { nav.openTask(it) },
                         onSlotClick = { slotPick = it },
                         onParcelClick = { d, list -> parcelSheet = d to list },
@@ -496,14 +537,45 @@ fun TimetableScreen() {
                             )
                         },
                         onEmptySlotClick = { dow, period ->
-                            nav.push(Route.CourseEdit(id = null, initialDow = dow, initialPeriod = period))
+                            val picking = pickingRescheduleFor
+                            if (picking != null) {
+                                val span = (picking.endPeriod - picking.startPeriod).coerceAtLeast(0)
+                                val sp = period.coerceIn(1, periods.size)
+                                val ep = (sp + span).coerceAtMost(periods.size)
+                                reschedulePrefill = ReschedulePrefill(picking, week, dow, sp, ep, picking.room)
+                                pickingRescheduleFor = null
+                            } else {
+                                nav.push(Route.CourseEdit(id = null, initialDow = dow, initialPeriod = period))
+                            }
                         },
                     )
                 }
             }
         }
 
-        CourseSheet(selected, snap, cal, onDismiss = { selected = null })
+        CourseSheet(
+            cell = selected,
+            prefill = reschedulePrefill,
+            sem = sem,
+            snap = snap,
+            cal = cal,
+            onPickOnGrid = { occ ->
+                selected = null
+                reschedulePrefill = null
+                pickingRescheduleFor = occ
+            },
+            onJumpToWeek = { targetWeek ->
+                if (targetWeek in 1..sem.totalWeeks && targetWeek != pager.currentPage + 1) {
+                    scope.launch {
+                        if (reduce) pager.scrollToPage(targetWeek - 1) else pager.animateScrollToPage(targetWeek - 1)
+                    }
+                }
+            },
+            onDismiss = {
+                selected = null
+                reschedulePrefill = null
+            },
+        )
         SlotSheet(
             slotPick,
             onDismiss = { slotPick = null },
@@ -1703,215 +1775,679 @@ private fun CourseBlock(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+private data class ReschedulePrefill(
+    val occ: CourseOccurrence,
+    val week: Int,
+    val dow: Int,
+    val startPeriod: Int,
+    val endPeriod: Int,
+    val room: String,
+)
+
 @Composable
-private fun CourseSheet(
-    cell: TimetableCell?,
-    snap: Snapshot,
-    cal: SemesterCalendar,
-    onDismiss: () -> Unit,
+private fun ReschedulePickBanner(
+    courseName: String,
+    onCancel: () -> Unit,
 ) {
-    var lastCell by remember { mutableStateOf(cell) }
-    LaunchedEffect(cell) { if (cell != null) lastCell = cell }
-    val activeCell = cell ?: lastCell
-
-    InWindowSheet(
-        visible = cell != null,
-        onDismiss = onDismiss,
+    MintCard(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = RoundedCornerShape(16.dp),
     ) {
-        if (activeCell == null) return@InWindowSheet
-        val ctx = LocalContext.current
-        val nav = LocalNav.current
-        val actions = LocalActions.current
-        val o = activeCell.occ
-        val c = o.course
-        var reschedule by remember { mutableStateOf(false) }
-
-        Column(
-            Modifier
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .width(4.dp)
-                        .height(22.dp)
-                        .clip(CircleShape)
-                        .background(MintTheme.colors.fg(c.colorIndex)),
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(c.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-            }
-            Text(
-                "${ctx.weekdayShort(o.date.dayOfWeek.value).let { stringResource(R.string.weekday_prefix, it) }} ${cal.startTime(o.startPeriod)?.hm().orEmpty()}–${cal.endTime(o.endPeriod)?.hm().orEmpty()} · ${stringResource(R.string.periods_range, o.startPeriod, o.endPeriod)}",
-                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 14.dp, bottom = 8.dp),
+            Icon(
+                Icons.Rounded.GridView,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(18.dp),
             )
-            if (o.room.isNotBlank()) {
-                val fullRoom =
-                    remember(o.room) {
-                        o.room
-                            .split(RoomSplitRegex)
-                            .filter { it.isNotBlank() }
-                            .joinToString(" / ")
-                            .ifBlank { o.room }
-                    }
-                ValueRow(stringResource(R.string.label_room), fullRoom, onClick = {
-                    onDismiss()
-                    nav.push(Route.CourseEdit(c.id))
-                })
+            Text(
+                stringResource(R.string.reschedule_pick_banner, courseName),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onCancel) {
+                Text(stringResource(R.string.cancel))
             }
-            if (c.teacher.isNotBlank()) {
-                ValueRow(stringResource(R.string.label_teacher), c.teacher, onClick = {
-                    onDismiss()
-                    nav.push(Route.CourseEdit(c.id))
-                })
-            }
-            ValueRow(stringResource(R.string.week_label), WeekSets.format(c.weeks), onClick = {
-                onDismiss()
-                nav.push(Route.CourseEdit(c.id))
-            })
-            if (c.note.isNotBlank()) {
-                Text(
-                    c.note,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f))
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                )
-            }
-            if (activeCell.kind == CellKind.NORMAL) {
-                Spacer(Modifier.height(10.dp))
-                // 小屏放不下三个按钮就换行，主次不变：编辑 > 停课 > 调课
-                val secondaryColors =
-                    ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Button(
-                        onClick = {
-                            onDismiss()
-                            nav.push(Route.CourseEdit(c.id))
-                        },
-                        modifier = Modifier.heightIn(min = 48.dp),
-                    ) { Text(stringResource(R.string.edit)) }
-                    FilledTonalButton(
-                        onClick = {
-                            val ex = CourseException(Ids.next(), c.id, origWeek(snap, c, o.date, cal), ExceptionType.CANCEL)
-                            val old = snap.exceptions.firstOrNull { it.courseId == c.id && it.week == ex.week }
-                            val cs = Edits.save(snap, if (old != null) ex.copy(id = old.id) else ex, ctx.getString(R.string.cancel_class_desc, c.name), System.currentTimeMillis())
-                            actions.commit(cs, ctx.getString(R.string.cancel_class_toast, c.name))
-                            onDismiss()
-                        },
-                        modifier = Modifier.heightIn(min = 48.dp),
-                        colors = secondaryColors,
-                    ) { Text(stringResource(R.string.cancel_class_this_week)) }
-                    FilledTonalButton(
-                        onClick = { reschedule = true },
-                        modifier = Modifier.heightIn(min = 48.dp),
-                        colors = secondaryColors,
-                    ) { Text(stringResource(R.string.reschedule)) }
-                }
-                if (o.rescheduled) {
-                    TextButton(onClick = {
-                        val w = origWeek(snap, c, o.date, cal)
-                        val changes =
-                            snap.exceptions
-                                .filter { it.courseId == c.id && it.week == w }
-                                .map { Change.Remove(it) }
-                        if (changes.isNotEmpty()) {
-                            actions.commit(
-                                ChangeSet(
-                                    Ids.next(),
-                                    ctx.getString(R.string.restore_class_desc, c.name),
-                                    Source.MANUAL,
-                                    System.currentTimeMillis(),
-                                    changes,
-                                ),
-                                ctx.getString(R.string.restore_class_toast),
-                            )
-                        }
-                        onDismiss()
-                    }) { Text(stringResource(R.string.restore_class)) }
-                }
-            }
-        }
-        if (reschedule) {
-            RescheduleDialog(c, o.date, cal, snap, onDismiss = {
-                reschedule = false
-                onDismiss()
-            })
         }
     }
 }
 
-/** 课程的「原始周次」：调课后课程出现在别的周，需要找回对应的原周。 */
-private fun origWeek(
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CourseSheet(
+    cell: TimetableCell?,
+    prefill: ReschedulePrefill?,
+    sem: Semester,
     snap: Snapshot,
-    c: Course,
-    date: LocalDate,
     cal: SemesterCalendar,
-): Int {
-    val shown = cal.weekOf(date)
-    if (shown in c.weeks) return shown
-    return snap.exceptions.firstOrNull { it.courseId == c.id && it.type == ExceptionType.RESCHEDULE && (it.newWeek ?: it.week) == shown }?.week ?: shown
+    onPickOnGrid: (CourseOccurrence) -> Unit,
+    onJumpToWeek: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var lastCell by remember { mutableStateOf(cell) }
+    var lastPrefill by remember { mutableStateOf(prefill) }
+    LaunchedEffect(cell, prefill) {
+        if (cell != null) {
+            lastCell = cell
+            lastPrefill = null
+        } else if (prefill != null) {
+            lastPrefill = prefill
+            lastCell = null
+        }
+    }
+    val visible = cell != null || prefill != null
+    val activePrefill = prefill ?: if (cell == null) lastPrefill else null
+    val activeCell = cell ?: if (activePrefill == null) lastCell else null
+    val activeOcc = activePrefill?.occ ?: activeCell?.occ
+
+    var inReschedule by remember { mutableStateOf(false) }
+    LaunchedEffect(cell, prefill) {
+        inReschedule = prefill != null
+    }
+    BackHandler(enabled = visible && inReschedule && prefill == null) {
+        inReschedule = false
+    }
+
+    InWindowSheet(
+        visible = visible,
+        onDismiss = onDismiss,
+    ) {
+        if (activeOcc == null) return@InWindowSheet
+        val ctx = LocalContext.current
+        val nav = LocalNav.current
+        val actions = LocalActions.current
+        val o = activeOcc
+        val c = o.course
+        val fadeSpec = MintTheme.spec<Float>()
+
+        AnimatedContent(
+            targetState = inReschedule,
+            transitionSpec = { fadeIn(fadeSpec) togetherWith fadeOut(fadeSpec) },
+            label = "course-sheet-mode",
+        ) { editing ->
+            if (!editing && activeCell != null) {
+                Column(
+                    Modifier
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .width(4.dp)
+                                .height(22.dp)
+                                .clip(CircleShape)
+                                .background(MintTheme.colors.fg(c.colorIndex)),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(c.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                    }
+                    Text(
+                        "${ctx.weekdayShort(o.date.dayOfWeek.value).let { stringResource(R.string.weekday_prefix, it) }} ${cal.startTime(o.startPeriod)?.hm().orEmpty()}–${cal.endTime(o.endPeriod)?.hm().orEmpty()} · ${stringResource(R.string.periods_range, o.startPeriod, o.endPeriod)}",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 14.dp, bottom = if (o.rescheduled) 2.dp else 8.dp),
+                    )
+                    if (o.rescheduled) {
+                        val origDow = ctx.getString(R.string.weekday_prefix, ctx.weekdayShort(c.dayOfWeek))
+                        val origHint =
+                            if (c.startPeriod == c.endPeriod) {
+                                stringResource(R.string.reschedule_from_hint_single, o.originalWeek, origDow, c.startPeriod)
+                            } else {
+                                stringResource(R.string.reschedule_from_hint, o.originalWeek, origDow, c.startPeriod, c.endPeriod)
+                            }
+                        Text(
+                            origHint,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 14.dp, bottom = 8.dp),
+                        )
+                    }
+                    if (o.room.isNotBlank()) {
+                        val fullRoom =
+                            remember(o.room) {
+                                o.room
+                                    .split(RoomSplitRegex)
+                                    .filter { it.isNotBlank() }
+                                    .joinToString(" / ")
+                                    .ifBlank { o.room }
+                            }
+                        ValueRow(stringResource(R.string.label_room), fullRoom, onClick = {
+                            onDismiss()
+                            nav.push(Route.CourseEdit(c.id))
+                        })
+                    }
+                    if (c.teacher.isNotBlank()) {
+                        ValueRow(stringResource(R.string.label_teacher), c.teacher, onClick = {
+                            onDismiss()
+                            nav.push(Route.CourseEdit(c.id))
+                        })
+                    }
+                    ValueRow(stringResource(R.string.week_label), WeekSets.format(c.weeks), onClick = {
+                        onDismiss()
+                        nav.push(Route.CourseEdit(c.id))
+                    })
+                    if (c.note.isNotBlank()) {
+                        Text(
+                            c.note,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f))
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                        )
+                    }
+                    if (activeCell.kind == CellKind.NORMAL) {
+                        Spacer(Modifier.height(10.dp))
+                        // 小屏放不下三个按钮就换行，主次不变：编辑 > 停课 > 调课
+                        val secondaryColors =
+                            ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                            )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Button(
+                                onClick = {
+                                    onDismiss()
+                                    nav.push(Route.CourseEdit(c.id))
+                                },
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) { Text(stringResource(R.string.edit)) }
+                            FilledTonalButton(
+                                onClick = {
+                                    val origW = o.originalWeek
+                                    val ex = CourseException(Ids.next(), c.id, origW, ExceptionType.CANCEL)
+                                    val old = snap.exceptions.firstOrNull { it.deletedAt == null && it.courseId == c.id && it.week == origW }
+                                    val cs = Edits.save(snap, if (old != null) ex.copy(id = old.id) else ex, ctx.getString(R.string.cancel_class_desc, c.name), System.currentTimeMillis())
+                                    actions.commit(cs, ctx.getString(R.string.cancel_class_toast, c.name))
+                                    onDismiss()
+                                },
+                                modifier = Modifier.heightIn(min = 48.dp),
+                                colors = secondaryColors,
+                            ) { Text(stringResource(R.string.cancel_class_this_week)) }
+                            FilledTonalButton(
+                                onClick = { inReschedule = true },
+                                modifier = Modifier.heightIn(min = 48.dp),
+                                colors = secondaryColors,
+                            ) { Text(stringResource(R.string.reschedule)) }
+                        }
+                        if (o.rescheduled) {
+                            TextButton(onClick = {
+                                val origW = o.originalWeek
+                                val changes =
+                                    snap.exceptions
+                                        .filter { it.deletedAt == null && it.courseId == c.id && it.week == origW }
+                                        .map { Change.Remove(it) }
+                                if (changes.isNotEmpty()) {
+                                    actions.commit(
+                                        ChangeSet(
+                                            Ids.next(),
+                                            ctx.getString(R.string.restore_class_desc, c.name),
+                                            Source.MANUAL,
+                                            System.currentTimeMillis(),
+                                            changes,
+                                        ),
+                                        ctx.getString(R.string.restore_class_toast),
+                                    )
+                                    onJumpToWeek(origW)
+                                }
+                                onDismiss()
+                            }) { Text(stringResource(R.string.restore_class)) }
+                        }
+                    }
+                }
+            } else {
+                ReschedulePanel(
+                    occ = o,
+                    prefill = activePrefill,
+                    sem = sem,
+                    snap = snap,
+                    cal = cal,
+                    onBack = {
+                        if (activePrefill != null) onDismiss() else inReschedule = false
+                    },
+                    onPickOnGrid = { onPickOnGrid(o) },
+                    onCommitted = { targetWeek ->
+                        onDismiss()
+                        onJumpToWeek(targetWeek)
+                    },
+                )
+            }
+        }
+    }
 }
 
 @Composable
-private fun RescheduleDialog(
-    c: Course,
-    date: LocalDate,
-    cal: SemesterCalendar,
+private fun ReschedulePanel(
+    occ: CourseOccurrence,
+    prefill: ReschedulePrefill?,
+    sem: Semester,
     snap: Snapshot,
-    onDismiss: () -> Unit,
+    cal: SemesterCalendar,
+    onBack: () -> Unit,
+    onPickOnGrid: () -> Unit,
+    onCommitted: (Int) -> Unit,
 ) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
-    val week = origWeek(snap, c, date, cal)
-    var newWeek by remember { mutableIntStateOf(cal.weekOf(date)) }
-    var dow by remember { mutableIntStateOf(date.dayOfWeek.value) }
-    var start by remember { mutableIntStateOf(c.startPeriod) }
-    var room by remember { mutableStateOf(c.room) }
-    val len = c.endPeriod - c.startPeriod
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.reschedule_title, c.name)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Stepper(stringResource(R.string.week_label), newWeek, 1, cal.totalWeeks) { newWeek = it }
-                Stepper(stringResource(R.string.weekday_label), dow, 1, 7, display = { ctx.weekdayFull(it) }) { dow = it }
-                Stepper(stringResource(R.string.start_period), start, 1, (cal.periods.size - len).coerceAtLeast(1)) { start = it }
-                Spacer(Modifier.height(4.dp))
-                app.mintcal.ui.components.TonalField(
-                    label = stringResource(R.string.label_room),
-                    value = room,
-                    onChange = { room = it },
+    val scheme = MaterialTheme.colorScheme
+    val c = occ.course
+    val origW = occ.originalWeek
+    val periodCount = cal.periods.size.coerceAtLeast(1)
+
+    val seedKey = prefill ?: occ
+    var newWeek by remember(seedKey) { mutableIntStateOf((prefill?.week ?: occ.week).coerceIn(1, cal.totalWeeks)) }
+    var dow by remember(seedKey) { mutableIntStateOf((prefill?.dow ?: occ.date.dayOfWeek.value).coerceIn(1, 7)) }
+    var start by remember(seedKey) { mutableIntStateOf((prefill?.startPeriod ?: occ.startPeriod).coerceIn(1, periodCount)) }
+    var end by remember(seedKey) { mutableIntStateOf((prefill?.endPeriod ?: occ.endPeriod).coerceIn(start, periodCount)) }
+    var room by remember(seedKey) { mutableStateOf(prefill?.room ?: occ.room) }
+    var rangeAnchor by remember(seedKey) { mutableStateOf<Int?>(null) }
+
+    val nextOrPrevWeek =
+        when {
+            origW < cal.totalWeeks -> origW + 1
+            origW > 1 -> origW - 1
+            else -> origW
+        }
+    var weekPickerOpen by remember(seedKey) { mutableStateOf(newWeek != origW && newWeek != nextOrPrevWeek) }
+
+    val targetDate = remember(cal, newWeek, dow) { cal.dateOf(newWeek, dow) }
+    val clockText =
+        remember(cal, start, end) {
+            val s = cal.startTime(start)?.hm()
+            val e = cal.endTime(end)?.hm()
+            if (s != null && e != null) "$s–$e" else ""
+        }
+    val periodSpanText =
+        if (start == end) {
+            stringResource(R.string.period_n, start)
+        } else {
+            stringResource(R.string.periods_range, start, end)
+        }
+    val periodSummary = listOfNotNull(periodSpanText, clockText.takeIf { it.isNotEmpty() }).joinToString(" · ")
+    val clashes =
+        remember(snap, sem, newWeek, dow, start, end, c.id, origW) {
+            CourseExpander
+                .occurrencesInWeek(sem, snap.courses, snap.exceptions, newWeek)
+                .filter { other ->
+                    other.date.dayOfWeek.value == dow &&
+                        other.startPeriod <= end &&
+                        other.endPeriod >= start &&
+                        !(other.course.id == c.id && other.originalWeek == origW)
+                }
+        }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 24.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back))
+            }
+            Spacer(Modifier.width(4.dp))
+            Text(
+                stringResource(R.string.reschedule_title, c.name),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onPickOnGrid) {
+                Icon(Icons.Rounded.GridView, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(stringResource(R.string.reschedule_pick_on_grid))
+            }
+        }
+
+        Text(
+            stringResource(R.string.reschedule_summary_line, newWeek, ctx.weekdayFull(dow), ctx.monthDay(targetDate)),
+            style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+            color = scheme.primary,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(start = 6.dp, top = 2.dp, bottom = 10.dp),
+        )
+
+        // 周次：原周 / 邻周快捷选择 + 展开 5 列周次网格
+        Text(
+            stringResource(R.string.week_label),
+            style = MaterialTheme.typography.labelMedium,
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 2.dp, bottom = 6.dp),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            RescheduleWeekChip(
+                label = stringResource(R.string.reschedule_orig_week_chip, origW),
+                selected = newWeek == origW && !weekPickerOpen,
+                onClick = {
+                    newWeek = origW
+                    weekPickerOpen = false
+                },
+                modifier = Modifier.weight(1f),
+            )
+            if (nextOrPrevWeek != origW) {
+                val adjLabel =
+                    if (nextOrPrevWeek > origW) {
+                        stringResource(R.string.reschedule_next_week_chip, nextOrPrevWeek)
+                    } else {
+                        stringResource(R.string.reschedule_prev_week_chip, nextOrPrevWeek)
+                    }
+                RescheduleWeekChip(
+                    label = adjLabel,
+                    selected = newWeek == nextOrPrevWeek && !weekPickerOpen,
+                    onClick = {
+                        newWeek = nextOrPrevWeek
+                        weekPickerOpen = false
+                    },
+                    modifier = Modifier.weight(1f),
                 )
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val old = snap.exceptions.firstOrNull { it.courseId == c.id && it.week == week }
-                val ex = CourseException(old?.id ?: Ids.next(), c.id, week, ExceptionType.RESCHEDULE, newWeek, dow, start, start + len, room.takeIf { it != c.room })
-                actions.commit(Edits.save(snap, ex, ctx.getString(R.string.reschedule_desc, c.name), System.currentTimeMillis()), ctx.getString(R.string.reschedule_toast, c.name))
-                onDismiss()
-            }) { Text(stringResource(R.string.ok)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-        shape = RoundedCornerShape(28.dp),
-    )
+            val customSelected = weekPickerOpen || (newWeek != origW && newWeek != nextOrPrevWeek)
+            Row(
+                Modifier
+                    .height(40.dp)
+                    .clip(CircleShape)
+                    .background(if (customSelected) scheme.primaryContainer else scheme.surfaceContainerHighest)
+                    .mintClickable(pressedScale = 0.96f, role = Role.Button, selected = customSelected) {
+                        weekPickerOpen = !weekPickerOpen
+                    }.padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    if (newWeek != origW && newWeek != nextOrPrevWeek) {
+                        stringResource(R.string.week_n, newWeek)
+                    } else {
+                        stringResource(R.string.reschedule_other_week)
+                    },
+                    style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                    color = if (customSelected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                    fontWeight = if (customSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1,
+                )
+                Icon(
+                    if (weekPickerOpen) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                    contentDescription = null,
+                    tint = if (customSelected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+        AnimatedVisibility(
+            visible = weekPickerOpen,
+            enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+            exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+        ) {
+            val cols = 5
+            val rows = (cal.totalWeeks + cols - 1) / cols
+            Column(
+                Modifier.padding(top = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                for (r in 0 until rows) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (col in 0 until cols) {
+                            val w = r * cols + col + 1
+                            if (w <= cal.totalWeeks) {
+                                val on = w == newWeek
+                                Box(
+                                    Modifier
+                                        .weight(1f)
+                                        .height(38.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (on) scheme.primary else scheme.surfaceContainerHighest)
+                                        .mintClickable(pressedScale = 0.96f, role = Role.RadioButton, selected = on) {
+                                            newWeek = w
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        "$w",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                                        color = if (on) scheme.onPrimary else scheme.onSurfaceVariant,
+                                        fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                                    )
+                                }
+                            } else {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 星期
+        Text(
+            stringResource(R.string.weekday_label),
+            style = MaterialTheme.typography.labelMedium,
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 2.dp, top = 12.dp, bottom = 6.dp),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (d in 1..7) {
+                val on = dow == d
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .height(40.dp)
+                        .clip(CircleShape)
+                        .background(if (on) scheme.primaryContainer else scheme.surfaceContainerHighest)
+                        .mintClickable(pressedScale = 0.96f, role = Role.RadioButton, selected = on) {
+                            dow = d
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        ctx.weekdayShort(d),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (on) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                        fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                }
+            }
+        }
+
+        // 节次区间（与 SlotEditorSheet 同款交互：第 1 下定起点，第 2 下拉成区间）
+        Row(Modifier.padding(top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.field_periods),
+                style = MaterialTheme.typography.labelMedium,
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f).padding(start = 2.dp),
+            )
+            Text(
+                if (rangeAnchor != null) stringResource(R.string.course_period_range_hint) else periodSummary,
+                style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                color = scheme.primary,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(end = 2.dp),
+            )
+        }
+        val pCols = 6
+        val pRows = (periodCount + pCols - 1) / pCols
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (r in 0 until pRows) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (col in 0 until pCols) {
+                        val p = r * pCols + col + 1
+                        if (p <= periodCount) {
+                            val inRange = p in start..end
+                            val isEndpoint = p == start || p == end
+                            val bg =
+                                when {
+                                    isEndpoint -> scheme.primary
+                                    inRange -> scheme.primaryContainer
+                                    else -> scheme.surfaceContainerHighest
+                                }
+                            val fg =
+                                when {
+                                    isEndpoint -> scheme.onPrimary
+                                    inRange -> scheme.onPrimaryContainer
+                                    else -> scheme.onSurfaceVariant
+                                }
+                            Box(
+                                Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(bg)
+                                    .mintClickable(pressedScale = 0.96f, role = Role.Button, selected = inRange) {
+                                        val anchor = rangeAnchor
+                                        if (anchor == null) {
+                                            rangeAnchor = p
+                                            start = p
+                                            end = p
+                                        } else {
+                                            rangeAnchor = null
+                                            start = minOf(anchor, p)
+                                            end = maxOf(anchor, p)
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    "$p",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                                    color = fg,
+                                    fontWeight = if (inRange) FontWeight.SemiBold else FontWeight.Normal,
+                                )
+                            }
+                        } else {
+                            Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        TonalField(
+            label = stringResource(R.string.label_room),
+            value = room,
+            onChange = { room = it },
+        )
+
+        AnimatedVisibility(
+            visible = clashes.isNotEmpty(),
+            enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+            exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+        ) {
+            ConflictCard(
+                title = stringResource(R.string.conflict_title),
+                modifier = Modifier.padding(top = 10.dp),
+            ) {
+                clashes.take(4).forEach { other ->
+                    val clashText =
+                        if (other.startPeriod == other.endPeriod) {
+                            stringResource(R.string.reschedule_clash_item_single, other.course.name, other.startPeriod)
+                        } else {
+                            stringResource(R.string.reschedule_clash_item, other.course.name, other.startPeriod, other.endPeriod)
+                        }
+                    Text(clashText, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+        Button(
+            onClick = {
+                val trimmedRoom = room.trim()
+                val old = snap.exceptions.firstOrNull { it.deletedAt == null && it.courseId == c.id && it.week == origW }
+                val sameAsOriginal =
+                    newWeek == origW &&
+                        dow == c.dayOfWeek &&
+                        start == c.startPeriod &&
+                        end == c.endPeriod &&
+                        trimmedRoom == c.room
+                if (sameAsOriginal) {
+                    if (old != null) {
+                        actions.commit(
+                            ChangeSet(
+                                Ids.next(),
+                                ctx.getString(R.string.restore_class_desc, c.name),
+                                Source.MANUAL,
+                                System.currentTimeMillis(),
+                                listOf(Change.Remove(old)),
+                            ),
+                            ctx.getString(R.string.restore_class_toast),
+                        )
+                        onCommitted(origW)
+                    } else {
+                        actions.toast(ctx.getString(R.string.reschedule_unchanged_toast))
+                        onCommitted(origW)
+                    }
+                } else {
+                    val ex =
+                        CourseException(
+                            old?.id ?: Ids.next(),
+                            c.id,
+                            origW,
+                            ExceptionType.RESCHEDULE,
+                            newWeek,
+                            dow,
+                            start,
+                            end,
+                            trimmedRoom.takeIf { it != c.room },
+                        )
+                    actions.commit(
+                        Edits.save(snap, ex, ctx.getString(R.string.reschedule_desc, c.name), System.currentTimeMillis()),
+                        ctx.getString(R.string.reschedule_toast, c.name),
+                    )
+                    onCommitted(newWeek)
+                }
+            },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        ) {
+            Text(stringResource(R.string.reschedule_confirm))
+        }
+    }
+}
+
+@Composable
+private fun RescheduleWeekChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        modifier
+            .height(40.dp)
+            .clip(CircleShape)
+            .background(if (selected) scheme.primaryContainer else scheme.surfaceContainerHighest)
+            .mintClickable(pressedScale = 0.96f, role = Role.RadioButton, selected = selected, onClick = onClick)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+            color = if (selected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 @Composable

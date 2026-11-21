@@ -22,8 +22,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.AlertDialog
@@ -39,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -57,18 +60,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
+import app.mintcal.core.change.Change
+import app.mintcal.core.change.ChangeSet
 import app.mintcal.core.change.Edits
 import app.mintcal.core.model.Course
 import app.mintcal.core.model.GdutCampus
 import app.mintcal.core.model.GdutPeriods
 import app.mintcal.core.model.PeriodTime
 import app.mintcal.core.model.Semester
+import app.mintcal.core.model.Snapshot
+import app.mintcal.core.model.Source
 import app.mintcal.core.time.WeekSets
+import app.mintcal.core.util.Ids
 import app.mintcal.jxfw.JxfwException
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
+import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.DatePickerDlg
 import app.mintcal.ui.components.FieldText
 import app.mintcal.ui.components.FormSection
@@ -77,6 +86,7 @@ import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.NavRow
 import app.mintcal.ui.components.SectionLabel
 import app.mintcal.ui.components.SegmentedPill
+import app.mintcal.ui.components.Tag
 import app.mintcal.ui.components.TimePickerDlg
 import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.components.mintClickable
@@ -107,22 +117,37 @@ fun EditTimetableScreen(onBack: () -> Unit) {
     val nav = LocalNav.current
     val actions = LocalActions.current
     val snap = liveSnapshot()
-    val sem =
-        snap.currentSemester ?: run {
-            onBack()
-            return
-        }
+    val sem = snap.currentSemester
+    if (sem == null) {
+        CreateSemesterScreen(snap = snap, onBack = onBack)
+        return
+    }
 
     var name by remember(sem.id) { mutableStateOf(sem.name) }
     var week1 by remember(sem.id) { mutableStateOf(sem.week1Monday) }
     var total by remember(sem.id) { mutableIntStateOf(sem.totalWeeks) }
     var pickDate by remember { mutableStateOf(false) }
     var copyDlg by remember { mutableStateOf(false) }
+    var switchDlg by remember { mutableStateOf(false) }
+    var deleteTarget by remember { mutableStateOf<Semester?>(null) }
 
     // 离开页面时自动保存学期信息（有改动才写）
     val latest by rememberUpdatedState(Triple(name, week1, total))
     val semNow by rememberUpdatedState(sem)
     val snapNow by rememberUpdatedState(snap)
+
+    fun flushPendingSemesterEdit(): Semester {
+        val trimmed = name.trim()
+        val monday = week1.with(java.time.DayOfWeek.MONDAY)
+        if (trimmed.isNotBlank() && (trimmed != sem.name || monday != sem.week1Monday || total != sem.totalWeeks)) {
+            val upd = sem.copy(name = trimmed, week1Monday = monday, totalWeeks = total)
+            val desc = ctx.getString(R.string.edit_semester_desc)
+            actions.commit(Edits.save(snap, upd, desc, System.currentTimeMillis()), desc)
+            return upd
+        }
+        return sem
+    }
+
     DisposableEffect(sem.id) {
         onDispose {
             val (n, w, t) = latest
@@ -175,7 +200,13 @@ fun EditTimetableScreen(onBack: () -> Unit) {
                 trailing = weekTrailing,
                 trailingColor = MaterialTheme.colorScheme.primary,
             ) {
-                FieldText(stringResource(R.string.label_semester_name), name, { name = it })
+                FieldText(
+                    stringResource(R.string.label_semester_name),
+                    name,
+                    { name = it },
+                    isError = name.isBlank(),
+                    supporting = if (name.isBlank()) stringResource(R.string.semester_name_required) else null,
+                )
                 ValueRow(stringResource(R.string.label_week1_monday), ctx.fullDate(week1), { pickDate = true })
                 Stepper(stringResource(R.string.label_total_weeks), total, 1, 30, { ctx.getString(R.string.week_n_total, it) }) { total = it }
                 ValueRow(
@@ -216,6 +247,13 @@ fun EditTimetableScreen(onBack: () -> Unit) {
             }
 
             FormSection(stringResource(R.string.section_more)) {
+                if (snap.semesters.size > 1) {
+                    NavRow(
+                        stringResource(R.string.semester_switch_title),
+                        sem.name,
+                        Icons.Rounded.SwapHoriz,
+                    ) { switchDlg = true }
+                }
                 NavRow(
                     stringResource(R.string.import_timetable_file),
                     stringResource(R.string.import_timetable_file_desc),
@@ -246,8 +284,9 @@ fun EditTimetableScreen(onBack: () -> Unit) {
             },
             confirmButton = {
                 TextButton(enabled = newName.isNotBlank(), onClick = {
+                    val baseSem = flushPendingSemesterEdit()
                     actions.commit(
-                        Edits.copyToNextSemester(snap, sem, newName.trim(), newStart.with(java.time.DayOfWeek.MONDAY), System.currentTimeMillis(), ctx.getString(R.string.copy_semester_desc, newName.trim())),
+                        Edits.copyToNextSemester(snap, baseSem, newName.trim(), newStart.with(java.time.DayOfWeek.MONDAY), System.currentTimeMillis(), ctx.getString(R.string.copy_semester_desc, newName.trim())),
                         ctx.getString(R.string.copied_toast),
                     )
                     copyDlg = false
@@ -258,6 +297,166 @@ fun EditTimetableScreen(onBack: () -> Unit) {
         )
         if (pick) DatePickerDlg(newStart, { pick = false }) { newStart = it }
     }
+    if (switchDlg) {
+        val allSemesters = remember(snap.semesters) { snap.semesters.sortedByDescending { it.week1Monday } }
+        AlertDialog(
+            onDismissRequest = { switchDlg = false },
+            title = { Text(stringResource(R.string.semester_switch_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    allSemesters.forEach { target ->
+                        val isCur = target.id == sem.id
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .mintClickable(pressedScale = 0.98f) {
+                                    if (!isCur) {
+                                        val baseSem = flushPendingSemesterEdit()
+                                        val nowMs = System.currentTimeMillis()
+                                        val changes =
+                                            snap.semesters.mapNotNull { s ->
+                                                val effective = if (s.id == baseSem.id) baseSem else s
+                                                val want = effective.id == target.id
+                                                if (effective.isCurrent != want) Change.Modify(effective, effective.copy(isCurrent = want)) else null
+                                            }
+                                        if (changes.isNotEmpty()) {
+                                            val desc = ctx.getString(R.string.semester_switched_toast, target.name)
+                                            actions.commit(ChangeSet(Ids.next(), desc, Source.MANUAL, nowMs, changes), desc)
+                                        }
+                                    }
+                                    switchDlg = false
+                                }.padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(target.name, style = MaterialTheme.typography.bodyLarge, fontWeight = if (isCur) FontWeight.SemiBold else FontWeight.Normal)
+                                Text(
+                                    ctx.fullDate(target.week1Monday),
+                                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (isCur) {
+                                Tag(
+                                    stringResource(R.string.semester_current_tag),
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                            }
+                            if (allSemesters.size > 1) {
+                                IconButton(onClick = {
+                                    switchDlg = false
+                                    deleteTarget = target
+                                }) {
+                                    Icon(
+                                        Icons.Rounded.Delete,
+                                        stringResource(R.string.semester_delete),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { switchDlg = false }) { Text(stringResource(R.string.close)) } },
+            shape = RoundedCornerShape(28.dp),
+        )
+    }
+    deleteTarget?.let { target ->
+        ConfirmDialog(
+            title = stringResource(R.string.semester_delete),
+            text = stringResource(R.string.semester_delete_confirm, target.name),
+            confirm = stringResource(R.string.delete),
+            onConfirm = {
+                val nowMs = System.currentTimeMillis()
+                val changes = mutableListOf<Change>(Change.Remove(target))
+                val targetCourses = snap.courses.filter { it.semesterId == target.id }
+                val targetCourseIds = targetCourses.map { it.id }.toSet()
+                targetCourses.forEach { changes += Change.Remove(it) }
+                snap.exceptions.filter { it.courseId in targetCourseIds }.forEach { changes += Change.Remove(it) }
+                if (target.isCurrent) {
+                    val nextCurrent = snap.semesters.filter { it.id != target.id }.maxByOrNull { it.week1Monday }
+                    if (nextCurrent != null && !nextCurrent.isCurrent) {
+                        changes += Change.Modify(nextCurrent, nextCurrent.copy(isCurrent = true))
+                    }
+                }
+                val desc = ctx.getString(R.string.semester_deleted_toast, target.name)
+                actions.commit(ChangeSet(Ids.next(), desc, Source.MANUAL, nowMs, changes), desc)
+                deleteTarget = null
+            },
+            onDismiss = { deleteTarget = null },
+            danger = true,
+        )
+    }
+}
+
+@Composable
+private fun CreateSemesterScreen(
+    snap: Snapshot,
+    onBack: () -> Unit,
+) {
+    val ctx = LocalContext.current
+    val actions = LocalActions.current
+    val defaultName = stringResource(R.string.semester_create_default_name)
+    var name by remember { mutableStateOf(defaultName) }
+    var week1 by remember { mutableStateOf(LocalDate.now().with(java.time.DayOfWeek.MONDAY)) }
+    var total by remember { mutableIntStateOf(18) }
+    var campus by remember { mutableStateOf(GdutCampus.HEMC) }
+    var pickDate by remember { mutableStateOf(false) }
+
+    MintScreen(title = stringResource(R.string.semester_create_title), onBack = onBack) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            FormSection(stringResource(R.string.section_semester)) {
+                FieldText(
+                    stringResource(R.string.label_semester_name),
+                    name,
+                    { name = it },
+                    isError = name.isBlank(),
+                    supporting = if (name.isBlank()) stringResource(R.string.semester_name_required) else null,
+                )
+                ValueRow(stringResource(R.string.label_week1_monday), ctx.fullDate(week1), { pickDate = true })
+                Stepper(stringResource(R.string.label_total_weeks), total, 1, 30, { ctx.getString(R.string.week_n_total, it) }) { total = it }
+            }
+            FormSection(stringResource(R.string.semester_schedule_label)) {
+                SegmentedPill(
+                    options = GdutCampus.entries.map { it to campusLabel(it) },
+                    selected = campus,
+                    onSelect = { campus = it },
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Button(
+                enabled = name.isNotBlank(),
+                onClick = {
+                    val created =
+                        Semester(
+                            id = Ids.next(),
+                            name = name.trim(),
+                            week1Monday = week1.with(java.time.DayOfWeek.MONDAY),
+                            totalWeeks = total,
+                            periods = GdutPeriods.forCampus(campus),
+                            isCurrent = true,
+                        )
+                    val desc = ctx.getString(R.string.semester_create_title)
+                    actions.commit(Edits.save(snap, created, desc, System.currentTimeMillis()), desc)
+                },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            ) { Text(stringResource(R.string.semester_create_action)) }
+        }
+    }
+    if (pickDate) DatePickerDlg(week1, { pickDate = false }) { week1 = it.with(java.time.DayOfWeek.MONDAY) }
 }
 
 /**
@@ -415,11 +614,11 @@ fun PeriodsScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
     val snap = liveSnapshot()
-    val sem =
-        snap.currentSemester ?: run {
-            onBack()
-            return
-        }
+    val sem = snap.currentSemester
+    if (sem == null) {
+        LaunchedEffect(Unit) { onBack() }
+        return
+    }
     var periods by remember(sem.id) { mutableStateOf(sem.periods.sortedBy { it.index }) }
     var editing by remember { mutableStateOf<Pair<Int, Boolean>?>(null) }
     var menu by remember { mutableStateOf(false) }
@@ -576,7 +775,12 @@ fun PeriodsScreen(onBack: () -> Unit) {
     editing?.let { (i, isStart) ->
         val p = periods[i]
         TimePickerDlg(if (isStart) p.start else p.end, { editing = null }) { t ->
-            periods = periods.toMutableList().also { it[i] = if (isStart) p.copy(start = t) else p.copy(end = t) }
+            val updated = if (isStart) p.copy(start = t) else p.copy(end = t)
+            if (!updated.start.isBefore(updated.end)) {
+                actions.toast(ctx.getString(R.string.period_time_invalid))
+            } else {
+                periods = periods.toMutableList().also { it[i] = updated }
+            }
         }
     }
 }

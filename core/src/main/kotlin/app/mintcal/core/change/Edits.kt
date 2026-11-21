@@ -111,20 +111,32 @@ object Edits {
         }
     }
 
-    /** 改期：[date] 为 null 清除日期（回收集箱）。带时间的保留原时刻，否则当天 23:59 的无时间截止。 */
+    /** 改期：[date] 为 null 清除日期（回收集箱）。带时间的保留原时刻，若改到今天且原时刻已过且指定 [clearTimeIfPast] 则转为全天，避免继续卡在逾期。 */
     fun reschedule(
         tasks: List<Task>,
         date: LocalDate?,
         description: String,
         now: Long,
         ids: IdGenerator = Ids,
+        clearTimeIfPast: LocalDateTime? = null,
     ): ChangeSet =
         updateTasks(tasks, description, now, ids) { t ->
             if (date == null) {
                 t.copy(due = null, dueHasTime = false, startDate = null, blockStart = null, dueBeforeNextClass = false)
             } else {
-                val time = if (t.dueHasTime) t.due?.toLocalTime() ?: java.time.LocalTime.of(23, 59) else java.time.LocalTime.of(23, 59)
-                t.copy(due = java.time.LocalDateTime.of(date, time), startDate = null, blockStart = null, dueBeforeNextClass = false)
+                val origTime = if (t.dueHasTime) t.due?.toLocalTime() else null
+                val dropPastTime =
+                    origTime != null &&
+                        clearTimeIfPast != null &&
+                        LocalDateTime.of(date, origTime).isBefore(clearTimeIfPast)
+                val time = if (origTime != null && !dropPastTime) origTime else java.time.LocalTime.of(23, 59)
+                t.copy(
+                    due = LocalDateTime.of(date, time),
+                    dueHasTime = t.dueHasTime && !dropPastTime,
+                    startDate = null,
+                    blockStart = null,
+                    dueBeforeNextClass = false,
+                )
             }
         }
 
