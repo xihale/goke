@@ -52,7 +52,7 @@ class NextWidgetProvider : AppWidgetProvider() {
         }
     }
 
-    private data class Summary(
+    internal data class Summary(
         val badge: String,
         val sub: String?,
         val title: String,
@@ -109,7 +109,7 @@ class NextWidgetProvider : AppWidgetProvider() {
             am.set(AlarmManager.RTC, next.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(), pi)
         }
 
-        private fun pickSummary(
+        internal fun pickSummary(
             ctx: Context,
             snap: Snapshot?,
             st: Settings,

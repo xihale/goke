@@ -31,6 +31,8 @@ sealed interface Route {
 
     @Serializable data object Appearance : Route
 
+    @Serializable data object Widgets : Route
+
     @Serializable data object Settings : Route
 
     /** 权限与可靠性自检入口（Route.Permission 路由已统一指向 ReliabilityScreen）。 */

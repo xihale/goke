@@ -52,6 +52,7 @@ server/internal/server/web/app/   # Web 客户端（js/views + app.css）
 | 课程编辑 | `CourseEditScreen(...)` | `CourseEditScreen.kt` |
 | 课表管理 / 节次 | `EditTimetableScreen()` / `PeriodsScreen()` | `EditTimetableScreen.kt` |
 | 设置 / 外观 / 权限 / 关于 | `SettingsScreen` / `AppearanceScreen` / `PermissionScreen` / `AboutScreen` | `SettingsScreens.kt` |
+| 桌面小组件 | `WidgetsScreen()` | `WidgetsScreen.kt` |
 | 账号与同步 / 教务系统 / 本地 MCP | `SyncScreen()` / `JxfwScreen()` / `McpScreen()` | `SyncScreen.kt` / `JxfwScreen.kt` / `McpScreen.kt` |
 | 数据与备份 / 导入文件 | `DataScreen()` / `ImportScreen(...)` | `DataScreens.kt` |
 | 快递取件 / 回收站 / 操作历史 | `ParcelScreen` / `TrashScreen` / `HistoryScreen` | `ManageScreens.kt`（短信规则表单 `RuleEditSheet` 在 `ParcelRules.kt`） |

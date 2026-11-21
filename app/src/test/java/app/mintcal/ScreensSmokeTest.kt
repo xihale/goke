@@ -25,6 +25,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasImeAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -97,6 +98,7 @@ import app.mintcal.ui.screens.TodoEditScreen
 import app.mintcal.ui.screens.TodoScreen
 import app.mintcal.ui.screens.TrashScreen
 import app.mintcal.ui.screens.WhenPanel
+import app.mintcal.ui.screens.WidgetsScreen
 import app.mintcal.ui.theme.MintCalTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -270,6 +272,7 @@ class ScreensSmokeTest {
                 "edit_timetable" to { EditTimetableScreen {} },
                 "periods" to { PeriodsScreen {} },
                 "appearance" to { AppearanceScreen {} },
+                "widgets" to { WidgetsScreen {} },
                 "settings" to { SettingsScreen {} },
                 "data" to { DataScreen {} },
                 "sync" to { SyncScreen {} },
@@ -306,6 +309,10 @@ class ScreensSmokeTest {
             rule.runOnIdle { idx.intValue = 4 }
             rule.waitForIdle()
             shot("course_edit_dark")
+            val widgetsIdx = screens.indexOfFirst { it.first == "widgets" }
+            rule.runOnIdle { idx.intValue = widgetsIdx }
+            rule.waitForIdle()
+            shot("widgets_dark")
         } finally {
             app.settings.update { it.copy(darkMode = DarkMode.SYSTEM) }
         }
@@ -441,5 +448,21 @@ class ScreensSmokeTest {
         }
         rule.waitForIdle()
         rule.onNodeWithText("主页").assertIsDisplayed()
+    }
+
+    @Test
+    fun settingsOpensWidgetsScreenAndHandlesUnsupportedPin() {
+        rule.setContent { Host { SettingsScreen {} } }
+        rule.onNodeWithText(app.getString(R.string.widgets_title)).performClick()
+        rule.waitForIdle()
+        rule.onAllNodesWithText(app.getString(R.string.widget_today_name))[0].assertIsDisplayed()
+        rule.onAllNodesWithText(app.getString(R.string.widget_next_name))[0].assertIsDisplayed()
+        val addTodayDesc = app.getString(R.string.widgets_add_to_home_a11y, app.getString(R.string.widget_today_name))
+        rule.onAllNodes(hasContentDescription(addTodayDesc))[0].performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(R.string.widgets_unsupported_title)).assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.ok)).performClick()
+        rule.waitForIdle()
+        rule.onAllNodesWithText(app.getString(R.string.widgets_unsupported_title)).assertCountEquals(0)
     }
 }

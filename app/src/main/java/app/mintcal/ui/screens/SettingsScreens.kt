@@ -53,6 +53,7 @@ import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Spa
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.Terminal
+import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -125,17 +126,22 @@ fun SettingsScreen(onBack: () -> Unit) {
     fun ensureNotifPermission() {
         if (Build.VERSION.SDK_INT >= 33 && !Notifications.canPost(ctx)) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
-    // 权限入口行要实时状态：从系统设置回来后在异步协程中重算
+    // 权限入口行与桌面小组件行需要实时状态：从系统设置或桌面回来后在异步协程中重算
     var permOkCount by remember { mutableIntStateOf(4) }
+    var widgetAddedCount by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
-    fun refreshPerms() {
+    fun refreshStatus() {
         scope.launch {
-            val count = withContext(Dispatchers.IO) { permGrantedCount(ctx) }
+            val (count, widgets) =
+                withContext(Dispatchers.IO) {
+                    permGrantedCount(ctx) to totalAddedWidgets(ctx)
+                }
             if (permOkCount != count) permOkCount = count
+            if (widgetAddedCount != widgets) widgetAddedCount = widgets
         }
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refreshPerms() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refreshStatus() }
 
     MintScreen(title = stringResource(R.string.settings), onBack = onBack) {
         LazyColumn(
@@ -162,6 +168,19 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Box(Modifier.padding(top = 4.dp)) {
                     NavRow(stringResource(R.string.appearance), null, Icons.Rounded.Palette, trailing = sourceLabel) { nav.push(Route.Appearance) }
                 }
+            }
+            item(key = "widgets", contentType = "nav_row") {
+                NavRow(
+                    stringResource(R.string.widgets_title),
+                    null,
+                    Icons.Rounded.Widgets,
+                    trailing =
+                        if (widgetAddedCount > 0) {
+                            stringResource(R.string.widgets_added_count, widgetAddedCount)
+                        } else {
+                            stringResource(R.string.widgets_available_count, WidgetSpec.entries.size)
+                        },
+                ) { nav.push(Route.Widgets) }
             }
             item(key = "display_header", contentType = "section_label") {
                 SectionLabel(stringResource(R.string.section_display), modifier = Modifier.padding(top = 24.dp))

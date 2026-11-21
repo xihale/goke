@@ -850,4 +850,24 @@
     <string name="lan_web_tip_adb">③ USB 数据线连接电脑并开启调试，执行下方命令后访问 %1$s</string>
     <string name="lan_web_copy_adb">复制 ADB 命令</string>
     <string name="lan_web_copy_adb_url">复制 127.0.0.1 地址</string>
+    <string name="widgets_title">桌面小组件</string>
+    <string name="widgets_added_count">已添加 %1$d 个</string>
+    <string name="widgets_available_count">%1$d 款可选</string>
+    <string name="widgets_added_badge">已添加 %1$d</string>
+    <string name="widgets_add_action">添加</string>
+    <string name="widgets_add_to_home_a11y">将「%1$s」添加到桌面</string>
+    <string name="widgets_pin_confirmed_toast">已将「%1$s」添加到桌面</string>
+    <string name="widgets_unsupported_title">请从桌面手动添加</string>
+    <string name="widgets_unsupported_desc">当前桌面启动器不支持从应用内直接添加。请在手机桌面长按空白处，选择「添加小组件 / 窗口小工具」，搜索「薄荷广工」即可添加。</string>
+    <string name="widgets_go_home">回到桌面</string>
+    <string name="widgets_sample_course_1">高等数学</string>
+    <string name="widgets_sample_course_1_room">教3-204</string>
+    <string name="widgets_sample_course_2">操作系统</string>
+    <string name="widgets_sample_course_2_room">实4-401</string>
+    <string name="widgets_sample_todo_1">交实验报告</string>
+    <string name="widgets_sample_todo_2">整理高数笔记</string>
+    <string name="widgets_sample_parcel_code">4-2-1086</string>
+    <string name="widgets_sample_parcel_place">东门菜鸟驿站 · 顺丰</string>
+    <string name="widgets_sample_due_today">今天 18:00</string>
+    <string name="widgets_sample_due_parcel">今天 22:00</string>
 </resources>

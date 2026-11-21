@@ -23,6 +23,10 @@ import app.mintcal.core.sync.CalendarTaskLink
 import app.mintcal.core.sync.CourseExportLink
 import app.mintcal.core.util.Ids
 import app.mintcal.notify.ParcelTasks
+import app.mintcal.ui.screens.WidgetPinOutcome
+import app.mintcal.ui.screens.WidgetSpec
+import app.mintcal.ui.screens.requestPinWidget
+import app.mintcal.ui.screens.totalAddedWidgets
 import app.mintcal.widget.NextWidgetProvider
 import app.mintcal.widget.ParcelWidgetProvider
 import app.mintcal.widget.ParcelWidgetService
@@ -265,5 +269,27 @@ class WidgetsAndCalendarSyncTest {
 
             // 未授予日历权限时，syncNow 应安全返回 0 不崩溃
             assertEquals(0, app.calendarSync.syncNow())
+        }
+
+    @Test
+    fun widgetSpecsCoverAllProvidersAndPinHelperDegradesGracefully(): Unit =
+        runBlocking {
+            app.repo.load()
+            assertEquals(
+                setOf(
+                    TodayWidgetProvider::class.java,
+                    ScheduleWidgetProvider::class.java,
+                    TodoWidgetProvider::class.java,
+                    ParcelWidgetProvider::class.java,
+                    NextWidgetProvider::class.java,
+                ),
+                WidgetSpec.entries.map { it.providerClass }.toSet(),
+            )
+            assertEquals(0, totalAddedWidgets(app))
+            val snap = app.repo.snapshot.value
+            val st = app.settings.value
+            for (spec in WidgetSpec.entries) {
+                assertEquals(WidgetPinOutcome.UNSUPPORTED, requestPinWidget(app, spec, snap, st))
+            }
         }
 }

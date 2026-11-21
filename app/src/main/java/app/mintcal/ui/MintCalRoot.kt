@@ -95,6 +95,7 @@ import app.mintcal.ui.screens.TodayScreen
 import app.mintcal.ui.screens.TodoEditScreen
 import app.mintcal.ui.screens.TodoScreen
 import app.mintcal.ui.screens.TrashScreen
+import app.mintcal.ui.screens.WidgetsScreen
 import app.mintcal.ui.theme.LocalReduceMotion
 import app.mintcal.ui.theme.MintTheme
 import kotlinx.coroutines.delay
@@ -307,6 +308,7 @@ fun NavGraphBuilder.mintDestinations(
 ) {
     composable<Route.EditTimetable> { EditTimetableScreen(back) }
     composable<Route.Appearance> { AppearanceScreen(back) }
+    composable<Route.Widgets> { WidgetsScreen(back) }
     composable<Route.Settings> { SettingsScreen(back) }
     composable<Route.Permission> { ReliabilityScreen(back) }
     composable<Route.Trash> { TrashScreen(back) }
