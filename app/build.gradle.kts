@@ -9,14 +9,103 @@ import org.gradle.api.tasks.TaskAction
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.FileInputStream
 import java.util.Properties
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
-// release 签名（keystore.properties 不入库；缺文件时 assembleRelease 会明确失败）
+// 版本号由 git tag（v*）派生，支持 SemVer 预发布后缀（如 v0.0.1-beta.1）：
+// versionName = git describe 去 v 前缀——精确打在 tag 上时为干净 semver（如 0.0.1-beta.1），
+//   tag 之后形如 0.0.1-beta.1-1-g<sha>，工作区有未提交改动再加 -dirty；
+// versionCode 严格单调递增：alpha < beta < rc < 正式版 < 下一 patch/minor/major。
+fun runGit(vararg args: String): String? =
+    runCatching {
+        val process =
+            ProcessBuilder("git", *args)
+                .directory(rootDir)
+                .start()
+        val output = String(process.inputStream.readAllBytes(), Charsets.UTF_8)
+        process.waitFor(10, TimeUnit.SECONDS)
+        output.trim().takeIf { process.exitValue() == 0 }
+    }.getOrNull()
+
+fun computeVersionCode(
+    major: Int,
+    minor: Int,
+    patch: Int,
+    preRelease: String?,
+    commitsAfter: Int,
+): Int {
+    val base = major * 100_000_000 + minor * 1_000_000 + patch * 10_000
+    if (preRelease.isNullOrBlank()) {
+        return base + 9_000 + commitsAfter.coerceIn(0, 999)
+    }
+    val preMatch = Regex("""^(alpha|beta|rc)[.-]?(\d+)?""", RegexOption.IGNORE_CASE).find(preRelease)
+    val stage =
+        when (preMatch?.groupValues?.getOrNull(1)?.lowercase()) {
+            "alpha" -> 1
+            "beta" -> 2
+            "rc" -> 3
+            else -> 4
+        }
+    val preNum = (preMatch?.groupValues?.getOrNull(2)?.toIntOrNull() ?: 0).coerceIn(0, 99)
+    return base + stage * 1_000 + preNum * 10 + commitsAfter.coerceIn(0, 9)
+}
+
+val appVersion: Pair<String, Int> =
+    run {
+        val describe = runGit("describe", "--tags", "--match", "v[0-9]*", "--long", "--dirty", "--always")
+        val match =
+            Regex("""^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+?))?(?:-(\d+)-g[0-9a-f]+)?(-dirty)?$""")
+                .find(describe.orEmpty())
+        if (match == null) {
+            logger.info("未找到 v* SemVer git tag（describe=$describe），使用初始版本 0.0.1-beta.1")
+            "0.0.1-beta.1" to computeVersionCode(0, 0, 1, "beta.1", 0)
+        } else {
+            val major = match.groupValues[1].toInt()
+            val minor = match.groupValues[2].toInt()
+            val patch = match.groupValues[3].toInt()
+            val pre = match.groupValues[4].takeIf { it.isNotBlank() }
+            val commitsAfter = match.groupValues[5].toIntOrNull() ?: 0
+            // 精确在 tag 上时去掉 --long 的 -0-g<sha> 尾巴，发布产物拿到干净 semver
+            val name =
+                describe!!.removePrefix("v").let {
+                    if (commitsAfter == 0) it.replace(Regex("""-0-g[0-9a-f]+"""), "") else it
+                }
+            name to computeVersionCode(major, minor, patch, pre, commitsAfter)
+        }
+    }
+
+// release 签名：优先读环境变量（CI），其次读根目录 keystore.properties（本地）；均缺失时 release 构建显式报错，不回退 debug 签名
 val releaseProps =
     Properties().apply {
         val f = rootProject.file("keystore.properties")
         if (f.exists()) FileInputStream(f).use { load(it) }
     }
+val signingEnvVars =
+    listOf(
+        "SIGNING_KEYSTORE_FILE",
+        "SIGNING_KEYSTORE_PASSWORD",
+        "SIGNING_KEY_ALIAS",
+        "SIGNING_KEY_PASSWORD",
+    )
+val hasSigningEnv = signingEnvVars.all { !System.getenv(it).isNullOrBlank() }
+val releaseStoreFile: File? =
+    when {
+        hasSigningEnv -> file(System.getenv("SIGNING_KEYSTORE_FILE"))
+        !releaseProps.getProperty("storeFile").isNullOrBlank() -> rootProject.file(releaseProps.getProperty("storeFile"))
+        else -> null
+    }
+val releaseStorePassword: String? =
+    if (hasSigningEnv) System.getenv("SIGNING_KEYSTORE_PASSWORD") else releaseProps.getProperty("storePassword")
+val releaseKeyAlias: String? =
+    if (hasSigningEnv) System.getenv("SIGNING_KEY_ALIAS") else releaseProps.getProperty("keyAlias")
+val releaseKeyPassword: String? =
+    if (hasSigningEnv) System.getenv("SIGNING_KEY_PASSWORD") else releaseProps.getProperty("keyPassword")
+val hasReleaseSigning =
+    releaseStoreFile != null &&
+        releaseStoreFile.exists() &&
+        !releaseStorePassword.isNullOrBlank() &&
+        !releaseKeyAlias.isNullOrBlank() &&
+        !releaseKeyPassword.isNullOrBlank()
 
 plugins {
     alias(libs.plugins.android.application)
@@ -32,18 +121,20 @@ android {
         applicationId = "app.mintcal"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersion.second
+        versionName = appVersion.first
         // benchmark 变体置 true：只用来在首启时塞一份可滚动数据（BenchSeed），release/debug 下被常量折叠
         buildConfigField("boolean", "BENCHMARK", "false")
     }
 
-    signingConfigs {
-        create("release") {
-            storeFile = rootProject.file(releaseProps.getProperty("storeFile", "keystore/mintcal-release.jks"))
-            storePassword = releaseProps.getProperty("storePassword")
-            keyAlias = releaseProps.getProperty("keyAlias", "mintcal")
-            keyPassword = releaseProps.getProperty("keyPassword")
+    if (hasReleaseSigning) {
+        signingConfigs {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
 
@@ -53,7 +144,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else null
         }
         debug {
             // 包名后缀区分：debug 装在 app.mintcal.debug，与 release 并存
@@ -88,6 +179,23 @@ android {
     }
     lint {
         abortOnError = false
+    }
+}
+
+// release 变体缺少签名配置时直接失败，避免静默产出无签名或 debug 签名包
+gradle.taskGraph.whenReady {
+    if (hasReleaseSigning) return@whenReady
+    val releaseTask =
+        allTasks.firstOrNull { task ->
+            task.project == project &&
+                task.name.contains("Release") &&
+                listOf("assemble", "bundle", "package", "sign").any { task.name.startsWith(it) }
+        }
+    if (releaseTask != null) {
+        throw GradleException(
+            "缺少 release 签名配置：请设置环境变量 SIGNING_KEYSTORE_FILE / SIGNING_KEYSTORE_PASSWORD / " +
+                "SIGNING_KEY_ALIAS / SIGNING_KEY_PASSWORD，或在根目录提供 keystore.properties。",
+        )
     }
 }
 
