@@ -80,6 +80,7 @@ import app.mintcal.ui.screens.CalendarScreen
 import app.mintcal.ui.screens.CourseEditScreen
 import app.mintcal.ui.screens.DataScreen
 import app.mintcal.ui.screens.EditTimetableScreen
+import app.mintcal.ui.screens.GradesScreen
 import app.mintcal.ui.screens.HistoryScreen
 import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.JxfwScreen
@@ -321,6 +322,7 @@ fun NavGraphBuilder.mintDestinations(
     composable<Route.Data> { DataScreen(back) }
     composable<Route.Sync> { SyncScreen(back) }
     composable<Route.Jxfw> { JxfwScreen(back) }
+    composable<Route.Grades> { GradesScreen(back) }
     composable<Route.Reliability> { ReliabilityScreen(back) }
     composable<Route.Import> { e -> ImportScreen(e.toRoute<Route.Import>().uri, back) }
     composable<Route.CourseEdit> { e ->

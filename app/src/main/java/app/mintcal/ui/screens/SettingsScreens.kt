@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.Grade
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LaptopMac
@@ -58,6 +59,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -87,6 +89,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import app.mintcal.BuildConfig
 import app.mintcal.R
+import app.mintcal.core.jxfw.JxfwParse
 import app.mintcal.data.DarkMode
 import app.mintcal.data.ThemeSource
 import app.mintcal.notify.Notifications
@@ -113,6 +116,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalTime
+import java.util.Locale
 import android.provider.Settings as AndroidSettings
 
 @Composable
@@ -302,6 +306,9 @@ fun SettingsScreen(onBack: () -> Unit) {
             item(key = "more_jxfw", contentType = "nav_row") {
                 JxfwNavRow { nav.push(Route.Jxfw) }
             }
+            item(key = "more_grades", contentType = "nav_row") {
+                GradesNavRow { nav.push(Route.Grades) }
+            }
             item(key = "group_tools_header", contentType = "section_label") {
                 SectionLabel(stringResource(R.string.settings_group_tools), modifier = Modifier.padding(top = 24.dp))
             }
@@ -366,6 +373,27 @@ private fun JxfwNavRow(onOpen: () -> Unit) {
         null,
         Icons.Rounded.School,
         trailing = jxfwState.username,
+        onClick = onOpen,
+    )
+}
+
+@Composable
+private fun GradesNavRow(onOpen: () -> Unit) {
+    val app = LocalApp.current
+    val gradesState by app.jxfw.gradesState.collectAsState()
+    val summary =
+        remember(gradesState.grades) {
+            if (gradesState.grades.isNotEmpty()) JxfwParse.summarizeGrades(gradesState.grades) else null
+        }
+    val trailing =
+        summary?.weightedGpa?.let {
+            stringResource(R.string.grades_nav_gpa, String.format(Locale.US, "%.2f", it))
+        }
+    NavRow(
+        stringResource(R.string.grades_title),
+        null,
+        Icons.Rounded.Grade,
+        trailing = trailing,
         onClick = onOpen,
     )
 }
@@ -632,9 +660,9 @@ fun AppearanceScreen(onBack: () -> Unit) {
                     ThemeSource.CUSTOM -> {
                         val seed = st.seedColor
                         val hsvInit = remember(seed) { FloatArray(3).also { android.graphics.Color.colorToHSV(seed, it) } }
-                        var hue by remember(seed) { mutableStateOf(hsvInit[0]) }
-                        var sat by remember(seed) { mutableStateOf(hsvInit[1]) }
-                        var value by remember(seed) { mutableStateOf(hsvInit[2]) }
+                        val hueState = remember(seed) { SliderState(value = hsvInit[0], trackRange = 0f..360f) }
+                        val satState = remember(seed) { SliderState(value = hsvInit[1], trackRange = 0f..1f) }
+                        val valueState = remember(seed) { SliderState(value = hsvInit[2], trackRange = 0f..1f) }
 
                         fun persist(
                             h: Float,
@@ -645,15 +673,27 @@ fun AppearanceScreen(onBack: () -> Unit) {
                         }
 
                         Text(stringResource(R.string.theme_hue), style = MaterialTheme.typography.bodyMedium)
-                        Slider(value = hue, onValueChange = { hue = it }, valueRange = 0f..360f, onValueChangeFinished = { persist(hue, sat, value) })
+                        Slider(
+                            state = hueState,
+                            onValueChange = { hueState.value = it },
+                            onValueChangeFinished = { persist(hueState.value, satState.value, valueState.value) },
+                        )
                         Text(stringResource(R.string.theme_saturation), style = MaterialTheme.typography.bodyMedium)
-                        Slider(value = sat, onValueChange = { sat = it }, valueRange = 0f..1f, onValueChangeFinished = { persist(hue, sat, value) })
+                        Slider(
+                            state = satState,
+                            onValueChange = { satState.value = it },
+                            onValueChangeFinished = { persist(hueState.value, satState.value, valueState.value) },
+                        )
                         Text(stringResource(R.string.theme_lightness), style = MaterialTheme.typography.bodyMedium)
-                        Slider(value = value, onValueChange = { value = it }, valueRange = 0f..1f, onValueChangeFinished = { persist(hue, sat, value) })
+                        Slider(
+                            state = valueState,
+                            onValueChange = { valueState.value = it },
+                            onValueChangeFinished = { persist(hueState.value, satState.value, valueState.value) },
+                        )
 
                         // 拖动中的即时预览（当前主题真实生效色）
                         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val preview = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, sat, value)))
+                            val preview = Color(android.graphics.Color.HSVToColor(floatArrayOf(hueState.value, satState.value, valueState.value)))
                             listOf(
                                 preview,
                                 MaterialTheme.colorScheme.primary,
@@ -683,10 +723,10 @@ fun AppearanceScreen(onBack: () -> Unit) {
                                 onDismiss = { editHex = false },
                                 onConfirm = { rgb ->
                                     val parts = FloatArray(3).also { android.graphics.Color.RGBToHSV((rgb shr 16) and 0xFF, (rgb shr 8) and 0xFF, rgb and 0xFF, it) }
-                                    hue = parts[0]
-                                    sat = parts[1]
-                                    value = parts[2]
-                                    persist(hue, sat, value)
+                                    hueState.value = parts[0]
+                                    satState.value = parts[1]
+                                    valueState.value = parts[2]
+                                    persist(hueState.value, satState.value, valueState.value)
                                 },
                             )
                         }

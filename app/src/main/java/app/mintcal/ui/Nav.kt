@@ -58,6 +58,8 @@ sealed interface Route {
 
     @Serializable data object Jxfw : Route
 
+    @Serializable data object Grades : Route
+
     @Serializable data object Reliability : Route
 
     /** uri 为空表示先让用户选择文件。 */
@@ -117,6 +119,9 @@ class Nav(
 
     /** 要求课表跳到某一天（冲突面板「去查看」用），课表消费后清空。 */
     var focusDate by mutableStateOf<java.time.LocalDate?>(null)
+
+    /** 从「今日」逾期摘要跳转待办并立即拉起整理面板（一次性消费）。 */
+    var openTodoTidy by mutableStateOf(false)
 
     /** 再次点按当前 Tab 时自增，供各 Tab 内滚动回顶部。 */
     var reselect by mutableIntStateOf(0)

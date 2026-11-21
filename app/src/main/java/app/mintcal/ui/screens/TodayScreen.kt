@@ -29,10 +29,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,6 +56,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -75,6 +78,7 @@ import app.mintcal.core.todo.TaskLogic
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.Route
+import app.mintcal.ui.Tab
 import app.mintcal.ui.components.AgendaRow
 import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.EventDetailSheet
@@ -339,7 +343,7 @@ fun TodayScreen() {
                     )
                 }
             }
-            if (overdue.isNotEmpty()) {
+            if (overdue.size == 1) {
                 item(key = "h-overdue") { SectionLabel(stringResource(R.string.overdue_count, overdue.size), trailingColor = MintTheme.colors.removed) }
                 items(overdue, key = { "od-" + it.id }) { t ->
                     TaskRow(
@@ -349,6 +353,42 @@ fun TodayScreen() {
                         subtitle = t.due?.let { ctx.getString(R.string.overdue_since, it.toLocalDate().toString().substring(5)) },
                         modifier = Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()),
                     )
+                }
+            } else if (overdue.size >= 2) {
+                item(key = "overdue-banner") {
+                    MintCard(color = MintTheme.colors.conflictBg) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    stringResource(R.string.overdue_count, overdue.size),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MintTheme.colors.removed,
+                                )
+                                Text(
+                                    stringResource(R.string.today_overdue_tidy_hint),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            TextButton(
+                                onClick = {
+                                    nav.openTodoTidy = true
+                                    nav.select(Tab.TODO)
+                                },
+                                colors = ButtonDefaults.textButtonColors(contentColor = MintTheme.colors.removed),
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) {
+                                Text(stringResource(R.string.today_overdue_tidy_action), maxLines = 1)
+                            }
+                        }
+                    }
                 }
             }
             if (pendingItems.isNotEmpty()) {

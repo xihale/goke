@@ -391,6 +391,31 @@ fun TodoScreen() {
         if (reduce) listState.scrollToItem(0) else listState.animateScrollToItem(0)
     }
     LaunchedEffect(searching) { if (searching) searchFocus.requestFocus() }
+    var pendingTidyOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(nav.openTodoTidy, nav.tab) {
+        if (nav.openTodoTidy && nav.tab == Tab.TODO) {
+            nav.openTodoTidy = false
+            exitSelect()
+            searching = false
+            queryText = ""
+            listFilter = null
+            priorityFilter = 0
+            listMenu = false
+            priorityMenu = false
+            quickAddOpen = false
+            focusManager.clearFocus()
+            collapsedCsv = (csvToSet(collapsedCsv) - Bucket.OVERDUE.name).toCsv()
+            pendingTidyOpen = true
+        }
+    }
+    LaunchedEffect(pendingTidyOpen, listFilter, priorityFilter, queryText, searching, selecting, overdueTasks) {
+        if (pendingTidyOpen && listFilter == null && priorityFilter == 0 && queryText.isEmpty() && !searching && !selecting) {
+            pendingTidyOpen = false
+            if (overdueTasks.isNotEmpty()) {
+                tidy = true
+            }
+        }
+    }
 
     val selectedTasks = if (selecting) selected.mapNotNull { taskById[it] } else emptyList()
 

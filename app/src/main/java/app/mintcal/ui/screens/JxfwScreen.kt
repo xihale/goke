@@ -1,5 +1,6 @@
 package app.mintcal.ui.screens
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -18,12 +19,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Grade
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,11 +50,14 @@ import app.mintcal.jxfw.JxfwException
 import app.mintcal.jxfw.JxfwState
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
+import app.mintcal.ui.LocalNav
+import app.mintcal.ui.Route
 import app.mintcal.ui.components.ChipChoice
 import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
+import app.mintcal.ui.components.NavRow
 import app.mintcal.ui.components.SwitchRow
 import app.mintcal.ui.components.TonalField
 import kotlinx.coroutines.launch
@@ -61,7 +68,7 @@ import java.time.format.DateTimeFormatter
 
 private val STAMP: DateTimeFormatter = DateTimeFormatter.ofPattern("M月d日 HH:mm")
 
-private fun stamp(ms: Long): String = LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault()).format(STAMP)
+internal fun jxfwStamp(ms: Long): String = LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault()).format(STAMP)
 
 /** 「教务系统」：登录学校教务 → 自动导入课表 / 考试，每周日晚增量同步。 */
 @Composable
@@ -98,7 +105,7 @@ private fun errorText(
     }
 
 @Composable
-private fun ErrorGuidance(
+internal fun JxfwErrorGuidance(
     kind: JxfwException.Kind?,
     raw: String?,
 ) {
@@ -162,7 +169,7 @@ private fun LoginPanel(state: JxfwState) {
             onChange = { password = it },
             secret = true,
         )
-        ErrorGuidance(state.lastErrorKind, state.lastError)
+        JxfwErrorGuidance(state.lastErrorKind, state.lastError)
         Spacer(Modifier.height(4.dp))
         Button(
             enabled = !busy && user.isNotBlank() && password.isNotEmpty(),
@@ -183,7 +190,7 @@ private fun LoginPanel(state: JxfwState) {
         ) {
             if (busy) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(Modifier.size(18.dp), color = LocalContentColor.current, strokeWidth = 2.dp)
                     Text(state.progress ?: stringResource(R.string.jxfw_progress_login))
                 }
             } else {
@@ -204,6 +211,7 @@ private fun AccountPanel(state: JxfwState) {
     val ctx = LocalContext.current
     val app = LocalApp.current
     val actions = LocalActions.current
+    val nav = LocalNav.current
     val scope = rememberCoroutineScope()
     var showLogout by remember { mutableStateOf(false) }
     val currentTerm = remember { app.jxfw.currentTerm() }
@@ -223,18 +231,21 @@ private fun AccountPanel(state: JxfwState) {
         Spacer(Modifier.height(12.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             InfoLine(stringResource(R.string.jxfw_account), state.username.orEmpty())
-            state.term?.let { InfoLine(stringResource(R.string.jxfw_term), it) }
-            InfoLine(stringResource(R.string.jxfw_last_full), state.lastFullAt?.let(::stamp) ?: stringResource(R.string.jxfw_never))
-            InfoLine(stringResource(R.string.jxfw_last_weekly), state.lastWeeklyAt?.let(::stamp) ?: stringResource(R.string.jxfw_never))
+            state.term?.let { InfoLine(stringResource(R.string.jxfw_term), jxfwTermLabel(ctx, it)) }
+            InfoLine(stringResource(R.string.jxfw_last_full), state.lastFullAt?.let(::jxfwStamp) ?: stringResource(R.string.jxfw_never))
+            InfoLine(stringResource(R.string.jxfw_last_weekly), state.lastWeeklyAt?.let(::jxfwStamp) ?: stringResource(R.string.jxfw_never))
             if (state.busy) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Text(state.progress.orEmpty(), style = MaterialTheme.typography.bodySmall)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Text(state.progress.orEmpty(), style = MaterialTheme.typography.bodySmall)
+                    }
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
             } else {
                 state.lastResult?.let { InfoLine(stringResource(R.string.jxfw_last_result), it) }
             }
-            ErrorGuidance(state.lastErrorKind, state.lastError)
+            JxfwErrorGuidance(state.lastErrorKind, state.lastError)
         }
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -273,12 +284,22 @@ private fun AccountPanel(state: JxfwState) {
         }
     }
 
+    FormSection {
+        NavRow(
+            title = stringResource(R.string.grades_title),
+            subtitle = stringResource(R.string.grades_jxfw_entry_desc),
+            icon = Icons.Rounded.Grade,
+            onClick = { nav.push(Route.Grades) },
+        )
+    }
+
     FormSection(stringResource(R.string.jxfw_term_picker)) {
         val currentLabel = stringResource(R.string.jxfw_term_current)
         ChipChoice(
             options =
                 terms.map { code ->
-                    code to if (code == currentTerm) "$code · $currentLabel" else code
+                    val label = jxfwTermLabel(ctx, code)
+                    code to if (code == currentTerm) "$label · $currentLabel" else label
                 },
             selected = selectedTerm,
             onSelect = { selectedTerm = it },
@@ -311,6 +332,20 @@ private fun AccountPanel(state: JxfwState) {
             onDismiss = { showLogout = false },
             danger = true,
         )
+    }
+}
+
+/** 把教务学期代码（如 "202601"）格式化为「2026–2027 学年第一学期」。 */
+internal fun jxfwTermLabel(
+    ctx: Context,
+    code: String,
+): String {
+    val year = code.take(4).toIntOrNull()
+    val sem = code.drop(4).toIntOrNull()
+    return when {
+        year != null && sem == 1 -> ctx.getString(R.string.jxfw_term_first, year, year + 1)
+        year != null && sem == 2 -> ctx.getString(R.string.jxfw_term_second, year, year + 1)
+        else -> code
     }
 }
 

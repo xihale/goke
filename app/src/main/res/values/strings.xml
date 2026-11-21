@@ -290,7 +290,6 @@
     <string name="field_done">完成</string>
     <string name="field_block">时间块</string>
     <string name="field_tags">标签</string>
-    <string name="quick_tag_new">新建标签…</string>
     <string name="field_semester">学期</string>
     <string name="entity_semester">学期</string>
     <string name="entity_course">课程</string>
@@ -465,7 +464,8 @@
     <string name="jxfw_logout">退出教务登录</string>
     <string name="jxfw_logout_message">将删除保存的教务密码并停止自动同步。已导入的课程和考试会保留。</string>
     <string name="jxfw_progress_login">正在登录教务系统…</string>
-    <string name="jxfw_progress_courses">正在获取课表…</string>
+    <string name="jxfw_progress_courses">正在获取课表与考试（%1$d/%2$d）…</string>
+    <string name="jxfw_progress_saving">正在导入课表…</string>
     <string name="jxfw_progress_week">正在获取第 %1$d 周课表…</string>
     <string name="jxfw_result_full">已导入 %1$d 门课、%2$d 场考试</string>
     <string name="jxfw_result_nochange">第 %1$d 周没有变化</string>
@@ -816,6 +816,8 @@
     <string name="parcel_open_app_details">打开应用详情</string>
     <string name="jxfw_term_picker">选择同步学期</string>
     <string name="jxfw_term_current">当前学期</string>
+    <string name="jxfw_term_first">%1$d–%2$d 学年第一学期</string>
+    <string name="jxfw_term_second">%1$d–%2$d 学年第二学期</string>
     <string name="jxfw_keystore_reassurance">学号与密码仅通过 Android Keystore 加密保存在本机，直接连接学校教务系统，不经过任何第三方服务器。</string>
     <!-- LAN Web Console -->
     <string name="channel_lan_web">局域网电脑端管理</string>
@@ -870,4 +872,31 @@
     <string name="widgets_sample_parcel_place">东门菜鸟驿站 · 顺丰</string>
     <string name="widgets_sample_due_today">今天 18:00</string>
     <string name="widgets_sample_due_parcel">今天 22:00</string>
+    <!-- Today overdue tidy handoff -->
+    <string name="today_overdue_tidy_hint">积压待办可去待办页批量整理</string>
+    <string name="today_overdue_tidy_action">去整理</string>
+    <!-- Grades & GPA -->
+    <string name="grades_title">成绩与绩点</string>
+    <string name="grades_nav_gpa">均绩 %1$s</string>
+    <string name="grades_jxfw_entry_desc">本机只读查询各学期成绩与加权均绩</string>
+    <string name="grades_not_logged_in_title">登录后查看成绩与绩点</string>
+    <string name="grades_not_logged_in_hint">仅从教务系统直连拉取并在本机只读缓存，不上传云端</string>
+    <string name="grades_weighted_gpa">加权均绩 (GPA)</string>
+    <string name="grades_weighted_gpa_term">本学期加权均绩 (GPA)</string>
+    <string name="grades_dash">—</string>
+    <string name="grades_total_credits">总学分 %1$s</string>
+    <string name="grades_course_count">共 %1$d 门</string>
+    <string name="grades_last_fetched">更新于 %1$s</string>
+    <string name="grades_never_fetched">尚未拉取</string>
+    <string name="grades_refresh">刷新成绩</string>
+    <string name="grades_refreshing">刷新中…</string>
+    <string name="grades_refreshed_toast">已更新 %1$d 条成绩</string>
+    <string name="grades_disclaimer">仅本地只读缓存 · 均绩按学分加权计算仅供参考，以教务系统为准</string>
+    <string name="grades_all_terms">全部学期</string>
+    <string name="grades_empty_title">暂无本地成绩缓存</string>
+    <string name="grades_empty_hint">点击上方「刷新成绩」从教务系统获取</string>
+    <string name="grades_list_section">课程成绩 · %1$d</string>
+    <string name="grades_credit_value">%1$s 学分</string>
+    <string name="grades_gpa_value">绩点 %1$s</string>
+    <string name="grades_relogin_jxfw">前往教务账号</string>
 </resources>
