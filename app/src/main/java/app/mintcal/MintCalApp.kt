@@ -12,6 +12,7 @@ import app.mintcal.data.ParcelRuleStore
 import app.mintcal.data.Repository
 import app.mintcal.data.SecretStore
 import app.mintcal.data.SettingsStore
+import app.mintcal.data.UpdateChecker
 import app.mintcal.jxfw.JxfwManager
 import app.mintcal.lanweb.LanWebManager
 import app.mintcal.mcp.LocalMcpManager
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -62,6 +64,8 @@ open class MintCalApp : Application() {
         private set
     lateinit var lanWeb: LanWebManager
         private set
+    lateinit var updateChecker: UpdateChecker
+        private set
 
     /** 外部入口（通知 / 小组件 / 快捷方式 / 分享）待处理的动作，由根组合消费后清空。 */
     val links = MutableStateFlow<DeepLink?>(null)
@@ -84,6 +88,8 @@ open class MintCalApp : Application() {
         calendarSync = SystemCalendarSync(this, repo, settings, CalendarSyncStore(this), scope)
         jxfw = JxfwManager(this, repo, secrets)
         lanWeb = LanWebManager(this, repo)
+        updateChecker = UpdateChecker(settings)
+        updateChecker.clearStalePendingUpdate()
         // 通知渠道 / 桌面快捷方式都是 Binder IPC，不挡 Application 主线程的首帧
         scope.launch(Dispatchers.Default) {
             Notifications.ensureChannels(this@MintCalApp)
@@ -100,6 +106,11 @@ open class MintCalApp : Application() {
                 settings.update { it.copy(unifiedTasks = true) }
             }
             jxfw.ensureAlarm()
+            // 首次进入前台时按周期静默检测更新（小组件 / 闹钟拉起的后台进程不碰网络）
+            launch(Dispatchers.IO) {
+                uiActive.first { it }
+                runCatching { updateChecker.maybeAutoCheck() }
+            }
             // 回到前台才做网络同步、系统日历监听与教务抓取；后台拉起的进程（小组件 tick / 开机）不碰网络
             launch {
                 uiActive.collect { active ->

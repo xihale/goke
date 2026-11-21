@@ -8,6 +8,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -37,6 +39,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material.icons.rounded.Check
@@ -56,8 +59,10 @@ import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderState
 import androidx.compose.material3.Text
@@ -91,7 +96,11 @@ import app.mintcal.BuildConfig
 import app.mintcal.R
 import app.mintcal.core.jxfw.JxfwParse
 import app.mintcal.data.DarkMode
+import app.mintcal.data.ReleaseInfo
 import app.mintcal.data.ThemeSource
+import app.mintcal.data.UpdateCheckResult
+import app.mintcal.data.UpdateChecker
+import app.mintcal.data.UpdateInterval
 import app.mintcal.notify.Notifications
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
@@ -104,6 +113,7 @@ import app.mintcal.ui.components.NavRow
 import app.mintcal.ui.components.SectionLabel
 import app.mintcal.ui.components.SegmentedPill
 import app.mintcal.ui.components.SwitchRow
+import app.mintcal.ui.components.Tag
 import app.mintcal.ui.components.TimeDialSheet
 import app.mintcal.ui.components.TonalField
 import app.mintcal.ui.components.ValueRow
@@ -345,7 +355,20 @@ fun SettingsScreen(onBack: () -> Unit) {
                 SectionLabel(stringResource(R.string.settings_group_about), modifier = Modifier.padding(top = 24.dp))
             }
             item(key = "more_about", contentType = "nav_row") {
-                NavRow(stringResource(R.string.about_title), null, Icons.Rounded.Info) { nav.push(Route.About) }
+                val hasPendingUpdate =
+                    st.pendingUpdateVersion.isNotBlank() &&
+                        app.updateChecker.isNewerThanCurrent(st.pendingUpdateVersion)
+                NavRow(
+                    stringResource(R.string.about_title),
+                    null,
+                    Icons.Rounded.Info,
+                    trailing =
+                        if (hasPendingUpdate) {
+                            stringResource(R.string.update_new_badge_with_version, st.pendingUpdateVersion)
+                        } else {
+                            null
+                        },
+                ) { nav.push(Route.About) }
             }
         }
     }
@@ -746,6 +769,29 @@ fun AppearanceScreen(onBack: () -> Unit) {
 
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
+    val app = LocalApp.current
+    val ctx = LocalContext.current
+    val st = settingsState()
+    val scope = rememberCoroutineScope()
+    val checking by app.updateChecker.checking.collectAsState()
+    var showIntervalDialog by remember { mutableStateOf(false) }
+    var showLicenseDialog by remember { mutableStateOf(false) }
+    var dialogInfo by remember { mutableStateOf<ReleaseInfo?>(null) }
+    val pendingInfo =
+        remember(st.pendingUpdateVersion, st.pendingUpdateUrl, st.pendingUpdateNotes) {
+            if (st.pendingUpdateVersion.isNotBlank() &&
+                app.updateChecker.isNewerThanCurrent(st.pendingUpdateVersion)
+            ) {
+                ReleaseInfo(
+                    version = st.pendingUpdateVersion,
+                    url = st.pendingUpdateUrl.ifBlank { UpdateChecker.PROJECT_URL },
+                    notes = st.pendingUpdateNotes,
+                )
+            } else {
+                null
+            }
+        }
+
     MintScreen(title = stringResource(R.string.about_title), onBack = onBack) {
         Column(
             Modifier
@@ -805,24 +851,370 @@ fun AboutScreen(onBack: () -> Unit) {
                     )
                 }
             }
-            FormSection {
+            FormSection(title = stringResource(R.string.update_section_title)) {
+                AnimatedVisibility(
+                    visible = pendingInfo != null,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    pendingInfo?.let { info ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .mintClickable(pressedScale = 0.98f, role = Role.Button) {
+                                    dialogInfo = info
+                                }.padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                stringResource(R.string.update_new_version_title, info.version),
+                                Modifier.weight(1f).padding(end = 12.dp),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            Tag(
+                                stringResource(R.string.update_new_badge),
+                                MaterialTheme.colorScheme.errorContainer,
+                                MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                        }
+                    }
+                }
                 Row(
-                    Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .mintClickable(enabled = !checking, pressedScale = 0.98f, role = Role.Button) {
+                            scope.launch {
+                                when (val res = app.updateChecker.checkNow()) {
+                                    is UpdateCheckResult.Newer -> {
+                                        dialogInfo = res.info
+                                    }
+
+                                    UpdateCheckResult.UpToDate -> {
+                                        Toast.makeText(ctx, R.string.update_uptodate, Toast.LENGTH_SHORT).show()
+                                    }
+
+                                    UpdateCheckResult.Error -> {
+                                        Toast.makeText(ctx, R.string.update_check_failed, Toast.LENGTH_SHORT).show()
+                                    }
+
+                                    UpdateCheckResult.Idle -> {}
+                                }
+                            }
+                        }.padding(vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        stringResource(R.string.about_license_title),
-                        Modifier.weight(1f),
+                        stringResource(R.string.update_check),
+                        Modifier.weight(1f).padding(end = 16.dp),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    if (checking) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(
+                            Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                NavRow(
+                    title = stringResource(R.string.update_auto_check),
+                    trailing = stringResource(st.updateInterval.labelRes()),
+                    onClick = { showIntervalDialog = true },
+                )
+                NavRow(
+                    title = stringResource(R.string.update_project_home),
+                    onClick = { openExternalUrl(ctx, UpdateChecker.PROJECT_URL) },
+                )
+            }
+            FormSection(title = stringResource(R.string.about_license_section)) {
+                NavRow(
+                    title = stringResource(R.string.about_license_title),
+                    trailing = "AGPL-3.0",
+                    onClick = { showLicenseDialog = true },
+                )
+            }
+            FormSection(title = stringResource(R.string.about_ack_section)) {
+                ACKNOWLEDGMENTS.forEach { ack ->
+                    NavRow(
+                        title = stringResource(ack.nameRes),
+                        subtitle = stringResource(ack.descRes),
+                        onClick = { openExternalUrl(ctx, ack.url) },
+                    )
+                }
+                Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+                    Text(
+                        stringResource(R.string.about_ack_community_title),
                         style = MaterialTheme.typography.bodyLarge,
                     )
                     Text(
-                        "AGPL-3.0",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                        stringResource(R.string.about_ack_community_desc),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
         }
+    }
+
+    if (showLicenseDialog) {
+        OssLicensesDialog(onDismiss = { showLicenseDialog = false })
+    }
+
+    if (showIntervalDialog) {
+        AlertDialog(
+            onDismissRequest = { showIntervalDialog = false },
+            title = { Text(stringResource(R.string.update_auto_check_dialog_title)) },
+            text = {
+                Column {
+                    UpdateInterval.entries.forEach { option ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .mintClickable(pressedScale = 0.98f, role = Role.RadioButton) {
+                                    app.settings.update { it.copy(updateInterval = option) }
+                                    showIntervalDialog = false
+                                }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            RadioButton(selected = option == st.updateInterval, onClick = null)
+                            Text(stringResource(option.labelRes()))
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+        )
+    }
+
+    dialogInfo?.let { info ->
+        UpdateAvailableDialog(
+            info = info,
+            onDismiss = {
+                app.updateChecker.dismissUpdatePrompt(info.version)
+                dialogInfo = null
+            },
+            onOpenUrl = { url -> openExternalUrl(ctx, url) },
+        )
+    }
+}
+
+private fun UpdateInterval.labelRes(): Int =
+    when (this) {
+        UpdateInterval.STARTUP -> R.string.update_freq_startup
+        UpdateInterval.DAILY -> R.string.update_freq_daily
+        UpdateInterval.WEEKLY -> R.string.update_freq_weekly
+        UpdateInterval.OFF -> R.string.update_freq_off
+    }
+
+private data class AckEntry(
+    val nameRes: Int,
+    val descRes: Int,
+    val url: String,
+)
+
+private val ACKNOWLEDGMENTS =
+    listOf(
+        AckEntry(
+            nameRes = R.string.lic_jetpack_name,
+            descRes = R.string.about_ack_jetpack_desc,
+            url = "https://developer.android.com/compose",
+        ),
+        AckEntry(
+            nameRes = R.string.lic_kotlin_name,
+            descRes = R.string.about_ack_kotlin_desc,
+            url = "https://github.com/JetBrains/kotlin",
+        ),
+        AckEntry(
+            nameRes = R.string.lic_kolor_name,
+            descRes = R.string.about_ack_kolor_desc,
+            url = "https://github.com/jordond/material-kolor",
+        ),
+        AckEntry(
+            nameRes = R.string.lic_quickjs_name,
+            descRes = R.string.about_ack_quickjs_desc,
+            url = "https://github.com/dokar3/quickjs-kt",
+        ),
+    )
+
+private data class OssLicenseEntry(
+    val nameRes: Int,
+    val license: String,
+    val url: String,
+    val textRes: Int,
+)
+
+private val OSS_LICENSES =
+    listOf(
+        OssLicenseEntry(
+            nameRes = R.string.lic_app_name,
+            license = "AGPL-3.0",
+            url = "github.com/xihale/mintcal",
+            textRes = R.raw.license_agpl_3,
+        ),
+        OssLicenseEntry(
+            nameRes = R.string.lic_jetpack_name,
+            license = "Apache-2.0",
+            url = "developer.android.com/jetpack",
+            textRes = R.raw.license_apache_2,
+        ),
+        OssLicenseEntry(
+            nameRes = R.string.lic_kotlin_name,
+            license = "Apache-2.0",
+            url = "github.com/JetBrains/kotlin",
+            textRes = R.raw.license_apache_2,
+        ),
+        OssLicenseEntry(
+            nameRes = R.string.lic_kolor_name,
+            license = "MIT",
+            url = "github.com/jordond/material-kolor",
+            textRes = R.raw.license_mit,
+        ),
+        OssLicenseEntry(
+            nameRes = R.string.lic_quickjs_name,
+            license = "MIT",
+            url = "github.com/dokar3/quickjs-kt",
+            textRes = R.raw.license_mit,
+        ),
+    )
+
+@Composable
+private fun OssLicensesDialog(onDismiss: () -> Unit) {
+    var viewing by remember { mutableStateOf<OssLicenseEntry?>(null) }
+    val entry = viewing
+    if (entry == null) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(stringResource(R.string.about_license_title)) },
+            text = {
+                Column {
+                    OSS_LICENSES.forEach { item ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .mintClickable(pressedScale = 0.98f, role = Role.Button) {
+                                    viewing = item
+                                }.padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                                Text(stringResource(item.nameRes), style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    "${item.license} · ${item.url}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Icon(
+                                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+            },
+        )
+    } else {
+        LicenseTextDialog(entry = entry, onBack = { viewing = null })
+    }
+}
+
+@Composable
+private fun LicenseTextDialog(
+    entry: OssLicenseEntry,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+    val text =
+        remember(entry.textRes) {
+            context.resources
+                .openRawResource(entry.textRes)
+                .bufferedReader()
+                .use { it.readText() }
+        }
+    AlertDialog(
+        onDismissRequest = onBack,
+        title = {
+            Column {
+                Text(stringResource(entry.nameRes))
+                Text(
+                    entry.license,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        text = {
+            Text(
+                text,
+                style = MaterialTheme.typography.bodySmall,
+                modifier =
+                    Modifier
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
+        },
+    )
+}
+
+@Composable
+internal fun UpdateAvailableDialog(
+    info: ReleaseInfo,
+    onDismiss: () -> Unit,
+    onOpenUrl: (String) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.update_new_version_title, info.version)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    info.notes?.takeIf { it.isNotBlank() }
+                        ?: stringResource(R.string.update_new_version_body),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onOpenUrl(info.url)
+                onDismiss()
+            }) {
+                Text(stringResource(R.string.update_go))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.update_later))
+            }
+        },
+    )
+}
+
+internal fun openExternalUrl(
+    context: Context,
+    url: String,
+) {
+    val opened =
+        runCatching {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }.isSuccess
+    if (!opened) {
+        Toast.makeText(context, R.string.update_open_failed, Toast.LENGTH_SHORT).show()
     }
 }
 

@@ -920,4 +920,37 @@
     <string name="grades_credit_value">%1$s 学分</string>
     <string name="grades_gpa_value">绩点 %1$s</string>
     <string name="grades_relogin_jxfw">前往教务账号</string>
+    <!-- App update -->
+    <string name="update_section_title">版本与更新</string>
+    <string name="update_check">检查更新</string>
+    <string name="update_auto_check">自动检查更新</string>
+    <string name="update_auto_check_dialog_title">自动检查更新</string>
+    <string name="update_freq_off">关闭</string>
+    <string name="update_freq_startup">每次启动</string>
+    <string name="update_freq_daily">每天</string>
+    <string name="update_freq_weekly">每周</string>
+    <string name="update_uptodate">已是最新版本</string>
+    <string name="update_check_failed">检查更新失败，请检查网络</string>
+    <string name="update_new_version_title">发现新版本 v%1$s</string>
+    <string name="update_new_version_body">点击前往发布页下载更新。</string>
+    <string name="update_go">去更新</string>
+    <string name="update_later">以后再说</string>
+    <string name="update_new_badge">新</string>
+    <string name="update_new_badge_with_version">新版本 v%1$s</string>
+    <string name="update_project_home">项目主页</string>
+    <string name="update_open_failed">无法打开浏览器，请手动访问发布页</string>
+    <!-- About: Licenses & Acknowledgments -->
+    <string name="about_license_section">开源协议</string>
+    <string name="about_ack_section">致谢</string>
+    <string name="about_ack_jetpack_desc">Google · Material 3 界面与系统集成（Apache-2.0）</string>
+    <string name="about_ack_kotlin_desc">JetBrains · Kotlin 语言、协程与序列化（Apache-2.0）</string>
+    <string name="about_ack_kolor_desc">jordond · 动态与预设主题配色生成（MIT）</string>
+    <string name="about_ack_quickjs_desc">dokar3 · 高级修改 JavaScript 沙箱引擎（MIT）</string>
+    <string name="about_ack_community_title">开源社区与测试同学</string>
+    <string name="about_ack_community_desc">感谢提供课表样本、使用建议与问题反馈的每一位同学</string>
+    <string name="lic_app_name">薄荷广工 (MintCal)</string>
+    <string name="lic_jetpack_name">AndroidX &amp; Jetpack Compose</string>
+    <string name="lic_kotlin_name">Kotlin / kotlinx</string>
+    <string name="lic_kolor_name">material-kolor</string>
+    <string name="lic_quickjs_name">quickjs-kt</string>
 </resources>

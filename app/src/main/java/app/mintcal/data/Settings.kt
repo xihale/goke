@@ -10,6 +10,8 @@ enum class ThemeSource { DYNAMIC, PRESET, CUSTOM }
 
 enum class DarkMode { SYSTEM, LIGHT, DARK }
 
+enum class UpdateInterval { STARTUP, DAILY, WEEKLY, OFF }
+
 data class Settings(
     val themeSource: ThemeSource = ThemeSource.PRESET,
     val preset: String = "mint",
@@ -43,6 +45,14 @@ data class Settings(
     val weekStartsMonday: Boolean = true,
     /** 一次性迁移标记：日程已并入待办。 */
     val unifiedTasks: Boolean = false,
+    /** 自动检查更新频率，默认每天检查一次（兼顾校园网共享出口 IP 下的 GitHub API 频控）。 */
+    val updateInterval: UpdateInterval = UpdateInterval.DAILY,
+    val lastUpdateCheckAt: Long = 0L,
+    val pendingUpdateVersion: String = "",
+    val pendingUpdateUrl: String = "",
+    val pendingUpdateNotes: String = "",
+    /** 已在弹窗中点过「以后再说」或「去更新」的版本，同版本不再重复自动弹窗，仍保留在设置页提示。 */
+    val dismissedUpdateVersion: String = "",
 )
 
 /** 轻量设置存储（SharedPreferences + StateFlow）。同步令牌等敏感值另存于 [SecretStore]，不进此处。 */
@@ -80,9 +90,16 @@ class SettingsStore(
             parcelWindowEnd = sp.getInt("parcelWindowEnd", d.parcelWindowEnd).coerceIn(0, 24 * 60),
             weekStartsMonday = sp.getBoolean("weekStartsMonday", d.weekStartsMonday),
             unifiedTasks = sp.getBoolean("unifiedTasks", d.unifiedTasks),
+            updateInterval = runCatching { UpdateInterval.valueOf(sp.getString("updateInterval", d.updateInterval.name)!!) }.getOrDefault(d.updateInterval),
+            lastUpdateCheckAt = sp.getLong("lastUpdateCheckAt", d.lastUpdateCheckAt),
+            pendingUpdateVersion = sp.getString("pendingUpdateVersion", d.pendingUpdateVersion)!!,
+            pendingUpdateUrl = sp.getString("pendingUpdateUrl", d.pendingUpdateUrl)!!,
+            pendingUpdateNotes = sp.getString("pendingUpdateNotes", d.pendingUpdateNotes)!!,
+            dismissedUpdateVersion = sp.getString("dismissedUpdateVersion", d.dismissedUpdateVersion)!!,
         )
     }
 
+    @Synchronized
     fun update(block: (Settings) -> Settings) {
         val n = block(_flow.value)
         sp
@@ -110,6 +127,12 @@ class SettingsStore(
             .putInt("parcelWindowEnd", n.parcelWindowEnd)
             .putBoolean("weekStartsMonday", n.weekStartsMonday)
             .putBoolean("unifiedTasks", n.unifiedTasks)
+            .putString("updateInterval", n.updateInterval.name)
+            .putLong("lastUpdateCheckAt", n.lastUpdateCheckAt)
+            .putString("pendingUpdateVersion", n.pendingUpdateVersion)
+            .putString("pendingUpdateUrl", n.pendingUpdateUrl)
+            .putString("pendingUpdateNotes", n.pendingUpdateNotes)
+            .putString("dismissedUpdateVersion", n.dismissedUpdateVersion)
             .apply()
         _flow.value = n
     }

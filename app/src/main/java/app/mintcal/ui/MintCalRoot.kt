@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -71,6 +72,8 @@ import androidx.navigation.toRoute
 import app.mintcal.DeepLink
 import app.mintcal.MintCalApp
 import app.mintcal.R
+import app.mintcal.data.ReleaseInfo
+import app.mintcal.data.UpdateChecker
 import app.mintcal.ui.components.FloatingNavBar
 import app.mintcal.ui.components.NavClearance
 import app.mintcal.ui.components.mintClickable
@@ -96,7 +99,9 @@ import app.mintcal.ui.screens.TodayScreen
 import app.mintcal.ui.screens.TodoEditScreen
 import app.mintcal.ui.screens.TodoScreen
 import app.mintcal.ui.screens.TrashScreen
+import app.mintcal.ui.screens.UpdateAvailableDialog
 import app.mintcal.ui.screens.WidgetsScreen
+import app.mintcal.ui.screens.openExternalUrl
 import app.mintcal.ui.theme.LocalReduceMotion
 import app.mintcal.ui.theme.MintTheme
 import kotlinx.coroutines.delay
@@ -130,6 +135,21 @@ fun MintCalRoot(
     val scope = rememberCoroutineScope()
     val actions = remember { Actions(app, scope, nav) }
     val ready by app.repo.ready.collectAsState()
+    val settings by app.settings.flow.collectAsState()
+    val pendingUpdate =
+        if (ready &&
+            settings.pendingUpdateVersion.isNotBlank() &&
+            settings.dismissedUpdateVersion != settings.pendingUpdateVersion &&
+            app.updateChecker.isNewerThanCurrent(settings.pendingUpdateVersion)
+        ) {
+            ReleaseInfo(
+                version = settings.pendingUpdateVersion,
+                url = settings.pendingUpdateUrl.ifBlank { UpdateChecker.PROJECT_URL },
+                notes = settings.pendingUpdateNotes,
+            )
+        } else {
+            null
+        }
 
     // 可撤销的说明条留到下一次操作，或用户自己关掉。不按秒数收起。
     val undoPrompt = actions.undo
@@ -302,6 +322,15 @@ fun MintCalRoot(
 
             // 顶层模态插槽（覆盖底栏与 NavHost）
             modalContent?.invoke()
+
+            if (pendingUpdate != null) {
+                val context = LocalContext.current
+                UpdateAvailableDialog(
+                    info = pendingUpdate,
+                    onDismiss = { app.updateChecker.dismissUpdatePrompt(pendingUpdate.version) },
+                    onOpenUrl = { url -> openExternalUrl(context, url) },
+                )
+            }
         }
     }
 }
