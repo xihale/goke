@@ -79,6 +79,19 @@ open class MintCalApp : Application() {
         super.onCreate()
         repo = Repository(MintDb(this))
         settings = SettingsStore(this)
+        // 首屏仅依赖 repo 与 settings：立即在 IO 启动读库，与其余控制器构造并行
+        val loadJob =
+            scope.launch {
+                repo.load()
+                // benchmark 变体：首启塞一份可滚动数据（release/debug 里 BENCHMARK=false，常量折叠后整段消失）
+                if (BuildConfig.BENCHMARK) BenchSeed.seed(repo)
+                // 一次性迁移：日程并进待办（「有时间的待办」），此后不再产生日程记录
+                if (!settings.value.unifiedTasks) {
+                    val snap = repo.snapshot.value
+                    Unify.changeSet(snap, System.currentTimeMillis())?.let { repo.commit(it) }
+                    settings.update { it.copy(unifiedTasks = true) }
+                }
+            }
         parcelRules = ParcelRuleStore(this)
         secrets = SecretStore(this)
         reminders = ReminderScheduler(this)
@@ -89,21 +102,16 @@ open class MintCalApp : Application() {
         jxfw = JxfwManager(this, repo, secrets)
         lanWeb = LanWebManager(this, repo)
         updateChecker = UpdateChecker(settings)
-        updateChecker.clearStalePendingUpdate(cacheDir)
-        // 通知渠道 / 桌面快捷方式都是 Binder IPC，不挡 Application 主线程的首帧
-        scope.launch(Dispatchers.Default) {
-            Notifications.ensureChannels(this@MintCalApp)
-            DeepLinks.publishShortcuts(this@MintCalApp)
-        }
         scope.launch {
-            repo.load()
-            // benchmark 变体：首启塞一份可滚动数据（release/debug 里 BENCHMARK=false，常量折叠后整段消失）
-            if (BuildConfig.BENCHMARK) BenchSeed.seed(repo)
-            // 一次性迁移：日程并进待办（「有时间的待办」），此后不再产生日程记录
-            if (!settings.value.unifiedTasks) {
-                val snap = repo.snapshot.value
-                Unify.changeSet(snap, System.currentTimeMillis())?.let { repo.commit(it) }
-                settings.update { it.copy(unifiedTasks = true) }
+            loadJob.join()
+            // 通知渠道 / 快捷方式 / 规则预热 / Keystore 校验与过期缓存清理放到首屏读库之后，不与首帧抢 IO 和 Binder
+            launch(Dispatchers.IO) {
+                parcelRules.preload()
+                jxfw.hydrate()
+                sync.hydrate()
+                updateChecker.clearStalePendingUpdate(cacheDir)
+                Notifications.ensureChannels(this@MintCalApp)
+                DeepLinks.publishShortcuts(this@MintCalApp)
             }
             jxfw.ensureAlarm()
             // 首次进入前台时按周期静默检测更新（小组件 / 闹钟拉起的后台进程不碰网络）

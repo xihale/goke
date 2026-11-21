@@ -232,8 +232,6 @@ fun MintCalRoot(
     val exitEase = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
     val slideIn = if (reduce) snap<IntOffset>() else tween<IntOffset>(durationMillis = 260, easing = enterEase)
     val slideOut = if (reduce) snap<IntOffset>() else tween<IntOffset>(durationMillis = 200, easing = exitEase)
-    val splash = if (reduce) snap<Float>() else tween<Float>(durationMillis = 220, easing = enterEase)
-    val splashScale = if (reduce) snap<Float>() else tween<Float>(durationMillis = 280, easing = enterEase)
 
     val back =
         remember(nav) {
@@ -264,42 +262,38 @@ fun MintCalRoot(
         LocalModalHost provides modalHost,
     ) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            // 首屏内容从启动屏底下淡出浮现：ready 后不再是一帧硬切
-            AnimatedVisibility(
-                visible = ready,
-                enter = fadeIn(splash) + scaleIn(initialScale = 0.985f, animationSpec = splashScale),
-            ) {
+            // 系统 SplashScreen 负责退场动画；数据未就绪时先挂载空 HOME 的 NavHost，
+            // ready 翻真后直接挂载 Tabs，省掉根级 AnimatedVisibility 的离屏 graphicsLayer 与 280ms 缩放动画开销。
+            Box(Modifier.fillMaxSize()) {
                 if (ready) {
-                    Box(Modifier.fillMaxSize()) {
-                        // 1. 常驻底层 Tabs：永远不被 NavHost pop/push 销毁。
-                        // 二级页推入与弹出时 Tabs 常驻底层，返回时零重建，滚动位置与状态完全保留。
-                        Tabs(nav, onRoute)
-
-                        // 2. 覆盖层 NavHost：二级页面从右侧推入覆盖常驻 Tabs 之上；
-                        // HOME 目的地为空占位，在 HOME 时底层 Tabs 自然显露。
-                        val graph: NavGraphBuilder.() -> Unit =
-                            remember(nav, back) {
-                                {
-                                    composable(HOME) {
-                                        // 首页空占位：由常驻底层 Tabs 负责渲染与交互
-                                    }
-                                    mintDestinations(nav, back)
-                                }
-                            }
-                        NavHost(
-                            nav.controller,
-                            startDestination = HOME,
-                            modifier = Modifier.fillMaxSize(),
-                            // 纯水平位移转场：二级页从右侧完全推入覆盖，返回时右滑移出揭露底层；
-                            // 零整屏离屏 Alpha FBO 硬件层混合开销。
-                            enterTransition = { slideInHorizontally(slideIn) { it } },
-                            exitTransition = { slideOutHorizontally(slideOut) { -it / 5 } },
-                            popEnterTransition = { slideInHorizontally(slideIn) { -it / 5 } },
-                            popExitTransition = { slideOutHorizontally(slideOut) { it } },
-                            builder = graph,
-                        )
-                    }
+                    // 1. 常驻底层 Tabs：永远不被 NavHost pop/push 销毁。
+                    // 二级页推入与弹出时 Tabs 常驻底层，返回时零重建，滚动位置与状态完全保留。
+                    Tabs(nav, onRoute)
                 }
+
+                // 2. 覆盖层 NavHost：二级页面从右侧推入覆盖常驻 Tabs 之上；
+                // HOME 目的地为空占位，在 HOME 时底层 Tabs 自然显露。
+                val graph: NavGraphBuilder.() -> Unit =
+                    remember(nav, back) {
+                        {
+                            composable(HOME) {
+                                // 首页空占位：由常驻底层 Tabs 负责渲染与交互
+                            }
+                            mintDestinations(nav, back)
+                        }
+                    }
+                NavHost(
+                    nav.controller,
+                    startDestination = HOME,
+                    modifier = Modifier.fillMaxSize(),
+                    // 纯水平位移转场：二级页从右侧完全推入覆盖，返回时右滑移出揭露底层；
+                    // 零整屏离屏 Alpha FBO 硬件层混合开销。
+                    enterTransition = { slideInHorizontally(slideIn) { it } },
+                    exitTransition = { slideOutHorizontally(slideOut) { -it / 5 } },
+                    popEnterTransition = { slideInHorizontally(slideIn) { -it / 5 } },
+                    popExitTransition = { slideOutHorizontally(slideOut) { it } },
+                    builder = graph,
+                )
             }
 
             // 撤销：左下角一个圆钮，3 秒后自己消失。放左边就不和右下角的添加键打架，

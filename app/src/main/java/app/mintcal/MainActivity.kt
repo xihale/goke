@@ -9,7 +9,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +24,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         splash.setKeepOnScreenCondition { !mintApp.repo.ready.value }
         handleIntent(intent)
         val app = mintApp
@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
                     DarkMode.LIGHT -> false
                     DarkMode.DARK -> true
                 }
-            SideEffect {
+            LaunchedEffect(dark) {
                 val style =
                     if (dark) {
                         SystemBarStyle.dark(Color.TRANSPARENT)

@@ -32,9 +32,14 @@ class ParcelRuleStore(
     context: Context,
 ) {
     private val sp = context.getSharedPreferences("parcel_rules", Context.MODE_PRIVATE)
-    private val _flow = MutableStateFlow(read())
-    val flow: StateFlow<ParcelRuleConfig> = _flow.asStateFlow()
+    private val _flow by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { MutableStateFlow(read()) }
+    val flow: StateFlow<ParcelRuleConfig> get() = _flow.asStateFlow()
     val value: ParcelRuleConfig get() = _flow.value
+
+    /** 后台线程预热规则缓存，避免在冷启动主线程反序列化 JSON。 */
+    fun preload() {
+        _flow
+    }
 
     private fun read(): ParcelRuleConfig =
         ParcelRuleConfig(

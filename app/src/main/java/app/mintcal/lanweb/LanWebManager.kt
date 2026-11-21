@@ -56,8 +56,12 @@ class LanWebManager internal constructor(
     private var server: LanWebServer? = null
     private var watchdogJob: Job? = null
 
-    private val _state = MutableStateFlow(LanWebUiState(lanIp = detectLanIpv4()))
+    private val _state = MutableStateFlow(LanWebUiState())
     val state: StateFlow<LanWebUiState> = _state.asStateFlow()
+
+    init {
+        scope.launch { refreshNetwork() }
+    }
 
     fun start() {
         scope.launch {

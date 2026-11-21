@@ -58,7 +58,7 @@ class SecretStore(
 
     init {
         // 清掉历史版本遗留的 AI Key（内置 AI 已移除，改用自建服务的 MCP 入口）
-        sp.edit().remove("ai").apply()
+        if (sp.contains("ai")) sp.edit().remove("ai").apply()
     }
 
     private fun key(): SecretKey {

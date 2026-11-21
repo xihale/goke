@@ -55,14 +55,15 @@ class LocalMcpManager(
             McpState(
                 prefs = store.prefs.value,
                 boundPort = store.prefs.value.port,
-                token = store.ensureToken(),
-                lanIp = detectLanIpv4(),
             ),
         )
     val state: StateFlow<McpState> = _state.asStateFlow()
 
     init {
         scope.launch(Dispatchers.IO) {
+            val token = store.ensureToken()
+            val lanIp = detectLanIpv4()
+            _state.update { it.copy(token = token, lanIp = lanIp) }
             store.prefs.collect { prefs ->
                 reconcile(prefs)
             }

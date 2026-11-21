@@ -49,6 +49,15 @@ class SyncManager(
         repo.trackPurges = store.account.value != null
     }
 
+    /** 后台线程校验 Keystore 令牌是否仍在；若已失效则清理登录态，避免在启动主线程触碰 Keystore。 */
+    fun hydrate() {
+        if (store.account.value != null && store.token() == null) {
+            store.signOut()
+            repo.trackPurges = false
+            publish()
+        }
+    }
+
     private fun snapshotState(syncing: Boolean) = SyncUiState(store.account.value, syncing, store.lastSyncAt, store.lastError, store.needsRelogin)
 
     private fun publish(syncing: Boolean = false) {

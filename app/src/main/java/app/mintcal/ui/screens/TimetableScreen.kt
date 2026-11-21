@@ -161,7 +161,7 @@ import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDay
 import app.mintcal.ui.monthDayWeekday
 import app.mintcal.ui.reduceMotion
-import app.mintcal.ui.rememberToday
+import app.mintcal.ui.rememberTodayGated
 import app.mintcal.ui.settingsState
 import app.mintcal.ui.theme.MintColors
 import app.mintcal.ui.theme.MintTheme
@@ -221,8 +221,8 @@ fun TimetableScreen() {
     val actions = LocalActions.current
     val snap = liveSnapshot()
     val settings = settingsState()
-    // today 走 structural equality 的派生态：30 秒时钟跳变不再让整张周网格跟着重组
-    val today = rememberToday().value
+    // today 走门控派生态：隐藏 Tab 不养 30 秒后台协程，仅跨天时重组周网格
+    val today = rememberTodayGated()
     val adv by app.advanced.state.collectAsState()
     val sem = snap.currentSemester
     // 还没建学期：保留 64dp 头部骨架，给一个入口引导去课表设置

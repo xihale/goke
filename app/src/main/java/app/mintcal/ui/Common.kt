@@ -156,3 +156,10 @@ fun rememberToday(): State<LocalDate> {
     val now = rememberNow()
     return remember(now) { derivedStateOf { now.value.toLocalDate() } }
 }
+
+/** 门控版「今天」：仅当前 Tab 可见时校准日期，隐藏 Tab 不养 30 秒后台协程。 */
+@Composable
+fun rememberTodayGated(): LocalDate {
+    val now = rememberNowGated()
+    return remember(now) { now.toLocalDate() }
+}

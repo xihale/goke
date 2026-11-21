@@ -26,7 +26,6 @@ class SyncStore(
     private fun readAccount(): SyncAccount? {
         val url = sp.getString("url", null) ?: return null
         val user = sp.getString("user", null) ?: return null
-        if (secrets.syncToken() == null) return null
         return SyncAccount(url, user, sp.getString("role", "user")!!)
     }
 

@@ -25,6 +25,10 @@ class MintDb(
     context: Context,
     name: String = "mintcal.db",
 ) : SQLiteOpenHelper(context, name, null, 2) {
+    init {
+        setWriteAheadLoggingEnabled(true)
+    }
+
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE records (id TEXT PRIMARY KEY, kind TEXT NOT NULL, json TEXT NOT NULL, updated_at INTEGER NOT NULL, deleted_at INTEGER)")
         db.execSQL("CREATE TABLE oplog (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, description TEXT NOT NULL, source TEXT NOT NULL, json TEXT NOT NULL, undone_at INTEGER)")
