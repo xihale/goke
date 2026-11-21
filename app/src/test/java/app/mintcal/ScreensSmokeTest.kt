@@ -39,6 +39,7 @@ import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
@@ -484,6 +485,7 @@ class ScreensSmokeTest {
         rule.onNode(hasScrollAction()).performScrollToIndex(4)
         rule.waitForIdle()
         rule.onNodeWithText(app.getString(R.string.widget_next_name)).assertIsDisplayed()
+        shot("widgets_bottom")
     }
 
     @Test
@@ -521,7 +523,7 @@ class ScreensSmokeTest {
         assertEquals(DeepLinks.addUri("带伞 明天"), openedUri)
 
         // 2. 直接提交快速添加落库，不进主应用
-        rule.onNodeWithText(app.getString(R.string.widgets_add_action)).performClick()
+        rule.onNodeWithContentDescription(app.getString(R.string.widgets_add_action)).performClick()
         rule.waitUntil(5_000) {
             dismissed &&
                 app.repo.snapshot.value.tasks
@@ -551,16 +553,61 @@ class ScreensSmokeTest {
                 .done
         }
 
-        // 5. 待办悬浮卡片：就地完成待办
+        // 5. 待办悬浮卡片：行内修改标题与优先级并保存，随后可一键完成
         rule.runOnIdle { target.value = OverlayTarget.TaskDetail(todo.id) }
         rule.waitForIdle()
         shot("overlay_todo")
-        rule.onNodeWithText(todo.title).assertIsDisplayed()
+        val updatedTitle = "${todo.title} 已改"
+        val nextPriority = if (todo.priority == 2) 3 else 2
+        val nextPriorityLabel =
+            app.getString(if (nextPriority == 3) R.string.priority_3 else R.string.priority_2)
+        rule.onNodeWithText(todo.title).performTextReplacement(updatedTitle)
+        rule.waitForIdle()
+        val oldPrioLabel =
+            when (todo.priority) {
+                3 -> app.getString(R.string.priority_3)
+                2 -> app.getString(R.string.priority_2)
+                1 -> app.getString(R.string.priority_1)
+                else -> app.getString(R.string.label_priority)
+            }
+        rule.onNodeWithText(oldPrioLabel).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(nextPriorityLabel).performClick()
+        rule.waitForIdle()
+        dismissed = false
+        rule.onNodeWithText(app.getString(R.string.save)).performClick()
+        rule.waitUntil(5_000) {
+            dismissed &&
+                app.repo.snapshot.value.tasks
+                    .first { it.id == todo.id }
+                    .let { it.title == updatedTitle && it.priority == nextPriority }
+        }
+
+        // 重新打开后未做新修改，主按钮恢复为「完成」可一键勾选完成
+        dismissed = false
+        rule.runOnIdle { target.value = OverlayTarget.TaskDetail(todo.id) }
+        rule.waitForIdle()
         rule.onNodeWithText(app.getString(R.string.widget_overlay_task_done)).performClick()
         rule.waitUntil(5_000) {
             app.repo.snapshot.value.tasks
                 .first { it.id == todo.id }
                 .done
+        }
+
+        // 6. 深色模式浮层截图验视
+        val anotherTodo =
+            app.repo.snapshot.value.tasks
+                .first { !WidgetKit.isParcel(it) && !it.done && it.parentId == null }
+        try {
+            app.settings.update { it.copy(darkMode = DarkMode.DARK) }
+            rule.runOnIdle { target.value = OverlayTarget.Add() }
+            rule.waitForIdle()
+            shot("overlay_add_dark")
+            rule.runOnIdle { target.value = OverlayTarget.TaskDetail(anotherTodo.id) }
+            rule.waitForIdle()
+            shot("overlay_todo_dark")
+        } finally {
+            app.settings.update { it.copy(darkMode = DarkMode.SYSTEM) }
         }
     }
 }

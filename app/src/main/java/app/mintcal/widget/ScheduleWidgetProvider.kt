@@ -160,7 +160,7 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
                 val meta =
                     listOfNotNull(
                         o.room.takeIf { it.isNotBlank() },
-                        if (current) ctx.getString(R.string.widget_schedule_now) else null,
+                        if (current) ctx.getString(R.string.widget_ongoing) else null,
                     ).joinToString(" · ")
                 views.setTextViewText(metas[i], meta)
                 views.setOnClickPendingIntent(

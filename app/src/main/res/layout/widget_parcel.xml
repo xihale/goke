@@ -16,19 +16,12 @@
         android:orientation="horizontal"
         android:paddingBottom="6dp"
         android:paddingEnd="12dp"
-        android:paddingStart="14dp">
-
-        <ImageView
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/ic_widget_parcel" />
+        android:paddingStart="16dp">
 
         <TextView
             android:id="@+id/parcel_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
             android:text="@string/widget_parcel_name"
             android:textColor="@color/widget_text"
             android:textSize="15sp"

@@ -37,7 +37,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.LocalShipping
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -452,7 +451,7 @@ private fun WidgetItemBlock(
     val typography = MaterialTheme.typography
     val name = stringResource(spec.labelRes)
     val a11yAdd = stringResource(R.string.widgets_add_to_home_a11y, name)
-    val border = BorderStroke(0.5.dp, scheme.outlineVariant.copy(alpha = 0.6f))
+    val border = BorderStroke(0.75.dp, scheme.outlineVariant.copy(alpha = 0.8f))
 
     Column(Modifier.fillMaxWidth()) {
         Row(
@@ -534,7 +533,7 @@ private fun WidgetItemBlock(
 private fun PreviewAddPill() {
     val scheme = MaterialTheme.colorScheme
     Box(
-        modifier = Modifier.size(28.dp).clip(CircleShape).background(scheme.primaryContainer),
+        modifier = Modifier.size(30.dp).clip(CircleShape).background(scheme.primaryContainer),
         contentAlignment = Alignment.Center,
     ) {
         Icon(Icons.Rounded.Add, null, modifier = Modifier.size(16.dp), tint = scheme.onPrimaryContainer)
@@ -595,7 +594,7 @@ private fun TodayWidgetPreview(
             PreviewCourseStrip(
                 time = "08:30",
                 title = stringResource(R.string.widgets_sample_course_1),
-                sub = "08:30–10:05 · ${stringResource(R.string.widgets_sample_course_1_room)} · ${stringResource(R.string.widget_ongoing)}",
+                sub = "${stringResource(R.string.widgets_sample_course_1_room)} · ${stringResource(R.string.widget_ongoing)}",
                 bg = scheme.primaryContainer,
                 fg = scheme.onPrimaryContainer,
             )
@@ -632,10 +631,11 @@ private fun ScheduleWidgetPreview(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(ctx.monthDayWeekday(today), style = typography.titleSmall, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.weight(1f))
             if (weekBadge != null) {
+                Spacer(Modifier.width(6.dp))
                 Tag(weekBadge, scheme.primaryContainer, scheme.onPrimaryContainer)
             }
+            Spacer(Modifier.weight(1f))
         }
         if (courses.isNotEmpty()) {
             courses.forEach { item ->
@@ -646,7 +646,7 @@ private fun ScheduleWidgetPreview(
                 val meta =
                     listOfNotNull(
                         o.room.takeIf { it.isNotBlank() },
-                        if (current) stringResource(R.string.widget_schedule_now) else o.course.teacher.takeIf { it.isNotBlank() },
+                        if (current) stringResource(R.string.widget_ongoing) else o.course.teacher.takeIf { it.isNotBlank() },
                     ).joinToString(" · ").ifEmpty { null }
                 PreviewScheduleCourseBlock(o.start.hm(), o.end.hm(), o.course.name, meta, bg, fg)
             }
@@ -655,7 +655,7 @@ private fun ScheduleWidgetPreview(
                 start = "08:30",
                 end = "10:05",
                 name = stringResource(R.string.widgets_sample_course_1),
-                meta = "${stringResource(R.string.widgets_sample_course_1_room)} · ${stringResource(R.string.widget_schedule_now)}",
+                meta = "${stringResource(R.string.widgets_sample_course_1_room)} · ${stringResource(R.string.widget_ongoing)}",
                 bg = scheme.primaryContainer,
                 fg = scheme.onPrimaryContainer,
             )
@@ -767,8 +767,6 @@ private fun ParcelWidgetPreview(
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.LocalShipping, null, modifier = Modifier.size(16.dp), tint = scheme.primary)
-            Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.widget_parcel_name), style = typography.titleSmall, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(6.dp))
             Tag(displayCount.toString(), scheme.primaryContainer, scheme.onPrimaryContainer)
@@ -802,8 +800,8 @@ private fun NextWidgetPreview(
     val summary = remember(ctx, snap, st, now) { NextWidgetProvider.pickSummary(ctx, snap, st, now) }
     val emptyTitle = stringResource(R.string.widget_next_empty)
     val useSample = summary.title == emptyTitle
-    val badge = if (useSample) "08:30" else summary.badge
-    val sub = if (useSample) stringResource(R.string.widgets_sample_course_1_room) else summary.sub
+    val badge = if (useSample) stringResource(R.string.widget_ongoing) else summary.badge
+    val sub = if (useSample) "08:30–10:05 · ${stringResource(R.string.widgets_sample_course_1_room)}" else summary.sub
     val title = if (useSample) stringResource(R.string.widgets_sample_course_1) else summary.title
     val barColor = if (useSample) scheme.primary else Color(summary.barColor)
 
@@ -811,25 +809,31 @@ private fun NextWidgetPreview(
         Box(
             modifier =
                 Modifier
-                    .width(4.dp)
-                    .height(32.dp)
+                    .size(10.dp)
                     .clip(CircleShape)
                     .background(barColor),
         )
         Column(Modifier.weight(1f).padding(horizontal = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    title,
+                    style = typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = true),
+                )
                 Tag(badge, scheme.primaryContainer, scheme.onPrimaryContainer)
-                if (!sub.isNullOrBlank()) {
-                    Text(
-                        sub,
-                        style = typography.labelSmall,
-                        color = scheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
             }
-            Text(title, style = typography.bodyMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (!sub.isNullOrBlank()) {
+                Text(
+                    sub,
+                    style = typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         PreviewAddPill()
     }
@@ -909,12 +913,40 @@ private fun PreviewTaskStrip(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(left, style = typography.labelMedium, color = scheme.onSurfaceVariant, modifier = Modifier.width(44.dp))
-        if (code != null) {
-            Tag(code, scheme.primaryContainer, scheme.onPrimaryContainer)
-            Spacer(Modifier.width(6.dp))
+        Text(
+            left,
+            style = typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.width(44.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Column(Modifier.weight(1f)) {
+            if (code != null) {
+                Text(
+                    code,
+                    style = typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    title,
+                    style = typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else {
+                Text(
+                    title,
+                    style = typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
-        Text(title, style = typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(8.dp))
         PreviewCheckbox(checkColor)
     }
@@ -931,24 +963,45 @@ private fun PreviewTodoRow(
     val scheme = MaterialTheme.colorScheme
     val typography = MaterialTheme.typography
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         PreviewCheckbox(checkColor)
         Spacer(Modifier.width(10.dp))
-        if (code != null) {
-            Tag(code, scheme.primaryContainer, scheme.onPrimaryContainer)
-            Spacer(Modifier.width(6.dp))
-        }
-        Text(title, style = typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        if (!due.isNullOrBlank()) {
-            Spacer(Modifier.width(8.dp))
-            Text(
-                due,
-                style = typography.labelSmall,
-                color = if (overdue) scheme.error else scheme.onSurfaceVariant,
-                maxLines = 1,
-            )
+        Column(Modifier.weight(1f)) {
+            if (code != null) {
+                Text(
+                    code,
+                    style = typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    title,
+                    style = typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else {
+                Text(
+                    title,
+                    style = typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!due.isNullOrBlank()) {
+                    Text(
+                        due,
+                        style = typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                        color = if (overdue) scheme.error else scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
 }
@@ -966,21 +1019,26 @@ private fun PreviewParcelRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        PreviewCheckbox(if (overdue) scheme.error else scheme.primary)
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(code, style = typography.titleSmall, fontWeight = FontWeight.Bold, color = scheme.primary)
+                Text(
+                    code,
+                    style = typography.titleSmall.copy(fontFeatureSettings = "tnum"),
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.primary,
+                )
                 if (!due.isNullOrBlank()) {
                     Text(
                         due,
-                        style = typography.labelSmall,
+                        style = typography.labelSmall.copy(fontFeatureSettings = "tnum"),
                         color = if (overdue) scheme.error else scheme.onSurfaceVariant,
                     )
                 }
             }
             Text(place, style = typography.bodySmall, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Spacer(Modifier.width(8.dp))
-        PreviewCheckbox(scheme.primary)
     }
 }
 

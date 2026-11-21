@@ -55,20 +55,26 @@ class TodoWidgetService : RemoteViewsService() {
             if (r.code != null) {
                 v.setViewVisibility(R.id.item_code, View.VISIBLE)
                 v.setTextViewText(R.id.item_code, r.code)
+                v.setViewVisibility(R.id.item_title, View.GONE)
+                v.setViewVisibility(R.id.item_due, View.VISIBLE)
+                v.setTextViewText(R.id.item_due, r.title)
+                v.setTextColor(R.id.item_due, ctx.getColor(R.color.widget_muted))
             } else {
                 v.setViewVisibility(R.id.item_code, View.GONE)
-            }
-            v.setTextViewText(R.id.item_title, r.title)
-            if (!r.due.isNullOrBlank()) {
-                v.setViewVisibility(R.id.item_due, View.VISIBLE)
-                v.setTextViewText(R.id.item_due, r.due)
-                v.setTextColor(R.id.item_due, ctx.getColor(if (r.overdue) R.color.widget_overdue else R.color.widget_muted))
-            } else {
-                v.setViewVisibility(R.id.item_due, View.GONE)
+                v.setViewVisibility(R.id.item_title, View.VISIBLE)
+                v.setTextViewText(R.id.item_title, r.title)
+                if (!r.due.isNullOrBlank()) {
+                    v.setViewVisibility(R.id.item_due, View.VISIBLE)
+                    v.setTextViewText(R.id.item_due, r.due)
+                    v.setTextColor(R.id.item_due, ctx.getColor(if (r.overdue) R.color.widget_overdue else R.color.widget_muted))
+                } else {
+                    v.setViewVisibility(R.id.item_due, View.GONE)
+                }
             }
             v.setOnClickFillInIntent(R.id.item_check, fillIn(TodoWidgetProvider.OP_DONE, r.id))
             val open = fillIn(TodoWidgetProvider.OP_OPEN, r.id)
             v.setOnClickFillInIntent(R.id.item_root, open)
+            v.setOnClickFillInIntent(R.id.item_body, open)
             v.setOnClickFillInIntent(R.id.item_title, open)
             v.setOnClickFillInIntent(R.id.item_code, open)
             v.setOnClickFillInIntent(R.id.item_due, open)

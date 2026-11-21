@@ -7,9 +7,18 @@
     android:minHeight="52dp"
     android:orientation="horizontal"
     android:paddingBottom="6dp"
-    android:paddingEnd="4dp"
-    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingStart="4dp"
     android:paddingTop="6dp">
+
+    <ImageView
+        android:id="@+id/parcel_item_check"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:contentDescription="@string/a11y_mark_done"
+        android:padding="11dp"
+        android:scaleType="centerInside"
+        android:src="@drawable/ic_widget_check_box" />
 
     <LinearLayout
         android:id="@+id/parcel_item_body"
@@ -49,19 +58,10 @@
             android:id="@+id/parcel_item_place"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
+            android:layout_marginTop="2dp"
             android:ellipsize="end"
             android:maxLines="1"
             android:textColor="@color/widget_text"
             android:textSize="13sp" />
     </LinearLayout>
-
-    <ImageView
-        android:id="@+id/parcel_item_check"
-        android:layout_width="42dp"
-        android:layout_height="42dp"
-        android:contentDescription="@string/a11y_mark_done"
-        android:padding="11dp"
-        android:scaleType="centerInside"
-        android:src="@drawable/ic_widget_check_box" />
 </LinearLayout>

@@ -17,14 +17,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingBottom="4dp"
-        android:paddingEnd="2dp"
+        android:paddingEnd="4dp"
         android:paddingStart="4dp">
 
         <TextView
             android:id="@+id/sched_title"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="1"
             android:textColor="@color/widget_text"
@@ -38,13 +37,18 @@
             android:layout_marginStart="6dp"
             android:background="@drawable/widget_pill_bg"
             android:paddingBottom="1dp"
-            android:paddingEnd="8dp"
-            android:paddingStart="8dp"
+            android:paddingEnd="7dp"
+            android:paddingStart="7dp"
             android:paddingTop="1dp"
             android:textColor="@color/widget_pill_fg"
             android:textSize="11sp"
             android:textStyle="bold"
             android:visibility="gone" />
+
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
     </LinearLayout>
 
     <TextView

@@ -17,12 +17,14 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -32,16 +34,19 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,53 +57,67 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.LocalShipping
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.OpenInFull
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import app.mintcal.DeepLinks
 import app.mintcal.MainActivity
 import app.mintcal.MintCalApp
 import app.mintcal.R
+import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
 import app.mintcal.core.change.Edits
 import app.mintcal.core.model.Course
 import app.mintcal.core.model.Event
+import app.mintcal.core.model.Freq
+import app.mintcal.core.model.Recurrence
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Task
 import app.mintcal.core.time.SemesterCalendar
@@ -109,14 +128,22 @@ import app.mintcal.core.todo.QuickTokenKind
 import app.mintcal.data.DarkMode
 import app.mintcal.mintApp
 import app.mintcal.ui.components.ChipPill
+import app.mintcal.ui.components.ConfirmDialog
 import app.mintcal.ui.components.MintCheck
+import app.mintcal.ui.components.SegmentedPill
 import app.mintcal.ui.components.Tag
 import app.mintcal.ui.components.mintClickable
+import app.mintcal.ui.components.mintPressScale
 import app.mintcal.ui.dueLabel
 import app.mintcal.ui.formatRooms
 import app.mintcal.ui.hm
+import app.mintcal.ui.screens.QuickOverride
 import app.mintcal.ui.screens.TokenHighlight
+import app.mintcal.ui.screens.WhenPanel
+import app.mintcal.ui.screens.WhenPick
 import app.mintcal.ui.screens.buildQuickTasks
+import app.mintcal.ui.screens.freqLabel
+import app.mintcal.ui.screens.remindLabel
 import app.mintcal.ui.screens.tokenRanges
 import app.mintcal.ui.theme.MintCalTheme
 import app.mintcal.ui.theme.MintTheme
@@ -127,6 +154,8 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
 import android.graphics.Color as AndroidColor
+
+private enum class OverlayQuickPanel { PRIORITY, LIST }
 
 internal sealed interface OverlayTarget {
     data class Add(
@@ -152,8 +181,8 @@ internal sealed interface OverlayTarget {
 
 /**
  * 桌面小组件悬浮快速交互层：
- * 直接浮在桌面之上，支持快速添加、查看课程/快递/待办详情并就地完成、复制取件码、顺延改期；
- * 点击右上角「展开」再跳进主应用对应页面。
+ * 与应用内「薄荷便签」完全统一的贴底薄荷纸抽屉，支持自然语言快速添加、行内直接修改待办、
+ * 就地完成/改期/复制取件码，及按需展开进主应用。
  */
 class WidgetOverlayActivity : ComponentActivity() {
     private val targetState = mutableStateOf<OverlayTarget>(OverlayTarget.Add())
@@ -329,15 +358,25 @@ internal fun WidgetOverlayRoot(
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val scheme = MaterialTheme.colorScheme
+    val settings by app.settings.flow.collectAsState()
     var shown by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { shown = true }
+    var externalDismissHook by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-    BackHandler { onDismiss() }
+    LaunchedEffect(Unit) { shown = true }
+    LaunchedEffect(target) { externalDismissHook = null }
+
+    fun handleBackdropDismiss() {
+        val hook = externalDismissHook
+        if (hook != null) hook() else onDismiss()
+    }
+
+    BackHandler { handleBackdropDismiss() }
 
     fun commitAndRefresh(
         cs: ChangeSet,
         toast: String? = null,
         closeAfter: Boolean = false,
+        thenOpenUri: Uri? = null,
     ) {
         scope.launch {
             app.repo.commit(cs)
@@ -349,22 +388,22 @@ internal fun WidgetOverlayRoot(
                     Toast.makeText(ctx, toast, Toast.LENGTH_SHORT).show()
                 }
             }
-            if (closeAfter) onDismiss()
+            when {
+                thenOpenUri != null -> onOpenInApp(thenOpenUri)
+                closeAfter -> onDismiss()
+            }
         }
     }
 
-    val scrimInteraction = remember { MutableInteractionSource() }
-    val cardInteraction = remember { MutableInteractionSource() }
+    val isAdd = target is OverlayTarget.Add
+    val sheetShape = RoundedCornerShape(topStart = if (isAdd) 24.dp else 28.dp, topEnd = if (isAdd) 24.dp else 28.dp)
 
     Box(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(scheme.scrim.copy(alpha = 0.34f))
-                .clickable(interactionSource = scrimInteraction, indication = null, onClick = onDismiss)
-                .imePadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
+                .background(Color.Black.copy(alpha = 0.22f))
+                .pointerInput(target) { detectTapGestures { handleBackdropDismiss() } },
         contentAlignment = Alignment.BottomCenter,
     ) {
         AnimatedVisibility(
@@ -378,162 +417,166 @@ internal fun WidgetOverlayRoot(
                     Modifier
                         .widthIn(max = 560.dp)
                         .fillMaxWidth()
-                        .clickable(interactionSource = cardInteraction, indication = null, onClick = {}),
-                shape = RoundedCornerShape(28.dp),
-                color = MintTheme.card,
+                        .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                        .pointerInput(Unit) { detectTapGestures {} },
+                shape = sheetShape,
+                color = scheme.surfaceContainerLow,
                 tonalElevation = 0.dp,
-                shadowElevation = 8.dp,
+                shadowElevation = 0.dp,
             ) {
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 20.dp, vertical = 18.dp),
-                ) {
-                    when (target) {
-                        is OverlayTarget.Add -> {
-                            OverlayQuickAddCard(
-                                snap = live,
-                                initialCourseId = target.initialCourseId,
-                                initialText = target.initialText,
-                                onExpand = { draft ->
-                                    onOpenInApp(DeepLinks.addUri(draft.ifBlank { null }, target.initialCourseId))
-                                },
-                                onCommit = { cs, msg -> commitAndRefresh(cs, msg, closeAfter = true) },
-                                onDismiss = onDismiss,
+                Column(Modifier.fillMaxWidth()) {
+                    HorizontalDivider(
+                        thickness = 0.5.dp,
+                        color = scheme.outlineVariant.copy(alpha = 0.45f),
+                    )
+                    if (!isAdd) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .size(width = 36.dp, height = 4.dp)
+                                        .clip(CircleShape)
+                                        .background(scheme.outlineVariant.copy(alpha = 0.65f)),
                             )
                         }
-
-                        is OverlayTarget.CourseDetail -> {
-                            val course = live.courses.firstOrNull { it.id == target.courseId }
-                            if (course == null) {
-                                LaunchedEffect(Unit) { onOpenInApp(DeepLinks.timetableUri()) }
-                            } else {
-                                OverlayCourseCard(
+                    }
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                                .padding(
+                                    start = 16.dp,
+                                    end = 16.dp,
+                                    top = if (isAdd) 10.dp else 8.dp,
+                                    bottom = if (isAdd) 10.dp else 16.dp,
+                                ),
+                    ) {
+                        when (target) {
+                            is OverlayTarget.Add -> {
+                                OverlayQuickAddCard(
                                     snap = live,
-                                    course = course,
-                                    dateStr = target.dateStr,
-                                    startPeriod = target.startPeriod,
-                                    endPeriod = target.endPeriod,
-                                    onToggleTask = { task, done ->
-                                        val nowDt = LocalDateTime.now()
-                                        val desc = ctx.getString(R.string.edit_task_desc, task.title)
-                                        val toast =
-                                            if (done) ctx.getString(R.string.widget_overlay_task_done_toast, task.title) else null
-                                        commitAndRefresh(
-                                            Edits.toggleTask(live, task, done, System.currentTimeMillis(), nowDt, desc),
-                                            toast = toast,
-                                            closeAfter = false,
-                                        )
+                                    defaultBlockMinutes = settings.defaultBlockMinutes,
+                                    initialCourseId = target.initialCourseId,
+                                    initialText = target.initialText,
+                                    registerDismissHook = { externalDismissHook = it },
+                                    onExpand = { draft ->
+                                        onOpenInApp(DeepLinks.addUri(draft.ifBlank { null }, target.initialCourseId))
                                     },
-                                    onAddCourseTask = {
-                                        onChangeTarget(OverlayTarget.Add(initialCourseId = course.id))
-                                    },
-                                    onExpand = { onOpenInApp(DeepLinks.courseUri(course.id)) },
+                                    onCommit = { cs, msg -> commitAndRefresh(cs, msg, closeAfter = true) },
                                     onDismiss = onDismiss,
                                 )
                             }
-                        }
 
-                        is OverlayTarget.TaskDetail -> {
-                            val task = live.tasks.firstOrNull { it.id == target.taskId }
-                            if (task == null) {
-                                LaunchedEffect(Unit) { onDismiss() }
-                            } else if (WidgetKit.isParcel(task)) {
-                                OverlayParcelCard(
-                                    snap = live,
-                                    task = task,
-                                    onMarkDone = {
-                                        val msg = ctx.getString(R.string.widget_overlay_parcel_done_toast, task.title)
-                                        commitAndRefresh(
-                                            Edits.toggleTask(live, task, true, System.currentTimeMillis(), LocalDateTime.now(), task.title),
-                                            toast = msg,
-                                            closeAfter = true,
-                                        )
-                                    },
-                                    onPostponeTomorrow = {
-                                        val tomorrow = LocalDate.now().plusDays(1)
-                                        commitAndRefresh(
-                                            Edits.reschedule(
-                                                listOf(task),
-                                                tomorrow,
-                                                ctx.getString(R.string.edit_task_desc, task.title),
-                                                System.currentTimeMillis(),
-                                            ),
-                                            toast = ctx.getString(R.string.widget_overlay_postpone_toast),
-                                            closeAfter = true,
-                                        )
-                                    },
-                                    onExpand = { onOpenInApp(DeepLinks.taskUri(task.id)) },
-                                    onDismiss = onDismiss,
-                                )
-                            } else {
-                                OverlayTaskCard(
-                                    snap = live,
-                                    task = task,
-                                    onToggleDone = { t, done ->
-                                        val desc = ctx.getString(R.string.edit_task_desc, t.title)
-                                        val isMain = t.id == task.id
-                                        val msg =
-                                            if (done) ctx.getString(R.string.widget_overlay_task_done_toast, t.title) else null
-                                        commitAndRefresh(
-                                            Edits.toggleTask(live, t, done, System.currentTimeMillis(), LocalDateTime.now(), desc),
-                                            toast = msg,
-                                            closeAfter = isMain && done,
-                                        )
-                                    },
-                                    onCyclePriority = {
-                                        val nextP = (task.priority + 1) % 4
-                                        val cs =
-                                            Edits.updateTasks(
-                                                listOf(task),
-                                                ctx.getString(R.string.edit_task_desc, task.title),
-                                                System.currentTimeMillis(),
-                                            ) { it.copy(priority = nextP, updatedAt = System.currentTimeMillis()) }
-                                        commitAndRefresh(cs, closeAfter = false)
-                                    },
-                                    onPostponeTomorrow = {
-                                        val tomorrow = LocalDate.now().plusDays(1)
-                                        commitAndRefresh(
-                                            Edits.reschedule(
-                                                listOf(task),
-                                                tomorrow,
-                                                ctx.getString(R.string.edit_task_desc, task.title),
-                                                System.currentTimeMillis(),
-                                            ),
-                                            toast = ctx.getString(R.string.widget_overlay_postpone_toast),
-                                            closeAfter = true,
-                                        )
-                                    },
-                                    onDelete = {
-                                        commitAndRefresh(
-                                            Edits.delete(
-                                                live,
-                                                task,
-                                                ctx.getString(R.string.delete_desc, task.title),
-                                                System.currentTimeMillis(),
-                                            ),
-                                            toast = ctx.getString(R.string.widget_overlay_deleted_toast, task.title),
-                                            closeAfter = true,
-                                        )
-                                    },
-                                    onExpand = { onOpenInApp(DeepLinks.taskUri(task.id)) },
-                                    onDismiss = onDismiss,
-                                )
+                            is OverlayTarget.CourseDetail -> {
+                                val course = live.courses.firstOrNull { it.id == target.courseId }
+                                if (course == null) {
+                                    LaunchedEffect(Unit) { onOpenInApp(DeepLinks.timetableUri()) }
+                                } else {
+                                    OverlayCourseCard(
+                                        snap = live,
+                                        course = course,
+                                        dateStr = target.dateStr,
+                                        startPeriod = target.startPeriod,
+                                        endPeriod = target.endPeriod,
+                                        onToggleTask = { task, done ->
+                                            val nowDt = LocalDateTime.now()
+                                            val desc = ctx.getString(R.string.edit_task_desc, task.title)
+                                            val toast =
+                                                if (done) ctx.getString(R.string.widget_overlay_task_done_toast, task.title) else null
+                                            commitAndRefresh(
+                                                Edits.toggleTask(live, task, done, System.currentTimeMillis(), nowDt, desc),
+                                                toast = toast,
+                                                closeAfter = false,
+                                            )
+                                        },
+                                        onOpenTask = { task ->
+                                            onChangeTarget(OverlayTarget.TaskDetail(task.id))
+                                        },
+                                        onAddCourseTask = {
+                                            onChangeTarget(OverlayTarget.Add(initialCourseId = course.id))
+                                        },
+                                        onExpand = { onOpenInApp(DeepLinks.courseUri(course.id)) },
+                                    )
+                                }
                             }
-                        }
 
-                        is OverlayTarget.EventDetail -> {
-                            val event = live.events.firstOrNull { it.id == target.eventId }
-                            if (event == null) {
-                                LaunchedEffect(Unit) { onDismiss() }
-                            } else {
-                                OverlayEventCard(
-                                    event = event,
-                                    onOpenInApp = { onOpenInApp(DeepLinks.todayUri()) },
-                                    onDismiss = onDismiss,
-                                )
+                            is OverlayTarget.TaskDetail -> {
+                                val task = live.tasks.firstOrNull { it.id == target.taskId }
+                                if (task == null) {
+                                    LaunchedEffect(Unit) { onDismiss() }
+                                } else if (WidgetKit.isParcel(task)) {
+                                    OverlayParcelCard(
+                                        snap = live,
+                                        defaultBlockMinutes = settings.defaultBlockMinutes,
+                                        task = task,
+                                        onMarkDone = {
+                                            val msg = ctx.getString(R.string.widget_overlay_parcel_done_toast, task.title)
+                                            commitAndRefresh(
+                                                Edits.toggleTask(live, task, true, System.currentTimeMillis(), LocalDateTime.now(), task.title),
+                                                toast = msg,
+                                                closeAfter = true,
+                                            )
+                                        },
+                                        onCommit = { cs, msg -> commitAndRefresh(cs, msg, closeAfter = false) },
+                                        onExpand = { onOpenInApp(DeepLinks.taskUri(task.id)) },
+                                    )
+                                } else {
+                                    OverlayTaskCard(
+                                        snap = live,
+                                        defaultBlockMinutes = settings.defaultBlockMinutes,
+                                        task = task,
+                                        registerDismissHook = { externalDismissHook = it },
+                                        onToggleDone = { t, done, closeAfter ->
+                                            val desc = ctx.getString(R.string.edit_task_desc, t.title)
+                                            val msg =
+                                                if (done) ctx.getString(R.string.widget_overlay_task_done_toast, t.title) else null
+                                            commitAndRefresh(
+                                                Edits.toggleTask(live, t, done, System.currentTimeMillis(), LocalDateTime.now(), desc),
+                                                toast = msg,
+                                                closeAfter = closeAfter,
+                                            )
+                                        },
+                                        onCommitEdit = { updated, msg, closeAfter, thenOpenUri ->
+                                            val desc = ctx.getString(R.string.edit_task_desc, updated.title)
+                                            commitAndRefresh(
+                                                Edits.save(live, updated, desc, System.currentTimeMillis()),
+                                                toast = msg,
+                                                closeAfter = closeAfter,
+                                                thenOpenUri = thenOpenUri,
+                                            )
+                                        },
+                                        onDelete = {
+                                            commitAndRefresh(
+                                                Edits.delete(
+                                                    live,
+                                                    task,
+                                                    ctx.getString(R.string.delete_desc, task.title),
+                                                    System.currentTimeMillis(),
+                                                ),
+                                                toast = ctx.getString(R.string.widget_overlay_deleted_toast, task.title),
+                                                closeAfter = true,
+                                            )
+                                        },
+                                        onOpenInApp = { onOpenInApp(DeepLinks.taskUri(task.id)) },
+                                        onDismiss = onDismiss,
+                                    )
+                                }
+                            }
+
+                            is OverlayTarget.EventDetail -> {
+                                val event = live.events.firstOrNull { it.id == target.eventId }
+                                if (event == null) {
+                                    LaunchedEffect(Unit) { onDismiss() }
+                                } else {
+                                    OverlayEventCard(
+                                        event = event,
+                                        onOpenInApp = { onOpenInApp(DeepLinks.todayUri()) },
+                                    )
+                                }
                             }
                         }
                     }
@@ -543,28 +586,21 @@ internal fun WidgetOverlayRoot(
     }
 }
 
-@Composable
-private fun OverlayHeaderActions(
-    expandDescription: String,
-    onExpand: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onExpand) {
-            Icon(Icons.Rounded.OpenInFull, contentDescription = expandDescription, modifier = Modifier.size(20.dp))
-        }
-        IconButton(onClick = onDismiss) {
-            Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.close), modifier = Modifier.size(20.dp))
-        }
+private fun priorityTokenRes(v: Int): Int =
+    when (v) {
+        3 -> R.string.priority_3
+        2 -> R.string.priority_2
+        else -> R.string.priority_1
     }
-}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OverlayQuickAddCard(
     snap: Snapshot,
+    defaultBlockMinutes: Int,
     initialCourseId: String?,
     initialText: String,
+    registerDismissHook: ((() -> Unit)?) -> Unit,
     onExpand: (String) -> Unit,
     onCommit: (ChangeSet, String) -> Unit,
     onDismiss: () -> Unit,
@@ -576,6 +612,18 @@ private fun OverlayQuickAddCard(
     val linkedCourse = remember(snap, initialCourseId) { initialCourseId?.let { id -> snap.courses.firstOrNull { it.id == id } } }
 
     var text by remember(initialText) { mutableStateOf(initialText) }
+    var toolPanel by remember { mutableStateOf<OverlayQuickPanel?>(null) }
+    var whenPanel by remember { mutableStateOf(false) }
+    var panelWhen by remember { mutableStateOf<WhenPick?>(null) }
+    var panelRemind by remember { mutableStateOf<Int?>(null) }
+    var panelPersistent by remember { mutableStateOf(false) }
+    var panelFreq by remember { mutableStateOf<Freq?>(null) }
+    var panelInterval by remember { mutableIntStateOf(1) }
+    var panelUntil by remember { mutableStateOf<LocalDate?>(null) }
+    var panelByDays by remember { mutableStateOf(emptySet<Int>()) }
+    var panelByMonths by remember { mutableStateOf(emptySet<Int>()) }
+    var confirmDiscard by remember { mutableStateOf(false) }
+
     val parsed = remember(text, now) { if (text.isBlank()) null else QuickAdd.parse(text, now) }
     val tokens = parsed?.tokens.orEmpty()
     val highlight =
@@ -589,6 +637,13 @@ private fun OverlayQuickAddCard(
         }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    val hasDraft = text.isNotBlank() || panelWhen != null || panelRemind != null || panelFreq != null
+    LaunchedEffect(hasDraft) {
+        registerDismissHook {
+            if (hasDraft) confirmDiscard = true else onDismiss()
+        }
+    }
 
     fun rewriteToken(
         kinds: Set<QuickTokenKind>,
@@ -629,16 +684,36 @@ private fun OverlayQuickAddCard(
             } else {
                 ctx.getString(R.string.todo_batch_toast, items.size)
             }
-        var cs = buildQuickTasks(snap, items, defaultListId = null, defaultBucket = null, now = now, desc = desc)
+        val ov =
+            if (panelWhen != null || panelRemind != null || panelFreq != null) {
+                QuickOverride(
+                    whenPick = panelWhen,
+                    remind = panelRemind,
+                    persistent = panelPersistent,
+                    repeat =
+                        panelFreq?.let { f ->
+                            Recurrence(
+                                freq = f,
+                                interval = panelInterval.coerceAtLeast(1),
+                                byDays = if (f == Freq.DAILY) emptySet() else panelByDays,
+                                until = panelUntil,
+                                byMonths = if (f == Freq.YEARLY) panelByMonths else emptySet(),
+                            )
+                        },
+                )
+            } else {
+                null
+            }
+        var cs = buildQuickTasks(snap, items, defaultListId = null, defaultBucket = null, now = now, desc = desc, override = ov)
         if (linkedCourse != null) {
             cs =
                 cs.copy(
                     changes =
                         cs.changes.map { ch ->
-                            if (ch is app.mintcal.core.change.Change.Add && ch.after is Task) {
+                            if (ch is Change.Add && ch.after is Task) {
                                 val t = ch.after as Task
                                 if (t.courseId == null && t.parentId == null) {
-                                    app.mintcal.core.change.Change.Add(
+                                    Change.Add(
                                         t.copy(courseId = linkedCourse.id, dueBeforeNextClass = t.due == null),
                                     )
                                 } else {
@@ -653,92 +728,269 @@ private fun OverlayQuickAddCard(
         onCommit(cs, msg)
     }
 
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.widget_overlay_quick_add), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            if (linkedCourse != null) {
-                Spacer(Modifier.height(4.dp))
-                Tag(linkedCourse.name, colors.bg(linkedCourse.colorIndex), colors.fg(linkedCourse.colorIndex))
+    val daySet = parsed?.due != null || panelWhen != null
+    val panelWhenLabel =
+        panelWhen?.let { wp ->
+            val base = ctx.dueLabel(wp.date.atStartOfDay(), false, now.toLocalDate())
+            when {
+                wp.start == null -> base
+                wp.block -> "$base ${wp.start.hm()}–${wp.end?.hm().orEmpty()}"
+                else -> "$base ${wp.start.hm()}"
             }
         }
-        OverlayHeaderActions(
-            expandDescription = stringResource(R.string.widget_overlay_expand_app),
-            onExpand = { onExpand(text) },
-            onDismiss = onDismiss,
+
+    if (linkedCourse != null) {
+        Tag(
+            linkedCourse.name,
+            colors.bg(linkedCourse.colorIndex),
+            colors.fg(linkedCourse.colorIndex),
+            modifier = Modifier.padding(bottom = 2.dp),
         )
     }
-
-    Spacer(Modifier.height(8.dp))
 
     Box(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(scheme.surfaceContainerHighest)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .heightIn(min = 48.dp),
     ) {
-        if (text.isEmpty()) {
-            Text(
-                stringResource(R.string.quick_add_prompt),
-                style = MaterialTheme.typography.bodyLarge,
-                color = scheme.onSurfaceVariant,
-            )
-        }
         BasicTextField(
             value = text,
             onValueChange = { text = it },
-            modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-            textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .padding(vertical = 12.dp),
+            textStyle =
+                MaterialTheme.typography.titleLarge.copy(
+                    color = scheme.onSurface,
+                    fontWeight = FontWeight.Normal,
+                ),
             cursorBrush = SolidColor(scheme.primary),
             visualTransformation = highlight,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { submit() }),
             maxLines = 4,
         )
+        if (text.isEmpty()) {
+            Text(
+                stringResource(R.string.quick_add_prompt),
+                modifier = Modifier.padding(start = 3.dp, top = 12.dp, bottom = 12.dp).clearAndSetSemantics {},
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Normal),
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 
-    Spacer(Modifier.height(10.dp))
-
-    val todayToken = stringResource(R.string.today)
-    val tomorrowToken = stringResource(R.string.tomorrow)
-    val prioHighToken = "!${stringResource(R.string.priority_3)}"
-    val prioMidToken = "!${stringResource(R.string.priority_2)}"
-    val prioHighLabel = stringResource(R.string.overlay_priority_high)
-    val prioMidLabel = stringResource(R.string.overlay_priority_medium)
-    val hasToday = parsed?.due?.toLocalDate() == now.toLocalDate()
-    val hasTomorrow = parsed?.due?.toLocalDate() == now.toLocalDate().plusDays(1)
-    val prio = parsed?.priority ?: 0
-
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    AnimatedVisibility(
+        visible = toolPanel == OverlayQuickPanel.PRIORITY,
+        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
     ) {
-        ChipPill(todayToken, on = hasToday) {
-            rewriteToken(setOf(QuickTokenKind.DATE), if (hasToday) null else todayToken)
-        }
-        ChipPill(tomorrowToken, on = hasTomorrow) {
-            rewriteToken(setOf(QuickTokenKind.DATE), if (hasTomorrow) null else tomorrowToken)
-        }
-        ChipPill(prioHighLabel, on = prio == 3) {
-            rewriteToken(setOf(QuickTokenKind.PRIORITY), if (prio == 3) null else prioHighToken)
-        }
-        ChipPill(prioMidLabel, on = prio == 2) {
-            rewriteToken(setOf(QuickTokenKind.PRIORITY), if (prio == 2) null else prioMidToken)
+        SegmentedPill(
+            options =
+                listOf(
+                    3 to stringResource(R.string.priority_3),
+                    2 to stringResource(R.string.priority_2),
+                    1 to stringResource(R.string.priority_1),
+                    0 to stringResource(R.string.priority_0),
+                ),
+            selected = parsed?.priority ?: 0,
+            onSelect = { v ->
+                rewriteToken(setOf(QuickTokenKind.PRIORITY), if (v == 0) null else "!" + ctx.getString(priorityTokenRes(v)))
+                toolPanel = null
+            },
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+    }
+
+    AnimatedVisibility(
+        visible = toolPanel == OverlayQuickPanel.LIST,
+        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+    ) {
+        FlowRow(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 132.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            snap.lists.sortedBy { it.sort }.forEach { l ->
+                ChipPill("#${l.name}", on = parsed?.listName == l.name) {
+                    rewriteToken(setOf(QuickTokenKind.LIST), "#${l.name}")
+                    toolPanel = null
+                }
+            }
         }
     }
-    Spacer(Modifier.height(10.dp))
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        Button(
-            onClick = { submit() },
-            enabled = text.isNotBlank(),
-            modifier = Modifier.heightIn(min = 44.dp),
+
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        OverlayIconBtn(
+            icon = Icons.Rounded.Event,
+            contentDescription = stringResource(R.string.detail_editor_pick_date),
+            tint = if (daySet) scheme.primary else scheme.onSurfaceVariant,
+            onClick = { whenPanel = true },
+        )
+        OverlayIconBtn(
+            icon = Icons.Rounded.Flag,
+            contentDescription = stringResource(R.string.label_priority),
+            tint = colors.priorityColor(parsed?.priority ?: 0) ?: scheme.onSurfaceVariant,
+            onClick = { toolPanel = if (toolPanel == OverlayQuickPanel.PRIORITY) null else OverlayQuickPanel.PRIORITY },
+        )
+        OverlayIconBtn(
+            icon = Icons.Rounded.Inbox,
+            contentDescription = stringResource(R.string.label_list),
+            tint = if (parsed?.listName != null) scheme.primary else scheme.onSurfaceVariant,
+            onClick = {
+                if (snap.lists.isEmpty()) {
+                    rewriteToken(emptySet(), "#")
+                } else {
+                    toolPanel = if (toolPanel == OverlayQuickPanel.LIST) null else OverlayQuickPanel.LIST
+                }
+            },
+        )
+        Spacer(Modifier.weight(1f))
+        OverlayIconBtn(
+            icon = Icons.Rounded.OpenInFull,
+            contentDescription = stringResource(R.string.widget_overlay_expand_app),
+            tint = scheme.onSurfaceVariant,
+            onClick = { onExpand(text) },
+        )
+        val canAdd = parsed != null
+        val addLabel = stringResource(R.string.widgets_add_action)
+        Box(
+            modifier =
+                Modifier
+                    .padding(start = 4.dp)
+                    .minimumInteractiveComponentSize()
+                    .clip(CircleShape)
+                    .mintClickable(enabled = canAdd, pressedScale = 0.96f, role = Role.Button) { submit() }
+                    .semantics { contentDescription = addLabel },
+            contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.widgets_add_action))
+            Box(
+                modifier =
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(if (canAdd) scheme.primary else scheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Rounded.Check,
+                    null,
+                    tint = if (canAdd) scheme.onPrimary else scheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
+    }
+
+    AnimatedVisibility(
+        visible = panelWhenLabel != null || panelRemind != null || panelFreq != null,
+        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+    ) {
+        FlowRow(
+            Modifier.padding(end = 6.dp, top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (panelWhenLabel != null) {
+                val removeWhenDesc = stringResource(R.string.quick_add_remove_time, panelWhenLabel)
+                Tag(
+                    "$panelWhenLabel ×",
+                    scheme.primaryContainer,
+                    scheme.onPrimaryContainer,
+                    Modifier
+                        .minimumInteractiveComponentSize()
+                        .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelWhen = null }
+                        .semantics { contentDescription = removeWhenDesc },
+                )
+            }
+            if (panelRemind != null) {
+                val rLabel = remindLabel(panelRemind)
+                val removeRemindDesc = stringResource(R.string.quick_add_remove_remind, rLabel)
+                Tag(
+                    "$rLabel ×",
+                    scheme.secondaryContainer,
+                    scheme.onSecondaryContainer,
+                    Modifier
+                        .minimumInteractiveComponentSize()
+                        .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelRemind = null }
+                        .semantics { contentDescription = removeRemindDesc },
+                )
+            }
+            if (panelFreq != null) {
+                val fLabel = freqLabel(panelFreq, panelUntil, panelInterval, panelByDays, panelWhen?.date, byMonths = panelByMonths)
+                val removeRepeatDesc = stringResource(R.string.quick_add_remove_repeat, fLabel)
+                Tag(
+                    "$fLabel ×",
+                    scheme.tertiaryContainer,
+                    scheme.onTertiaryContainer,
+                    Modifier
+                        .minimumInteractiveComponentSize()
+                        .mintClickable(pressedScale = 0.96f, role = Role.Button) {
+                            panelFreq = null
+                            panelUntil = null
+                            panelByDays = emptySet()
+                            panelByMonths = emptySet()
+                        }.semantics { contentDescription = removeRepeatDesc },
+                )
+            }
+        }
+    }
+
+    if (whenPanel) {
+        WhenPanel(
+            initial =
+                panelWhen ?: parsed?.due?.let { d ->
+                    WhenPick(d.toLocalDate(), if (parsed.dueHasTime) d.toLocalTime() else null)
+                },
+            defaultDate = now.toLocalDate(),
+            defaultMinutes = defaultBlockMinutes,
+            initialRemind = panelRemind,
+            initialPersistent = panelPersistent,
+            initialFreq = panelFreq,
+            initialInterval = panelInterval,
+            initialUntil = panelUntil,
+            initialByDays = panelByDays,
+            initialByMonths = panelByMonths,
+            semesterEnd = snap.currentSemester?.let { SemesterCalendar(it).weekEnd(it.totalWeeks) },
+            onDismiss = { whenPanel = false },
+            onPick = { r ->
+                panelWhen = r.whenPick
+                panelRemind = r.remindMinutes
+                panelPersistent = r.remindPersistent
+                panelFreq = r.freq
+                panelInterval = r.interval
+                panelUntil = r.until
+                panelByDays = r.byDays
+                panelByMonths = r.byMonths
+                whenPanel = false
+            },
+        )
+    }
+
+    if (confirmDiscard) {
+        ConfirmDialog(
+            title = stringResource(R.string.detail_editor_discard_title),
+            text = stringResource(R.string.detail_editor_discard_desc),
+            confirm = stringResource(R.string.detail_editor_discard),
+            onConfirm = {
+                confirmDiscard = false
+                onDismiss()
+            },
+            onDismiss = { confirmDiscard = false },
+            danger = true,
+        )
     }
 }
 
@@ -751,9 +1003,9 @@ private fun OverlayCourseCard(
     startPeriod: Int?,
     endPeriod: Int?,
     onToggleTask: (Task, Boolean) -> Unit,
+    onOpenTask: (Task) -> Unit,
     onAddCourseTask: () -> Unit,
     onExpand: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -775,16 +1027,21 @@ private fun OverlayCourseCard(
             append(" · ")
             append(stringResource(R.string.periods_range, sp, ep))
         }
+    val metaLine =
+        listOfNotNull(
+            course.room.takeIf { it.isNotBlank() }?.let { ctx.formatRooms(it, maxInline = 4) },
+            course.teacher.takeIf { it.isNotBlank() },
+            WeekSets.format(course.weeks).takeIf { it.isNotBlank() },
+        ).joinToString(" · ")
     val courseTasks =
         remember(snap.tasks, course.id) {
             snap.tasks.filter { !it.done && it.parentId == null && it.courseId == course.id }
         }
 
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier
-                .width(4.dp)
-                .height(22.dp)
+                .size(10.dp)
                 .clip(CircleShape)
                 .background(colors.fg(course.colorIndex)),
         )
@@ -797,55 +1054,47 @@ private fun OverlayCourseCard(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        IconButton(onClick = onDismiss) {
-            Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.close), modifier = Modifier.size(20.dp))
-        }
     }
 
-    Text(
-        timeText,
-        style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
-        color = scheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 14.dp, top = 2.dp),
-    )
-
-    Spacer(Modifier.height(12.dp))
-
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (course.room.isNotBlank()) {
-            OverlayInfoRow(stringResource(R.string.label_room), ctx.formatRooms(course.room, maxInline = 4))
+    Column(Modifier.padding(start = 20.dp, top = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+            timeText,
+            style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+            color = scheme.onSurfaceVariant,
+        )
+        if (metaLine.isNotEmpty()) {
+            Text(
+                metaLine,
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurface,
+            )
         }
-        if (course.teacher.isNotBlank()) {
-            OverlayInfoRow(stringResource(R.string.label_teacher), course.teacher)
-        }
-        OverlayInfoRow(stringResource(R.string.week_label), WeekSets.format(course.weeks))
         if (course.note.isNotBlank()) {
             Text(
                 course.note,
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(scheme.surfaceContainerHighest.copy(alpha = 0.6f))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
     }
 
     if (courseTasks.isNotEmpty()) {
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
         Text(
             stringResource(R.string.widget_overlay_course_tasks),
             style = MaterialTheme.typography.labelLarge,
             color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 20.dp),
         )
         Spacer(Modifier.height(4.dp))
         courseTasks.take(4).forEach { t ->
             Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .mintClickable(pressedScale = 0.98f) { onOpenTask(t) },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 MintCheck(
@@ -865,20 +1114,18 @@ private fun OverlayCourseCard(
         }
     }
 
-    Spacer(Modifier.height(14.dp))
+    Spacer(Modifier.height(16.dp))
 
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    val expandInteraction = remember { MutableInteractionSource() }
+    val addInteraction = remember { MutableInteractionSource() }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Button(onClick = onAddCourseTask, modifier = Modifier.heightIn(min = 48.dp)) {
-            Icon(Icons.Rounded.Add, null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.course_todos_add))
-        }
         FilledTonalButton(
             onClick = onExpand,
-            modifier = Modifier.heightIn(min = 48.dp),
+            interactionSource = expandInteraction,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).mintPressScale(expandInteraction, 0.96f),
             colors =
                 ButtonDefaults.filledTonalButtonColors(
                     containerColor = scheme.surfaceContainerHighest,
@@ -889,18 +1136,26 @@ private fun OverlayCourseCard(
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.widget_overlay_course_detail))
         }
+        Button(
+            onClick = onAddCourseTask,
+            interactionSource = addInteraction,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).mintPressScale(addInteraction, 0.96f),
+        ) {
+            Icon(Icons.Rounded.Add, null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(stringResource(R.string.course_todos_add))
+        }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OverlayParcelCard(
     snap: Snapshot,
+    defaultBlockMinutes: Int,
     task: Task,
     onMarkDone: () -> Unit,
-    onPostponeTomorrow: () -> Unit,
+    onCommit: (ChangeSet, String) -> Unit,
     onExpand: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -910,6 +1165,13 @@ private fun OverlayParcelCard(
     val place = WidgetKit.cleanTitleWithCode(ctx, task)
     val due = task.due?.let { ctx.dueLabel(it, task.dueHasTime, today) }
     val overdue = task.due != null && task.due!!.isBefore(now)
+    var whenPanel by remember { mutableStateOf(false) }
+
+    val showNote =
+        remember(task.note, code, place) {
+            val n = task.note.trim()
+            n.isNotEmpty() && (!n.contains(code) || n.length > code.length + place.length + 14)
+        }
 
     fun copyCode() {
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -917,95 +1179,78 @@ private fun OverlayParcelCard(
         Toast.makeText(ctx, ctx.getString(R.string.parcel_code_copied, code), Toast.LENGTH_SHORT).show()
     }
 
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Rounded.LocalShipping, null, modifier = Modifier.size(20.dp), tint = scheme.primary)
-        Spacer(Modifier.width(8.dp))
-        Text(
-            stringResource(R.string.widget_parcel_name),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f),
-        )
-        OverlayHeaderActions(
-            expandDescription = stringResource(R.string.widget_overlay_expand_app),
-            onExpand = onExpand,
-            onDismiss = onDismiss,
-        )
-    }
-
-    Spacer(Modifier.height(8.dp))
-
     Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(scheme.primaryContainer.copy(alpha = 0.45f))
-                .mintClickable(pressedScale = 0.98f, role = Role.Button) { copyCode() }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                code,
-                style = MaterialTheme.typography.headlineMedium.copy(fontFeatureSettings = "tnum"),
-                fontWeight = FontWeight.Bold,
-                color = scheme.primary,
-            )
-            Text(
-                place,
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (due != null) {
-                Text(
-                    due,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (overdue) scheme.error else scheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-        }
-        IconButton(onClick = { copyCode() }) {
-            Icon(
-                Icons.Rounded.ContentCopy,
-                contentDescription = stringResource(R.string.parcel_copy_code, code),
-                tint = scheme.primary,
-            )
-        }
+        Text(
+            code,
+            style = MaterialTheme.typography.headlineLarge.copy(fontSize = 28.sp, fontFeatureSettings = "tnum"),
+            fontWeight = FontWeight.Bold,
+            color = scheme.primary,
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .mintClickable(pressedScale = 0.98f, role = Role.Button) { copyCode() }
+                    .padding(vertical = 2.dp),
+        )
+        OverlayIconBtn(
+            icon = Icons.Rounded.ContentCopy,
+            contentDescription = stringResource(R.string.parcel_copy_code, code),
+            tint = scheme.primary,
+            iconSize = 20.dp,
+            onClick = { copyCode() },
+        )
+        OverlayIconBtn(
+            icon = Icons.Rounded.OpenInFull,
+            contentDescription = stringResource(R.string.widget_overlay_expand_app),
+            tint = scheme.onSurfaceVariant,
+            iconSize = 20.dp,
+            onClick = onExpand,
+        )
     }
 
-    if (task.note.isNotBlank()) {
-        Spacer(Modifier.height(10.dp))
+    Text(
+        place,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Medium,
+        color = scheme.onSurface,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(top = 2.dp),
+    )
+    if (due != null) {
+        Text(
+            due,
+            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+            color = if (overdue) scheme.error else scheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+    if (showNote) {
         Text(
             task.note,
             style = MaterialTheme.typography.bodySmall,
             color = scheme.onSurfaceVariant,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(scheme.surfaceContainerHighest.copy(alpha = 0.6f))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 8.dp),
         )
     }
 
-    Spacer(Modifier.height(14.dp))
+    Spacer(Modifier.height(16.dp))
 
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    val reschedInteraction = remember { MutableInteractionSource() }
+    val doneInteraction = remember { MutableInteractionSource() }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Button(onClick = onMarkDone, modifier = Modifier.heightIn(min = 48.dp)) {
-            Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.widget_overlay_parcel_done))
-        }
         FilledTonalButton(
-            onClick = onPostponeTomorrow,
-            modifier = Modifier.heightIn(min = 48.dp),
+            onClick = { whenPanel = true },
+            interactionSource = reschedInteraction,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).mintPressScale(reschedInteraction, 0.96f),
             colors =
                 ButtonDefaults.filledTonalButtonColors(
                     containerColor = scheme.surfaceContainerHighest,
@@ -1014,140 +1259,476 @@ private fun OverlayParcelCard(
         ) {
             Icon(Icons.Rounded.Schedule, null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text(stringResource(R.string.widget_overlay_postpone_tomorrow))
+            Text(stringResource(R.string.widget_overlay_reschedule))
+        }
+        Button(
+            onClick = onMarkDone,
+            interactionSource = doneInteraction,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).mintPressScale(doneInteraction, 0.96f),
+        ) {
+            Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(stringResource(R.string.widget_overlay_parcel_done))
         }
     }
+
+    if (whenPanel) {
+        val initPick =
+            remember(task) {
+                task.blockStart?.let { WhenPick(it.toLocalDate(), it.toLocalTime(), task.blockMinutes ?: defaultBlockMinutes) }
+                    ?: task.due?.let { WhenPick(it.toLocalDate(), if (task.dueHasTime) it.toLocalTime() else null) }
+            }
+        WhenPanel(
+            initial = initPick,
+            defaultDate = today,
+            defaultMinutes = defaultBlockMinutes,
+            initialRemind = task.remindMinutes,
+            initialPersistent = task.remindPersistent,
+            initialFreq = task.repeat?.freq,
+            initialInterval = task.repeat?.interval ?: 1,
+            initialUntil = task.repeat?.until,
+            initialByDays = task.repeat?.byDays ?: emptySet(),
+            initialByMonths = task.repeat?.byMonths ?: emptySet(),
+            semesterEnd = snap.currentSemester?.let { SemesterCalendar(it).weekEnd(it.totalWeeks) },
+            onDismiss = { whenPanel = false },
+            onPick = { r ->
+                val ms = System.currentTimeMillis()
+                val updated = applyWhenResult(task, r, ms)
+                val desc = ctx.getString(R.string.edit_task_desc, updated.title)
+                onCommit(Edits.save(snap, updated, desc, ms), ctx.getString(R.string.widget_overlay_saved_toast, updated.title))
+                whenPanel = false
+            },
+        )
+    }
+}
+
+private fun applyWhenResult(
+    task: Task,
+    r: app.mintcal.ui.screens.WhenPanelResult,
+    ms: Long,
+): Task {
+    val w = r.whenPick
+    var blockStartAt: LocalDateTime? = null
+    var dueAt: LocalDateTime? = null
+    var blockMinutes: Int? = null
+    var hasTime = false
+    if (w != null) {
+        val dur = w.minutes
+        if (w.start != null) {
+            val at = LocalDateTime.of(w.date, w.start)
+            if (dur != null) {
+                blockStartAt = at
+                blockMinutes = dur
+                dueAt = at.plusMinutes(dur.toLong())
+            } else {
+                dueAt = at
+            }
+            hasTime = true
+        } else {
+            dueAt = w.date.atTime(23, 59)
+        }
+    }
+    return task.copy(
+        blockStart = blockStartAt,
+        blockMinutes = blockMinutes,
+        due = dueAt,
+        dueHasTime = hasTime,
+        remindMinutes = r.remindMinutes,
+        remindPersistent = r.remindMinutes != null && r.remindPersistent,
+        repeat =
+            r.freq?.let { f ->
+                (task.repeat?.takeIf { it.freq == f } ?: Recurrence(f)).copy(
+                    freq = f,
+                    interval = r.interval.coerceAtLeast(1),
+                    byDays = if (f == Freq.DAILY) emptySet() else r.byDays,
+                    byMonths = if (f == Freq.YEARLY) r.byMonths else emptySet(),
+                    until = r.until,
+                )
+            },
+        updatedAt = ms,
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OverlayTaskCard(
     snap: Snapshot,
+    defaultBlockMinutes: Int,
     task: Task,
-    onToggleDone: (Task, Boolean) -> Unit,
-    onCyclePriority: () -> Unit,
-    onPostponeTomorrow: () -> Unit,
+    registerDismissHook: ((() -> Unit)?) -> Unit,
+    onToggleDone: (Task, Boolean, Boolean) -> Unit,
+    onCommitEdit: (Task, String?, Boolean, Uri?) -> Unit,
     onDelete: () -> Unit,
-    onExpand: () -> Unit,
+    onOpenInApp: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val colors = MintTheme.colors
     val today = remember { LocalDate.now() }
+    val now = remember { LocalDateTime.now() }
     val subtasks = remember(snap.tasks, task.id) { snap.tasks.filter { it.parentId == task.id } }
-    val listName = remember(snap.lists, task.listId) { snap.lists.firstOrNull { it.id == task.listId }?.name }
+
+    val initWhen =
+        remember(task.id) {
+            task.blockStart?.let { WhenPick(it.toLocalDate(), it.toLocalTime(), task.blockMinutes ?: defaultBlockMinutes) }
+                ?: task.due?.let { WhenPick(it.toLocalDate(), if (task.dueHasTime) it.toLocalTime() else null) }
+        }
+    var title by remember(task.id) { mutableStateOf(task.title) }
+    var note by remember(task.id) { mutableStateOf(task.note) }
+    var priority by remember(task.id) { mutableIntStateOf(task.priority) }
+    var listId by remember(task.id) { mutableStateOf(task.listId) }
+    var done by remember(task.id, task.done) { mutableStateOf(task.done) }
+    var whenPick by remember(task.id) { mutableStateOf(initWhen) }
+    var remind by remember(task.id) { mutableStateOf(task.remindMinutes) }
+    var persistent by remember(task.id) { mutableStateOf(task.remindPersistent) }
+    var freq by remember(task.id) { mutableStateOf(task.repeat?.freq) }
+    var interval by remember(task.id) { mutableIntStateOf(task.repeat?.interval ?: 1) }
+    var until by remember(task.id) { mutableStateOf(task.repeat?.until) }
+    var byDays by remember(task.id) { mutableStateOf(task.repeat?.byDays ?: emptySet()) }
+    var byMonths by remember(task.id) { mutableStateOf(task.repeat?.byMonths ?: emptySet()) }
+
+    var toolPanel by remember { mutableStateOf<OverlayQuickPanel?>(null) }
+    var whenPanel by remember { mutableStateOf(false) }
+
+    val listName = remember(snap.lists, listId) { snap.lists.firstOrNull { it.id == listId }?.name }
     val course = remember(snap.courses, task.courseId) { snap.courses.firstOrNull { it.id == task.courseId } }
 
-    val whenText =
-        remember(task, today) {
-            when {
-                task.blockStart != null -> {
-                    val start = task.blockStart!!
-                    val end = start.plusMinutes((task.blockMinutes ?: 30).toLong())
-                    "${ctx.dueLabel(start, true, today)}–${end.hm()}"
-                }
+    val whenChanged =
+        whenPick?.date != initWhen?.date || whenPick?.start != initWhen?.start || whenPick?.minutes != initWhen?.minutes
+    val repeatChanged =
+        freq != task.repeat?.freq ||
+            (
+                freq != null &&
+                    (
+                        interval != (task.repeat?.interval ?: 1) ||
+                            until != task.repeat?.until ||
+                            byDays != (task.repeat?.byDays ?: emptySet<Int>()) ||
+                            byMonths != (task.repeat?.byMonths ?: emptySet<Int>())
+                    )
+            )
+    val isDirty =
+        title.trim() != task.title ||
+            note != task.note ||
+            priority != task.priority ||
+            listId != task.listId ||
+            done != task.done ||
+            remind != task.remindMinutes ||
+            persistent != task.remindPersistent ||
+            whenChanged ||
+            repeatChanged
 
-                task.due != null -> {
-                    ctx.dueLabel(task.due!!, task.dueHasTime, today)
+    fun buildUpdated(ms: Long): Task {
+        val w = whenPick
+        var blockStartAt: LocalDateTime? = null
+        var dueAt: LocalDateTime? = null
+        var blockMinutes: Int? = null
+        var hasTime = false
+        if (w != null) {
+            val dur = w.minutes
+            if (w.start != null) {
+                val at = LocalDateTime.of(w.date, w.start)
+                if (dur != null) {
+                    blockStartAt = at
+                    blockMinutes = dur
+                    dueAt = at.plusMinutes(dur.toLong())
+                } else {
+                    dueAt = at
                 }
-
-                else -> {
-                    null
-                }
+                hasTime = true
+            } else {
+                dueAt = w.date.atTime(23, 59)
             }
         }
-    val prioLabel =
-        when (task.priority) {
-            3 -> stringResource(R.string.priority_3)
-            2 -> stringResource(R.string.priority_2)
-            1 -> stringResource(R.string.priority_1)
-            else -> stringResource(R.string.widget_overlay_priority_none)
-        }
-    val prioFg = colors.priorityColor(task.priority) ?: scheme.onSurfaceVariant
-
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        MintCheck(
-            checked = task.done,
-            onChange = { onToggleDone(task, it) },
-            tint = colors.priorityColor(task.priority),
-        )
-        Text(
-            task.title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
-            textDecoration = if (task.done) TextDecoration.LineThrough else TextDecoration.None,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        OverlayHeaderActions(
-            expandDescription = stringResource(R.string.widget_overlay_expand_app),
-            onExpand = onExpand,
-            onDismiss = onDismiss,
+        return task.copy(
+            title = title.trim(),
+            note = note,
+            priority = priority,
+            listId = listId,
+            done = done,
+            doneAt = if (done) (task.doneAt ?: ms) else null,
+            dropped = if (!done) false else task.dropped,
+            blockStart = blockStartAt,
+            blockMinutes = blockMinutes,
+            due = dueAt,
+            dueHasTime = hasTime,
+            remindMinutes = remind,
+            remindPersistent = remind != null && persistent,
+            repeat =
+                freq?.let { f ->
+                    (task.repeat?.takeIf { it.freq == f } ?: Recurrence(f)).copy(
+                        freq = f,
+                        interval = interval.coerceAtLeast(1),
+                        byDays = if (f == Freq.DAILY) emptySet() else byDays,
+                        byMonths = if (f == Freq.YEARLY) byMonths else emptySet(),
+                        until = until,
+                    )
+                },
+            updatedAt = ms,
         )
     }
 
-    Spacer(Modifier.height(6.dp))
-
-    FlowRow(
-        modifier = Modifier.padding(start = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+    fun saveAndMaybe(
+        closeAfter: Boolean,
+        thenOpenUri: Uri? = null,
     ) {
-        if (whenText != null) {
-            Tag(whenText, scheme.primaryContainer, scheme.onPrimaryContainer)
+        val cleanTitle = title.trim()
+        if (cleanTitle.isEmpty() || !isDirty) {
+            if (thenOpenUri != null) {
+                onOpenInApp()
+            } else if (closeAfter) {
+                onDismiss()
+            }
+            return
         }
+        val ms = System.currentTimeMillis()
+        val updated = buildUpdated(ms)
+        val msg = if (closeAfter && thenOpenUri == null) ctx.getString(R.string.widget_overlay_saved_toast, updated.title) else null
+        onCommitEdit(updated, msg, closeAfter, thenOpenUri)
+    }
+
+    LaunchedEffect(isDirty, title, note, priority, listId, done, whenPick, remind, persistent, freq, interval, until, byDays, byMonths) {
+        registerDismissHook {
+            if (isDirty && title.trim().isNotEmpty()) saveAndMaybe(closeAfter = true) else onDismiss()
+        }
+    }
+
+    val whenText =
+        remember(whenPick, freq, interval, until, byDays, byMonths, today) {
+            val w = whenPick
+            when {
+                w == null -> {
+                    null
+                }
+
+                w.start != null && w.minutes != null -> {
+                    val start = LocalDateTime.of(w.date, w.start)
+                    val end = start.plusMinutes(w.minutes.toLong())
+                    "${ctx.dueLabel(start, true, today)}–${end.hm()}"
+                }
+
+                w.start != null -> {
+                    ctx.dueLabel(LocalDateTime.of(w.date, w.start), true, today)
+                }
+
+                else -> {
+                    ctx.dueLabel(w.date.atStartOfDay(), false, today)
+                }
+            }
+        }
+    val freqShort =
+        if (freq != null) {
+            freqLabel(freq, until, interval, byDays, whenPick?.date, withUntil = false, byMonths = byMonths)
+        } else {
+            null
+        }
+    val whenChipText =
+        listOfNotNull(whenText, freqShort).joinToString(" · ").ifEmpty { stringResource(R.string.detail_editor_pick_date) }
+    val overdue =
+        whenPick?.let { w ->
+            !done &&
+                when {
+                    w.start != null -> LocalDateTime.of(w.date, w.start).isBefore(now)
+                    else -> w.date.isBefore(today)
+                }
+        } == true
+
+    val prioText =
+        when (priority) {
+            3 -> stringResource(R.string.priority_3)
+            2 -> stringResource(R.string.priority_2)
+            1 -> stringResource(R.string.priority_1)
+            else -> stringResource(R.string.label_priority)
+        }
+    val prioFg = colors.priorityColor(priority) ?: scheme.onSurfaceVariant
+
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        MintCheck(
+            checked = done,
+            onChange = { checked ->
+                done = checked
+                if (!isDirty && checked && !task.done) {
+                    onToggleDone(task, true, true)
+                }
+            },
+            tint = colors.priorityColor(priority),
+        )
         Box(
             modifier =
                 Modifier
-                    .clip(CircleShape)
-                    .mintClickable(pressedScale = 0.96f, role = Role.Button, onClick = onCyclePriority),
+                    .weight(1f)
+                    .padding(vertical = 4.dp)
+                    .alpha(if (done) 0.45f else 1f),
         ) {
-            Tag(prioLabel, scheme.surfaceContainerHighest, prioFg)
+            BasicTextField(
+                value = title,
+                onValueChange = { title = it },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle =
+                    MaterialTheme.typography.titleLarge.copy(
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = scheme.onSurface,
+                        textDecoration = if (done) TextDecoration.LineThrough else TextDecoration.None,
+                    ),
+                cursorBrush = SolidColor(scheme.primary),
+                maxLines = 3,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { saveAndMaybe(closeAfter = true) }),
+            )
+            if (title.isEmpty()) {
+                Text(
+                    stringResource(R.string.quick_add_prompt),
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Normal),
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.clearAndSetSemantics {},
+                )
+            }
         }
-        if (listName != null) {
-            Tag("#$listName", scheme.surfaceContainerHighest, scheme.onSurfaceVariant)
+    }
+
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 48.dp, top = 2.dp),
+    ) {
+        BasicTextField(
+            value = note,
+            onValueChange = { note = it },
+            modifier = Modifier.fillMaxWidth(),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurfaceVariant),
+            cursorBrush = SolidColor(scheme.primary),
+            maxLines = 4,
+        )
+        if (note.isEmpty()) {
+            Text(
+                stringResource(R.string.label_note),
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                modifier = Modifier.clearAndSetSemantics {},
+            )
+        }
+    }
+
+    Spacer(Modifier.height(12.dp))
+
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(start = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        OverlayActionChip(
+            icon = Icons.Rounded.Event,
+            label = whenChipText,
+            bg =
+                when {
+                    overdue -> scheme.errorContainer
+                    whenText != null || freq != null -> scheme.primaryContainer
+                    else -> scheme.surfaceContainerHighest
+                },
+            fg =
+                when {
+                    overdue -> scheme.error
+                    whenText != null || freq != null -> scheme.onPrimaryContainer
+                    else -> scheme.onSurfaceVariant
+                },
+            onClick = { whenPanel = true },
+        )
+        OverlayActionChip(
+            icon = Icons.Rounded.Flag,
+            label = prioText,
+            bg = scheme.surfaceContainerHighest,
+            fg = prioFg,
+            onClick = { toolPanel = if (toolPanel == OverlayQuickPanel.PRIORITY) null else OverlayQuickPanel.PRIORITY },
+        )
+        if (snap.lists.isNotEmpty()) {
+            OverlayActionChip(
+                icon = Icons.Rounded.Inbox,
+                label = listName?.let { "#$it" } ?: stringResource(R.string.label_list),
+                bg = if (listName != null) scheme.primaryContainer else scheme.surfaceContainerHighest,
+                fg = if (listName != null) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                onClick = { toolPanel = if (toolPanel == OverlayQuickPanel.LIST) null else OverlayQuickPanel.LIST },
+            )
         }
         if (course != null) {
             Tag(course.name, colors.bg(course.colorIndex), colors.fg(course.colorIndex))
         }
     }
 
-    if (task.note.isNotBlank()) {
-        Spacer(Modifier.height(10.dp))
-        Text(
-            task.note,
-            style = MaterialTheme.typography.bodySmall,
-            color = scheme.onSurfaceVariant,
+    AnimatedVisibility(
+        visible = toolPanel == OverlayQuickPanel.PRIORITY,
+        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+    ) {
+        SegmentedPill(
+            options =
+                listOf(
+                    3 to stringResource(R.string.priority_3),
+                    2 to stringResource(R.string.priority_2),
+                    1 to stringResource(R.string.priority_1),
+                    0 to stringResource(R.string.priority_0),
+                ),
+            selected = priority,
+            onSelect = { v ->
+                priority = v
+                toolPanel = null
+            },
+            modifier = Modifier.padding(top = 10.dp),
+        )
+    }
+
+    AnimatedVisibility(
+        visible = toolPanel == OverlayQuickPanel.LIST && snap.lists.isNotEmpty(),
+        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+    ) {
+        FlowRow(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(scheme.surfaceContainerHighest.copy(alpha = 0.6f))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-        )
+                    .heightIn(max = 132.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ChipPill(stringResource(R.string.widget_overlay_no_list), on = listId == null) {
+                listId = null
+                toolPanel = null
+            }
+            snap.lists.sortedBy { it.sort }.forEach { l ->
+                ChipPill("#${l.name}", on = listId == l.id) {
+                    listId = l.id
+                    toolPanel = null
+                }
+            }
+        }
     }
 
     if (subtasks.isNotEmpty()) {
         Spacer(Modifier.height(12.dp))
         Text(
             stringResource(R.string.widget_overlay_subtasks),
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelMedium,
             color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 12.dp, bottom = 2.dp),
         )
         subtasks.forEach { sub ->
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth().alpha(if (sub.done) 0.45f else 1f),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 MintCheck(
                     checked = sub.done,
-                    onChange = { onToggleDone(sub, it) },
+                    onChange = { onToggleDone(sub, it, false) },
                     size = 18.dp,
                     tint = colors.priorityColor(sub.priority),
                 )
                 Text(
                     sub.title,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (sub.done) scheme.onSurfaceVariant else scheme.onSurface,
+                    color = scheme.onSurface,
                     textDecoration = if (sub.done) TextDecoration.LineThrough else TextDecoration.None,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -1159,34 +1740,128 @@ private fun OverlayTaskCard(
 
     Spacer(Modifier.height(14.dp))
 
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    val primaryInteraction = remember { MutableInteractionSource() }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        OverlayIconBtn(
+            icon = Icons.Rounded.DeleteOutline,
+            contentDescription = stringResource(R.string.delete),
+            tint = scheme.error,
+            iconSize = 20.dp,
+            onClick = onDelete,
+        )
+        Spacer(Modifier.weight(1f))
+        OverlayIconBtn(
+            icon = Icons.Rounded.OpenInFull,
+            contentDescription = stringResource(R.string.widget_overlay_expand_app),
+            tint = scheme.onSurfaceVariant,
+            iconSize = 20.dp,
+            onClick = { saveAndMaybe(closeAfter = false, thenOpenUri = DeepLinks.taskUri(task.id)) },
+        )
+        Spacer(Modifier.width(6.dp))
+        val canSave = title.trim().isNotEmpty()
+        val primaryEnabled = if (isDirty) canSave else true
         Button(
-            onClick = { onToggleDone(task, !task.done) },
-            modifier = Modifier.heightIn(min = 48.dp),
+            onClick = {
+                if (isDirty) {
+                    saveAndMaybe(closeAfter = true)
+                } else {
+                    onToggleDone(task, !task.done, !task.done)
+                }
+            },
+            enabled = primaryEnabled,
+            interactionSource = primaryInteraction,
+            modifier = Modifier.heightIn(min = 44.dp).mintPressScale(primaryInteraction, 0.96f, enabled = primaryEnabled),
         ) {
             Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.widget_overlay_task_done))
-        }
-        FilledTonalButton(
-            onClick = onPostponeTomorrow,
-            modifier = Modifier.heightIn(min = 48.dp),
-            colors =
-                ButtonDefaults.filledTonalButtonColors(
-                    containerColor = scheme.surfaceContainerHighest,
-                    contentColor = scheme.onSurface,
+            Text(
+                stringResource(
+                    when {
+                        isDirty -> R.string.save
+                        task.done -> R.string.widget_overlay_task_reopen
+                        else -> R.string.widget_overlay_task_done
+                    },
                 ),
-        ) {
-            Icon(Icons.Rounded.Schedule, null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(stringResource(R.string.widget_overlay_postpone_tomorrow))
+            )
         }
-        TextButton(onClick = onDelete, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text(stringResource(R.string.delete), color = scheme.error)
-        }
+    }
+
+    if (whenPanel) {
+        WhenPanel(
+            initial = whenPick,
+            defaultDate = today,
+            defaultMinutes = defaultBlockMinutes,
+            initialRemind = remind,
+            initialPersistent = persistent,
+            initialFreq = freq,
+            initialInterval = interval,
+            initialUntil = until,
+            initialByDays = byDays,
+            initialByMonths = byMonths,
+            semesterEnd = snap.currentSemester?.let { SemesterCalendar(it).weekEnd(it.totalWeeks) },
+            onDismiss = { whenPanel = false },
+            onPick = { r ->
+                whenPick = r.whenPick
+                remind = r.remindMinutes
+                persistent = r.remindPersistent
+                freq = r.freq
+                interval = r.interval
+                until = r.until
+                byDays = r.byDays
+                byMonths = r.byMonths
+                whenPanel = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun OverlayIconBtn(
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color,
+    iconSize: androidx.compose.ui.unit.Dp = 24.dp,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .mintClickable(pressedScale = 0.96f, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(iconSize))
+    }
+}
+
+@Composable
+private fun OverlayActionChip(
+    icon: ImageVector,
+    label: String,
+    bg: Color,
+    fg: Color,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .heightIn(min = 36.dp)
+                .clip(CircleShape)
+                .background(bg)
+                .mintClickable(pressedScale = 0.96f, role = Role.Button, onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Icon(icon, null, modifier = Modifier.size(15.dp), tint = fg)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+            color = fg,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -1194,7 +1869,6 @@ private fun OverlayTaskCard(
 private fun OverlayEventCard(
     event: Event,
     onOpenInApp: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -1206,12 +1880,16 @@ private fun OverlayEventCard(
         } else {
             "${ctx.dueLabel(event.start, true, today)}–${event.end.hm()}"
         }
+    val metaLine =
+        listOfNotNull(
+            timeText,
+            event.location.takeIf { it.isNotBlank() }?.let { ctx.formatRooms(it, maxInline = 4) },
+        ).joinToString(" · ")
 
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier
-                .width(4.dp)
-                .height(22.dp)
+                .size(10.dp)
                 .clip(CircleShape)
                 .background(colors.fg(event.colorIndex)),
         )
@@ -1222,62 +1900,30 @@ private fun OverlayEventCard(
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f),
         )
-        OverlayHeaderActions(
-            expandDescription = stringResource(R.string.widget_overlay_open_in_app),
-            onExpand = onOpenInApp,
-            onDismiss = onDismiss,
-        )
     }
     Text(
-        timeText,
-        style = MaterialTheme.typography.bodyMedium,
+        metaLine,
+        style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
         color = scheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 14.dp, top = 4.dp),
+        modifier = Modifier.padding(start = 20.dp, top = 4.dp),
     )
-    if (event.location.isNotBlank()) {
-        Spacer(Modifier.height(8.dp))
-        OverlayInfoRow(stringResource(R.string.label_room), ctx.formatRooms(event.location, maxInline = 4))
-    }
     if (event.note.isNotBlank()) {
-        Spacer(Modifier.height(8.dp))
         Text(
             event.note,
             style = MaterialTheme.typography.bodySmall,
             color = scheme.onSurfaceVariant,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(scheme.surfaceContainerHighest.copy(alpha = 0.6f))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(start = 20.dp, top = 8.dp),
         )
     }
-    Spacer(Modifier.height(14.dp))
-    Button(onClick = onOpenInApp, modifier = Modifier.heightIn(min = 48.dp)) {
+    Spacer(Modifier.height(16.dp))
+    val openInteraction = remember { MutableInteractionSource() }
+    Button(
+        onClick = onOpenInApp,
+        interactionSource = openInteraction,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).mintPressScale(openInteraction, 0.96f),
+    ) {
         Icon(Icons.Rounded.OpenInFull, null, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(6.dp))
         Text(stringResource(R.string.widget_overlay_open_in_app))
-    }
-}
-
-@Composable
-private fun OverlayInfoRow(
-    label: String,
-    value: String,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = scheme.onSurfaceVariant,
-            modifier = Modifier.width(68.dp),
-        )
-        Text(
-            value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = scheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
     }
 }

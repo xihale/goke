@@ -55,7 +55,7 @@ class TodayWidgetService : RemoteViewsService() {
                 // 宣纸行规则：待办行无框直落宣纸底（与 App TaskRow / web .task 一致）
                 v.setInt(R.id.today_item_root, "setBackgroundResource", 0)
                 v.setTextColor(R.id.today_item_time, ctx.getColor(R.color.widget_muted))
-                v.setTextColor(R.id.today_item_title, ctx.getColor(R.color.widget_text))
+                v.setTextColor(R.id.today_item_title, ctx.getColor(if (r.code != null) R.color.widget_accent else R.color.widget_text))
                 v.setTextColor(R.id.today_item_sub, ctx.getColor(R.color.widget_muted))
             } else {
                 // 时间块穿植物色软彩底；正在进行的按设计改用薄荷容器高亮
@@ -70,18 +70,19 @@ class TodayWidgetService : RemoteViewsService() {
                 v.setTextColor(R.id.today_item_sub, WidgetKit.softFg(fg))
             }
             v.setTextViewText(R.id.today_item_time, r.time)
+            v.setViewVisibility(R.id.today_item_code, View.GONE)
             if (r.code != null) {
-                v.setViewVisibility(R.id.today_item_code, View.VISIBLE)
-                v.setTextViewText(R.id.today_item_code, r.code)
-            } else {
-                v.setViewVisibility(R.id.today_item_code, View.GONE)
-            }
-            v.setTextViewText(R.id.today_item_title, r.title)
-            if (!r.sub.isNullOrBlank()) {
+                v.setTextViewText(R.id.today_item_title, r.code)
                 v.setViewVisibility(R.id.today_item_sub, View.VISIBLE)
-                v.setTextViewText(R.id.today_item_sub, r.sub)
+                v.setTextViewText(R.id.today_item_sub, r.title)
             } else {
-                v.setViewVisibility(R.id.today_item_sub, View.GONE)
+                v.setTextViewText(R.id.today_item_title, r.title)
+                if (!r.sub.isNullOrBlank()) {
+                    v.setViewVisibility(R.id.today_item_sub, View.VISIBLE)
+                    v.setTextViewText(R.id.today_item_sub, r.sub)
+                } else {
+                    v.setViewVisibility(R.id.today_item_sub, View.GONE)
+                }
             }
 
             if (r.taskId != null) {

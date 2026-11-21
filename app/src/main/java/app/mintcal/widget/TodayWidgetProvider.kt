@@ -161,10 +161,9 @@ class TodayWidgetProvider : AppWidgetProvider() {
                         val ongoing = !o.start.isAfter(now) && o.end.isAfter(now)
                         val sub =
                             listOfNotNull(
-                                "${o.start.hm()}–${o.end.hm()}",
                                 o.room.takeIf { it.isNotBlank() },
                                 if (ongoing) ctx.getString(R.string.widget_ongoing) else null,
-                            ).joinToString(" · ")
+                            ).joinToString(" · ").ifEmpty { "–${o.end.hm()}" }
                         result +=
                             Row(
                                 key = "c_${o.course.id}_${o.start}",
@@ -212,7 +211,7 @@ class TodayWidgetProvider : AppWidgetProvider() {
                         val cleanTitle = if (code != null) WidgetKit.cleanTitleWithCode(ctx, t) else t.title
                         val sub =
                             listOfNotNull(
-                                "${item.start.hm()}–${item.end.hm()}",
+                                "–${item.end.hm()}",
                                 if (ongoing) ctx.getString(R.string.widget_ongoing) else null,
                             ).joinToString(" · ")
                         result +=

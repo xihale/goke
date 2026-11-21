@@ -60,7 +60,7 @@ class ParcelWidgetService : RemoteViewsService() {
             } else {
                 v.setViewVisibility(R.id.parcel_item_due, View.GONE)
             }
-            v.setInt(R.id.parcel_item_check, "setColorFilter", WidgetKit.priorityColor(ctx, 2, r.overdue))
+            v.setInt(R.id.parcel_item_check, "setColorFilter", WidgetKit.priorityColor(ctx, 0, r.overdue))
             v.setOnClickFillInIntent(
                 R.id.parcel_item_check,
                 Intent()
