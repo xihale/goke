@@ -39,7 +39,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -104,6 +103,7 @@ import app.mintcal.ui.components.NavClearance
 import app.mintcal.ui.components.NavListInset
 import app.mintcal.ui.components.SegmentedPill
 import app.mintcal.ui.components.mintClickable
+import app.mintcal.ui.components.rememberModalSheetState
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDayWeekday
 import app.mintcal.ui.reduceMotion
@@ -345,8 +345,7 @@ fun CalendarScreen() {
                 }
             val marks = remember(entries) { CalendarMarks.from(entries) }
 
-            @Suppress("DEPRECATION")
-            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            val sheetState = rememberModalSheetState()
             ModalBottomSheet(
                 onDismissRequest = { previewDate = null },
                 sheetState = sheetState,

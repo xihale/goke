@@ -128,7 +128,7 @@ object DeepLinks {
             ShortcutInfoCompat
                 .Builder(ctx, id)
                 .setShortLabel(ctx.getString(label))
-                .setIcon(IconCompat.createWithResource(ctx, R.drawable.ic_notification))
+                .setIcon(IconCompat.createWithResource(ctx, R.drawable.ic_shortcut_mint))
                 .setIntent(Intent(Intent.ACTION_VIEW, uri, ctx, MainActivity::class.java))
                 .build()
         runCatching {

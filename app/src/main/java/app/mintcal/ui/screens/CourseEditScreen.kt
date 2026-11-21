@@ -46,7 +46,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -92,6 +91,7 @@ import app.mintcal.ui.components.SectionLabel
 import app.mintcal.ui.components.TonalField
 import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.components.mintClickable
+import app.mintcal.ui.components.rememberModalSheetState
 import app.mintcal.ui.components.rememberNoFocusPopup
 import app.mintcal.ui.formatRooms
 import app.mintcal.ui.hm
@@ -716,8 +716,7 @@ internal fun SlotEditorSheet(
     val clock = clockRange(periods, slot.startPeriod, slot.endPeriod)
     var rangeAnchor by remember { mutableStateOf<Int?>(null) }
 
-    @Suppress("DEPRECATION")
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberModalSheetState()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,

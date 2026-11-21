@@ -15,7 +15,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,6 +37,7 @@ import app.mintcal.ui.components.ChipChoice
 import app.mintcal.ui.components.FieldText
 import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.mintClickable
+import app.mintcal.ui.components.rememberModalSheetState
 
 /** 正在编辑的规则：originBuiltinId 非空 = 编辑的是内置种子，保存时 fork 成用户规则并停用原条目。 */
 data class RuleDraft(
@@ -149,7 +149,7 @@ fun RuleEditSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = rememberModalSheetState(),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
@@ -255,7 +255,7 @@ private fun NoiseWordsSheet(
     var text by remember { mutableStateOf(current.joinToString("，")) }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = rememberModalSheetState(),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(

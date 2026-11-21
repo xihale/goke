@@ -70,7 +70,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -129,7 +128,7 @@ private fun priorityToken(v: Int): Int =
 /**
  * 快速添加：右下角加号打开，输入区贴在键盘上方。
  * 点「确定」（或键盘完成键）才落库；点空白 / 返回收起即丢弃草稿。
- * 日期、优先级、标签、清单在工具条上；详细编辑、粘贴、课程收进更多。
+ * 日期、优先级、清单在工具条上；详细编辑、粘贴、课程收进更多。
  * [anchorDate] 不写进输入框，只在没写日期时作为这一天的默认落点。
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -173,7 +172,7 @@ internal fun QuickAddSheet(
         }
     }
 
-    // 未展开时真正早退：跳过内部 UI、knownTags 扫描、BackHandler 与焦点逻辑，
+    // 未展开时真正早退：跳过内部 UI、BackHandler 与焦点逻辑，
     // 避免今日/日历/待办 3 个 Tab 重复空转与常驻监听。
     if (!visible) return
 
@@ -196,18 +195,6 @@ internal fun QuickAddSheet(
     val settings = settingsState()
     val parsed = remember(text, now) { if (text.isBlank()) null else QuickAdd.parse(text, now) }
 
-    /** 已有标签按使用次数排序：展开时才统计，收起时零开销 */
-    val knownTags =
-        remember(snap.tasks) {
-            snap.tasks
-                .flatMap { it.tags }
-                .filter { it.isNotBlank() }
-                .groupingBy { it }
-                .eachCount()
-                .entries
-                .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
-                .map { it.key }
-        }
     // 只有可见时向外报状态
     DisposableEffect(Unit) {
         nav.composerOpen = true
@@ -231,7 +218,7 @@ internal fun QuickAddSheet(
     // 打开即弹键盘。日期不写进输入框，避免「今天」占掉标题。
     LaunchedEffect(Unit) { focus.requestFocus() }
 
-    /** 去掉某类片段后（可选）追加一个新片段，用于快捷条与标签点按。 */
+    /** 去掉某类片段后（可选）追加一个新片段，用于快捷条点按。 */
     fun rewrite(
         kinds: Set<QuickTokenKind>,
         add: String?,
@@ -254,34 +241,6 @@ internal fun QuickAddSheet(
             } else {
                 "$t $add"
             }
-        focus.requestFocus()
-    }
-
-    /** 点选已有标签：输入里没有就加上，已经有就去掉，其它标签不动。 */
-    fun toggleTag(name: String) {
-        val removeRanges =
-            tokenRanges(text, parsed?.tokens.orEmpty())
-                .filter { it.first.kind == QuickTokenKind.TAG && it.first.text.equals("@$name", ignoreCase = true) }
-                .map { it.second }
-                .sortedByDescending { it.first }
-        text =
-            if (removeRanges.isNotEmpty()) {
-                var t = text
-                for (r in removeRanges) {
-                    t = t.substring(0, r.first) + " " + t.substring(r.last + 1)
-                }
-                t.replace(Regex("\\s+"), " ").trim()
-            } else {
-                val t = text.replace(Regex("\\s+"), " ").trim()
-                if (t.isEmpty()) "@$name " else "$t @$name"
-            }
-        focus.requestFocus()
-    }
-
-    /** 新建标签：只落一个 @，后面继续打字就是新标签名。 */
-    fun tagMarker() {
-        val t = text.trimEnd()
-        text = if (t.isEmpty()) "@" else "$t @"
         focus.requestFocus()
     }
 
@@ -417,7 +376,6 @@ internal fun QuickAddSheet(
                 else -> "$base ${wp.start.hm()}"
             }
         }
-    val pickedTags = remember(parsed?.tags) { parsed?.tags?.toSet().orEmpty() }
 
     Box(modifier.fillMaxSize()) {
         // 遮罩：点空白 = 空白直接收起，有草稿先确认放弃。压浅一点，列表还看得见。
@@ -473,13 +431,6 @@ internal fun QuickAddSheet(
                         )
                     }
                 }
-                // 标签独立子组合：输入普通标题/时间时不随 text 逐字重组
-                TagFlow(
-                    knownTags = knownTags,
-                    pickedTags = pickedTags,
-                    onToggleTag = { toggleTag(it) },
-                    onNewTag = { tagMarker() },
-                )
                 AnimatedVisibility(
                     visible = toolPanel == QuickPanel.PRIORITY,
                     enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
@@ -717,34 +668,6 @@ internal fun tokenRanges(
             from = idx + 1
         }
         found?.let { token to it }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun TagFlow(
-    knownTags: List<String>,
-    pickedTags: Set<String>,
-    onToggleTag: (String) -> Unit,
-    onNewTag: () -> Unit,
-) {
-    FlowRow(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(max = 96.dp)
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        knownTags.forEach { name ->
-            ChipPill(
-                label = "@$name",
-                on = name in pickedTags,
-                role = Role.Checkbox,
-            ) { onToggleTag(name) }
-        }
-        ChipPill(stringResource(R.string.quick_tag_new), on = null) { onNewTag() }
     }
 }
 

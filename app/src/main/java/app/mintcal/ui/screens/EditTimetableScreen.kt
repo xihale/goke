@@ -295,8 +295,9 @@ private fun JxfwSyncCard(sem: Semester) {
                 Text(stringResource(R.string.jxfw_card_bind_action))
             }
         } else {
+            val termText = state.term?.let { jxfwTermLabel(ctx, it) } ?: sem.name
             Text(
-                ctx.getString(R.string.jxfw_card_bound_meta, state.username.orEmpty(), state.term ?: sem.name),
+                ctx.getString(R.string.jxfw_card_bound_meta, state.username.orEmpty(), termText),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

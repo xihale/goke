@@ -39,7 +39,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,6 +65,7 @@ import app.mintcal.core.model.Task
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.components.DatePickerDlg
 import app.mintcal.ui.components.mintClickable
+import app.mintcal.ui.components.rememberModalSheetState
 import app.mintcal.ui.components.rememberNoFocusPopup
 import app.mintcal.ui.dueLabel
 import app.mintcal.ui.theme.MintTheme
@@ -86,7 +86,7 @@ internal fun RescheduleSheet(
 ) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheet = rememberModalSheetState()
     val scope = rememberCoroutineScope()
     val today = LocalDate.now()
     var pickDate by remember { mutableStateOf(false) }
@@ -190,7 +190,7 @@ internal fun MorningSheet(
 ) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
-    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheet = rememberModalSheetState()
     val today = now.toLocalDate()
 
     // 全部处理完就自动收起

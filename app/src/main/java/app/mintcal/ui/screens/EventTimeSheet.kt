@@ -45,7 +45,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -71,6 +70,7 @@ import app.mintcal.ui.components.MinutesDialSheet
 import app.mintcal.ui.components.MonthPager
 import app.mintcal.ui.components.TimeDialSheet
 import app.mintcal.ui.components.mintClickable
+import app.mintcal.ui.components.rememberModalSheetState
 import app.mintcal.ui.hm
 import app.mintcal.ui.monthDayWeekday
 import app.mintcal.ui.theme.MintTheme
@@ -177,7 +177,7 @@ internal fun WhenPanel(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = rememberModalSheetState(),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
@@ -359,7 +359,7 @@ private fun PickerSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = rememberModalSheetState(),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
@@ -537,7 +537,7 @@ internal fun freqLabel(
                 stringResource(R.string.repeat_yearly_on, anchor.monthValue, anchor.dayOfMonth)
             }
 
-            interval > 1 && f != null -> {
+            interval > 1 -> {
                 stringResource(R.string.detail_editor_every_n, interval, freqUnit(f))
             }
 
