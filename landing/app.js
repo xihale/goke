@@ -2,16 +2,8 @@
 (function () {
   'use strict';
 
-  var CAPTIONS = {
-    today: '下一节课、大号取件码与今日时间线，一屏看清。',
-    timetable: '广工四校区节次预设，多机房自动折叠为「实4\u2011401 等 8 处」。',
-    calendar: '月视图与周视图随手切换，色点标出课程与待办。',
-    todo: '自然语言解析时间与优先级，考试与快递自动归档。'
-  };
-
   var tablist = document.getElementById('heroTabs');
   var screen = document.getElementById('heroScreen');
-  var caption = document.getElementById('heroCaption');
   if (tablist && screen) {
     var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
     var imgs = Array.prototype.slice.call(screen.querySelectorAll('.screen-img'));
@@ -33,7 +25,6 @@
       });
 
       if (thumb) thumb.style.transform = 'translateX(' + (i * 100) + '%)';
-      if (caption && CAPTIONS[key]) caption.textContent = CAPTIONS[key];
       if (focusTab) tabs[i].focus();
     }
 
@@ -70,15 +61,13 @@
         if (!latest) return;
 
         var ver = latest.tag_name || ('v' + latest.version);
-        var sizeStr = latest.apk_size ? formatMiB(latest.apk_size) : '3.82 MiB';
+        var sizeStr = latest.apk_size ? formatMiB(latest.apk_size) : '3.83 MiB';
         var href = './downloads/' + latest.apk_name;
 
         setText('heroVer', ver);
         setText('heroVerSize', sizeStr);
         setText('heroLeadSize', sizeStr);
         setText('heroBtnSize', sizeStr);
-        setText('pillarSize', sizeStr);
-        setText('dlVer', ver);
         setText('dlApkName', latest.apk_name);
         setText('dlSize', sizeStr);
 
@@ -90,7 +79,6 @@
         var shaEl = document.getElementById('dlSha');
         if (shaEl && latest.apk_sha256) {
           shaEl.textContent = 'SHA-256: ' + latest.apk_sha256;
-          shaEl.hidden = false;
         }
       })
       .catch(function () {});
