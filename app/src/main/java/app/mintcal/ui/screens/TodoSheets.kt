@@ -225,7 +225,7 @@ internal fun MorningSheet(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(bottom = 12.dp),
             )
-            if (tasks.isNotEmpty()) {
+            if (tasks.size > 1) {
                 Row(
                     Modifier.fillMaxWidth().padding(bottom = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -283,7 +283,7 @@ internal fun MorningSheet(
                                 ) { move(listOf(t), today.plusDays(1)) }
                                 TidyActionPill(
                                     label = stringResource(R.string.todo_drop),
-                                    containerColor = Color.Transparent,
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                     contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 ) { drop(listOf(t)) }
                             }
@@ -306,8 +306,8 @@ private fun TidyActionPill(
     Box(
         modifier =
             Modifier
-                .heightIn(min = 48.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .heightIn(min = 36.dp)
+                .clip(RoundedCornerShape(999.dp))
                 .background(containerColor)
                 .mintClickable(pressedScale = 0.96f, role = Role.Button, onClick = onClick)
                 .padding(horizontal = 12.dp, vertical = 6.dp),

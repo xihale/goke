@@ -26,14 +26,10 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginEnd="6dp"
-        android:background="@drawable/widget_pill_bg"
+        android:fontFeatureSettings="tnum"
         android:maxLines="1"
-        android:paddingBottom="1dp"
-        android:paddingEnd="6dp"
-        android:paddingStart="6dp"
-        android:paddingTop="1dp"
-        android:textColor="@color/widget_pill_fg"
-        android:textSize="11sp"
+        android:textColor="@color/widget_accent"
+        android:textSize="13.5sp"
         android:textStyle="bold"
         android:visibility="gone" />
 
@@ -67,10 +63,10 @@
 
     <ImageView
         android:id="@+id/today_item_check"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
         android:contentDescription="@string/a11y_mark_done"
-        android:padding="8dp"
+        android:padding="11dp"
         android:scaleType="centerInside"
         android:src="@drawable/ic_widget_check_box"
         android:visibility="gone" />

@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.OpenInFull
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -391,210 +393,217 @@ internal fun QuickAddSheet(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            shadowElevation = 6.dp,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shadowElevation = 0.dp,
         ) {
-            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 8.dp)) {
-                // 标题：详细编辑同款素面大字输入
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp),
-                ) {
-                    BasicTextField(
-                        value = text,
-                        onValueChange = { text = it },
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .focusRequester(focus)
-                                .padding(vertical = 12.dp),
-                        textStyle =
-                            MaterialTheme.typography.titleLarge.copy(
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.Normal,
-                            ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        singleLine = true,
-                        visualTransformation = highlight,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { finish() }),
-                    )
-                    if (text.isEmpty()) {
-                        Text(
-                            stringResource(R.string.quick_add_prompt),
-                            Modifier.padding(vertical = 12.dp),
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Normal),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-                AnimatedVisibility(
-                    visible = toolPanel == QuickPanel.PRIORITY,
-                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-                ) {
-                    SegmentedPill(
-                        options =
-                            listOf(
-                                3 to stringResource(R.string.priority_3),
-                                2 to stringResource(R.string.priority_2),
-                                1 to stringResource(R.string.priority_1),
-                                0 to stringResource(R.string.priority_0),
-                            ),
-                        selected = parsed?.priority ?: 0,
-                        onSelect = { v ->
-                            rewrite(setOf(QuickTokenKind.PRIORITY), if (v == 0) null else "!" + ctx.getString(priorityToken(v)))
-                            toolPanel = null
-                        },
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                }
-                AnimatedVisibility(
-                    visible = toolPanel == QuickPanel.LIST,
-                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-                ) {
-                    FlowRow(
+            Column(Modifier.fillMaxWidth()) {
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                )
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 8.dp)) {
+                    // 标题：详细编辑同款素面大字输入
+                    Box(
                         Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 132.dp)
-                            .verticalScroll(rememberScrollState())
-                            .padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                            .heightIn(min = 48.dp),
                     ) {
-                        snap.lists.sortedBy { it.sort }.forEach { l ->
-                            ChipPill("#" + l.name, on = parsed?.listName == l.name) {
-                                rewrite(setOf(QuickTokenKind.LIST), "#" + l.name)
+                        BasicTextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focus)
+                                    .padding(vertical = 12.dp),
+                            textStyle =
+                                MaterialTheme.typography.titleLarge.copy(
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Normal,
+                                ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            singleLine = true,
+                            visualTransformation = highlight,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { finish() }),
+                        )
+                        if (text.isEmpty()) {
+                            Text(
+                                stringResource(R.string.quick_add_prompt),
+                                Modifier.padding(vertical = 12.dp),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Normal),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    AnimatedVisibility(
+                        visible = toolPanel == QuickPanel.PRIORITY,
+                        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                    ) {
+                        SegmentedPill(
+                            options =
+                                listOf(
+                                    3 to stringResource(R.string.priority_3),
+                                    2 to stringResource(R.string.priority_2),
+                                    1 to stringResource(R.string.priority_1),
+                                    0 to stringResource(R.string.priority_0),
+                                ),
+                            selected = parsed?.priority ?: 0,
+                            onSelect = { v ->
+                                rewrite(setOf(QuickTokenKind.PRIORITY), if (v == 0) null else "!" + ctx.getString(priorityToken(v)))
                                 toolPanel = null
+                            },
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                    }
+                    AnimatedVisibility(
+                        visible = toolPanel == QuickPanel.LIST,
+                        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                    ) {
+                        FlowRow(
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 132.dp)
+                                .verticalScroll(rememberScrollState())
+                                .padding(bottom = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            snap.lists.sortedBy { it.sort }.forEach { l ->
+                                ChipPill("#" + l.name, on = parsed?.listName == l.name) {
+                                    rewrite(setOf(QuickTokenKind.LIST), "#" + l.name)
+                                    toolPanel = null
+                                }
                             }
                         }
                     }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { whenPanel = true }) {
-                        Icon(
-                            Icons.Rounded.Event,
-                            stringResource(R.string.detail_editor_pick_date),
-                            tint = if (daySet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    IconButton(onClick = { toolPanel = if (toolPanel == QuickPanel.PRIORITY) null else QuickPanel.PRIORITY }) {
-                        Icon(
-                            Icons.Rounded.Flag,
-                            stringResource(R.string.label_priority),
-                            tint = colors.priorityColor(parsed?.priority ?: 0) ?: MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    // 清单按钮常驻：还没有自定义清单时点它插入 #，现场输名字即建清单
-                    IconButton(onClick = {
-                        if (snap.lists.isEmpty()) {
-                            rewrite(emptySet(), "#")
-                        } else {
-                            toolPanel = if (toolPanel == QuickPanel.LIST) null else QuickPanel.LIST
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { whenPanel = true }) {
+                            Icon(
+                                Icons.Rounded.Event,
+                                stringResource(R.string.detail_editor_pick_date),
+                                tint = if (daySet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
-                    }) {
-                        Icon(Icons.Rounded.Inbox, stringResource(R.string.label_list), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Spacer(Modifier.weight(1f))
-                    IconButton(onClick = { openDetail() }) {
-                        Icon(Icons.Rounded.OpenInFull, stringResource(R.string.detail_editor_full_edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    // 确定：点了才落库；没写内容置灰
-                    val canAdd = parsed != null
-                    val confirmLabel = stringResource(R.string.confirm)
-                    Box(
-                        modifier =
-                            Modifier
-                                .padding(start = 4.dp)
-                                .minimumInteractiveComponentSize()
-                                .clip(CircleShape)
-                                .mintClickable(enabled = canAdd, pressedScale = 0.96f, role = Role.Button) { finish() }
-                                .semantics { contentDescription = confirmLabel },
-                        contentAlignment = Alignment.Center,
-                    ) {
+                        IconButton(onClick = { toolPanel = if (toolPanel == QuickPanel.PRIORITY) null else QuickPanel.PRIORITY }) {
+                            Icon(
+                                Icons.Rounded.Flag,
+                                stringResource(R.string.label_priority),
+                                tint = colors.priorityColor(parsed?.priority ?: 0) ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        // 清单按钮常驻：还没有自定义清单时点它插入 #，现场输名字即建清单
+                        IconButton(onClick = {
+                            if (snap.lists.isEmpty()) {
+                                rewrite(emptySet(), "#")
+                            } else {
+                                toolPanel = if (toolPanel == QuickPanel.LIST) null else QuickPanel.LIST
+                            }
+                        }) {
+                            Icon(Icons.Rounded.Inbox, stringResource(R.string.label_list), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Spacer(Modifier.weight(1f))
+                        IconButton(onClick = { openDetail() }) {
+                            Icon(Icons.Rounded.OpenInFull, stringResource(R.string.detail_editor_full_edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        // 确定：点了才落库；没写内容置灰
+                        val canAdd = parsed != null
+                        val confirmLabel = stringResource(R.string.confirm)
                         Box(
                             modifier =
                                 Modifier
-                                    .size(36.dp)
+                                    .padding(start = 4.dp)
+                                    .minimumInteractiveComponentSize()
                                     .clip(CircleShape)
-                                    .background(if (canAdd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
+                                    .mintClickable(enabled = canAdd, pressedScale = 0.96f, role = Role.Button) { finish() }
+                                    .semantics { contentDescription = confirmLabel },
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                Icons.Rounded.Check,
-                                null,
-                                tint =
-                                    if (canAdd) {
-                                        MaterialTheme.colorScheme.onPrimary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                modifier = Modifier.size(20.dp),
-                            )
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(if (canAdd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Check,
+                                    null,
+                                    tint =
+                                        if (canAdd) {
+                                            MaterialTheme.colorScheme.onPrimary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
                         }
                     }
-                }
-                AnimatedVisibility(
-                    visible = panelWhenLabel != null || panelRemind != null || panelFreq != null,
-                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-                ) {
-                    FlowRow(
-                        Modifier.padding(end = 6.dp, top = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    AnimatedVisibility(
+                        visible = panelWhenLabel != null || panelRemind != null || panelFreq != null,
+                        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
                     ) {
-                        if (panelWhenLabel != null) {
-                            val removeWhenDesc = stringResource(R.string.quick_add_remove_time, panelWhenLabel)
-                            Tag(
-                                "$panelWhenLabel ×",
-                                MaterialTheme.colorScheme.primaryContainer,
-                                MaterialTheme.colorScheme.onPrimaryContainer,
-                                Modifier
-                                    .minimumInteractiveComponentSize()
-                                    .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelWhen = null }
-                                    .semantics {
-                                        contentDescription = removeWhenDesc
-                                    },
-                            )
-                        }
-                        if (panelRemind != null) {
-                            val rLabel = remindLabel(panelRemind)
-                            val removeRemindDesc = stringResource(R.string.quick_add_remove_remind, rLabel)
-                            Tag(
-                                "$rLabel ×",
-                                MaterialTheme.colorScheme.secondaryContainer,
-                                MaterialTheme.colorScheme.onSecondaryContainer,
-                                Modifier
-                                    .minimumInteractiveComponentSize()
-                                    .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelRemind = null }
-                                    .semantics {
-                                        contentDescription = removeRemindDesc
-                                    },
-                            )
-                        }
-                        if (panelFreq != null) {
-                            val fLabel = freqLabel(panelFreq, panelUntil, panelInterval, panelByDays, panelWhen?.date, byMonths = panelByMonths)
-                            val removeRepeatDesc = stringResource(R.string.quick_add_remove_repeat, fLabel)
-                            Tag(
-                                "$fLabel ×",
-                                MaterialTheme.colorScheme.tertiaryContainer,
-                                MaterialTheme.colorScheme.onTertiaryContainer,
-                                Modifier
-                                    .minimumInteractiveComponentSize()
-                                    .mintClickable(pressedScale = 0.96f, role = Role.Button) {
-                                        panelFreq = null
-                                        panelUntil = null
-                                        panelByDays = emptySet()
-                                        panelByMonths = emptySet()
-                                    }.semantics {
-                                        contentDescription = removeRepeatDesc
-                                    },
-                            )
+                        FlowRow(
+                            Modifier.padding(end = 6.dp, top = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            if (panelWhenLabel != null) {
+                                val removeWhenDesc = stringResource(R.string.quick_add_remove_time, panelWhenLabel)
+                                Tag(
+                                    "$panelWhenLabel ×",
+                                    MaterialTheme.colorScheme.primaryContainer,
+                                    MaterialTheme.colorScheme.onPrimaryContainer,
+                                    Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelWhen = null }
+                                        .semantics {
+                                            contentDescription = removeWhenDesc
+                                        },
+                                )
+                            }
+                            if (panelRemind != null) {
+                                val rLabel = remindLabel(panelRemind)
+                                val removeRemindDesc = stringResource(R.string.quick_add_remove_remind, rLabel)
+                                Tag(
+                                    "$rLabel ×",
+                                    MaterialTheme.colorScheme.secondaryContainer,
+                                    MaterialTheme.colorScheme.onSecondaryContainer,
+                                    Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .mintClickable(pressedScale = 0.96f, role = Role.Button) { panelRemind = null }
+                                        .semantics {
+                                            contentDescription = removeRemindDesc
+                                        },
+                                )
+                            }
+                            if (panelFreq != null) {
+                                val fLabel = freqLabel(panelFreq, panelUntil, panelInterval, panelByDays, panelWhen?.date, byMonths = panelByMonths)
+                                val removeRepeatDesc = stringResource(R.string.quick_add_remove_repeat, fLabel)
+                                Tag(
+                                    "$fLabel ×",
+                                    MaterialTheme.colorScheme.tertiaryContainer,
+                                    MaterialTheme.colorScheme.onTertiaryContainer,
+                                    Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .mintClickable(pressedScale = 0.96f, role = Role.Button) {
+                                            panelFreq = null
+                                            panelUntil = null
+                                            panelByDays = emptySet()
+                                            panelByMonths = emptySet()
+                                        }.semantics {
+                                            contentDescription = removeRepeatDesc
+                                        },
+                                )
+                            }
                         }
                     }
                 }

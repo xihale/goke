@@ -260,7 +260,7 @@ fun TodoLine(
     val onSurfaceVariant = scheme.onSurfaceVariant
     val bodySmall = typography.bodySmall
     val isDone = model.task.done
-    val doneAlpha = 0.65f
+    val doneAlpha = 0.45f
     val subColor = if (isDone) onSurfaceVariant.copy(alpha = doneAlpha) else onSurfaceVariant
     val titleColor = if (isDone) subColor else scheme.onSurface
     val ring =
@@ -319,7 +319,7 @@ fun TodoLine(
             MintCheck(
                 isDone,
                 { d -> onToggle(model.task, d) },
-                tint = model.listColorIndex?.let { colors.fg(it) },
+                tint = colors.priorityColor(model.task.priority) ?: model.listColorIndex?.let { colors.fg(it) },
                 strokeWidth = ring,
             )
         }
@@ -606,7 +606,7 @@ internal fun SubRow(
     val nav = LocalNav.current
     val actions = LocalActions.current
     val scheme = MaterialTheme.colorScheme
-    val doneAlpha = 0.65f
+    val doneAlpha = 0.45f
     val titleColor =
         if (sub.done) {
             scheme.onSurfaceVariant.copy(alpha = doneAlpha)
@@ -734,6 +734,8 @@ internal fun SectionHeader(
             IconButton(onClick = onAdd, Modifier.size(48.dp)) {
                 Icon(Icons.Rounded.Add, stringResource(R.string.todo_add_here), tint = onSurfaceVariant)
             }
+        } else {
+            Spacer(Modifier.width(48.dp))
         }
     }
 }

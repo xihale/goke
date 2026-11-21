@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -38,6 +37,7 @@ import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,6 +59,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -341,7 +344,10 @@ private fun QuickChip(
     Column(
         modifier
             .clip(RoundedCornerShape(12.dp))
-            .selectable(selected = active, role = Role.Button, onClick = onClick)
+            .semantics {
+                role = Role.RadioButton
+                selected = active
+            }.mintClickable(pressedScale = 0.96f, onClick = onClick)
             .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -697,11 +703,11 @@ private fun RemindOption(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .selectable(
-                selected = selected,
-                role = if (chevron) Role.Button else Role.RadioButton,
-                onClick = onClick,
-            ).padding(horizontal = 4.dp),
+            .semantics {
+                role = if (chevron) Role.Button else Role.RadioButton
+                this.selected = selected
+            }.mintClickable(pressedScale = 0.98f, onClick = onClick)
+            .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -878,6 +884,10 @@ internal fun RepeatPickDialog(
                         }
                     }
                 }
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                )
             } else {
                 Text(
                     stringResource(R.string.label_repeat),

@@ -296,9 +296,14 @@ fun TimetableScreen() {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             Row(Modifier.fillMaxWidth().height(64.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
+                Row(
+                    Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     AnimatedContent(
                         targetState = pager.currentPage,
+                        modifier = Modifier.weight(1f, fill = false),
                         transitionSpec = {
                             val sign = if (targetState > initialState) 1 else -1
                             (slideInVertically(slideSpec) { sign * it / 2 } + fadeIn(fadeSpec)) togetherWith
@@ -317,16 +322,36 @@ fun TimetableScreen() {
                                 ctx.getString(R.string.fmt_range_md, cal.weekStart(p + 1).monthValue, cal.weekStart(p + 1).dayOfMonth, cal.weekEnd(p + 1).monthValue, cal.weekEnd(p + 1).dayOfMonth),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
-                }
-                AnimatedVisibility(
-                    visible = pager.currentPage + 1 != currentWeek && currentWeek in 1..sem.totalWeeks,
-                    enter = fadeIn(MintTheme.spec()) + expandHorizontally(MintTheme.spec()),
-                    exit = fadeOut(MintTheme.spec()) + shrinkHorizontally(MintTheme.spec()),
-                ) {
-                    TextButton(onClick = { scope.launch { if (reduce) pager.scrollToPage(currentWeek - 1) else pager.animateScrollToPage(currentWeek - 1) } }) { Text(stringResource(R.string.back_to_this_week)) }
+                    AnimatedVisibility(
+                        visible = pager.currentPage + 1 != currentWeek && currentWeek in 1..sem.totalWeeks,
+                        enter = fadeIn(MintTheme.spec()) + expandHorizontally(MintTheme.spec()),
+                        exit = fadeOut(MintTheme.spec()) + shrinkHorizontally(MintTheme.spec()),
+                    ) {
+                        Box(
+                            Modifier
+                                .heightIn(min = 32.dp)
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer)
+                                .mintClickable(pressedScale = 0.96f, role = Role.Button) {
+                                    scope.launch { if (reduce) pager.scrollToPage(currentWeek - 1) else pager.animateScrollToPage(currentWeek - 1) }
+                                }.padding(horizontal = 10.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                stringResource(R.string.back_to_this_week),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                        }
+                    }
                 }
                 IconButton(onClick = { nav.push(Route.CourseEdit(null)) }) { Icon(Icons.Rounded.Add, stringResource(R.string.new_course)) }
                 IconButton(onClick = { nav.push(Route.EditTimetable) }) { Icon(Icons.Rounded.Edit, stringResource(R.string.edit_timetable)) }
@@ -1492,13 +1517,9 @@ private fun TaskBlock(
             // 一格只有 40 来 dp 宽，放不下「10:15–11:15」；拖动时只报正在变的那一头。
             // 同时段还有别的安排时，这行改成「N 项」——冲突比几点更要紧，点开就能看全部。
             if (overlap > 1 && !active) {
-                Text(
-                    stringResource(R.string.conflict_count, overlap),
-                    color = colors.removed,
-                    style = timeStyle,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip,
+                OverlapBadge(
+                    overlap = overlap,
+                    fg = if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else fg,
                 )
             } else {
                 val label =
@@ -1548,6 +1569,31 @@ private fun Handle(
             .clip(CircleShape)
             .background(fg.copy(alpha = 0.9f)),
     )
+}
+
+@Composable
+private fun OverlapBadge(
+    overlap: Int,
+    fg: Color,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier
+            .padding(top = 2.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(fg.copy(alpha = 0.14f))
+            .padding(horizontal = 5.dp, vertical = 1.dp),
+    ) {
+        Text(
+            stringResource(R.string.conflict_count, overlap),
+            color = fg,
+            style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip,
+        )
+    }
 }
 
 @Composable
@@ -1648,13 +1694,9 @@ private fun CourseBlock(
                 )
             }
             if (overlap > 1) {
-                Text(
-                    stringResource(R.string.conflict_count, overlap),
-                    color = colors.removed,
-                    style = roomStyle,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip,
+                OverlapBadge(
+                    overlap = overlap,
+                    fg = if (isRemoved) colors.removed else fg,
                 )
             }
         }

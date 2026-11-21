@@ -502,7 +502,7 @@ fun PeriodsScreen(onBack: () -> Unit) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 44.dp)
+                        .heightIn(min = 48.dp)
                         .padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -588,7 +588,7 @@ private fun TimeTap(
 ) {
     Box(
         Modifier
-            .heightIn(min = 38.dp)
+            .heightIn(min = 44.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f))
             .mintClickable(pressedScale = 0.96f, role = Role.Button, onClick = onClick)

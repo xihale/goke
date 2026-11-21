@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,10 +32,8 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -103,6 +102,7 @@ import app.mintcal.ui.components.NavClearance
 import app.mintcal.ui.components.NavListInset
 import app.mintcal.ui.components.SegmentedPill
 import app.mintcal.ui.components.mintClickable
+import app.mintcal.ui.components.mintPressScale
 import app.mintcal.ui.components.rememberModalSheetState
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.monthDayWeekday
@@ -232,7 +232,6 @@ fun CalendarScreen() {
     val onDatePreview = remember<(LocalDate) -> Unit> { { d -> previewDate = d } }
     val onGotoToday = remember(today) { { goto(today) } }
     val onOpenEvent = remember { { id: String -> selectedEventId = id } }
-    val onQuickAdd = remember { { quickAddOpen = true } }
     val periodStartFn = remember<(Int) -> LocalDate>(mode, anchor, first) { { page -> periodStart(page) } }
     val previewLabel = stringResource(R.string.calendar_preview_day)
 
@@ -240,7 +239,7 @@ fun CalendarScreen() {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = NavListInset),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = NavListInset),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item(key = "header") {
@@ -311,7 +310,6 @@ fun CalendarScreen() {
                     nav = nav,
                     onGotoToday = onGotoToday,
                     onOpenEvent = onOpenEvent,
-                    onQuickAdd = onQuickAdd,
                 )
             }
         }
@@ -431,7 +429,6 @@ private fun DayAgendaSection(
     nav: Nav,
     onGotoToday: () -> Unit,
     onOpenEvent: (String) -> Unit,
-    onQuickAdd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ctx = LocalContext.current
@@ -465,13 +462,19 @@ private fun DayAgendaSection(
             ) {
                 Text(
                     dateTitle,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (dayItems.isNotEmpty()) {
+                val detailParts =
+                    buildList {
+                        if (marks.scheduled > 0) add(stringResource(R.string.cal_day_events_count, marks.scheduled))
+                        if (marks.pending > 0) add(stringResource(R.string.cal_day_todo_count, marks.pending))
+                        if (marks.done > 0) add(stringResource(R.string.cal_day_done_count, marks.done))
+                    }
+                if (detailParts.isNotEmpty()) {
                     Text(
-                        stringResource(R.string.calendar_day_detail, marks.scheduled, marks.pending, marks.done),
+                        detailParts.joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -497,15 +500,10 @@ private fun DayAgendaSection(
                             }.padding(horizontal = 12.dp, vertical = 12.dp),
                 )
             }
-            IconButton(onClick = onQuickAdd) {
-                Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.shortcut_add_task))
-            }
         }
         if (dayItems.isEmpty()) {
             EmptyState(
                 title = stringResource(R.string.day_empty),
-                actionLabel = stringResource(R.string.shortcut_add_task),
-                onAction = onQuickAdd,
             )
         } else {
             for (i in dayItems.indices) {
@@ -850,12 +848,14 @@ private fun DayCell(
             boxBaseModifier
         }
 
+    val interaction = remember { MutableInteractionSource() }
     Column(
         modifier =
             modifier
                 .height(48.dp)
+                .mintPressScale(interaction, 0.96f)
                 .combinedClickable(
-                    interactionSource = null,
+                    interactionSource = interaction,
                     indication = null,
                     role = Role.Button,
                     onClick = { onClick(cell.date) },
@@ -1102,7 +1102,7 @@ private fun CalendarTitle(
                 }
             }
         }
-    Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
+    Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
 }
 
 @Composable

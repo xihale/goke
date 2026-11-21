@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -252,11 +253,12 @@ fun <T> SegmentedPill(
     Box(
         modifier
             .fillMaxWidth()
-            .height(42.dp)
+            .height(IntrinsicSize.Min)
+            .heightIn(min = 44.dp)
             .clip(CircleShape)
             .background(track),
     ) {
-        Canvas(Modifier.fillMaxSize()) {
+        Canvas(Modifier.matchParentSize()) {
             if (rawIndex >= 0) {
                 val inset = 3.dp.toPx()
                 val slot = size.width / options.size
@@ -271,7 +273,7 @@ fun <T> SegmentedPill(
                 )
             }
         }
-        Row(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().fillMaxHeight()) {
             options.forEach { (v, label) ->
                 val on = v == selected
                 val interaction = remember { MutableInteractionSource() }
@@ -292,7 +294,7 @@ fun <T> SegmentedPill(
                 ) {
                     Text(
                         label,
-                        modifier = Modifier.mintPressScale(interaction, 0.96f),
+                        modifier = Modifier.mintPressScale(interaction, 0.96f).padding(horizontal = 6.dp, vertical = 8.dp),
                         style = labelStyle,
                         color = fg,
                         fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
@@ -351,7 +353,7 @@ fun ChipPill(
     )
     Box(
         modifier
-            .heightIn(min = 38.dp)
+            .heightIn(min = 40.dp)
             .clip(CircleShape)
             .background(bg)
             .semantics {

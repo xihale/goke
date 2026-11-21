@@ -27,7 +27,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -67,6 +66,7 @@ import app.mintcal.ui.components.MintCheck
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.SwitchRow
 import app.mintcal.ui.components.TonalField
+import app.mintcal.ui.components.ValueRow
 import app.mintcal.ui.components.mintClickable
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -104,7 +104,7 @@ fun SyncScreen(onBack: () -> Unit) {
                     .padding(horizontal = 16.dp)
                     .navigationBarsPadding()
                     .padding(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 val account = cloudState.account
                 if (account == null) {
@@ -113,7 +113,6 @@ fun SyncScreen(onBack: () -> Unit) {
                     AccountPanel(account, cloudState.syncing, cloudState.lastSyncAt, cloudState.lastError, cloudState.needsRelogin)
                     CloudMcpCard(account)
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 SystemCalendarSection()
             }
         }
@@ -449,26 +448,32 @@ private fun CloudMcpCard(account: SyncAccount) {
     val endpoint = app.sync.cloudMcpEndpoint() ?: "${account.serverUrl.trimEnd('/')}/mcp"
 
     FormSection(stringResource(R.string.sync_cloud_mcp_title)) {
-        MintCard {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    stringResource(R.string.sync_cloud_mcp_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                InfoLine(stringResource(R.string.sync_cloud_mcp_endpoint), endpoint)
-                FilledTonalButton(
-                    onClick = {
-                        val cfg = app.sync.cloudMcpConfigJson() ?: return@FilledTonalButton
-                        ctx.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("Cloud MCP JSON", cfg))
-                        actions.toast(ctx.getString(R.string.sync_copied_mcp_config))
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Rounded.ContentCopy, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.sync_copy_mcp_config))
-                }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                stringResource(R.string.sync_cloud_mcp_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+            ValueRow(
+                stringResource(R.string.sync_cloud_mcp_endpoint),
+                endpoint,
+                onClick = {
+                    ctx.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("Cloud MCP Endpoint", endpoint))
+                    actions.toast(ctx.getString(R.string.sync_copied_mcp_config))
+                },
+            )
+            FilledTonalButton(
+                onClick = {
+                    val cfg = app.sync.cloudMcpConfigJson() ?: return@FilledTonalButton
+                    ctx.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("Cloud MCP JSON", cfg))
+                    actions.toast(ctx.getString(R.string.sync_copied_mcp_config))
+                },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            ) {
+                Icon(Icons.Rounded.ContentCopy, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.sync_copy_mcp_config))
             }
         }
     }

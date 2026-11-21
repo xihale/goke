@@ -80,9 +80,11 @@ import app.mintcal.ui.screens.CalendarScreen
 import app.mintcal.ui.screens.CourseEditScreen
 import app.mintcal.ui.screens.DataScreen
 import app.mintcal.ui.screens.EditTimetableScreen
+import app.mintcal.ui.screens.GradesScreen
 import app.mintcal.ui.screens.HistoryScreen
 import app.mintcal.ui.screens.ImportScreen
 import app.mintcal.ui.screens.JxfwScreen
+import app.mintcal.ui.screens.LanWebScreen
 import app.mintcal.ui.screens.McpScreen
 import app.mintcal.ui.screens.MorningSheet
 import app.mintcal.ui.screens.ParcelScreen
@@ -291,6 +293,8 @@ class ScreensSmokeTest {
                 "parcel" to { ParcelScreen {} },
                 "about" to { AboutScreen {} },
                 "mcp" to { McpScreen {} },
+                "grades" to { GradesScreen {} },
+                "lan_web" to { LanWebScreen {} },
                 "root_shell" to { MintCalRoot(app, null) {} },
             )
         val idx = mutableIntStateOf(0)
@@ -308,16 +312,24 @@ class ScreensSmokeTest {
         }
         try {
             app.settings.update { it.copy(darkMode = DarkMode.DARK) }
-            rule.runOnIdle { idx.intValue = 0 }
-            rule.waitForIdle()
-            shot("today_dark")
-            rule.runOnIdle { idx.intValue = 4 }
-            rule.waitForIdle()
-            shot("course_edit_dark")
-            val widgetsIdx = screens.indexOfFirst { it.first == "widgets" }
-            rule.runOnIdle { idx.intValue = widgetsIdx }
-            rule.waitForIdle()
-            shot("widgets_dark")
+            val darkTargets =
+                listOf(
+                    "today" to "today_dark",
+                    "timetable" to "timetable_dark",
+                    "calendar" to "calendar_dark",
+                    "todo" to "todo_dark",
+                    "settings" to "settings_dark",
+                    "course_edit" to "course_edit_dark",
+                    "widgets" to "widgets_dark",
+                    "grades" to "grades_dark",
+                    "lan_web" to "lan_web_dark",
+                )
+            darkTargets.forEach { (keyName, shotName) ->
+                val targetIdx = screens.indexOfFirst { it.first == keyName }
+                rule.runOnIdle { idx.intValue = targetIdx }
+                rule.waitForIdle()
+                shot(shotName)
+            }
         } finally {
             app.settings.update { it.copy(darkMode = DarkMode.SYSTEM) }
         }
@@ -523,7 +535,7 @@ class ScreensSmokeTest {
         rule.waitForIdle()
         shot("overlay_course")
         rule.onNodeWithText(course.name).assertIsDisplayed()
-        rule.onNodeWithContentDescription(app.getString(R.string.widget_overlay_course_detail)).performClick()
+        rule.onNodeWithText(app.getString(R.string.widget_overlay_course_detail)).performClick()
         assertEquals(DeepLinks.courseUri(course.id), openedUri)
 
         // 4. 快递悬浮卡片：展示取件码并就地标记已取件

@@ -86,6 +86,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -119,6 +120,7 @@ import app.mintcal.ui.Route
 import app.mintcal.ui.Tab
 import app.mintcal.ui.components.ChipChoice
 import app.mintcal.ui.components.FormSection
+import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.MinutesDialSheet
 import app.mintcal.ui.components.NavListInset
@@ -217,7 +219,10 @@ fun SettingsScreen() {
                     )
                 }
             }
-            item(key = "appearance", contentType = "nav_row") {
+            item(key = "campus_hub_card", contentType = "campus_card") {
+                CampusHubCard { nav.push(Route.Jxfw) }
+            }
+            item(key = "campus_section", contentType = "form_section") {
                 val themeSource =
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && st.themeSource == ThemeSource.DYNAMIC) {
                         ThemeSource.PRESET
@@ -230,22 +235,35 @@ fun SettingsScreen() {
                         ThemeSource.PRESET -> stringResource(Preset.entries.firstOrNull { it.key == st.preset }?.label ?: R.string.theme_preset)
                         ThemeSource.CUSTOM -> stringResource(R.string.theme_custom)
                     }
-                Box(Modifier.padding(top = 4.dp)) {
+                FormSection(stringResource(R.string.me_hub_campus_section)) {
+                    GradesNavRow { nav.push(Route.Grades) }
+                    NavRow(
+                        stringResource(R.string.parcel_title),
+                        null,
+                        Icons.Rounded.LocalShipping,
+                        trailing = stringResource(if (st.parcelEnabled) R.string.parcel_status_on else R.string.parcel_status_off),
+                    ) { nav.push(Route.Parcel) }
+                    NavRow(
+                        stringResource(R.string.widgets_title),
+                        null,
+                        Icons.Rounded.Widgets,
+                        trailing =
+                            if (widgetAddedCount > 0) {
+                                stringResource(R.string.widgets_added_count, widgetAddedCount)
+                            } else {
+                                stringResource(R.string.widgets_available_count, WidgetSpec.entries.size)
+                            },
+                    ) { nav.push(Route.Widgets) }
                     NavRow(stringResource(R.string.appearance), null, Icons.Rounded.Palette, trailing = sourceLabel) { nav.push(Route.Appearance) }
                 }
             }
-            item(key = "widgets", contentType = "nav_row") {
-                NavRow(
-                    stringResource(R.string.widgets_title),
-                    null,
-                    Icons.Rounded.Widgets,
-                    trailing =
-                        if (widgetAddedCount > 0) {
-                            stringResource(R.string.widgets_added_count, widgetAddedCount)
-                        } else {
-                            stringResource(R.string.widgets_available_count, WidgetSpec.entries.size)
-                        },
-                ) { nav.push(Route.Widgets) }
+            item(key = "sync_data_section", contentType = "form_section") {
+                FormSection(stringResource(R.string.me_hub_sync_section)) {
+                    SyncNavRow { nav.push(Route.Sync) }
+                    NavRow(stringResource(R.string.data_title), null, Icons.Rounded.SwapVert) { nav.push(Route.Data) }
+                    TrashNavRow { nav.push(Route.Trash) }
+                    NavRow(stringResource(R.string.history_title), null, Icons.Rounded.History) { nav.push(Route.History) }
+                }
             }
             item(key = "display_header", contentType = "section_label") {
                 SectionLabel(stringResource(R.string.section_display), modifier = Modifier.padding(top = 24.dp))
@@ -358,17 +376,8 @@ fun SettingsScreen() {
                     app.settings.update { it.copy(autoMute = v) }
                 }
             }
-            item(key = "group_sync_header", contentType = "section_label") {
-                SectionLabel(stringResource(R.string.settings_group_sync), modifier = Modifier.padding(top = 24.dp))
-            }
-            item(key = "more_sync", contentType = "nav_row") {
-                SyncNavRow { nav.push(Route.Sync) }
-            }
-            item(key = "more_jxfw", contentType = "nav_row") {
-                JxfwNavRow { nav.push(Route.Jxfw) }
-            }
-            item(key = "more_grades", contentType = "nav_row") {
-                GradesNavRow { nav.push(Route.Grades) }
+            item(key = "more_reliability", contentType = "nav_row") {
+                ReliabilityNavRow(permOkCount = { permOkCount }) { nav.push(Route.Reliability) }
             }
             item(key = "group_tools_header", contentType = "section_label") {
                 SectionLabel(stringResource(R.string.settings_group_tools), modifier = Modifier.padding(top = 24.dp))
@@ -378,29 +387,6 @@ fun SettingsScreen() {
             }
             item(key = "more_mcp", contentType = "nav_row") {
                 McpNavRow { nav.push(Route.Mcp) }
-            }
-            item(key = "more_parcel", contentType = "nav_row") {
-                NavRow(
-                    stringResource(R.string.parcel_title),
-                    null,
-                    Icons.Rounded.LocalShipping,
-                    trailing = stringResource(if (st.parcelEnabled) R.string.parcel_status_on else R.string.parcel_status_off),
-                ) { nav.push(Route.Parcel) }
-            }
-            item(key = "group_manage_header", contentType = "section_label") {
-                SectionLabel(stringResource(R.string.settings_group_manage), modifier = Modifier.padding(top = 24.dp))
-            }
-            item(key = "more_reliability", contentType = "nav_row") {
-                ReliabilityNavRow(permOkCount = { permOkCount }) { nav.push(Route.Reliability) }
-            }
-            item(key = "more_data", contentType = "nav_row") {
-                NavRow(stringResource(R.string.data_title), null, Icons.Rounded.SwapVert) { nav.push(Route.Data) }
-            }
-            item(key = "more_history", contentType = "nav_row") {
-                NavRow(stringResource(R.string.history_title), null, Icons.Rounded.History) { nav.push(Route.History) }
-            }
-            item(key = "more_trash", contentType = "nav_row") {
-                TrashNavRow { nav.push(Route.Trash) }
             }
             item(key = "group_about_header", contentType = "section_label") {
                 SectionLabel(stringResource(R.string.settings_group_about), modifier = Modifier.padding(top = 24.dp))
@@ -439,16 +425,72 @@ private fun SyncNavRow(onOpen: () -> Unit) {
 }
 
 @Composable
-private fun JxfwNavRow(onOpen: () -> Unit) {
+private fun CampusHubCard(onOpen: () -> Unit) {
     val app = LocalApp.current
     val jxfwState by app.jxfw.state.collectAsState()
-    NavRow(
-        stringResource(R.string.jxfw_title),
-        null,
-        Icons.Rounded.School,
-        trailing = jxfwState.username,
+    val snap = liveSnapshot()
+    val studentId = jxfwState.username?.takeIf { it.isNotBlank() }
+    val semesterName = snap.currentSemester?.name?.takeIf { it.isNotBlank() }
+    val scheme = MaterialTheme.colorScheme
+
+    MintCard(
         onClick = onOpen,
-    )
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(scheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Rounded.School,
+                    contentDescription = null,
+                    tint = scheme.onPrimaryContainer,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    if (studentId != null) {
+                        stringResource(R.string.me_hub_bound_id, studentId)
+                    } else {
+                        stringResource(R.string.me_hub_bind_jxfw)
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = scheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val subtitle =
+                    when {
+                        studentId != null && semesterName != null -> semesterName
+                        studentId == null -> stringResource(R.string.me_hub_bind_jxfw_sub)
+                        else -> null
+                    }
+                if (subtitle != null) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Icon(
+                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = scheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 @Composable
@@ -678,7 +720,6 @@ fun AppearanceScreen(onBack: () -> Unit) {
     val onSurfaceColor = scheme.onSurface
     val onSurfaceVariantColor = scheme.onSurfaceVariant
     val labelSmallStyle = typography.labelSmall
-    val selectedBorder = remember(onSurfaceColor) { Modifier.border(3.dp, onSurfaceColor, CircleShape) }
 
     MintScreen(title = stringResource(R.string.appearance), onBack = onBack) {
         Column(
@@ -698,34 +739,45 @@ fun AppearanceScreen(onBack: () -> Unit) {
                     ThemeSource.DYNAMIC -> {}
 
                     ThemeSource.PRESET -> {
-                        FlowRow(
+                        Column(
                             Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            presetItems.forEach { (p, name) ->
-                                val sel = st.preset == p.key
-                                Column(
-                                    Modifier.width(84.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                            presetItems.chunked(3).forEach { rowItems ->
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 ) {
-                                    Box(
-                                        Modifier
-                                            .size(48.dp)
-                                            .clip(CircleShape)
-                                            .background(p.seed)
-                                            .then(if (sel) selectedBorder else Modifier)
-                                            .semantics {
-                                                contentDescription = name
-                                                role = Role.RadioButton
-                                                selected = sel
-                                            }.mintClickable(pressedScale = 0.96f) { app.settings.update { it.copy(preset = p.key) } },
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        if (sel) Icon(Icons.Rounded.Check, null, Modifier.size(20.dp), tint = onSurfaceColor)
+                                    rowItems.forEach { (p, name) ->
+                                        val sel = st.preset == p.key
+                                        val checkTint = if (p.seed.luminance() > 0.5f) onSurfaceColor else Color.White
+                                        Column(
+                                            Modifier.weight(1f),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        ) {
+                                            Box(
+                                                Modifier
+                                                    .size(52.dp)
+                                                    .then(if (sel) Modifier.border(2.dp, p.seed, CircleShape) else Modifier)
+                                                    .padding(4.dp)
+                                                    .clip(CircleShape)
+                                                    .background(p.seed)
+                                                    .semantics {
+                                                        contentDescription = name
+                                                        role = Role.RadioButton
+                                                        selected = sel
+                                                    }.mintClickable(pressedScale = 0.96f) { app.settings.update { it.copy(preset = p.key) } },
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                if (sel) Icon(Icons.Rounded.Check, null, Modifier.size(20.dp), tint = checkTint)
+                                            }
+                                            Text(name, style = labelSmallStyle, color = onSurfaceVariantColor, maxLines = 1)
+                                        }
                                     }
-                                    Text(name, style = labelSmallStyle, color = onSurfaceVariantColor, maxLines = 1)
+                                    repeat(3 - rowItems.size) {
+                                        Spacer(Modifier.weight(1f))
+                                    }
                                 }
                             }
                         }

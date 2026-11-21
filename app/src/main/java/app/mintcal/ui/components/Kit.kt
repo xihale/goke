@@ -68,6 +68,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -161,7 +162,7 @@ fun MintScreen(
                 if (onBack != null) {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
                 } else {
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(8.dp))
                 }
                 Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 actions()
@@ -184,7 +185,16 @@ fun MintCard(
 ) {
     val inner: @Composable () -> Unit = { Column(Modifier.fillMaxWidth().padding(16.dp), content = content) }
     if (onClick != null) {
-        Surface(onClick = onClick, modifier = modifier, shape = shape, color = color, border = border, content = inner)
+        val interaction = remember { MutableInteractionSource() }
+        Surface(
+            onClick = onClick,
+            modifier = modifier.mintPressScale(interaction, 0.98f),
+            shape = shape,
+            color = color,
+            border = border,
+            interactionSource = interaction,
+            content = inner,
+        )
     } else {
         Surface(modifier = modifier, shape = shape, color = color, border = border, content = inner)
     }
@@ -616,7 +626,15 @@ private fun RowScope.NavBarItemView(
             )
         }
         Spacer(Modifier.height(2.dp))
-        Text(stringResource(item.label), style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1)
+        Text(
+            stringResource(item.label),
+            modifier = Modifier.padding(horizontal = 4.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = fg,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -1066,10 +1084,20 @@ fun MintFab(
         exit = fadeOut(MintTheme.spec()) + scaleOut(targetScale = 0.6f, animationSpec = MintTheme.spec()),
         modifier = modifier,
     ) {
+        val interaction = remember { MutableInteractionSource() }
         FloatingActionButton(
             onClick = onClick,
+            modifier = Modifier.mintPressScale(interaction, 0.96f),
             containerColor = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            elevation =
+                FloatingActionButtonDefaults.elevation(
+                    defaultElevation = 3.dp,
+                    pressedElevation = 3.dp,
+                    focusedElevation = 3.dp,
+                    hoveredElevation = 3.dp,
+                ),
+            interactionSource = interaction,
         ) {
             Icon(Icons.Rounded.Add, description)
         }

@@ -975,7 +975,7 @@ private fun WhenRow(
         }
         if (!empty) {
             Box(
-                Modifier.width(36.dp).heightIn(min = 48.dp).mintClickable(pressedScale = 0.95f, role = Role.Button, onClick = onClear),
+                Modifier.size(48.dp).mintClickable(pressedScale = 0.95f, role = Role.Button, onClick = onClear),
                 contentAlignment = Alignment.CenterEnd,
             ) {
                 Icon(Icons.Rounded.Close, stringResource(R.string.detail_editor_clear_plan), tint = muted, modifier = Modifier.size(20.dp))

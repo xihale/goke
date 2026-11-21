@@ -229,8 +229,27 @@ fun TodayScreen() {
                     MintCard {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                val remaining = (taskTotal - taskDone).coerceAtLeast(0)
+                                val summaryText =
+                                    if (allDone) {
+                                        stringResource(R.string.today_all_done_title)
+                                    } else {
+                                        val classPart =
+                                            if (courseCount == 0) {
+                                                stringResource(R.string.today_no_classes)
+                                            } else {
+                                                stringResource(R.string.today_summary, courseCount, taskTotal).substringBefore(" · ")
+                                            }
+                                        val remainingPart =
+                                            if (remaining > 0) {
+                                                stringResource(R.string.today_summary_remaining, remaining)
+                                            } else {
+                                                null
+                                            }
+                                        listOfNotNull(classPart, remainingPart).joinToString(" · ")
+                                    }
                                 AnimatedContent(
-                                    if (allDone) stringResource(R.string.today_all_done_title) else stringResource(R.string.today_summary, courseCount, taskTotal),
+                                    summaryText,
                                     transitionSpec = {
                                         (fadeIn(fadeSpec) + slideInVertically(slideSpec) { it / 3 }) togetherWith
                                             (fadeOut(fadeSpec) + slideOutVertically(slideSpec) { -it / 3 })
@@ -341,15 +360,17 @@ fun TodayScreen() {
                 }
             }
             if (overdue.size == 1) {
-                item(key = "h-overdue") { SectionLabel(stringResource(R.string.overdue_count, overdue.size), trailingColor = MintTheme.colors.removed) }
+                item(key = "h-overdue") { SectionLabel(stringResource(R.string.bucket_overdue), trailing = overdue.size.toString(), trailingColor = MintTheme.colors.removed) }
                 items(overdue, key = { "od-" + it.id }) { t ->
-                    TaskRow(
-                        t,
-                        { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) },
-                        { nav.openTask(it) },
-                        subtitle = t.due?.let { ctx.getString(R.string.overdue_since, it.toLocalDate().toString().substring(5)) },
-                        modifier = Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()),
-                    )
+                    MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurfaceVariant = MintTheme.colors.removed)) {
+                        TaskRow(
+                            t,
+                            { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) },
+                            { nav.openTask(it) },
+                            subtitle = t.due?.let { ctx.getString(R.string.overdue_since, it.toLocalDate().toString().substring(5)) },
+                            modifier = Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()),
+                        )
+                    }
                 }
             } else if (overdue.size >= 2) {
                 item(key = "overdue-banner") {
@@ -389,7 +410,7 @@ fun TodayScreen() {
                 }
             }
             if (pendingItems.isNotEmpty()) {
-                item(key = "h-timeline") { SectionLabel(stringResource(R.string.timeline) + " · " + pendingItems.size) }
+                item(key = "h-timeline") { SectionLabel(stringResource(R.string.timeline), trailing = pendingItems.size.toString()) }
             }
             items(pendingItems, key = { itemKey(it) }, contentType = { agendaType(it) }) { item ->
                 AgendaRow(

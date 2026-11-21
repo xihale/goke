@@ -702,32 +702,34 @@ private fun OverlayQuickAddCard(
 
     val todayToken = stringResource(R.string.today)
     val tomorrowToken = stringResource(R.string.tomorrow)
-    val prioHigh = "!${stringResource(R.string.priority_3)}"
-    val prioMid = "!${stringResource(R.string.priority_2)}"
+    val prioHighToken = "!${stringResource(R.string.priority_3)}"
+    val prioMidToken = "!${stringResource(R.string.priority_2)}"
+    val prioHighLabel = stringResource(R.string.overlay_priority_high)
+    val prioMidLabel = stringResource(R.string.overlay_priority_medium)
     val hasToday = parsed?.due?.toLocalDate() == now.toLocalDate()
     val hasTomorrow = parsed?.due?.toLocalDate() == now.toLocalDate().plusDays(1)
     val prio = parsed?.priority ?: 0
 
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        FlowRow(
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            ChipPill(todayToken, on = hasToday) {
-                rewriteToken(setOf(QuickTokenKind.DATE), if (hasToday) null else todayToken)
-            }
-            ChipPill(tomorrowToken, on = hasTomorrow) {
-                rewriteToken(setOf(QuickTokenKind.DATE), if (hasTomorrow) null else tomorrowToken)
-            }
-            ChipPill(prioHigh, on = prio == 3) {
-                rewriteToken(setOf(QuickTokenKind.PRIORITY), if (prio == 3) null else prioHigh)
-            }
-            ChipPill(prioMid, on = prio == 2) {
-                rewriteToken(setOf(QuickTokenKind.PRIORITY), if (prio == 2) null else prioMid)
-            }
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ChipPill(todayToken, on = hasToday) {
+            rewriteToken(setOf(QuickTokenKind.DATE), if (hasToday) null else todayToken)
         }
-        Spacer(Modifier.width(8.dp))
+        ChipPill(tomorrowToken, on = hasTomorrow) {
+            rewriteToken(setOf(QuickTokenKind.DATE), if (hasTomorrow) null else tomorrowToken)
+        }
+        ChipPill(prioHighLabel, on = prio == 3) {
+            rewriteToken(setOf(QuickTokenKind.PRIORITY), if (prio == 3) null else prioHighToken)
+        }
+        ChipPill(prioMidLabel, on = prio == 2) {
+            rewriteToken(setOf(QuickTokenKind.PRIORITY), if (prio == 2) null else prioMidToken)
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Button(
             onClick = { submit() },
             enabled = text.isNotBlank(),
@@ -795,11 +797,9 @@ private fun OverlayCourseCard(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        OverlayHeaderActions(
-            expandDescription = stringResource(R.string.widget_overlay_course_detail),
-            onExpand = onExpand,
-            onDismiss = onDismiss,
-        )
+        IconButton(onClick = onDismiss) {
+            Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.close), modifier = Modifier.size(20.dp))
+        }
     }
 
     Text(

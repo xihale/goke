@@ -4,7 +4,7 @@
     <string name="widget_today_name">今日安排</string>
     <string name="widget_today_desc">在桌面查看今天的课程、日程与待办</string>
     <string name="widget_todo_name">待办清单</string>
-    <string name="widget_todo_desc">逾期与今天的待办，点圈直接完成，点＋新建</string>
+    <string name="widget_todo_desc">逾期与今天的待办，勾选直接完成，点＋新建</string>
     <string name="widget_todo_empty">(〃\'▽\'〃) 今天没有待办啦</string>
     <string name="widget_todo_title">待办 · %1$d</string>
     <string name="notif_action_done">完成</string>
@@ -379,10 +379,6 @@
     <string name="parcel_sample_label">粘贴一条取件通知</string>
     <string name="parcel_recognize">识别</string>
     <string name="parcel_not_found">没有识别出取件信息。</string>
-    <string name="parcel_code">取件码：%1$s</string>
-    <string name="parcel_place">地点：%1$s</string>
-    <string name="parcel_company">快递：%1$s</string>
-    <string name="parcel_deadline">截止：%1$s</string>
     <string name="parcel_add_task">加入待办</string>
     <string name="parcel_task_title">取件 %1$s · %2$s</string>
     <string name="parcel_op_desc">快递取件待办</string>
@@ -411,7 +407,6 @@
     <string name="parcel_rule_delete">删除</string>
     <string name="parcel_move_up">上移</string>
     <string name="parcel_move_down">下移</string>
-    <string name="parcel_rule_matched">规则：%1$s</string>
     <string name="parcel_rule_from_sample">按此样本建规则</string>
     <string name="parcel_rule_err_empty">模板不能为空</string>
     <string name="parcel_rule_err_no_code">模板必须恰好包含一个 {code}</string>
@@ -550,7 +545,7 @@
     <string name="todo_batch_toast">已添加 %1$d 条待办</string>
 
     <string name="widget_schedule_name">今日课表</string>
-    <string name="widget_schedule_desc">今天的课程，当前这节课高亮显示。</string>
+    <string name="widget_schedule_desc">今天的课程，当前这节课高亮显示</string>
     <string name="widget_schedule_empty">(〃\'▽\'〃) 今天没有课啦</string>
     <string name="widget_schedule_more">还有 %1$d 节</string>
     <string name="widget_schedule_now">正在上</string>
@@ -593,7 +588,6 @@
     <string name="auto_backup_desc">数据变化时自动导出完整备份（JSON）到应用目录 backup/，保留最近 %1$d 份</string>
     <string name="course_todos">这门课的待办</string>
     <string name="course_weeks_clear">清空</string>
-    <string name="course_pattern_delete">删除此时间</string>
     <string name="course_todos_add">添加待办</string>
     <string name="course_todos_empty">还没有待办</string>
     <string name="clash_row_course">与「%1$s」冲突 · %2$s</string>
@@ -685,12 +679,12 @@
     <string name="parcel_status_on">已开启</string>
     <string name="parcel_status_off">未开启</string>
     <string name="widget_parcel_name">待取快递</string>
-    <string name="widget_parcel_desc">大号取件码、驿站地点与一键已取。</string>
+    <string name="widget_parcel_desc">大号取件码、驿站地点与一键已取</string>
     <string name="widget_parcel_title">待取件</string>
     <string name="widget_parcel_empty">(〃\'▽\'〃) 暂无待取快递</string>
     <string name="widget_parcel_station">快递驿站</string>
     <string name="widget_next_name">下一件事</string>
-    <string name="widget_next_desc">紧凑展示下一节课、日程或待办，一键新建。</string>
+    <string name="widget_next_desc">紧凑展示下一节课、日程或待办，一键新建</string>
     <string name="widget_next_empty">当前空闲</string>
     <string name="widget_next_label">接下来</string>
     <string name="widget_ongoing">进行中</string>
@@ -725,7 +719,7 @@
     <string name="jxfw_card_bind_action">登录教务</string>
     <string name="jxfw_card_bound_meta">学号 %1$s · %2$s</string>
     <string name="jxfw_card_sync_now">立即同步</string>
-    <string name="jxfw_login_hint">统一身份认证账号，凭据仅加密保存在本机</string>
+    <string name="jxfw_login_hint">输入广工统一身份认证账号</string>
     <string name="courses_slots_count">%1$d 个时段</string>
     <string name="parcel_window_section">默认取件时段</string>
     <string name="parcel_window_desc">识别出的取件待办默认排入每日此时段，并在课表顶栏展示胶囊</string>
@@ -785,9 +779,7 @@
     <string name="event_detail_all_day">全天日程</string>
     <string name="event_detail_repeat">重复规则</string>
     <string name="event_detail_converted_toast">已转为待办</string>
-    <string name="settings_group_sync">账号与教务</string>
     <string name="settings_group_tools">AI 与工具</string>
-    <string name="settings_group_manage">系统与数据</string>
     <string name="settings_group_about">其他</string>
     <string name="reliability_section_optional">可选功能授权</string>
     <string name="reliability_parcel_listener">通知使用权（快递识别）</string>
@@ -963,4 +955,23 @@
     <string name="lic_kotlin_name">Kotlin / kotlinx</string>
     <string name="lic_kolor_name">material-kolor</string>
     <string name="lic_quickjs_name">quickjs-kt</string>
+    <!-- Polish Wave 2 Pre-added Strings -->
+    <string name="today_no_classes">今日无课</string>
+    <string name="today_summary_remaining">还剩 %1$d 项</string>
+    <string name="cal_day_events_count">%1$d 项日程</string>
+    <string name="cal_day_todo_count">%1$d 项待办</string>
+    <string name="cal_day_done_count">%1$d 项已完成</string>
+    <string name="course_slot_delete">删除此时段</string>
+    <string name="course_teacher_placeholder">选填，如：涂钰青</string>
+    <string name="course_note_placeholder">选填，如教室变更或考核方式</string>
+    <string name="parcel_test_placeholder">如：【菜鸟驿站】凭 4-2-1086 取件</string>
+    <string name="parcel_test_matched_rule">已匹配规则 · %1$s</string>
+    <string name="me_hub_campus_section">校园与效率</string>
+    <string name="me_hub_sync_section">同步与数据</string>
+    <string name="me_hub_bind_jxfw">绑定广工教务</string>
+    <string name="me_hub_bind_jxfw_sub">同步课表、考试与成绩</string>
+    <string name="me_hub_bound_id">学号 %1$s</string>
+    <string name="lan_web_usb_toggle">校园网隔离？使用 USB 连接电脑</string>
+    <string name="overlay_priority_high">高优先</string>
+    <string name="overlay_priority_medium">中优先</string>
 </resources>

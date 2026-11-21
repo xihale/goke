@@ -34,10 +34,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -451,14 +451,12 @@ fun CourseEditScreen(
                 modifier = Modifier.padding(top = 14.dp),
             )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val deletable = slots.size > 1
                 slots.forEach { s ->
                     SlotRow(
                         slot = s,
                         color = color,
                         clock = clockRange(periods, s.startPeriod, s.endPeriod),
                         onOpen = { openSlot = s.id },
-                        onDelete = if (deletable) ({ slots = slots.filterNot { it.id == s.id } }) else null,
                     )
                 }
             }
@@ -509,6 +507,7 @@ fun CourseEditScreen(
                 label = stringResource(R.string.label_teacher),
                 value = teacher,
                 onChange = { teacher = it },
+                placeholder = stringResource(R.string.course_teacher_placeholder),
             )
             Spacer(Modifier.height(4.dp))
             TonalField(
@@ -517,6 +516,7 @@ fun CourseEditScreen(
                 onChange = { note = it },
                 singleLine = false,
                 minLines = 2,
+                placeholder = stringResource(R.string.course_note_placeholder),
             )
 
             if (origin != null) {
@@ -566,6 +566,15 @@ fun CourseEditScreen(
                 slot = slot,
                 onChange = { updated -> slots = slots.map { if (it.id == key) updated else it } },
                 onDismiss = { openSlot = null },
+                onDelete =
+                    if (slots.size > 1) {
+                        {
+                            slots = slots.filterNot { it.id == key }
+                            openSlot = null
+                        }
+                    } else {
+                        null
+                    },
             )
         }
     }
@@ -617,14 +626,13 @@ fun CourseEditScreen(
     }
 }
 
-/** 一条时段：植物色竖条 + 「周X 第A–B节 · 第N周」+ 等宽钟点 / 教室；单条带右箭头，多条带删除键。 */
+/** 一条时段：植物色竖条 + 「周X 第A–B节 · 第N周」+ 等宽钟点 / 教室 + 右箭头。 */
 @Composable
 private fun SlotRow(
     slot: SlotDraft,
     color: Int,
     clock: String,
     onOpen: () -> Unit,
-    onDelete: (() -> Unit)?,
 ) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
@@ -635,7 +643,7 @@ private fun SlotRow(
             .clip(RoundedCornerShape(14.dp))
             .background(scheme.surfaceContainerHighest.copy(alpha = 0.65f))
             .mintClickable(pressedScale = 0.98f, onClick = onOpen)
-            .padding(start = 12.dp, end = if (onDelete != null) 2.dp else 12.dp, top = 10.dp, bottom = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -678,23 +686,12 @@ private fun SlotRow(
                 )
             }
         }
-        if (onDelete != null) {
-            IconButton(onClick = onDelete) {
-                Icon(
-                    Icons.Rounded.Close,
-                    stringResource(R.string.course_pattern_delete),
-                    tint = scheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        } else {
-            Icon(
-                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                null,
-                tint = scheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
-        }
+        Icon(
+            Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+            null,
+            tint = scheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -709,12 +706,14 @@ internal fun SlotEditorSheet(
     slot: SlotDraft,
     onChange: (SlotDraft) -> Unit,
     onDismiss: () -> Unit,
+    onDelete: (() -> Unit)? = null,
 ) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val n = periods.size
-    val clock = clockRange(periods, slot.startPeriod, slot.endPeriod)
-    var rangeAnchor by remember { mutableStateOf<Int?>(null) }
+    var draft by remember(slot) { mutableStateOf(slot) }
+    val clock = clockRange(periods, draft.startPeriod, draft.endPeriod)
+    var rangeAnchor by remember(slot) { mutableStateOf<Int?>(null) }
 
     val sheetState = rememberModalSheetState()
     ModalBottomSheet(
@@ -745,22 +744,22 @@ internal fun SlotEditorSheet(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (d in 1..7) {
-                    val on = slot.dayOfWeek == d
+                    val on = draft.dayOfWeek == d
                     Box(
                         Modifier
                             .weight(1f)
-                            .height(42.dp)
+                            .heightIn(min = 44.dp)
                             .clip(CircleShape)
-                            .background(if (on) scheme.primaryContainer else scheme.surfaceContainerHighest)
+                            .background(if (on) scheme.primary else scheme.surfaceContainerHighest)
                             .mintClickable(pressedScale = 0.96f, role = Role.RadioButton, selected = on) {
-                                onChange(slot.copy(dayOfWeek = d))
+                                draft = draft.copy(dayOfWeek = d)
                             },
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             ctx.weekdayShort(d),
                             style = MaterialTheme.typography.labelLarge,
-                            color = if (on) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                            color = if (on) scheme.onPrimary else scheme.onSurfaceVariant,
                             fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
                         )
                     }
@@ -769,10 +768,10 @@ internal fun SlotEditorSheet(
 
             // 节次区间：单网格连选（第 1 下定单节/起点，第 2 下拉成区间）
             val periodSpanText =
-                if (slot.startPeriod == slot.endPeriod) {
-                    stringResource(R.string.period_n, slot.startPeriod)
+                if (draft.startPeriod == draft.endPeriod) {
+                    stringResource(R.string.period_n, draft.startPeriod)
                 } else {
-                    stringResource(R.string.periods_range, slot.startPeriod, slot.endPeriod)
+                    stringResource(R.string.periods_range, draft.startPeriod, draft.endPeriod)
                 }
             val periodSummary = listOfNotNull(periodSpanText, clock.takeIf { it.isNotEmpty() }).joinToString(" · ")
             Row(Modifier.padding(top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -798,34 +797,21 @@ internal fun SlotEditorSheet(
                         for (c in 0 until pCols) {
                             val p = r * pCols + c + 1
                             if (p <= n) {
-                                val inRange = p in slot.startPeriod..slot.endPeriod
-                                val isEndpoint = p == slot.startPeriod || p == slot.endPeriod
-                                val bg =
-                                    when {
-                                        isEndpoint -> scheme.primary
-                                        inRange -> scheme.primaryContainer
-                                        else -> scheme.surfaceContainerHighest
-                                    }
-                                val fg =
-                                    when {
-                                        isEndpoint -> scheme.onPrimary
-                                        inRange -> scheme.onPrimaryContainer
-                                        else -> scheme.onSurfaceVariant
-                                    }
+                                val inRange = p in draft.startPeriod..draft.endPeriod
                                 Box(
                                     Modifier
                                         .weight(1f)
-                                        .height(42.dp)
+                                        .heightIn(min = 44.dp)
                                         .clip(RoundedCornerShape(10.dp))
-                                        .background(bg)
+                                        .background(if (inRange) scheme.primary else scheme.surfaceContainerHighest)
                                         .mintClickable(pressedScale = 0.96f, role = Role.Button, selected = inRange) {
                                             val anchor = rangeAnchor
                                             if (anchor == null) {
                                                 rangeAnchor = p
-                                                onChange(slot.copy(startPeriod = p, endPeriod = p))
+                                                draft = draft.copy(startPeriod = p, endPeriod = p)
                                             } else {
                                                 rangeAnchor = null
-                                                onChange(slot.copy(startPeriod = minOf(anchor, p), endPeriod = maxOf(anchor, p)))
+                                                draft = draft.copy(startPeriod = minOf(anchor, p), endPeriod = maxOf(anchor, p))
                                             }
                                         },
                                     contentAlignment = Alignment.Center,
@@ -833,7 +819,7 @@ internal fun SlotEditorSheet(
                                     Text(
                                         "$p",
                                         style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
-                                        color = fg,
+                                        color = if (inRange) scheme.onPrimary else scheme.onSurfaceVariant,
                                         fontWeight = if (inRange) FontWeight.SemiBold else FontWeight.Normal,
                                     )
                                 }
@@ -849,8 +835,8 @@ internal fun SlotEditorSheet(
             Spacer(Modifier.height(10.dp))
             TonalField(
                 label = stringResource(R.string.label_room),
-                value = slot.room,
-                onChange = { onChange(slot.copy(room = it)) },
+                value = draft.room,
+                onChange = { draft = draft.copy(room = it) },
             )
 
             // 周次（5 列矩阵：20 周正好 4×5 满行对齐）
@@ -861,9 +847,9 @@ internal fun SlotEditorSheet(
                     color = scheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f).padding(start = 2.dp),
                 )
-                if (slot.weeks.isNotEmpty()) {
+                if (draft.weeks.isNotEmpty()) {
                     Text(
-                        stringResource(R.string.weeks_value, WeekSets.format(slot.weeks)),
+                        stringResource(R.string.weeks_value, WeekSets.format(draft.weeks)),
                         style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
                         color = scheme.primary,
                         fontWeight = FontWeight.Medium,
@@ -879,8 +865,8 @@ internal fun SlotEditorSheet(
                         WeekSets.even(totalWeeks) to stringResource(R.string.weeks_even),
                         emptySet<Int>() to stringResource(R.string.course_weeks_clear),
                     ),
-                selected = slot.weeks,
-                onSelect = { onChange(slot.copy(weeks = it)) },
+                selected = draft.weeks,
+                onSelect = { draft = draft.copy(weeks = it) },
             )
             Spacer(Modifier.height(8.dp))
             val cols = 5
@@ -891,7 +877,7 @@ internal fun SlotEditorSheet(
                         for (c in 0 until cols) {
                             val w = r * cols + c + 1
                             if (w <= totalWeeks) {
-                                val on = w in slot.weeks
+                                val on = w in draft.weeks
                                 Box(
                                     Modifier
                                         .weight(1f)
@@ -899,7 +885,7 @@ internal fun SlotEditorSheet(
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(if (on) scheme.primaryContainer else scheme.surfaceContainerHighest)
                                         .mintClickable(pressedScale = 0.96f, role = Role.Checkbox, selected = on) {
-                                            onChange(slot.copy(weeks = if (on) slot.weeks - w else slot.weeks + w))
+                                            draft = draft.copy(weeks = if (on) draft.weeks - w else draft.weeks + w)
                                         },
                                     contentAlignment = Alignment.Center,
                                 ) {
@@ -920,11 +906,23 @@ internal fun SlotEditorSheet(
 
             Spacer(Modifier.height(16.dp))
             Button(
-                enabled = slot.weeks.isNotEmpty(),
-                onClick = onDismiss,
+                enabled = draft.weeks.isNotEmpty(),
+                onClick = {
+                    onChange(draft)
+                    onDismiss()
+                },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             ) {
                 Text(stringResource(R.string.ok))
+            }
+            if (onDelete != null) {
+                TextButton(
+                    onClick = onDelete,
+                    colors = ButtonDefaults.textButtonColors(contentColor = scheme.error),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 4.dp),
+                ) {
+                    Text(stringResource(R.string.course_slot_delete))
+                }
             }
         }
     }

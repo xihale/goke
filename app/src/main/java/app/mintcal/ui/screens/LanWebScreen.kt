@@ -19,9 +19,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
@@ -35,10 +38,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -53,6 +58,7 @@ import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.SwitchRow
 import app.mintcal.ui.components.Tag
+import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.theme.MintTheme
 import kotlinx.coroutines.delay
 
@@ -211,7 +217,7 @@ fun LanWebScreen(onBack: () -> Unit) {
                                     )
                                     FilledTonalButton(
                                         onClick = { copyText("LAN Web URL", lanUrl, R.string.lan_web_copied_url) },
-                                        modifier = Modifier.heightIn(min = 40.dp),
+                                        modifier = Modifier.heightIn(min = 48.dp),
                                     ) {
                                         Icon(Icons.Rounded.ContentCopy, null, Modifier.size(16.dp))
                                         Spacer(Modifier.width(6.dp))
@@ -317,38 +323,69 @@ fun LanWebScreen(onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
-                    Text(
-                        stringResource(R.string.lan_web_tip_adb, state.adbUrl),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        state.adbCommand,
-                        style =
-                            MaterialTheme.typography.bodyMedium.copy(
-                                fontFeatureSettings = "tnum",
-                                fontWeight = FontWeight.Medium,
-                            ),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                    var usbExpanded by remember { mutableStateOf(false) }
                     Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .mintClickable(pressedScale = 0.98f) { usbExpanded = !usbExpanded }
+                            .padding(horizontal = 4.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        FilledTonalButton(
-                            onClick = { copyText("ADB Command", state.adbCommand, R.string.lan_web_copied_adb) },
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        ) {
-                            Icon(Icons.Rounded.ContentCopy, null, Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(R.string.lan_web_copy_adb), maxLines = 1)
-                        }
-                        TextButton(
-                            onClick = { copyText("ADB URL", state.adbUrl, R.string.lan_web_copied_url) },
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        ) {
-                            Text(stringResource(R.string.lan_web_copy_adb_url), maxLines = 1)
+                        Text(
+                            stringResource(R.string.lan_web_usb_toggle),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Icon(
+                            if (usbExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    AnimatedVisibility(
+                        visible = usbExpanded,
+                        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                stringResource(R.string.lan_web_tip_adb, state.adbUrl),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                state.adbCommand,
+                                style =
+                                    MaterialTheme.typography.bodyMedium.copy(
+                                        fontFeatureSettings = "tnum",
+                                        fontWeight = FontWeight.Medium,
+                                    ),
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                FilledTonalButton(
+                                    onClick = { copyText("ADB Command", state.adbCommand, R.string.lan_web_copied_adb) },
+                                    modifier = Modifier.heightIn(min = 48.dp),
+                                ) {
+                                    Icon(Icons.Rounded.ContentCopy, null, Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(stringResource(R.string.lan_web_copy_adb), maxLines = 1)
+                                }
+                                TextButton(
+                                    onClick = { copyText("ADB URL", state.adbUrl, R.string.lan_web_copied_url) },
+                                    modifier = Modifier.heightIn(min = 48.dp),
+                                ) {
+                                    Text(stringResource(R.string.lan_web_copy_adb_url), maxLines = 1)
+                                }
+                            }
                         }
                     }
                 }

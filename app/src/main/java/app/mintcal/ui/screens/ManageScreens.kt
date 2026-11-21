@@ -65,6 +65,7 @@ import app.mintcal.ui.components.FormSection
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.NavRow
+import app.mintcal.ui.components.ParcelCodeHeadline
 import app.mintcal.ui.components.SwitchRow
 import app.mintcal.ui.components.TimeDialSheet
 import app.mintcal.ui.components.TonalField
@@ -371,6 +372,7 @@ fun ParcelScreen(onBack: () -> Unit) {
                         },
                         singleLine = false,
                         minLines = 3,
+                        placeholder = stringResource(R.string.parcel_test_placeholder),
                     )
                     FilledTonalButton(
                         onClick = {
@@ -389,19 +391,39 @@ fun ParcelScreen(onBack: () -> Unit) {
                     }
                     if (r != null) {
                         MintCard {
-                            Text(stringResource(R.string.parcel_code, r.code), style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"))
-                            (rulesCfg.user + ParcelRuleEngine.BUILTIN).firstOrNull { it.id == r.ruleId }?.let {
-                                Text(stringResource(R.string.parcel_rule_matched, it.name), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            ParcelCodeHeadline(
+                                code = r.code,
+                                done = false,
+                                copyEnabled = true,
+                            )
+                            val subtitle =
+                                listOfNotNull(
+                                    r.place.takeIf { it.isNotBlank() },
+                                    r.company.takeIf { it.isNotBlank() },
+                                    r.deadline?.format(STAMP),
+                                ).joinToString(" · ")
+                            if (subtitle.isNotEmpty()) {
+                                Text(
+                                    subtitle,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
                             }
-                            if (r.place.isNotBlank()) Text(stringResource(R.string.parcel_place, r.place), style = MaterialTheme.typography.bodyMedium)
-                            if (r.company.isNotBlank()) Text(stringResource(R.string.parcel_company, r.company), style = MaterialTheme.typography.bodyMedium)
-                            r.deadline?.let { Text(stringResource(R.string.parcel_deadline, it.format(STAMP)), style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum")) }
+                            (rulesCfg.user + ParcelRuleEngine.BUILTIN).firstOrNull { it.id == r.ruleId }?.let {
+                                Text(
+                                    stringResource(R.string.parcel_test_matched_rule, it.name),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 2.dp),
+                                )
+                            }
                             Button(
                                 onClick = {
                                     val desc = ctx.getString(R.string.parcel_op_desc)
                                     actions.commit(Edits.save(snap, ParcelTasks.build(ctx, r), desc, System.currentTimeMillis()), desc)
                                 },
-                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                             ) { Text(stringResource(R.string.parcel_add_task)) }
                         }
                     }
