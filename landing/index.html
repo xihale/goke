@@ -25,6 +25,8 @@
         <span>薄荷广工</span>
       </a>
       <nav class="topnav" aria-label="页面导航">
+        <a href="#widgets">小组件</a>
+        <a href="#playground">空教室</a>
         <a href="#features">特性</a>
         <a href="#demo">演示</a>
         <a href="#screens">界面</a>
@@ -37,8 +39,9 @@
 
   <main id="main">
     <section class="hero" id="top">
+      <div class="hero-ambient" aria-hidden="true"></div>
       <div class="wrap hero-grid">
-        <div class="hero-copy">
+        <div class="hero-copy" data-reveal>
           <a class="ver-link" href="#download">
             <span class="ver-dot" aria-hidden="true"></span>
             <span class="mono" id="heroVer">v0.0.1-beta.7</span>
@@ -46,7 +49,7 @@
             <span class="mono" id="heroVerSize">3.83 MiB</span>
           </a>
 
-          <h1 class="display">课表、待办与取件，<br>安放在薄荷宣纸上</h1>
+          <h1 class="display">薄荷广工，<br>顺滑如原生</h1>
           <p class="lead">极简流畅 · 零广告 · 仅 <strong class="mono" id="heroLeadSize">3.83 MiB</strong>。将广工课表、7×12 空教室、GPA 核算、5 款桌面小组件与多端同步干净集成。</p>
 
           <div class="cta-row">
@@ -57,19 +60,38 @@
             </a>
             <a class="btn btn-tonal btn-lg" href="#demo">
               <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>
-              <span>观看演示</span>
+              <span>观看 43s 大片</span>
             </a>
             <a class="btn btn-tonal btn-lg" href="https://github.com/xihale/mintcal">GitHub</a>
           </div>
         </div>
 
-        <div class="hero-stage">
+        <div class="hero-stage" id="heroStage" data-reveal data-delay="1">
+          <div class="hero-float-chip hero-float-chip--tl" aria-hidden="true">
+            <span class="chip-dot"></span>
+            <span>+ 教3-101 · 223座</span>
+          </div>
+          <div class="hero-float-chip hero-float-chip--br" aria-hidden="true">
+            <span class="mono">GPA 4.03 · 4-2-1086</span>
+          </div>
+
           <div class="phone-frame" id="heroScreen">
-            <img class="screen-img" data-tab="today" data-light="./assets/shot-today.webp" data-dark="./assets/shot-today-dark.webp" src="./assets/shot-today.webp" width="1233" height="2673" alt="今日视图">
-            <img class="screen-img is-active" data-tab="timetable" data-light="./assets/shot-timetable.webp" data-dark="./assets/shot-timetable-dark.webp" src="./assets/shot-timetable.webp" width="1233" height="2673" alt="课表视图">
-            <img class="screen-img" data-tab="calendar" data-light="./assets/shot-calendar.webp" data-dark="./assets/shot-calendar-dark.webp" src="./assets/shot-calendar.webp" width="1233" height="2673" alt="日历视图">
-            <img class="screen-img" data-tab="todo" data-light="./assets/shot-todo.webp" data-dark="./assets/shot-todo-dark.webp" src="./assets/shot-todo.webp" width="1233" height="2673" alt="待办视图">
-            <img class="screen-img" data-tab="settings" data-light="./assets/shot-settings.webp" data-dark="./assets/shot-settings-dark.webp" src="./assets/shot-settings.webp" width="1233" height="2673" alt="我的与设置">
+            <div class="hero-layer hero-layer--light">
+              <img class="screen-img" data-tab="today" src="./assets/shot-today.webp" width="1233" height="2673" alt="今日视图">
+              <img class="screen-img is-active" data-tab="timetable" src="./assets/shot-timetable.webp" width="1233" height="2673" alt="课表视图">
+              <img class="screen-img" data-tab="calendar" src="./assets/shot-calendar.webp" width="1233" height="2673" alt="日历视图">
+              <img class="screen-img" data-tab="todo" src="./assets/shot-todo.webp" width="1233" height="2673" alt="待办视图">
+              <img class="screen-img" data-tab="settings" src="./assets/shot-settings.webp" width="1233" height="2673" alt="我的与设置">
+            </div>
+            <div class="hero-layer hero-layer--dark" aria-hidden="true">
+              <img class="screen-img" data-tab="today" src="./assets/shot-today-dark.webp" width="1233" height="2673" alt="">
+              <img class="screen-img is-active" data-tab="timetable" src="./assets/shot-timetable-dark.webp" width="1233" height="2673" alt="">
+              <img class="screen-img" data-tab="calendar" src="./assets/shot-calendar-dark.webp" width="1233" height="2673" alt="">
+              <img class="screen-img" data-tab="todo" src="./assets/shot-todo-dark.webp" width="1233" height="2673" alt="">
+              <img class="screen-img" data-tab="settings" src="./assets/shot-settings-dark.webp" width="1233" height="2673" alt="">
+            </div>
+            <div class="hero-blade" aria-hidden="true"></div>
+
             <div class="phone-nav-hotspot" aria-hidden="true">
               <button type="button" tabindex="-1" data-tab="today" aria-label="今日"></button>
               <button type="button" tabindex="-1" data-tab="timetable" aria-label="课表"></button>
@@ -89,7 +111,7 @@
           </div>
 
           <div class="hero-stage-meta">
-            <span class="hero-caption">五栏薄荷宣纸视图</span>
+            <span class="hero-caption">轻触底栏交互 · 点击斜切光刃主题</span>
             <button type="button" class="theme-pill" id="heroThemeToggle" aria-pressed="false" title="切换预览浅色/深色模式">
               <span class="theme-dot" aria-hidden="true"></span>
               <span id="heroThemeLabel">浅色预览</span>
@@ -99,21 +121,86 @@
       </div>
     </section>
 
+    <!-- 5 Native Desktop Widgets Spatial Matrix -->
+    <section class="section section--mist" id="widgets">
+      <div class="wrap">
+        <div class="sec-head sec-head--split" data-reveal>
+          <div>
+            <span class="sec-eyebrow">高方便度 · 桌面微件家族</span>
+            <h2 class="sec-title">5 款组件，抬眼即达</h2>
+            <p class="sec-desc">不用点开 App——下节课进度、今日日程、待办勾选、菜鸟取件码与考场座位直铺桌面。悬停或点击任意微件聚焦查看。</p>
+          </div>
+          <span class="stage-hint mono">5 × Jetpack Glance 原生态桌面小组件</span>
+        </div>
+
+        <div class="widget-matrix" id="widgetMatrix" data-reveal>
+          <button type="button" class="w-card w-card--next" data-widget="next" aria-label="查看 下一日程 小组件">
+            <img src="./assets/widget-next.webp" width="1020" height="204" alt="下一日程小组件">
+          </button>
+          <button type="button" class="w-card w-card--schedule" data-widget="schedule" aria-label="查看 今日课表 小组件">
+            <img src="./assets/widget-schedule.webp" width="960" height="630" alt="今日课表小组件">
+          </button>
+          <button type="button" class="w-card w-card--today is-focus" data-widget="today" aria-label="查看 今日安排 小组件">
+            <img src="./assets/widget-today.webp" width="960" height="810" alt="今日安排小组件">
+          </button>
+          <button type="button" class="w-card w-card--parcel" data-widget="parcel" aria-label="查看 待取快递 小组件">
+            <img src="./assets/widget-parcel.webp" width="780" height="555" alt="待取快递小组件">
+          </button>
+          <button type="button" class="w-card w-card--todo" data-widget="todo" aria-label="查看 待办清单 小组件">
+            <img src="./assets/widget-todo.webp" width="780" height="705" alt="待办清单小组件">
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interactive 1:1 BoxSel Playground -->
+    <section class="section section--forest" id="playground">
+      <div class="wrap pg-grid">
+        <div class="pg-copy" data-reveal>
+          <span class="sec-eyebrow sec-eyebrow--dark">交互体验 · 真实物理框选</span>
+          <h2 class="sec-title sec-title--dark">空教室，一划即建</h2>
+          <p class="sec-desc sec-desc--dark">进入教3-101 7×12 周课表自动叠加你的个人课程防撞车。直接在右侧 <strong>周四 6–7 节纯白空位</strong> 按住向下拖拽，体验原生 BoxSel 弹簧框选。</p>
+          <div class="pg-actions">
+            <button type="button" class="btn btn-mint" id="pgReplayBtn">
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+              <span>自动演示框选</span>
+            </button>
+            <span class="pg-status mono" id="pgStatus">等待手势或点击演示…</span>
+          </div>
+          <div class="pg-legend">
+            <span><i class="dot-personal"></i> 个人已排课程</span>
+            <span><i class="dot-empty"></i> 空白时段（可框选）</span>
+          </div>
+        </div>
+
+        <div class="pg-stage" data-reveal data-delay="1">
+          <div class="pg-loupe" id="pgLoupe" role="application" aria-label="教室周课表拖拽框选交互区">
+            <div class="pg-loupe-canvas" id="pgCanvas">
+              <img src="./assets/shot-classroom-grid.webp" width="1233" height="2673" alt="教3-101 教室周课表放大区域" draggable="false">
+              <div class="pg-ripple" id="pgRipple" aria-hidden="true"></div>
+              <div class="pg-boxsel" id="pgBoxSel" aria-hidden="true"></div>
+            </div>
+            <div class="pg-pill" id="pgPill">+ 教3-101 · 周四 6–7 节 · 14:40–16:15</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="section" id="features">
       <div class="wrap">
-        <div class="sec-head">
-          <span class="sec-eyebrow">核心能力</span>
-          <h2 class="sec-title">为广工日常打磨的每一处细节</h2>
-          <p class="sec-desc">围绕广工教务生态、高效日程待办与多端极客协同，纯本地优先运行，轻量克制。</p>
+        <div class="sec-head" data-reveal>
+          <span class="sec-eyebrow">高集成架构</span>
+          <h2 class="sec-title">校园日常，一屏全收</h2>
+          <p class="sec-desc">围绕广工教务生态、流畅日程待办与国产防杀保活，纯本地优先运行，轻量克制。</p>
         </div>
 
         <div class="track">
-          <div class="track-head">
+          <div class="track-head" data-reveal>
             <span class="track-badge track-badge--accent">重点特性</span>
             <h3 class="track-title">广工教务生态</h3>
           </div>
           <div class="bento-grid bento-grid--gdut">
-            <article class="feat-card feat-card--highlight feat-span-3">
+            <article class="feat-card feat-card--highlight feat-span-3" data-reveal>
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16M15 4v16M3 10h18M3 15h18"/></svg>
               </div>
@@ -121,7 +208,7 @@
               <p>5 校区筛选 + 节次过滤「仅看空闲」，点进看整周课表、自动叠加个人课表防撞车、长按框选空位直建日程。</p>
             </article>
 
-            <article class="feat-card feat-card--highlight feat-span-3">
+            <article class="feat-card feat-card--highlight feat-span-3" data-reveal data-delay="1">
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19h16"/><path d="M7 15V9"/><path d="M12 15V5"/><path d="M17 15v-3"/></svg>
               </div>
@@ -129,15 +216,7 @@
               <p>已获学分 / 总学分统计，支持按课程类别或单科勾选实时重算 GPA，学业进度一目了然。</p>
             </article>
 
-            <article class="feat-card feat-span-2">
-              <div class="feat-ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-              </div>
-              <h4>跨校区单课独立作息</h4>
-              <p>四校区（大学城/龙洞/东风路/揭阳）铃声预设，单门选修课可独立覆盖作息时间。</p>
-            </article>
-
-            <article class="feat-card feat-span-2">
+            <article class="feat-card feat-span-2" data-reveal>
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9h10M7 13h6"/><circle cx="16.5" cy="14.5" r="2"/></svg>
               </div>
@@ -145,23 +224,31 @@
               <p><code>今日</code> 与 <code>下一日程</code> 小组件直显考试地点与座位号（如 <code>教1-203 · 18座</code>）。</p>
             </article>
 
-            <article class="feat-card feat-span-2">
+            <article class="feat-card feat-span-2" data-reveal data-delay="1">
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4z"/><path d="M9.5 12l2 2 3.5-4"/></svg>
               </div>
               <h4>教务直连 &amp; 体测成绩</h4>
               <p>AES 加密统一认证登录、全学期课表与实验分批折叠、每周增量同步、单周调课「课表选位」、体测成绩查询。</p>
             </article>
+
+            <article class="feat-card feat-span-2" data-reveal data-delay="2">
+              <div class="feat-ic">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              </div>
+              <h4>单课独立校区作息</h4>
+              <p>支持四校区铃声预设，遇到特殊跨区选修课也可单独覆盖作息，日常无感省心。</p>
+            </article>
           </div>
         </div>
 
         <div class="track">
-          <div class="track-head">
+          <div class="track-head" data-reveal>
             <span class="track-badge">日常效率</span>
             <h3 class="track-title">日程、待办与系统联动</h3>
           </div>
           <div class="bento-grid bento-grid--3">
-            <article class="feat-card">
+            <article class="feat-card" data-reveal>
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c4.5 3.5 7 7.5 7 11a7 7 0 1 1-14 0c0-3.5 2.5-7.5 7-11z"/></svg>
               </div>
@@ -169,7 +256,7 @@
               <p>今日 / 课表 / 日历 / 待办 / 我的，8 组低饱和植物色块、多套植物主题、动态取色与深浅双模式。</p>
             </article>
 
-            <article class="feat-card">
+            <article class="feat-card" data-reveal data-delay="1">
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h7"/><path d="M17 14l2 2 3-4"/></svg>
               </div>
@@ -177,59 +264,108 @@
               <p>底部单行自然语言录入与优先级高亮；自动提取快递取件短信生成票据胶囊，轻触复制不振动。</p>
             </article>
 
-            <article class="feat-card">
+            <article class="feat-card" data-reveal data-delay="2">
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>
               </div>
-              <h4>5 款桌面小组件 &amp; 系统护航</h4>
-              <p>今日日程/今日课表/待办清单/待取快递/下一件事；上课自动勿扰、国产 ROM 防杀 3 步自检、系统日历同步与 <code>.ics</code> 导出导入。</p>
-            </article>
-          </div>
-        </div>
-
-        <div class="track">
-          <div class="track-head">
-            <span class="track-badge">多端极客</span>
-            <h3 class="track-title">多端协同与极客扩展</h3>
-          </div>
-          <div class="bento-grid bento-grid--3">
-            <article class="feat-card">
-              <div class="feat-ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
-              </div>
-              <h4>局域网 Web 大屏管理</h4>
-              <p>手机一键启停本地服务端，电脑浏览器零安装管理课表与待办（无外链严格 CSP）。</p>
-            </article>
-
-            <article class="feat-card">
-              <div class="feat-ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.5-5.8L20 8"/><path d="M20 4v4h-4"/><path d="M20 12a8 8 0 0 1-13.5 5.8L4 16"/><path d="M4 20v-4h4"/></svg>
-              </div>
-              <h4>自建 Go + SQLite 多端同步</h4>
-              <p>单二进制轻量化服务端，多端增量同步、离线编辑冲突消解与完整 JSON 备份。</p>
-            </article>
-
-            <article class="feat-card">
-              <div class="feat-ic">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 9l-3 3 3 3M16 9l3 3-3 3M13 7l-2 10"/></svg>
-              </div>
-              <h4>AI MCP Server &amp; QuickJS 脚本</h4>
-              <p>本地/云端 MCP 工具接入 AI 助手自然语言调度日程；QuickJS 沙箱支持批量调停课与差异预览回滚。</p>
+              <h4>上课勿扰 &amp; 防杀护航</h4>
+              <p>上课自动勿扰、国产 ROM 后台保活 3 步自检、系统日历同步与 <code>.ics</code> 标准导入导出。</p>
             </article>
           </div>
         </div>
       </div>
     </section>
 
+    <!-- Obsidian Dark Ecosystem Showcase -->
+    <section class="section section--obsidian" id="geek-showcase">
+      <div class="wrap">
+        <div class="sec-head sec-head--split" data-reveal>
+          <div>
+            <span class="sec-eyebrow sec-eyebrow--dark">多端极客生态</span>
+            <h2 class="sec-title sec-title--dark">大屏与 AI，一键直连</h2>
+            <p class="sec-desc sec-desc--dark">手机端一键开启局域网共享，电脑浏览器零安装管理；配合 Go + SQLite 自建同步与 MCP 接口，让大模型直接帮你调度日程。</p>
+          </div>
+        </div>
+
+        <div class="obsidian-stage" data-reveal>
+          <div class="obs-phone-card">
+            <img src="./assets/shot-lan-web-dark.webp" width="1233" height="2673" alt="局域网共享开关">
+          </div>
+
+          <div class="obs-browser">
+            <div class="obs-browser-bar">
+              <span class="obs-dot"></span><span class="obs-dot"></span><span class="obs-dot"></span>
+              <span class="obs-url mono">http://192.168.1.24:8080/app/</span>
+            </div>
+            <div class="obs-browser-grid">
+              <div class="obs-day">周一</div><div class="obs-day">周二</div><div class="obs-day">周三</div><div class="obs-day">周四</div><div class="obs-day">周五</div>
+              <div class="obs-blk obs-blk--mint"><strong>高等数学</strong><span>教3-101</span></div>
+              <div class="obs-cell"></div>
+              <div class="obs-blk obs-blk--blue"><strong>大学物理</strong><span>教2-305</span></div>
+              <div class="obs-cell"></div>
+              <div class="obs-blk obs-blk--mint"><strong>数据结构</strong><span>实4-202</span></div>
+
+              <div class="obs-cell"></div>
+              <div class="obs-blk obs-blk--plum"><strong>英语听说</strong><span>教1-402</span></div>
+              <div class="obs-cell"></div>
+              <div class="obs-blk obs-blk--sage"><strong>线性代数</strong><span>教3-204</span></div>
+              <div class="obs-cell"></div>
+
+              <div class="obs-blk obs-blk--blue"><strong>信号系统</strong><span>教2-108</span></div>
+              <div class="obs-cell"></div>
+              <div class="obs-blk obs-blk--mint"><strong>软件工程</strong><span>教4-201</span></div>
+              <div class="obs-blk obs-blk--dashed"><strong>+ 自习预约</strong><span>周四 6–7 节</span></div>
+              <div class="obs-blk obs-blk--plum"><strong>物理实验</strong><span>实验楼 B</span></div>
+            </div>
+          </div>
+
+          <div class="obs-mcp-card">
+            <img src="./assets/shot-mcp.webp" width="1233" height="2673" alt="本地 MCP 服务">
+          </div>
+
+          <svg class="obs-beams" viewBox="0 0 1080 420" aria-hidden="true">
+            <path class="obs-beam-path" d="M 235 160 C 310 140, 355 120, 415 130" />
+            <path class="obs-beam-path obs-beam-path--delayed" d="M 235 190 C 440 280, 620 330, 770 290" />
+          </svg>
+        </div>
+
+        <div class="bento-grid bento-grid--3 obs-cards">
+          <article class="feat-card feat-card--dark" data-reveal>
+            <div class="feat-ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+            </div>
+            <h4>局域网 Web 大屏管理</h4>
+            <p>手机一键启停本地服务端，电脑浏览器零安装管理课表与待办（无外链严格 CSP）。</p>
+          </article>
+
+          <article class="feat-card feat-card--dark" data-reveal data-delay="1">
+            <div class="feat-ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.5-5.8L20 8"/><path d="M20 4v4h-4"/><path d="M20 12a8 8 0 0 1-13.5 5.8L4 16"/><path d="M4 20v-4h4"/></svg>
+            </div>
+            <h4>自建 Go + SQLite 多端同步</h4>
+            <p>单二进制轻量化服务端，多端增量同步、离线编辑冲突消解与完整 JSON 备份。</p>
+          </article>
+
+          <article class="feat-card feat-card--dark" data-reveal data-delay="2">
+            <div class="feat-ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 9l-3 3 3 3M16 9l3 3-3 3M13 7l-2 10"/></svg>
+            </div>
+            <h4>AI MCP Server &amp; QuickJS 脚本</h4>
+            <p>本地/云端 MCP 工具接入 AI 助手自然语言调度日程；QuickJS 沙箱支持批量调停课与差异预览回滚。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <section class="section" id="demo">
       <div class="wrap">
-        <div class="sec-head">
-          <span class="sec-eyebrow">功能实录</span>
+        <div class="sec-head" data-reveal>
+          <span class="sec-eyebrow">功能实录 · 1080p 60fps</span>
           <h2 class="sec-title">43 秒看懂薄荷广工</h2>
           <p class="sec-desc">点击下方章节胶囊，直接跳转对应画面片段。</p>
         </div>
 
-        <div class="demo-stage">
+        <div class="demo-stage" data-reveal>
           <video id="demoVideo" controls playsinline preload="metadata" poster="./assets/demo-poster.webp">
             <source src="./assets/demo.mp4" type="video/mp4">
           </video>
@@ -257,7 +393,7 @@
 
     <section class="section" id="screens">
       <div class="wrap">
-        <div class="sec-head sec-head--split">
+        <div class="sec-head sec-head--split" data-reveal>
           <div>
             <span class="sec-eyebrow">真实截图</span>
             <h2 class="sec-title">全场景界面一览</h2>
@@ -266,6 +402,7 @@
 
           <div class="gallery-controls">
             <div class="filter-pills" id="screenFilters" role="tablist" aria-label="界面分类筛选">
+              <span class="seg-thumb seg-thumb--small" aria-hidden="true"></span>
               <button type="button" role="tab" data-cat="all" aria-selected="true" class="is-active">全部</button>
               <button type="button" role="tab" data-cat="gdut" aria-selected="false">广工教务</button>
               <button type="button" role="tab" data-cat="daily" aria-selected="false">日常效率</button>
@@ -273,6 +410,7 @@
             </div>
 
             <div class="mode-switch" id="galleryModeSwitch" role="group" aria-label="截图主题模式">
+              <span class="seg-thumb seg-thumb--small" aria-hidden="true"></span>
               <button type="button" data-mode="light" aria-pressed="true" class="is-active">浅色</button>
               <button type="button" data-mode="dark" aria-pressed="false">深色</button>
             </div>
@@ -280,7 +418,7 @@
         </div>
 
         <div class="shot-grid" id="shotGrid">
-          <figure class="shot-card" data-cat="gdut" data-title="空教室查询" data-desc="5 校区筛选 + 节次过滤仅看空闲，快速定位可用自习室。">
+          <figure class="shot-card" data-cat="gdut" data-title="空教室查询" data-desc="5 校区筛选 + 节次过滤仅看空闲，快速定位可用自习室。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：空教室">
               <div class="shot-frame">
                 <img src="./assets/shot-classroom.webp" data-light="./assets/shot-classroom.webp" data-dark="./assets/shot-classroom-dark.webp" width="1233" height="2673" alt="空教室" loading="lazy">
@@ -289,7 +427,7 @@
             <figcaption>空教室</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="gdut" data-title="7×12 教室周课表" data-desc="自动叠加个人课表防撞车，长按框选空位直建日程。">
+          <figure class="shot-card" data-cat="gdut" data-title="7×12 教室周课表" data-desc="自动叠加个人课表防撞车，长按框选空位直建日程。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：教室周课表">
               <div class="shot-frame">
                 <img src="./assets/shot-classroom-grid.webp" data-light="./assets/shot-classroom-grid.webp" data-dark="./assets/shot-classroom-grid-dark.webp" width="1233" height="2673" alt="教室周课表" loading="lazy">
@@ -298,7 +436,7 @@
             <figcaption>教室周课表</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="gdut" data-title="成绩与均绩" data-desc="已获学分与总学分统计，按课程类别或单科勾选实时重算 GPA。">
+          <figure class="shot-card" data-cat="gdut" data-title="成绩与均绩" data-desc="已获学分与总学分统计，按课程类别或单科勾选实时重算 GPA。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：成绩与均绩">
               <div class="shot-frame">
                 <img src="./assets/shot-grades.webp" data-light="./assets/shot-grades.webp" data-dark="./assets/shot-grades-dark.webp" width="1233" height="2673" alt="成绩与均绩" loading="lazy">
@@ -307,7 +445,7 @@
             <figcaption>成绩与均绩</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="gdut" data-title="跨校区课设" data-desc="四校区铃声预设，单门选修课可独立覆盖作息时间。">
+          <figure class="shot-card" data-cat="gdut" data-title="跨校区课设" data-desc="四校区铃声预设，单门选修课可独立覆盖作息时间。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：跨校区课设">
               <div class="shot-frame">
                 <img src="./assets/shot-course-edit.webp" data-light="./assets/shot-course-edit.webp" data-dark="./assets/shot-course-edit-dark.webp" width="1233" height="2673" alt="跨校区课设" loading="lazy">
@@ -316,7 +454,7 @@
             <figcaption>跨校区课设</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="gdut" data-title="广工教务直连" data-desc="AES 加密统一认证登录，支持全学期课表与每周增量同步。">
+          <figure class="shot-card" data-cat="gdut" data-title="广工教务直连" data-desc="AES 加密统一认证登录，支持全学期课表与每周增量同步。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：广工教务">
               <div class="shot-frame">
                 <img src="./assets/shot-jxfw.webp" data-light="./assets/shot-jxfw.webp" width="1233" height="2673" alt="广工教务" loading="lazy">
@@ -325,7 +463,7 @@
             <figcaption>广工教务</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="gdut" data-title="体测成绩查询" data-desc="体测各项得分与等级明细一目了然，历史学期随时可查。">
+          <figure class="shot-card" data-cat="gdut" data-title="体测成绩查询" data-desc="体测各项得分与等级明细一目了然，历史学期随时可查。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：体测成绩">
               <div class="shot-frame">
                 <img src="./assets/shot-physical-test.webp" data-light="./assets/shot-physical-test.webp" width="1233" height="2673" alt="体测成绩" loading="lazy">
@@ -334,7 +472,7 @@
             <figcaption>体测成绩</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="daily" data-title="今日视图" data-desc="今日日程、考场座位、待取快递与时间线流一屏总览。">
+          <figure class="shot-card" data-cat="daily" data-title="今日视图" data-desc="今日日程、考场座位、待取快递与时间线流一屏总览。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：今日">
               <div class="shot-frame">
                 <img src="./assets/shot-today.webp" data-light="./assets/shot-today.webp" data-dark="./assets/shot-today-dark.webp" width="1233" height="2673" alt="今日" loading="lazy">
@@ -343,7 +481,7 @@
             <figcaption>今日</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="daily" data-title="周课表视图" data-desc="低饱和植物色块区分课程，实验分批折叠不拥挤。">
+          <figure class="shot-card" data-cat="daily" data-title="周课表视图" data-desc="低饱和植物色块区分课程，实验分批折叠不拥挤。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：课表">
               <div class="shot-frame">
                 <img src="./assets/shot-timetable.webp" data-light="./assets/shot-timetable.webp" data-dark="./assets/shot-timetable-dark.webp" width="1233" height="2673" alt="课表" loading="lazy">
@@ -352,7 +490,7 @@
             <figcaption>课表</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="daily" data-title="日历视图" data-desc="教学周次与月历联动，日程密度与考试节点清晰标记。">
+          <figure class="shot-card" data-cat="daily" data-title="日历视图" data-desc="教学周次与月历联动，日程密度与考试节点清晰标记。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：日历">
               <div class="shot-frame">
                 <img src="./assets/shot-calendar.webp" data-light="./assets/shot-calendar.webp" data-dark="./assets/shot-calendar-dark.webp" width="1233" height="2673" alt="日历" loading="lazy">
@@ -361,7 +499,7 @@
             <figcaption>日历</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="daily" data-title="待办清单" data-desc="底部单行 NLP 自然语言快添，支持优先级高亮与 DDL 提醒。">
+          <figure class="shot-card" data-cat="daily" data-title="待办清单" data-desc="底部单行 NLP 自然语言快添，支持优先级高亮与 DDL 提醒。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：待办">
               <div class="shot-frame">
                 <img src="./assets/shot-todo.webp" data-light="./assets/shot-todo.webp" data-dark="./assets/shot-todo-dark.webp" width="1233" height="2673" alt="待办" loading="lazy">
@@ -370,7 +508,7 @@
             <figcaption>待办</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="daily" data-title="桌面小组件" data-desc="5 款薄荷桌面小组件，考场与座位号直接在桌面呈现。">
+          <figure class="shot-card" data-cat="daily" data-title="桌面小组件" data-desc="5 款薄荷桌面小组件，考场与座位号直接在桌面呈现。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：桌面小组件">
               <div class="shot-frame">
                 <img src="./assets/shot-widgets.webp" data-light="./assets/shot-widgets.webp" data-dark="./assets/shot-widgets-dark.webp" width="1233" height="2673" alt="桌面小组件" loading="lazy">
@@ -379,7 +517,7 @@
             <figcaption>桌面小组件</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="daily" data-title="快递取件胶囊" data-desc="自动提取取件短信生成票据胶囊，轻触复制取件码不振动。">
+          <figure class="shot-card" data-cat="daily" data-title="快递取件胶囊" data-desc="自动提取取件短信生成票据胶囊，轻触复制取件码不振动。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：快递取件">
               <div class="shot-frame">
                 <img src="./assets/shot-parcel.webp" data-light="./assets/shot-parcel.webp" width="1233" height="2673" alt="快递取件" loading="lazy">
@@ -388,7 +526,7 @@
             <figcaption>快递取件</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="daily" data-title="植物主题外观" data-desc="8 组低饱和植物色块、多套植物主题、动态取色与深浅双模式。">
+          <figure class="shot-card" data-cat="daily" data-title="植物主题外观" data-desc="8 组低饱和植物色块、多套植物主题、动态取色与深浅双模式。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：植物主题">
               <div class="shot-frame">
                 <img src="./assets/shot-appearance.webp" data-light="./assets/shot-appearance.webp" width="1233" height="2673" alt="植物主题" loading="lazy">
@@ -397,7 +535,7 @@
             <figcaption>植物主题</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="geek" data-title="局域网 Web 管理" data-desc="手机一键启停本地服务端，电脑浏览器零安装管理课表与待办。">
+          <figure class="shot-card" data-cat="geek" data-title="局域网 Web 管理" data-desc="手机一键启停本地服务端，电脑浏览器零安装管理课表与待办。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：局域网 Web">
               <div class="shot-frame">
                 <img src="./assets/shot-lan-web.webp" data-light="./assets/shot-lan-web.webp" data-dark="./assets/shot-lan-web-dark.webp" width="1233" height="2673" alt="局域网 Web" loading="lazy">
@@ -406,7 +544,7 @@
             <figcaption>局域网 Web</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="geek" data-title="自建 Go + SQLite 多端同步" data-desc="单二进制轻量化服务端，增量同步、离线冲突消解与完整 JSON 备份。">
+          <figure class="shot-card" data-cat="geek" data-title="自建 Go + SQLite 多端同步" data-desc="单二进制轻量化服务端，增量同步、离线冲突消解与完整 JSON 备份。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：多端同步">
               <div class="shot-frame">
                 <img src="./assets/shot-sync.webp" data-light="./assets/shot-sync.webp" width="1233" height="2673" alt="多端同步" loading="lazy">
@@ -415,7 +553,7 @@
             <figcaption>多端同步</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="geek" data-title="AI MCP &amp; QuickJS 脚本" data-desc="本地/云端 MCP 接入 AI 助手调度日程；QuickJS 沙箱支持批量调停课回滚。">
+          <figure class="shot-card" data-cat="geek" data-title="AI MCP &amp; QuickJS 脚本" data-desc="本地/云端 MCP 接入 AI 助手调度日程；QuickJS 沙箱支持批量调停课回滚。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：AI MCP">
               <div class="shot-frame">
                 <img src="./assets/shot-mcp.webp" data-light="./assets/shot-mcp.webp" width="1233" height="2673" alt="AI MCP" loading="lazy">
@@ -428,7 +566,7 @@
     </section>
 
     <section class="section" id="download">
-      <div class="wrap">
+      <div class="wrap" data-reveal>
         <div class="dl-sheet">
           <div class="dl-row dl-row--rec">
             <div class="dl-info">
@@ -455,7 +593,7 @@
         <img src="./assets/logo.svg" alt="" width="20" height="20">
         <span>薄荷广工</span>
         <span class="footer-sep" aria-hidden="true">/</span>
-        <span class="footer-note">AGPL-3.0</span>
+        <span class="footer-note">AGPL-3.0 · 纯净 · 免费 · 开源</span>
       </div>
       <div class="footer-links">
         <a href="./downloads/latest.json">latest.json</a>

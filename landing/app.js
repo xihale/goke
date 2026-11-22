@@ -1,10 +1,38 @@
-/* MintCal landing — 五栏预览、视频章节、界面筛选与深浅切换、最新发行包同步 */
+/* MintCal landing — Motion 编排、光刃斜切预览、小组件聚焦、BoxSel 交互试玩、截图筛选与释放同步 */
 (function () {
   'use strict';
 
-  /* 1. Hero 5-tab switcher & light/dark preview */
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* 0. Scroll-linked section reveal choreography */
+  var revealEls = Array.prototype.slice.call(document.querySelectorAll('[data-reveal]'));
+  if ('IntersectionObserver' in window && !reduceMotion) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-in');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.14, rootMargin: '0px 0px -24px 0px' });
+    revealEls.forEach(function (el) { io.observe(el); });
+  } else {
+    revealEls.forEach(function (el) { el.classList.add('is-in'); });
+  }
+
+  /* Helper: sliding pill thumb positioner */
+  function positionSmallThumb(container, btn) {
+    if (!container || !btn) return;
+    var thumb = container.querySelector('.seg-thumb--small');
+    if (!thumb) return;
+    thumb.style.width = btn.offsetWidth + 'px';
+    thumb.style.transform = 'translateX(' + (btn.offsetLeft - 4) + 'px)';
+  }
+
+  /* 1. Hero 5-tab switcher, 18-deg diagonal blade dark wipe, and subtle pointer tilt */
   var tablist = document.getElementById('heroTabs');
   var screen = document.getElementById('heroScreen');
+  var stage = document.getElementById('heroStage');
   if (tablist && screen) {
     var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
     var imgs = Array.prototype.slice.call(screen.querySelectorAll('.screen-img'));
@@ -53,21 +81,148 @@
 
     var heroThemeBtn = document.getElementById('heroThemeToggle');
     var heroThemeLabel = document.getElementById('heroThemeLabel');
+    var bladeTimer = null;
     if (heroThemeBtn) {
       heroThemeBtn.addEventListener('click', function () {
         var isDark = heroThemeBtn.getAttribute('aria-pressed') === 'true';
         var nextDark = !isDark;
         heroThemeBtn.setAttribute('aria-pressed', nextDark ? 'true' : 'false');
         if (heroThemeLabel) heroThemeLabel.textContent = nextDark ? '深色预览' : '浅色预览';
-        imgs.forEach(function (img) {
-          var nextSrc = img.getAttribute(nextDark ? 'data-dark' : 'data-light');
-          if (nextSrc) img.setAttribute('src', nextSrc);
-        });
+        if (bladeTimer) clearTimeout(bladeTimer);
+        screen.classList.add('is-blading');
+        screen.classList.toggle('is-dark', nextDark);
+        bladeTimer = setTimeout(function () {
+          screen.classList.remove('is-blading');
+        }, 640);
+      });
+    }
+
+    if (stage && !reduceMotion) {
+      stage.addEventListener('pointermove', function (e) {
+        if (e.pointerType !== 'mouse') return;
+        var rect = screen.getBoundingClientRect();
+        var nx = ((e.clientX - rect.left) / rect.width) - 0.5;
+        var ny = ((e.clientY - rect.top) / rect.height) - 0.5;
+        screen.style.setProperty('--tilt-x', (-ny * 6).toFixed(2) + 'deg');
+        screen.style.setProperty('--tilt-y', (nx * 7).toFixed(2) + 'deg');
+      });
+      stage.addEventListener('pointerleave', function () {
+        screen.style.setProperty('--tilt-x', '0deg');
+        screen.style.setProperty('--tilt-y', '0deg');
       });
     }
   }
 
-  /* 2. Demo video chapter jump pills */
+  /* 2. 5 Native Desktop Widgets Matrix spotlight interaction */
+  var widgetMatrix = document.getElementById('widgetMatrix');
+  if (widgetMatrix) {
+    var wCards = Array.prototype.slice.call(widgetMatrix.querySelectorAll('.w-card'));
+    widgetMatrix.classList.add('has-focus');
+    function focusWidget(target) {
+      wCards.forEach(function (c) { c.classList.toggle('is-focus', c === target); });
+    }
+    wCards.forEach(function (card) {
+      card.addEventListener('mouseenter', function () { focusWidget(card); });
+      card.addEventListener('click', function () { focusWidget(card); });
+    });
+  }
+
+  /* 3. Interactive 1:1 BoxSel Playground (auto-demo + real drag over Thu P6-P7) */
+  var pgLoupe = document.getElementById('pgLoupe');
+  var pgRipple = document.getElementById('pgRipple');
+  var pgBoxSel = document.getElementById('pgBoxSel');
+  var pgPill = document.getElementById('pgPill');
+  var pgReplay = document.getElementById('pgReplayBtn');
+  var pgStatus = document.getElementById('pgStatus');
+
+  if (pgLoupe && pgBoxSel && pgPill) {
+    var pgTimer = null;
+    function resetBoxSel() {
+      if (pgTimer) clearTimeout(pgTimer);
+      pgBoxSel.classList.remove('is-active', 'is-manual');
+      pgBoxSel.style.height = '0%';
+      pgPill.classList.remove('is-shown');
+      if (pgRipple) pgRipple.classList.remove('is-pop');
+    }
+
+    function playBoxSelDemo() {
+      resetBoxSel();
+      if (pgStatus) pgStatus.textContent = '长按周四第 6 节空白…';
+      if (pgRipple) {
+        void pgRipple.offsetWidth;
+        pgRipple.classList.add('is-pop');
+      }
+      pgTimer = setTimeout(function () {
+        pgBoxSel.classList.add('is-active');
+        pgBoxSel.style.height = '11.7%';
+        if (pgStatus) pgStatus.textContent = '向下拖拽选定 6–7 节…';
+        pgTimer = setTimeout(function () {
+          pgPill.classList.add('is-shown');
+          if (pgStatus) pgStatus.textContent = '已生成：教3-101 · 14:40–16:15';
+        }, 420);
+      }, 280);
+    }
+
+    if (pgReplay) {
+      pgReplay.addEventListener('click', playBoxSelDemo);
+    }
+
+    /* Interactive pointer drag inside #pgLoupe */
+    var dragging = false;
+    var startY = 0;
+    pgLoupe.addEventListener('pointerdown', function (e) {
+      dragging = true;
+      startY = e.clientY;
+      pgLoupe.setPointerCapture(e.pointerId);
+      resetBoxSel();
+      pgBoxSel.classList.add('is-active', 'is-manual');
+      pgBoxSel.style.height = '5.8%';
+      if (pgRipple) {
+        void pgRipple.offsetWidth;
+        pgRipple.classList.add('is-pop');
+      }
+      if (pgStatus) pgStatus.textContent = '拖拽中…松手创建日程';
+    });
+    pgLoupe.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      var dy = Math.max(0, e.clientY - startY);
+      var h = Math.min(18.0, 5.8 + (dy / 160) * 12.0);
+      pgBoxSel.style.height = h.toFixed(2) + '%';
+    });
+    function finishDrag() {
+      if (!dragging) return;
+      dragging = false;
+      pgBoxSel.classList.remove('is-manual');
+      var h = parseFloat(pgBoxSel.style.height || '5.8');
+      var twoSlots = h >= 8.5;
+      pgBoxSel.style.height = twoSlots ? '11.7%' : '5.9%';
+      pgPill.textContent = twoSlots
+        ? '+ 教3-101 · 周四 6–7 节 · 14:40–16:15'
+        : '+ 教3-101 · 周四 第 6 节 · 14:40–15:25';
+      pgPill.classList.add('is-shown');
+      if (pgStatus) pgStatus.textContent = '松手确认：已填入时间与教室';
+    }
+    pgLoupe.addEventListener('pointerup', finishDrag);
+    pgLoupe.addEventListener('pointercancel', finishDrag);
+
+    if ('IntersectionObserver' in window && !reduceMotion) {
+      var pgPlayed = false;
+      var pgIo = new IntersectionObserver(function (entries) {
+        if (entries[0] && entries[0].isIntersecting && !pgPlayed) {
+          pgPlayed = true;
+          setTimeout(playBoxSelDemo, 320);
+          pgIo.disconnect();
+        }
+      }, { threshold: 0.4 });
+      pgIo.observe(pgLoupe);
+    } else {
+      pgBoxSel.classList.add('is-active');
+      pgBoxSel.style.height = '11.7%';
+      pgPill.classList.add('is-shown');
+    }
+  }
+
+  /* 4. Demo video chapter jump pills */
   var video = document.getElementById('demoVideo');
   var chaptersWrap = document.getElementById('demoChapters');
   if (video && chaptersWrap) {
@@ -102,19 +257,18 @@
     });
   }
 
-  /* 3. Screens filter, light/dark toggle & lightbox */
+  /* 5. Screens filter, sliding thumbs, light/dark toggle & lightbox */
   var shotGrid = document.getElementById('shotGrid');
   var filterWrap = document.getElementById('screenFilters');
   var modeWrap = document.getElementById('galleryModeSwitch');
   if (shotGrid) {
     var cards = Array.prototype.slice.call(shotGrid.querySelectorAll('.shot-card'));
-    var currentCat = 'all';
 
     function applyFilter(cat) {
-      currentCat = cat;
       cards.forEach(function (card) {
         var match = cat === 'all' || card.getAttribute('data-cat') === cat;
         card.classList.toggle('is-hidden', !match);
+        if (match) card.classList.add('is-in');
       });
     }
 
@@ -128,9 +282,12 @@
             b.classList.toggle('is-active', on);
             b.setAttribute('aria-selected', on ? 'true' : 'false');
           });
+          positionSmallThumb(filterWrap, btn);
           applyFilter(cat);
         });
       });
+      var activeFilter = filterWrap.querySelector('.is-active') || filterBtns[0];
+      positionSmallThumb(filterWrap, activeFilter);
     }
 
     if (modeWrap) {
@@ -143,6 +300,7 @@
             b.classList.toggle('is-active', on);
             b.setAttribute('aria-pressed', on ? 'true' : 'false');
           });
+          positionSmallThumb(modeWrap, btn);
           cards.forEach(function (card) {
             var img = card.querySelector('img');
             if (!img) return;
@@ -151,7 +309,14 @@
           });
         });
       });
+      var activeMode = modeWrap.querySelector('.is-active') || modeBtns[0];
+      positionSmallThumb(modeWrap, activeMode);
     }
+
+    window.addEventListener('resize', function () {
+      if (filterWrap) positionSmallThumb(filterWrap, filterWrap.querySelector('.is-active'));
+      if (modeWrap) positionSmallThumb(modeWrap, modeWrap.querySelector('.is-active'));
+    });
 
     /* Lightbox */
     var lightbox = document.getElementById('shotLightbox');
@@ -192,9 +357,7 @@
 
     cards.forEach(function (card) {
       var btn = card.querySelector('.shot-btn');
-      if (btn) {
-        btn.addEventListener('click', function () { showCardInLightbox(card); });
-      }
+      if (btn) btn.addEventListener('click', function () { showCardInLightbox(card); });
     });
 
     if (lbClose && lightbox) {
@@ -212,11 +375,10 @@
     });
   }
 
-  /* 4. Hydrate latest release info from latest.json */
+  /* 6. Hydrate latest release info from latest.json */
   function formatMiB(bytes) {
     return (bytes / (1024 * 1024)).toFixed(2) + ' MiB';
   }
-
   function setText(id, text) {
     var el = document.getElementById(id);
     if (el) el.textContent = text;
