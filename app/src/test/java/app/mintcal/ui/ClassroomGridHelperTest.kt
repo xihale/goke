@@ -155,4 +155,13 @@ class ClassroomGridHelperTest {
         }
         rule.onNodeWithText("教3-101").assertIsDisplayed()
     }
+
+    @Test
+    fun cleanTeacherLabelStripsRoleTags() {
+        assertEquals("张三", ClassroomGridHelper.cleanTeacherLabel("张三[主讲]"))
+        assertEquals("李四", ClassroomGridHelper.cleanTeacherLabel("李四 [辅讲]"))
+        assertEquals("张三, 李四", ClassroomGridHelper.cleanTeacherLabel("张三[主讲], 李四[辅讲]"))
+        assertEquals("王五", ClassroomGridHelper.cleanTeacherLabel("王五"))
+        assertEquals("", ClassroomGridHelper.cleanTeacherLabel(""))
+    }
 }

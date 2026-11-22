@@ -1097,4 +1097,17 @@
     <string name="classroom_detail_note">说明：%1$s</string>
     <string name="classroom_detail_close">关闭</string>
     <string name="classroom_unnamed_occupancy">已占用</string>
+    <string name="classroom_select_building">选择教学楼</string>
+    <string name="classroom_building_picker_cd">切换校区或教学楼</string>
+    <string name="classroom_building_search_hint">搜索教学楼或校区…</string>
+    <string name="classroom_building_search_empty">没有匹配的教学楼</string>
+    <string name="classroom_campus_building">%1$s · %2$s</string>
+    <string name="classroom_summary_count">共 %1$d 间 · %2$d 间空闲</string>
+    <string name="classroom_summary_week_range">第 %1$d 周 %2$d/%3$d–%4$d/%5$d</string>
+    <string name="classroom_week_capsule_range">第%1$d周 %2$d/%3$d–%4$d/%5$d</string>
+    <string name="classroom_timeline_morning">1–4</string>
+    <string name="classroom_timeline_afternoon">5–9</string>
+    <string name="classroom_timeline_evening">10–12</string>
+    <string name="classroom_box_preview_single">%1$s %2$s节 · %3$s–%4$s</string>
+    <string name="classroom_box_preview_multi">%1$s–%2$s %3$s节 · %4$s–%5$s</string>
 </resources>

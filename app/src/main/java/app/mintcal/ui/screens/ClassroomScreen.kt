@@ -1,7 +1,15 @@
 package app.mintcal.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -18,12 +26,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,14 +42,18 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.MeetingRoom
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -59,13 +74,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -73,6 +93,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.mintcal.R
@@ -98,17 +119,19 @@ import app.mintcal.ui.components.ChipPill
 import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
-import app.mintcal.ui.components.SectionLabel
 import app.mintcal.ui.components.Tag
+import app.mintcal.ui.components.TonalField
 import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.components.parcelCode
+import app.mintcal.ui.components.rememberModalSheetState
 import app.mintcal.ui.hm
 import app.mintcal.ui.liveSnapshot
+import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberToday
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.weekdayShort
-import kotlinx.coroutines.launch
 import java.time.LocalDate
+import kotlin.math.roundToInt
 
 internal enum class PeriodGroup(
     val code: String,
@@ -142,6 +165,9 @@ internal data class PersonalOverlayItem(
 internal object ClassroomGridHelper {
     private val BoundariesAbove8 = listOf(4, 8)
     private val BoundariesAbove4 = listOf(4)
+    private val TeacherRoleTagRegex = Regex("""\s*\[(?:主讲|辅讲)]""")
+
+    fun cleanTeacherLabel(teacher: String): String = teacher.replace(TeacherRoleTagRegex, "").trim()
 
     fun groupBoundaries(periodCount: Int): List<Int> =
         when {
@@ -438,6 +464,21 @@ fun ClassroomScreen(onBack: () -> Unit) {
             selectedRoomCode?.let { code -> currentRooms.firstOrNull { it.code == code } }
         }
 
+    // Silently prefetch next week's occupancy so horizontal week swiping feels instant
+    LaunchedEffect(jxfwState.loggedIn, activeBuilding?.code, selectedWeek, maxWeeks) {
+        val bCode = activeBuilding?.code ?: return@LaunchedEffect
+        if (!jxfwState.loggedIn || selectedWeek >= maxWeeks) return@LaunchedEffect
+        val nextStart = weekStartFor(selectedWeek + 1)
+        val key = bCode to nextStart
+        if (!occupancyByKey.containsKey(key)) {
+            runCatching {
+                app.jxfw.fetchClassroomWeekOccupancy(bCode, nextStart, forceRefresh = false)
+            }.onSuccess { occMap ->
+                occupancyByKey = occupancyByKey + (key to occMap)
+            }
+        }
+    }
+
     BackHandler(enabled = selectedRoom != null) {
         selectedRoomCode = null
     }
@@ -484,119 +525,162 @@ fun ClassroomScreen(onBack: () -> Unit) {
             return@MintScreen
         }
 
-        if (selectedRoom != null && activeBuilding != null) {
-            ClassroomRoomScheduleView(
-                building = activeBuilding,
-                room = selectedRoom,
-                fallbackCampus = fallbackCampus,
-                week = selectedWeek,
-                maxWeeks = maxWeeks,
-                weekStart = weekStart,
-                today = today,
-                snap = snap,
-                weekOccupancy = currentWeekOccupancy,
-                loading = roomLoading,
-                error = roomError,
-                errorKind = roomErrorKind,
-                overlayPersonal = overlayPersonal,
-                onToggleOverlay = { overlayPersonal = !overlayPersonal },
-                onWeekChange = { selectedWeek = it.coerceIn(1, maxWeeks) },
-                onRetry = {
-                    forceRefreshNext = true
-                    reloadToken++
-                },
-                onOpenJxfw = { nav.push(Route.Jxfw) },
-                onTapOccupancy = { detailOccupancy = it },
-                onSelectBox = { days, firstP, lastP, occByDay, personalByDay ->
-                    val sel =
-                        ClassroomGridHelper.resolveClassroomBoxSelection(
-                            buildingCampusCode = activeBuilding.campusCode,
-                            fallbackCampus = fallbackCampus,
-                            weekStart = weekStart,
-                            days = days,
-                            firstPeriod = firstP,
-                            lastPeriod = lastP,
-                            roomName = selectedRoom.name,
-                            roomOccupanciesByDay = occByDay,
-                            personalBusyByDay = personalByDay,
-                        ) ?: return@ClassroomRoomScheduleView
-                    if (sel.overlapsOccupancy || sel.overlapsPersonal) {
-                        actions.toast(ctx.getString(R.string.classroom_overlap_note))
-                    }
-                    nav.push(
-                        Route.TodoEdit(
-                            id = null,
-                            date = sel.date,
-                            start = sel.start,
-                            end = sel.end,
-                            location = sel.location,
-                            extraDates = sel.extraDates,
-                        ),
-                    )
-                },
-            )
-        } else {
-            val targetDate = weekStart.plusDays((selectedDayOfWeek - 1).toLong())
-            val dayOccupancies = currentWeekOccupancy[targetDate].orEmpty()
-            val targetPeriods =
-                remember(selectedPeriodGroups) {
-                    selectedPeriodGroups.flatMapTo(HashSet()) { it.periods }
-                }
-            val displayedRooms =
-                remember(currentRooms, dayOccupancies, targetPeriods, onlyFree) {
-                    if (!onlyFree) {
-                        currentRooms
-                    } else {
-                        currentRooms.filter { room ->
-                            ClassroomGridHelper.isRoomFree(dayOccupancies, room.code, targetPeriods)
-                        }
-                    }
-                }
+        val isLoading = buildingsLoading || roomLoading
+        val reduce = reduceMotion()
+        val slideSpec = MintTheme.spec<IntOffset>()
+        val fadeSpec = MintTheme.spec<Float>()
 
-            ClassroomFinderView(
-                campuses = campuses,
-                activeCampus = activeCampus,
-                onSelectCampus = {
-                    selectedCampus = it
-                    selectedBuildingCode = null
-                    selectedRoomCode = null
+        Box(Modifier.fillMaxSize()) {
+            AnimatedContent(
+                targetState = selectedRoom != null && activeBuilding != null,
+                transitionSpec = {
+                    if (reduce) {
+                        fadeIn(fadeSpec) togetherWith fadeOut(fadeSpec)
+                    } else if (targetState) {
+                        (slideInHorizontally(slideSpec) { it / 4 } + fadeIn(fadeSpec)) togetherWith
+                            (slideOutHorizontally(slideSpec) { -it / 4 } + fadeOut(fadeSpec))
+                    } else {
+                        (slideInHorizontally(slideSpec) { -it / 4 } + fadeIn(fadeSpec)) togetherWith
+                            (slideOutHorizontally(slideSpec) { it / 4 } + fadeOut(fadeSpec))
+                    }
                 },
-                buildings = campusBuildings,
-                activeBuilding = activeBuilding,
-                onSelectBuilding = {
-                    selectedBuildingCode = it.code
-                    selectedRoomCode = null
-                },
-                week = selectedWeek,
-                maxWeeks = maxWeeks,
-                weekStart = weekStart,
-                onWeekChange = { selectedWeek = it.coerceIn(1, maxWeeks) },
-                selectedDayOfWeek = selectedDayOfWeek,
-                onSelectDayOfWeek = { selectedDayOfWeek = it },
-                selectedPeriodGroups = selectedPeriodGroups,
-                onTogglePeriodGroup = { grp ->
-                    selectedPeriodGroups =
-                        if (grp in selectedPeriodGroups) {
-                            selectedPeriodGroups - grp
-                        } else {
-                            selectedPeriodGroups + grp
+                label = "classroom-mode",
+            ) { showingSchedule ->
+                val room = selectedRoom
+                val building = activeBuilding
+                if (showingSchedule && room != null && building != null) {
+                    ClassroomRoomScheduleView(
+                        building = building,
+                        room = room,
+                        fallbackCampus = fallbackCampus,
+                        week = selectedWeek,
+                        maxWeeks = maxWeeks,
+                        weekStartFor = ::weekStartFor,
+                        today = today,
+                        snap = snap,
+                        occupancyForWeek = { ws -> occupancyByKey[building.code to ws].orEmpty() },
+                        error = roomError,
+                        errorKind = roomErrorKind,
+                        overlayPersonal = overlayPersonal,
+                        onToggleOverlay = { overlayPersonal = !overlayPersonal },
+                        onWeekChange = { selectedWeek = it.coerceIn(1, maxWeeks) },
+                        onRetry = {
+                            forceRefreshNext = true
+                            reloadToken++
+                        },
+                        onOpenJxfw = { nav.push(Route.Jxfw) },
+                        onTapOccupancy = { detailOccupancy = it },
+                        onSelectBox = { boxWeekStart, days, firstP, lastP, occByDay, personalByDay ->
+                            val sel =
+                                ClassroomGridHelper.resolveClassroomBoxSelection(
+                                    buildingCampusCode = building.campusCode,
+                                    fallbackCampus = fallbackCampus,
+                                    weekStart = boxWeekStart,
+                                    days = days,
+                                    firstPeriod = firstP,
+                                    lastPeriod = lastP,
+                                    roomName = room.name,
+                                    roomOccupanciesByDay = occByDay,
+                                    personalBusyByDay = personalByDay,
+                                ) ?: return@ClassroomRoomScheduleView
+                            if (sel.overlapsOccupancy || sel.overlapsPersonal) {
+                                actions.toast(ctx.getString(R.string.classroom_overlap_note))
+                            }
+                            nav.push(
+                                Route.TodoEdit(
+                                    id = null,
+                                    date = sel.date,
+                                    start = sel.start,
+                                    end = sel.end,
+                                    location = sel.location,
+                                    extraDates = sel.extraDates,
+                                ),
+                            )
+                        },
+                    )
+                } else {
+                    val targetDate = weekStart.plusDays((selectedDayOfWeek - 1).toLong())
+                    val dayOccupancies = currentWeekOccupancy[targetDate].orEmpty()
+                    val targetPeriods =
+                        remember(selectedPeriodGroups) {
+                            selectedPeriodGroups.flatMapTo(HashSet()) { it.periods }
                         }
-                },
-                onlyFree = onlyFree,
-                onToggleOnlyFree = { onlyFree = !onlyFree },
-                rooms = displayedRooms,
-                dayOccupancies = dayOccupancies,
-                targetPeriods = targetPeriods,
-                loading = buildingsLoading || roomLoading,
-                error = buildingsError ?: roomError,
-                errorKind = buildingsErrorKind ?: roomErrorKind,
-                onRetry = {
-                    forceRefreshNext = true
-                    reloadToken++
-                },
-                onOpenJxfw = { nav.push(Route.Jxfw) },
-                onSelectRoom = { room -> selectedRoomCode = room.code },
-            )
+                    val freeRoomsCount =
+                        remember(currentRooms, dayOccupancies, targetPeriods) {
+                            currentRooms.count { r ->
+                                ClassroomGridHelper.isRoomFree(dayOccupancies, r.code, targetPeriods)
+                            }
+                        }
+                    val displayedRooms =
+                        remember(currentRooms, dayOccupancies, targetPeriods, onlyFree) {
+                            if (!onlyFree) {
+                                currentRooms
+                            } else {
+                                currentRooms.filter { r ->
+                                    ClassroomGridHelper.isRoomFree(dayOccupancies, r.code, targetPeriods)
+                                }
+                            }
+                        }
+
+                    ClassroomFinderView(
+                        campuses = campuses,
+                        activeCampus = activeCampus,
+                        allBuildings = buildings,
+                        activeBuilding = activeBuilding,
+                        onSelectBuilding = { b ->
+                            if (b.campusName.isNotBlank()) {
+                                selectedCampus = b.campusName
+                            }
+                            selectedBuildingCode = b.code
+                            selectedRoomCode = null
+                        },
+                        week = selectedWeek,
+                        maxWeeks = maxWeeks,
+                        weekStart = weekStart,
+                        today = today,
+                        onWeekChange = { selectedWeek = it.coerceIn(1, maxWeeks) },
+                        selectedDayOfWeek = selectedDayOfWeek,
+                        onSelectDayOfWeek = { selectedDayOfWeek = it },
+                        selectedPeriodGroups = selectedPeriodGroups,
+                        onTogglePeriodGroup = { grp ->
+                            selectedPeriodGroups =
+                                if (grp in selectedPeriodGroups) {
+                                    selectedPeriodGroups - grp
+                                } else {
+                                    selectedPeriodGroups + grp
+                                }
+                        },
+                        onlyFree = onlyFree,
+                        onToggleOnlyFree = { onlyFree = !onlyFree },
+                        rooms = displayedRooms,
+                        totalRoomsCount = currentRooms.size,
+                        freeRoomsCount = freeRoomsCount,
+                        dayOccupancies = dayOccupancies,
+                        targetPeriods = targetPeriods,
+                        loading = isLoading,
+                        error = buildingsError ?: roomError,
+                        errorKind = buildingsErrorKind ?: roomErrorKind,
+                        onRetry = {
+                            forceRefreshNext = true
+                            reloadToken++
+                        },
+                        onOpenJxfw = { nav.push(Route.Jxfw) },
+                        onSelectRoom = { r -> selectedRoomCode = r.code },
+                    )
+                }
+            }
+
+            AnimatedVisibility(
+                visible = isLoading,
+                enter = fadeIn(fadeSpec),
+                exit = fadeOut(fadeSpec),
+                modifier = Modifier.align(Alignment.TopCenter),
+            ) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                    trackColor = Color.Transparent,
+                )
+            }
         }
     }
 
@@ -612,17 +696,18 @@ fun ClassroomScreen(onBack: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ClassroomFinderView(
     campuses: List<String>,
     activeCampus: String?,
-    onSelectCampus: (String) -> Unit,
-    buildings: List<ClassroomBuilding>,
+    allBuildings: List<ClassroomBuilding>,
     activeBuilding: ClassroomBuilding?,
     onSelectBuilding: (ClassroomBuilding) -> Unit,
     week: Int,
     maxWeeks: Int,
     weekStart: LocalDate,
+    today: LocalDate,
     onWeekChange: (Int) -> Unit,
     selectedDayOfWeek: Int,
     onSelectDayOfWeek: (Int) -> Unit,
@@ -631,6 +716,8 @@ private fun ClassroomFinderView(
     onlyFree: Boolean,
     onToggleOnlyFree: () -> Unit,
     rooms: List<ClassroomRoom>,
+    totalRoomsCount: Int,
+    freeRoomsCount: Int,
     dayOccupancies: List<ClassroomOccupancy>,
     targetPeriods: Set<Int>,
     loading: Boolean,
@@ -641,19 +728,36 @@ private fun ClassroomFinderView(
     onSelectRoom: (ClassroomRoom) -> Unit,
 ) {
     val ctx = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
     val weekdayLabels = remember(ctx) { (1..7).map { ctx.weekdayShort(it) } }
+    val dateSubStyle =
+        remember {
+            androidx.compose.ui.text
+                .TextStyle(fontSize = 10.sp, fontFeatureSettings = "tnum")
+        }
+    var showBuildingSheet by remember { mutableStateOf(false) }
+    val weekEnd = weekStart.plusDays(6)
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().navigationBarsPadding(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        if (loading) {
-            item(key = "loading") {
-                LinearProgressIndicator(Modifier.fillMaxWidth())
+    val selectorLabel =
+        when {
+            activeCampus != null && activeBuilding != null -> {
+                stringResource(R.string.classroom_campus_building, activeCampus, activeBuilding.name)
+            }
+
+            activeBuilding != null -> {
+                activeBuilding.name
+            }
+
+            else -> {
+                stringResource(R.string.classroom_select_building)
             }
         }
 
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         if (error != null) {
             item(key = "error") {
                 ClassroomErrorBanner(
@@ -665,89 +769,187 @@ private fun ClassroomFinderView(
             }
         }
 
-        if (campuses.isNotEmpty()) {
-            item(key = "campuses") {
+        // Single clean selector row: left building picker pill + right compact week capsule
+        item(key = "top-selector-row") {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = scheme.surfaceContainerHighest,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
+                            .clip(CircleShape)
+                            .semantics { role = Role.Button }
+                            .mintClickable(pressedScale = 0.97f) {
+                                if (allBuildings.isNotEmpty()) showBuildingSheet = true
+                            },
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            Icons.Rounded.MeetingRoom,
+                            contentDescription = null,
+                            tint = scheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            selectorLabel,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = scheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Icon(
+                            Icons.Rounded.KeyboardArrowDown,
+                            contentDescription = stringResource(R.string.classroom_building_picker_cd),
+                            tint = scheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+
+                CompactWeekCapsule(
+                    label = stringResource(R.string.classroom_week_label, week),
+                    canPrev = week > 1,
+                    canNext = week < maxWeeks,
+                    onPrev = { onWeekChange(week - 1) },
+                    onNext = { onWeekChange(week + 1) },
+                )
+            }
+        }
+
+        // Compact control panel MintCard: 7-col equal-width weekday strip + period quick-filter row
+        item(key = "control-panel") {
+            MintCard(color = scheme.surfaceContainerLow, shape = RoundedCornerShape(22.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    for (dow in 1..7) {
+                        val date = weekStart.plusDays((dow - 1).toLong())
+                        val isSelected = dow == selectedDayOfWeek
+                        val isToday = date == today
+                        val pillBg by animateColorAsState(
+                            if (isSelected) scheme.primaryContainer else Color.Transparent,
+                            MintTheme.spec(),
+                            label = "day-pill-bg",
+                        )
+                        val textColor =
+                            when {
+                                isSelected -> scheme.onPrimaryContainer
+                                isToday -> scheme.primary
+                                else -> scheme.onSurfaceVariant
+                            }
+                        Column(
+                            Modifier
+                                .weight(1f)
+                                .heightIn(min = 52.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(pillBg)
+                                .semantics {
+                                    role = Role.RadioButton
+                                    selected = isSelected
+                                }.mintClickable(pressedScale = 0.96f) { onSelectDayOfWeek(dow) }
+                                .padding(vertical = 6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                weekdayLabels[dow - 1],
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (isSelected || isToday) FontWeight.SemiBold else FontWeight.Medium,
+                                color = textColor,
+                                maxLines = 1,
+                            )
+                            Text(
+                                "${date.monthValue}/${date.dayOfMonth}",
+                                style = dateSubStyle,
+                                color = textColor.copy(alpha = if (isSelected) 0.92f else 0.72f),
+                                maxLines = 1,
+                            )
+                            if (isToday) {
+                                Box(
+                                    Modifier
+                                        .padding(top = 2.dp)
+                                        .size(4.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isSelected) scheme.onPrimaryContainer else scheme.primary),
+                                )
+                            } else {
+                                Spacer(Modifier.height(6.dp))
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    items(campuses, key = { it }) { campus ->
+                    item(key = "only-free") {
                         ChipPill(
-                            label = campus,
-                            on = campus == activeCampus,
-                            onClick = { onSelectCampus(campus) },
+                            label = stringResource(R.string.classroom_only_free),
+                            on = onlyFree,
+                            role = Role.Checkbox,
+                            onClick = onToggleOnlyFree,
+                        )
+                    }
+                    items(PeriodGroup.entries, key = { it.code }) { grp ->
+                        ChipPill(
+                            label = grp.code,
+                            on = grp in selectedPeriodGroups,
+                            role = Role.Checkbox,
+                            onClick = { onTogglePeriodGroup(grp) },
                         )
                     }
                 }
             }
         }
 
-        if (buildings.isNotEmpty()) {
-            item(key = "buildings") {
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+        // Compact count summary row
+        if (activeBuilding != null && totalRoomsCount > 0) {
+            item(key = "summary-row") {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    items(buildings, key = { it.code }) { b ->
-                        ChipPill(
-                            label = b.name,
-                            on = b.code == activeBuilding?.code,
-                            onClick = { onSelectBuilding(b) },
-                        )
-                    }
-                }
-            }
-        }
-
-        item(key = "week-switcher") {
-            WeekSwitcherRow(
-                week = week,
-                maxWeeks = maxWeeks,
-                weekStart = weekStart,
-                onWeekChange = onWeekChange,
-            )
-        }
-
-        item(key = "day-filter") {
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items((1..7).toList(), key = { it }) { dow ->
-                    ChipPill(
-                        label = weekdayLabels[dow - 1],
-                        on = dow == selectedDayOfWeek,
-                        onClick = { onSelectDayOfWeek(dow) },
+                    Text(
+                        stringResource(R.string.classroom_summary_count, totalRoomsCount, freeRoomsCount),
+                        style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                        color = scheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        stringResource(
+                            R.string.classroom_summary_week_range,
+                            week,
+                            weekStart.monthValue,
+                            weekStart.dayOfMonth,
+                            weekEnd.monthValue,
+                            weekEnd.dayOfMonth,
+                        ),
+                        style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                        color = scheme.onSurfaceVariant,
                     )
                 }
             }
         }
 
-        item(key = "period-filter") {
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                item(key = "only-free") {
-                    ChipPill(
-                        label = stringResource(R.string.classroom_only_free),
-                        on = onlyFree,
-                        role = Role.Checkbox,
-                        onClick = onToggleOnlyFree,
-                    )
-                }
-                items(PeriodGroup.entries, key = { it.code }) { grp ->
-                    ChipPill(
-                        label = grp.code,
-                        on = grp in selectedPeriodGroups,
-                        role = Role.Checkbox,
-                        onClick = { onTogglePeriodGroup(grp) },
-                    )
-                }
-            }
-        }
-
-        if (!loading && buildings.isEmpty() && error == null) {
+        if (!loading && allBuildings.isEmpty() && error == null) {
             item(key = "empty-buildings") {
                 EmptyState(
                     title = stringResource(R.string.classroom_empty_buildings),
@@ -769,8 +971,212 @@ private fun ClassroomFinderView(
                     room = room,
                     dayOccupancies = dayOccupancies,
                     targetPeriods = targetPeriods,
+                    modifier = Modifier.animateItem(),
                     onClick = { onSelectRoom(room) },
                 )
+            }
+        }
+    }
+
+    if (showBuildingSheet) {
+        ClassroomBuildingPickerSheet(
+            campuses = campuses,
+            activeCampus = activeCampus,
+            allBuildings = allBuildings,
+            activeBuildingCode = activeBuilding?.code,
+            onSelect = { b ->
+                onSelectBuilding(b)
+                showBuildingSheet = false
+            },
+            onDismiss = { showBuildingSheet = false },
+        )
+    }
+}
+
+@Composable
+private fun CompactWeekCapsule(
+    label: String,
+    canPrev: Boolean,
+    canNext: Boolean,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        shape = CircleShape,
+        color = scheme.surfaceContainerHighest,
+        modifier = modifier.heightIn(min = 48.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(width = 36.dp, height = 48.dp)
+                    .clip(CircleShape)
+                    .mintClickable(enabled = canPrev, pressedScale = 0.92f, role = Role.Button, onClick = onPrev),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                    contentDescription = stringResource(R.string.classroom_prev_week_cd),
+                    tint = if (canPrev) scheme.onSurface else scheme.onSurfaceVariant.copy(alpha = 0.35f),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                fontWeight = FontWeight.SemiBold,
+                color = scheme.onSurface,
+                maxLines = 1,
+                softWrap = false,
+            )
+            Box(
+                Modifier
+                    .size(width = 36.dp, height = 48.dp)
+                    .clip(CircleShape)
+                    .mintClickable(enabled = canNext, pressedScale = 0.92f, role = Role.Button, onClick = onNext),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    contentDescription = stringResource(R.string.classroom_next_week_cd),
+                    tint = if (canNext) scheme.onSurface else scheme.onSurfaceVariant.copy(alpha = 0.35f),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ClassroomBuildingPickerSheet(
+    campuses: List<String>,
+    activeCampus: String?,
+    allBuildings: List<ClassroomBuilding>,
+    activeBuildingCode: String?,
+    onSelect: (ClassroomBuilding) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    var sheetCampus by remember(activeCampus) { mutableStateOf(activeCampus ?: campuses.firstOrNull()) }
+    var query by remember { mutableStateOf("") }
+    val filtered =
+        remember(allBuildings, sheetCampus, query) {
+            val q = query.trim()
+            if (q.isNotEmpty()) {
+                allBuildings.filter {
+                    it.name.contains(q, ignoreCase = true) || it.campusName.contains(q, ignoreCase = true)
+                }
+            } else if (sheetCampus != null) {
+                allBuildings.filter { it.campusName == sheetCampus }
+            } else {
+                allBuildings
+            }
+        }
+    val rows = remember(filtered) { filtered.chunked(2) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalSheetState(),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                stringResource(R.string.classroom_select_building),
+                style = MaterialTheme.typography.titleLarge,
+            )
+            TonalField(
+                label = "",
+                value = query,
+                onChange = { query = it },
+                placeholder = stringResource(R.string.classroom_building_search_hint),
+            )
+            if (campuses.size > 1 && query.isBlank()) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(campuses, key = { it }) { campus ->
+                        ChipPill(
+                            label = campus,
+                            on = campus == sheetCampus,
+                            onClick = { sheetCampus = campus },
+                        )
+                    }
+                }
+            }
+            if (rows.isEmpty()) {
+                Text(
+                    stringResource(R.string.classroom_building_search_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 20.dp),
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(vertical = 4.dp),
+                ) {
+                    items(rows, key = { pair -> pair.joinToString(",") { it.code } }) { pair ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            pair.forEach { b ->
+                                val isSelected = b.code == activeBuildingCode
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (isSelected) scheme.primaryContainer else scheme.surfaceContainerHighest,
+                                    modifier =
+                                        Modifier
+                                            .weight(1f)
+                                            .heightIn(min = 48.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .semantics {
+                                                role = Role.RadioButton
+                                                selected = isSelected
+                                            }.mintClickable(pressedScale = 0.96f) { onSelect(b) },
+                                ) {
+                                    Column(
+                                        Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalArrangement = Arrangement.Center,
+                                    ) {
+                                        Text(
+                                            b.name,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                            color = if (isSelected) scheme.onPrimaryContainer else scheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        if (query.isNotBlank() && b.campusName.isNotBlank()) {
+                                            Text(
+                                                b.campusName,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (isSelected) scheme.onPrimaryContainer.copy(alpha = 0.8f) else scheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            if (pair.size == 1) {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -781,10 +1187,10 @@ private fun ClassroomRoomRow(
     room: ClassroomRoom,
     dayOccupancies: List<ClassroomOccupancy>,
     targetPeriods: Set<Int>,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val mintColors = MintTheme.colors
     val isFree =
         remember(dayOccupancies, room.code, targetPeriods) {
             ClassroomGridHelper.isRoomFree(dayOccupancies, room.code, targetPeriods)
@@ -793,14 +1199,17 @@ private fun ClassroomRoomRow(
         remember(dayOccupancies, room.code) {
             ClassroomGridHelper.roomDayAvailability(dayOccupancies, room.code)
         }
+    val captionStyle =
+        remember {
+            androidx.compose.ui.text
+                .TextStyle(fontSize = 10.sp, fontFeatureSettings = "tnum")
+        }
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .mintClickable(pressedScale = 0.98f, onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    MintCard(
+        modifier = modifier.fillMaxWidth(),
+        color = scheme.surfaceContainerLow,
+        shape = RoundedCornerShape(20.dp),
+        onClick = onClick,
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -830,42 +1239,72 @@ private fun ClassroomRoomRow(
             )
         }
 
+        Spacer(Modifier.height(10.dp))
+
         // 12-period day availability strip (grouped 1-4, 5-9, 10-12)
         Row(
             Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             for (p in 1..12) {
                 val type = availability[p]
                 val barColor =
                     when (type) {
-                        null -> scheme.surfaceContainerHighest
-                        OccupancyType.COURSE -> scheme.primary.copy(alpha = 0.65f)
-                        OccupancyType.BORROWED -> scheme.secondary.copy(alpha = 0.65f)
-                        OccupancyType.EXAM -> scheme.tertiary.copy(alpha = 0.65f)
-                        OccupancyType.LOCKED -> mintColors.removed.copy(alpha = 0.65f)
-                        OccupancyType.OTHER -> scheme.outline.copy(alpha = 0.55f)
+                        null -> scheme.primaryContainer.copy(alpha = 0.65f)
+                        OccupancyType.COURSE -> scheme.surfaceContainerHighest
+                        OccupancyType.BORROWED -> scheme.secondary.copy(alpha = 0.45f)
+                        OccupancyType.EXAM -> scheme.tertiary.copy(alpha = 0.45f)
+                        OccupancyType.LOCKED -> scheme.error.copy(alpha = 0.40f)
+                        OccupancyType.OTHER -> scheme.outline.copy(alpha = 0.30f)
                     }
                 val highlighted = p in targetPeriods
                 Box(
                     Modifier
                         .weight(1f)
-                        .height(6.dp)
-                        .clip(CircleShape)
+                        .height(7.dp)
+                        .clip(RoundedCornerShape(3.5.dp))
                         .background(barColor)
                         .then(
                             if (highlighted) {
-                                Modifier.border(1.dp, scheme.primary, CircleShape)
+                                Modifier.border(1.dp, scheme.primary, RoundedCornerShape(3.5.dp))
                             } else {
                                 Modifier
                             },
                         ),
                 )
                 if (p == 4 || p == 9) {
-                    Spacer(Modifier.width(3.dp))
+                    Spacer(Modifier.width(4.dp))
                 }
             }
+        }
+
+        Spacer(Modifier.height(4.dp))
+
+        Row(Modifier.fillMaxWidth()) {
+            Text(
+                stringResource(R.string.classroom_timeline_morning),
+                style = captionStyle,
+                color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(4f),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                stringResource(R.string.classroom_timeline_afternoon),
+                style = captionStyle,
+                color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(5f),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                stringResource(R.string.classroom_timeline_evening),
+                style = captionStyle,
+                color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(3f),
+            )
         }
     }
 }
@@ -877,11 +1316,10 @@ private fun ClassroomRoomScheduleView(
     fallbackCampus: GdutCampus,
     week: Int,
     maxWeeks: Int,
-    weekStart: LocalDate,
+    weekStartFor: (Int) -> LocalDate,
     today: LocalDate,
     snap: Snapshot,
-    weekOccupancy: Map<LocalDate, List<ClassroomOccupancy>>,
-    loading: Boolean,
+    occupancyForWeek: (LocalDate) -> Map<LocalDate, List<ClassroomOccupancy>>,
     error: String?,
     errorKind: JxfwException.Kind?,
     overlayPersonal: Boolean,
@@ -891,6 +1329,7 @@ private fun ClassroomRoomScheduleView(
     onOpenJxfw: () -> Unit,
     onTapOccupancy: (ClassroomOccupancy) -> Unit,
     onSelectBox: (
+        boxWeekStart: LocalDate,
         days: IntRange,
         firstPeriod: Int,
         lastPeriod: Int,
@@ -899,46 +1338,61 @@ private fun ClassroomRoomScheduleView(
     ) -> Unit,
 ) {
     val ctx = LocalContext.current
+    val reduce = reduceMotion()
     val campus = remember(building.campusCode, fallbackCampus) { JwcwxParse.resolveCampus(building.campusCode, fallbackCampus) }
     val periods = remember(campus) { GdutPeriods.forCampus(campus).sortedBy { it.index } }
+    val pageCount = maxWeeks.coerceAtLeast(1)
+    val pager = rememberPagerState(initialPage = (week - 1).coerceIn(0, pageCount - 1), pageCount = { pageCount })
+    val scroll = rememberScrollState()
 
-    val occByDay =
-        remember(weekOccupancy, room.code, weekStart) {
-            (1..7).associateWith { dow ->
-                val date = weekStart.plusDays((dow - 1).toLong())
-                weekOccupancy[date].orEmpty().filter { it.roomCode == room.code }
-            }
+    LaunchedEffect(week, reduce) {
+        val target = (week - 1).coerceIn(0, pageCount - 1)
+        if (pager.currentPage != target && !pager.isScrollInProgress) {
+            if (reduce) pager.scrollToPage(target) else pager.animateScrollToPage(target)
         }
-    val personalItems =
-        remember(snap, week, weekStart, periods, overlayPersonal) {
-            if (!overlayPersonal) {
-                emptyList()
-            } else {
-                ClassroomGridHelper.personalOverlayForWeek(snap, week, weekStart, periods)
-            }
+    }
+    LaunchedEffect(pager.settledPage) {
+        val settledWeek = pager.settledPage + 1
+        if (settledWeek != week) {
+            onWeekChange(settledWeek)
         }
-    val personalBusyByDay =
-        remember(personalItems) {
-            personalItems
-                .groupBy { it.dayOfWeek }
-                .mapValues { (_, list) ->
-                    list.flatMapTo(HashSet()) { it.startPeriod..it.endPeriod }
-                }
+    }
+
+    val currentWeekStart = weekStartFor(week)
+    val currentWeekEnd = currentWeekStart.plusDays(6)
+
+    val density = LocalDensity.current
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
+    val fallbackWidth =
+        with(density) {
+            val dmWidth = ctx.resources.displayMetrics.widthPixels
+            if (dmWidth > 0) dmWidth.toDp() else screenWidthDp
         }
+    var measuredWidthPx by remember { mutableIntStateOf(0) }
+    val gridWidth = if (measuredWidthPx > 0) with(density) { measuredWidthPx.toDp() } else fallbackWidth
 
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
+                .padding(horizontal = 16.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            WeekSwitcherRow(
-                week = week,
-                maxWeeks = maxWeeks,
-                weekStart = weekStart,
-                onWeekChange = onWeekChange,
+            CompactWeekCapsule(
+                label =
+                    stringResource(
+                        R.string.classroom_week_capsule_range,
+                        week,
+                        currentWeekStart.monthValue,
+                        currentWeekStart.dayOfMonth,
+                        currentWeekEnd.monthValue,
+                        currentWeekEnd.dayOfMonth,
+                    ),
+                canPrev = week > 1,
+                canNext = week < maxWeeks,
+                onPrev = { onWeekChange(week - 1) },
+                onNext = { onWeekChange(week + 1) },
                 modifier = Modifier.weight(1f),
             )
             ChipPill(
@@ -949,9 +1403,6 @@ private fun ClassroomRoomScheduleView(
             )
         }
 
-        if (loading) {
-            LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
-        }
         if (error != null) {
             Box(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
                 ClassroomErrorBanner(
@@ -970,33 +1421,57 @@ private fun ClassroomRoomScheduleView(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
         )
 
-        val density = LocalDensity.current
-        val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
-        val fallbackWidth =
-            with(density) {
-                val dmWidth = ctx.resources.displayMetrics.widthPixels
-                if (dmWidth > 0) dmWidth.toDp() else screenWidthDp
-            }
-        var measuredWidthPx by remember { mutableIntStateOf(0) }
-        val gridWidth = if (measuredWidthPx > 0) with(density) { measuredWidthPx.toDp() } else fallbackWidth
-
-        ClassroomWeekGrid(
-            periods = periods,
-            weekStart = weekStart,
-            today = today,
-            occByDay = occByDay,
-            personalItems = personalItems,
-            gridWidth = gridWidth,
+        HorizontalPager(
+            state = pager,
+            beyondViewportPageCount = 1,
             modifier =
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .onSizeChanged { measuredWidthPx = it.width },
-            onTapOccupancy = onTapOccupancy,
-            onSelectBox = { days, firstP, lastP ->
-                onSelectBox(days, firstP, lastP, occByDay, personalBusyByDay)
-            },
-        )
+        ) { page ->
+            val pageWeek = page + 1
+            val pageWeekStart = remember(pageWeek) { weekStartFor(pageWeek) }
+            val pageWeekOccupancy = occupancyForWeek(pageWeekStart)
+            val occByDay =
+                remember(pageWeekOccupancy, room.code, pageWeekStart) {
+                    (1..7).associateWith { dow ->
+                        val date = pageWeekStart.plusDays((dow - 1).toLong())
+                        pageWeekOccupancy[date].orEmpty().filter { it.roomCode == room.code }
+                    }
+                }
+            val personalItems =
+                remember(snap, pageWeek, pageWeekStart, periods, overlayPersonal) {
+                    if (!overlayPersonal) {
+                        emptyList()
+                    } else {
+                        ClassroomGridHelper.personalOverlayForWeek(snap, pageWeek, pageWeekStart, periods)
+                    }
+                }
+            val personalBusyByDay =
+                remember(personalItems) {
+                    personalItems
+                        .groupBy { it.dayOfWeek }
+                        .mapValues { (_, list) ->
+                            list.flatMapTo(HashSet()) { it.startPeriod..it.endPeriod }
+                        }
+                }
+
+            ClassroomWeekGrid(
+                periods = periods,
+                weekStart = pageWeekStart,
+                today = today,
+                occByDay = occByDay,
+                personalItems = personalItems,
+                gridWidth = gridWidth,
+                scroll = scroll,
+                modifier = Modifier.fillMaxSize(),
+                onTapOccupancy = onTapOccupancy,
+                onSelectBox = { days, firstP, lastP ->
+                    onSelectBox(pageWeekStart, days, firstP, lastP, occByDay, personalBusyByDay)
+                },
+            )
+        }
     }
 }
 
@@ -1008,12 +1483,15 @@ private fun ClassroomWeekGrid(
     occByDay: Map<Int, List<ClassroomOccupancy>>,
     personalItems: List<PersonalOverlayItem>,
     gridWidth: Dp,
+    scroll: androidx.compose.foundation.ScrollState,
     modifier: Modifier = Modifier,
     onTapOccupancy: (ClassroomOccupancy) -> Unit,
     onSelectBox: (days: IntRange, firstPeriod: Int, lastPeriod: Int) -> Unit,
 ) {
     val ctx = LocalContext.current
-    val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.35f)
+    val haptics = LocalHapticFeedback.current
+    val localDensity = LocalDensity.current
+    val fontScale = localDensity.fontScale.coerceIn(1f, 1.35f)
     val rowH = 54.dp * fontScale
     val groupGap = 10.dp
     val timeColW = 36.dp * fontScale
@@ -1037,7 +1515,6 @@ private fun ClassroomWeekGrid(
     val blockTitleStyle = remember(labelSmall) { labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp, letterSpacing = 0.sp) }
     val blockSubStyle = remember(labelSmall) { labelSmall.copy(fontSize = 9.5.sp, lineHeight = 11.sp, letterSpacing = 0.sp) }
     val weekdayShorts = remember(ctx) { (1..7).map { ctx.weekdayShort(it) } }
-    val scroll = rememberScrollState()
 
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(start = timeColW)) {
@@ -1076,13 +1553,26 @@ private fun ClassroomWeekGrid(
                     .drawBehind {
                         val startX = timeColW.toPx()
                         val lineW = (size.width - startX).coerceAtLeast(0f)
-                        val lineH = 1.dp.toPx()
+                        val slotLineH = 0.5.dp.toPx()
+                        val groupLineH = 1.dp.toPx()
+                        val slotLineColor = outline.copy(alpha = 0.25f)
+                        val groupLineColor = outline.copy(alpha = 0.65f)
+                        for (p in 1 until n) {
+                            if (p !in boundaries) {
+                                val y = (ClassroomGridHelper.calcPeriodTop(p, n, rowH, groupGap) + rowH).toPx()
+                                drawRect(
+                                    color = slotLineColor,
+                                    topLeft = Offset(startX, y),
+                                    size = Size(lineW, slotLineH),
+                                )
+                            }
+                        }
                         boundaries.forEach { b ->
                             val y = (ClassroomGridHelper.calcPeriodTop(b, n, rowH, groupGap) + rowH + groupGap / 2).toPx()
                             drawRect(
-                                color = outline,
+                                color = groupLineColor,
                                 topLeft = Offset(startX, y),
-                                size = Size(lineW, lineH),
+                                size = Size(lineW, groupLineH),
                             )
                         }
                     }.pointerInput(n, timeColW, rowH, occByDay) {
@@ -1134,6 +1624,7 @@ private fun ClassroomWeekGrid(
                                 if (off.x >= timeColPx) {
                                     anchorDay = colOf(off.x)
                                     anchorSlot = slotOf(off.y)
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                     box = ClassroomBoxSel(anchorDay, anchorDay, anchorSlot, anchorSlot)
                                 }
                             },
@@ -1142,7 +1633,11 @@ private fun ClassroomWeekGrid(
                                 change.consume()
                                 val d = colOf(change.position.x)
                                 val e = slotOf(change.position.y).coerceIn(1, n)
-                                box = b.copy(day2 = d, first = minOf(anchorSlot, e), last = maxOf(anchorSlot, e))
+                                val first = minOf(anchorSlot, e)
+                                val last = maxOf(anchorSlot, e)
+                                if (d != b.day2 || first != b.first || last != b.last) {
+                                    box = b.copy(day2 = d, first = first, last = last)
+                                }
                             },
                             onDragEnd = {
                                 box?.let { b ->
@@ -1206,8 +1701,8 @@ private fun ClassroomWeekGrid(
                                 .width(colW - 3.dp)
                                 .height(bottom - top)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(scheme.surfaceContainerHigh.copy(alpha = 0.72f))
-                                .border(1.dp, scheme.outline.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                                .background(scheme.surfaceContainerHighest.copy(alpha = 0.65f))
+                                .border(0.8.dp, scheme.outline.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
                                 .padding(4.dp),
                         ) {
                             Text(
@@ -1230,6 +1725,7 @@ private fun ClassroomWeekGrid(
                         val bottom = ClassroomGridHelper.calcPeriodTop(p2, n, rowH, groupGap) + rowH - 2.dp
                         val (bg, fg, badgeRes) = occupancyColorsAndBadge(occ.type)
                         val title = occ.courseName.ifBlank { occ.note.ifBlank { stringResource(R.string.classroom_unnamed_occupancy) } }
+                        val cleanedTeacher = remember(occ.teacher) { ClassroomGridHelper.cleanTeacherLabel(occ.teacher) }
                         Column(
                             Modifier
                                 .absoluteOffset(timeColW + colW * (dow - 1) + 1.5.dp, top)
@@ -1266,9 +1762,9 @@ private fun ClassroomWeekGrid(
                                 maxLines = 3,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            if (occ.teacher.isNotBlank()) {
+                            if (cleanedTeacher.isNotBlank()) {
                                 Text(
-                                    occ.teacher,
+                                    cleanedTeacher,
                                     style = blockSubStyle,
                                     color = fg.copy(alpha = 0.8f),
                                     maxLines = 1,
@@ -1279,23 +1775,91 @@ private fun ClassroomWeekGrid(
                     }
                 }
 
-                // BoxSel highlight
+                // BoxSel highlight + floating time preview badge positioned via IntOffset
                 box?.let { b ->
-                    val boxAlpha by animateFloatAsState(if (box != null) 1f else 0f, MintTheme.spec(), label = "classroom-box-sel")
+                    val boxAlpha by animateFloatAsState(1f, MintTheme.spec(), label = "classroom-box-sel")
                     val top = ClassroomGridHelper.calcPeriodTop(b.first, n, rowH, groupGap) + 2.dp
                     val bottom = ClassroomGridHelper.calcPeriodTop(b.last, n, rowH, groupGap) + rowH - 2.dp
                     val d1 = minOf(b.day1, b.day2)
                     val d2 = maxOf(b.day1, b.day2)
+                    val boxW = colW * (d2 - d1 + 1) - 3.dp
+                    val boxH = bottom - top
+                    val boxXPx = with(localDensity) { (timeColW + colW * (d1 - 1) + 1.5.dp).toPx() }.roundToInt()
+                    val boxYPx = with(localDensity) { top.toPx() }.roundToInt()
+
                     Box(
                         Modifier
+                            .offset { IntOffset(boxXPx, boxYPx) }
                             .graphicsLayer { alpha = boxAlpha }
-                            .absoluteOffset(timeColW + colW * (d1 - 1) + 1.5.dp, top)
-                            .width(colW * (d2 - d1 + 1) - 3.dp)
-                            .height(bottom - top)
+                            .width(boxW)
+                            .height(boxH)
                             .clip(RoundedCornerShape(14.dp))
-                            .background(scheme.primary.copy(alpha = 0.3f))
+                            .background(scheme.primary.copy(alpha = 0.28f))
                             .border(2.dp, scheme.primary, RoundedCornerShape(14.dp)),
                     )
+
+                    val startP = periods.firstOrNull { it.index == b.first }
+                    val endP = periods.firstOrNull { it.index == b.last }
+                    if (startP != null && endP != null) {
+                        val periodStr = if (b.first == b.last) "${b.first}" else "${b.first}–${b.last}"
+                        val badgeText =
+                            if (d1 == d2) {
+                                ctx.getString(
+                                    R.string.classroom_box_preview_single,
+                                    weekdayShorts[d1 - 1],
+                                    periodStr,
+                                    startP.start.hm(),
+                                    endP.end.hm(),
+                                )
+                            } else {
+                                ctx.getString(
+                                    R.string.classroom_box_preview_multi,
+                                    weekdayShorts[d1 - 1],
+                                    weekdayShorts[d2 - 1],
+                                    periodStr,
+                                    startP.start.hm(),
+                                    endP.end.hm(),
+                                )
+                            }
+                        val gridWPx = with(localDensity) { gridWidth.toPx() }.roundToInt()
+                        val timeColPx = with(localDensity) { timeColW.toPx() }.roundToInt()
+                        val boxWPx = with(localDensity) { boxW.toPx() }.roundToInt()
+                        val boxHPx = with(localDensity) { boxH.toPx() }.roundToInt()
+                        val gapPx = with(localDensity) { 6.dp.toPx() }.roundToInt()
+                        var badgeW by remember { mutableIntStateOf(0) }
+                        var badgeH by remember { mutableIntStateOf(0) }
+                        val badgeX =
+                            (boxXPx + (boxWPx - badgeW) / 2)
+                                .coerceIn(timeColPx, (gridWPx - badgeW).coerceAtLeast(timeColPx))
+                        val badgeY =
+                            if (b.first > 1 && boxYPx - badgeH - gapPx >= 0) {
+                                boxYPx - badgeH - gapPx
+                            } else {
+                                boxYPx + boxHPx + gapPx
+                            }
+
+                        Surface(
+                            shape = CircleShape,
+                            color = scheme.primary,
+                            shadowElevation = 4.dp,
+                            modifier =
+                                Modifier
+                                    .offset { IntOffset(badgeX, badgeY) }
+                                    .onSizeChanged {
+                                        badgeW = it.width
+                                        badgeH = it.height
+                                    },
+                        ) {
+                            Text(
+                                badgeText,
+                                style = labelSmall.copy(fontFeatureSettings = "tnum"),
+                                fontWeight = FontWeight.SemiBold,
+                                color = scheme.onPrimary,
+                                maxLines = 1,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1306,55 +1870,11 @@ private fun ClassroomWeekGrid(
 private fun occupancyColorsAndBadge(type: OccupancyType): Triple<Color, Color, Int> {
     val scheme = MaterialTheme.colorScheme
     return when (type) {
-        OccupancyType.COURSE -> Triple(scheme.primaryContainer, scheme.onPrimaryContainer, R.string.classroom_badge_course)
-        OccupancyType.BORROWED -> Triple(scheme.secondaryContainer, scheme.onSecondaryContainer, R.string.classroom_badge_borrowed)
-        OccupancyType.EXAM -> Triple(scheme.tertiaryContainer, scheme.onTertiaryContainer, R.string.classroom_badge_exam)
-        OccupancyType.LOCKED -> Triple(scheme.errorContainer, scheme.onErrorContainer, R.string.classroom_badge_locked)
-        OccupancyType.OTHER -> Triple(scheme.surfaceContainerHighest, scheme.onSurfaceVariant, R.string.classroom_badge_other)
-    }
-}
-
-@Composable
-private fun WeekSwitcherRow(
-    week: Int,
-    maxWeeks: Int,
-    weekStart: LocalDate,
-    onWeekChange: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val weekEnd = weekStart.plusDays(6)
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        IconButton(
-            onClick = { onWeekChange(week - 1) },
-            enabled = week > 1,
-        ) {
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, stringResource(R.string.classroom_prev_week_cd))
-        }
-        Column(
-            Modifier.weight(1f),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                stringResource(R.string.classroom_week_label, week),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                "${weekStart.monthValue}/${weekStart.dayOfMonth}–${weekEnd.monthValue}/${weekEnd.dayOfMonth}",
-                style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        IconButton(
-            onClick = { onWeekChange(week + 1) },
-            enabled = week < maxWeeks,
-        ) {
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, stringResource(R.string.classroom_next_week_cd))
-        }
+        OccupancyType.COURSE -> Triple(scheme.primaryContainer.copy(alpha = 0.85f), scheme.onPrimaryContainer, R.string.classroom_badge_course)
+        OccupancyType.BORROWED -> Triple(scheme.secondaryContainer.copy(alpha = 0.85f), scheme.onSecondaryContainer, R.string.classroom_badge_borrowed)
+        OccupancyType.EXAM -> Triple(scheme.tertiaryContainer.copy(alpha = 0.85f), scheme.onTertiaryContainer, R.string.classroom_badge_exam)
+        OccupancyType.LOCKED -> Triple(scheme.errorContainer.copy(alpha = 0.85f), scheme.onErrorContainer, R.string.classroom_badge_locked)
+        OccupancyType.OTHER -> Triple(scheme.surfaceContainerHigh, scheme.onSurfaceVariant, R.string.classroom_badge_other)
     }
 }
 
