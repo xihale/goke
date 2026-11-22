@@ -480,6 +480,7 @@ code {
 .feat-ic svg { width: 20px; height: 20px; }
 .feat-card h4 { font-size: 15.5px; font-weight: 650; line-height: 1.35; color: var(--ink); }
 .feat-card p { margin-top: 8px; font-size: 13.8px; line-height: 1.62; color: var(--ink-muted); }
+.feat-card p code { white-space: nowrap; }
 
 .feat-card--dark {
   background: rgba(255, 255, 255, 0.045);

@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Goke — 广工离线课表与校园日程</title>
-  <meta name="description" content="Goke（工课）是专为广工设计的 Android 课表与日程应用，仅 3.83 MiB，纯离线存储、无广告。涵盖教务课表同步、7×12 空教室框选、GPA 计算、体测查询、快递取件与 5 款桌面小组件。">
+  <title>Goke — 广工离线课表与日程</title>
+  <meta name="description" content="Goke（工课）是专为广工设计的 Android 离线课表与日程应用，3.83 MiB，无广告，AGPL-3.0 开源。">
   <meta name="theme-color" content="#F2F7F5">
   <link rel="canonical" href="https://mintcal.xeed.ink/">
   <meta property="og:title" content="Goke">
-  <meta property="og:description" content="为广工而写的轻量课表与校园日程。3.83 MiB，数据留本机，无广告。">
+  <meta property="og:description" content="为广工而写的离线课表与日程。3.83 MiB，无广告。">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://mintcal.xeed.ink/">
   <link rel="icon" href="./assets/logo.svg" type="image/svg+xml">
@@ -27,7 +27,7 @@
       <nav class="topnav" aria-label="页面导航">
         <a href="#widgets">小组件</a>
         <a href="#playground">空教室</a>
-        <a href="#features">特性</a>
+        <a href="#features">功能</a>
         <a href="#screens">界面</a>
         <a href="#download">下载</a>
         <a href="https://github.com/xihale/mintcal">GitHub</a>
@@ -49,7 +49,7 @@
           </a>
 
           <h1 class="display">Goke，<br>为广工而写</h1>
-          <p class="lead">安装包 <strong class="mono" id="heroLeadSize">3.83 MiB</strong>，无广告，数据存本机。支持广工教务同步、7×12 空教室、均绩体测、快递取件与 5 款桌面小组件。</p>
+          <p class="lead">Android 离线课表与日程，<strong class="mono" id="heroLeadSize">3.83 MiB</strong>，无广告。</p>
 
           <div class="cta-row">
             <a class="btn btn-primary btn-lg" id="heroApkBtn" href="./downloads/MintCal-0.0.1-beta.7-arm64-v8a.apk">
@@ -58,7 +58,7 @@
               <span class="btn-meta mono" id="heroBtnSize">3.83 MiB</span>
             </a>
             <a class="btn btn-tonal btn-lg" href="#playground">
-              <span>体验空教室框选</span>
+              <span>空教室框选</span>
             </a>
             <a class="btn btn-tonal btn-lg" href="https://github.com/xihale/mintcal">GitHub</a>
           </div>
@@ -109,7 +109,7 @@
           </div>
 
           <div class="hero-stage-meta">
-            <span class="hero-caption">点击底栏切换页面 · 右侧预览深浅色</span>
+            <span class="hero-caption">点按底栏预览</span>
             <button type="button" class="theme-pill" id="heroThemeToggle" aria-pressed="false" title="切换预览浅色/深色模式">
               <span class="theme-dot" aria-hidden="true"></span>
               <span id="heroThemeLabel">浅色预览</span>
@@ -124,11 +124,11 @@
       <div class="wrap">
         <div class="sec-head sec-head--split" data-reveal>
           <div>
-            <span class="sec-eyebrow">桌面微件</span>
+            <span class="sec-eyebrow">桌面</span>
             <h2 class="sec-title">5 款桌面小组件</h2>
-            <p class="sec-desc">在桌面查看下节课、今日安排、待办、取件码与考场座位。点击下方卡片预览。</p>
+            <p class="sec-desc">点按卡片预览。</p>
           </div>
-          <span class="stage-hint mono">5 款小组件</span>
+          <span class="stage-hint mono">Android Glance</span>
         </div>
 
         <div class="widget-matrix" id="widgetMatrix" data-reveal>
@@ -157,13 +157,13 @@
         <div class="pg-copy" data-reveal>
           <span class="sec-eyebrow sec-eyebrow--dark">7×12 周课表</span>
           <h2 class="sec-title sec-title--dark">空教室，按格框选</h2>
-          <p class="sec-desc sec-desc--dark">查看教3-101 的 7×12 周课表时自动叠加个人课表。在右侧 <strong>周四 6–7 节空位</strong> 按住下拉，松手记为日程。</p>
+          <p class="sec-desc sec-desc--dark">叠加个人课表，在右侧 <strong>周四 6–7 节</strong> 按住下拉框选。</p>
           <div class="pg-actions">
             <button type="button" class="btn btn-mint" id="pgReplayBtn">
               <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>
               <span>演示框选</span>
             </button>
-            <span class="pg-status mono" id="pgStatus">拖动右侧空白时段，或点击演示</span>
+            <span class="pg-status mono" id="pgStatus">拖动空白格，或点击演示</span>
           </div>
           <div class="pg-legend">
             <span><i class="dot-personal"></i> 个人已排课程</span>
@@ -187,47 +187,47 @@
     <section class="section" id="features">
       <div class="wrap">
         <div class="sec-head" data-reveal>
-          <span class="sec-eyebrow">核心功能</span>
+          <span class="sec-eyebrow">功能</span>
           <h2 class="sec-title">课表之外</h2>
-          <p class="sec-desc">广工教务、日常待办与系统集成。</p>
+          <p class="sec-desc">教务、日常与系统能力。</p>
         </div>
 
         <div class="track">
           <div class="track-head" data-reveal>
             <span class="track-badge track-badge--accent">教务</span>
-            <h3 class="track-title">广工教务集成</h3>
+            <h3 class="track-title">广工教务</h3>
           </div>
           <div class="bento-grid bento-grid--gdut">
             <article class="feat-card feat-card--highlight feat-span-3" data-reveal>
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16M15 4v16M3 10h18M3 15h18"/></svg>
               </div>
-              <h4>空教室与 7×12 周课表</h4>
-              <p>按教学楼与节次筛选当前空教室；进入单间周课表自动叠加个人课表，空白处长按框选建日程。</p>
+              <h4>空教室周课表</h4>
+              <p>按楼栋节次筛空位，叠加课表按格框选。</p>
             </article>
 
             <article class="feat-card feat-card--highlight feat-span-3" data-reveal data-delay="1">
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19h16"/><path d="M7 15V9"/><path d="M12 15V5"/><path d="M17 15v-3"/></svg>
               </div>
-              <h4>成绩单与 GPA 核算</h4>
-              <p>统计已修与总学分，支持按学期与课程性质筛选，点按单科可临时排除并重算加权均绩。</p>
+              <h4>成绩与均绩</h4>
+              <p>按学期与类别筛选，点选单科重算 GPA。</p>
             </article>
 
             <article class="feat-card feat-span-2" data-reveal>
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7 9h10M7 13h6"/><circle cx="16.5" cy="14.5" r="2"/></svg>
               </div>
-              <h4>桌面显示考场与座位号</h4>
-              <p><code>今日</code> 与 <code>下一件事</code> 小组件直接显示考场教室与座位号（如 <code>教1-203 · 18座</code>）。</p>
+              <h4>考场与座位号</h4>
+              <p>桌面小组件直接显示考场与座位（如 <code>教1-203 · 18座</code>）。</p>
             </article>
 
             <article class="feat-card feat-span-2" data-reveal data-delay="1">
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4z"/><path d="M9.5 12l2 2 3.5-4"/></svg>
               </div>
-              <h4>统一认证同步与体测</h4>
-              <p>AES 加密连接统一认证导入课表，自动折叠多机房实验课，支持周增量更新、单周调课与体测明细查询。</p>
+              <h4>教务同步与体测</h4>
+              <p>统一认证导入课表，同步查询体测明细。</p>
             </article>
 
             <article class="feat-card feat-span-2" data-reveal data-delay="2">
@@ -235,7 +235,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
               </div>
               <h4>分校区作息</h4>
-              <p>内置广工各校区作息表，单门课程可单独指定节次时间。</p>
+              <p>内置各校区作息表，单门课可独立指定节次。</p>
             </article>
           </div>
         </div>
@@ -243,31 +243,31 @@
         <div class="track">
           <div class="track-head" data-reveal>
             <span class="track-badge">日常</span>
-            <h3 class="track-title">日程、待办与系统体验</h3>
+            <h3 class="track-title">日程与提醒</h3>
           </div>
           <div class="bento-grid bento-grid--3">
             <article class="feat-card" data-reveal>
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c4.5 3.5 7 7.5 7 11a7 7 0 1 1-14 0c0-3.5 2.5-7.5 7-11z"/></svg>
               </div>
-              <h4>五栏结构与主题</h4>
-              <p>今日、课表、日历、待办、我的五栏分区；内置 6 套配色与 8 种课程色块，支持深色模式与壁纸取色。</p>
+              <h4>五栏与配色</h4>
+              <p>6 套配色与深色模式，支持壁纸取色。</p>
             </article>
 
             <article class="feat-card" data-reveal data-delay="1">
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h7"/><path d="M17 14l2 2 3-4"/></svg>
               </div>
-              <h4>自然语言待办与取件码</h4>
-              <p>底部单行输入解析日期时间（如「周三晚八点开会」）；本地规则从驿站短信提取取件码，点按复制。</p>
+              <h4>待办与取件码</h4>
+              <p>输入自然语言建待办，自动提取短信取件码。</p>
             </article>
 
             <article class="feat-card" data-reveal data-delay="2">
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>
               </div>
-              <h4>上课静音与提醒自检</h4>
-              <p>上课时段自动开启勿扰，内置后台权限自检；支持系统日历双向同步与 <code>.ics</code> 导入导出。</p>
+              <h4>上课静音与日历</h4>
+              <p>上课时段自动勿扰，支持系统日历与 <code>.ics</code> 互通。</p>
             </article>
           </div>
         </div>
@@ -279,9 +279,9 @@
       <div class="wrap">
         <div class="sec-head sec-head--split" data-reveal>
           <div>
-            <span class="sec-eyebrow sec-eyebrow--dark">电脑与扩展</span>
+            <span class="sec-eyebrow sec-eyebrow--dark">多端</span>
             <h2 class="sec-title sec-title--dark">大屏直连，本地 MCP</h2>
-            <p class="sec-desc sec-desc--dark">数据默认存本机，支持局域网网页编辑、自建同步服务端与 MCP 接口。</p>
+            <p class="sec-desc sec-desc--dark">数据默认存本机，可按需连接电脑与 AI。</p>
           </div>
         </div>
 
@@ -332,24 +332,24 @@
             <div class="feat-ic">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
             </div>
-            <h4>局域网网页管理</h4>
-            <p>开启手机共享开关后，同一网络下通过电脑浏览器编辑课表与待办，资源全部本地加载。</p>
+            <h4>局域网网页</h4>
+            <p>同一网络下用电脑浏览器编辑，全本地加载。</p>
           </article>
 
           <article class="feat-card feat-card--dark" data-reveal data-delay="1">
             <div class="feat-ic">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.5-5.8L20 8"/><path d="M20 4v4h-4"/><path d="M20 12a8 8 0 0 1-13.5 5.8L4 16"/><path d="M4 20v-4h4"/></svg>
             </div>
-            <h4>Go + SQLite 自建同步</h4>
-            <p>附带单二进制开源服务端，用于多设备同步与网页访问，支持整库 JSON 备份与还原。</p>
+            <h4>自建同步</h4>
+            <p>单二进制 Go + SQLite 服务端，支持整库 JSON 备份。</p>
           </article>
 
           <article class="feat-card feat-card--dark" data-reveal data-delay="2">
             <div class="feat-ic">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 9l-3 3 3 3M16 9l3 3-3 3M13 7l-2 10"/></svg>
             </div>
-            <h4>MCP 接口与 QuickJS 脚本</h4>
-            <p>通过本地或云端 MCP 供 AI 客户端读写日程；QuickJS 沙箱支持批量调停课，提交前可预览差异并撤销。</p>
+            <h4>MCP 与脚本</h4>
+            <p>本地或云端 MCP 接入 AI，QuickJS 沙箱支持撤销。</p>
           </article>
         </div>
       </div>
@@ -359,18 +359,18 @@
       <div class="wrap">
         <div class="sec-head sec-head--split" data-reveal>
           <div>
-            <span class="sec-eyebrow">真机截图</span>
+            <span class="sec-eyebrow">截图</span>
             <h2 class="sec-title">界面一览</h2>
-            <p class="sec-desc">按分类或深浅模式查看，点按放大。</p>
+            <p class="sec-desc">点按图片放大。</p>
           </div>
 
           <div class="gallery-controls">
             <div class="filter-pills" id="screenFilters" role="tablist" aria-label="界面分类筛选">
               <span class="seg-thumb seg-thumb--small" aria-hidden="true"></span>
               <button type="button" role="tab" data-cat="all" aria-selected="true" class="is-active">全部</button>
-              <button type="button" role="tab" data-cat="gdut" aria-selected="false">广工教务</button>
-              <button type="button" role="tab" data-cat="daily" aria-selected="false">日常使用</button>
-              <button type="button" role="tab" data-cat="geek" aria-selected="false">电脑与扩展</button>
+              <button type="button" role="tab" data-cat="gdut" aria-selected="false">教务</button>
+              <button type="button" role="tab" data-cat="daily" aria-selected="false">日常</button>
+              <button type="button" role="tab" data-cat="geek" aria-selected="false">多端</button>
             </div>
 
             <div class="mode-switch" id="galleryModeSwitch" role="group" aria-label="截图主题模式">
@@ -382,7 +382,7 @@
         </div>
 
         <div class="shot-grid" id="shotGrid">
-          <figure class="shot-card" data-cat="gdut" data-title="空教室查询" data-desc="按校区和节次筛选当前有空位的教室。" data-reveal>
+          <figure class="shot-card" data-cat="gdut" data-title="空教室" data-desc="按楼栋与节次筛选当前空位。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：空教室">
               <div class="shot-frame">
                 <img src="./assets/shot-classroom.webp" data-light="./assets/shot-classroom.webp" data-dark="./assets/shot-classroom-dark.webp" width="1233" height="2673" alt="空教室" loading="lazy">
@@ -391,7 +391,7 @@
             <figcaption>空教室</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="gdut" data-title="7×12 教室周课表" data-desc="自动叠上个人课表防时间冲突，空白处长按划选可以记日程。" data-reveal>
+          <figure class="shot-card" data-cat="gdut" data-title="教室周课表" data-desc="叠加个人课表，空白处长按框选。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：教室周课表">
               <div class="shot-frame">
                 <img src="./assets/shot-classroom-grid.webp" data-light="./assets/shot-classroom-grid.webp" data-dark="./assets/shot-classroom-grid-dark.webp" width="1233" height="2673" alt="教室周课表" loading="lazy">
@@ -400,7 +400,7 @@
             <figcaption>教室周课表</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="gdut" data-title="成绩与均绩" data-desc="统计已获学分与总学分，按类别或单科勾选重算 GPA。" data-reveal>
+          <figure class="shot-card" data-cat="gdut" data-title="成绩与均绩" data-desc="按类别筛选，点按单科重算 GPA。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：成绩与均绩">
               <div class="shot-frame">
                 <img src="./assets/shot-grades.webp" data-light="./assets/shot-grades.webp" data-dark="./assets/shot-grades-dark.webp" width="1233" height="2673" alt="成绩与均绩" loading="lazy">
@@ -409,7 +409,7 @@
             <figcaption>成绩与均绩</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="gdut" data-title="分校区作息" data-desc="内置各校区作息预设，单门课程可独立指定节次时间。" data-reveal>
+          <figure class="shot-card" data-cat="gdut" data-title="分校区作息" data-desc="单门课程独立指定校区节次。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：分校区作息">
               <div class="shot-frame">
                 <img src="./assets/shot-course-edit.webp" data-light="./assets/shot-course-edit.webp" data-dark="./assets/shot-course-edit-dark.webp" width="1233" height="2673" alt="分校区作息" loading="lazy">
@@ -418,7 +418,7 @@
             <figcaption>分校区作息</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="gdut" data-title="广工教务同步" data-desc="AES 加密走统一认证登录，导入整学期课表并每周增量更新。" data-reveal>
+          <figure class="shot-card" data-cat="gdut" data-title="广工教务" data-desc="统一认证导入课表与增量更新。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：广工教务">
               <div class="shot-frame">
                 <img src="./assets/shot-jxfw.webp" data-light="./assets/shot-jxfw.webp" width="1233" height="2673" alt="广工教务" loading="lazy">
@@ -427,7 +427,7 @@
             <figcaption>广工教务</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="gdut" data-title="体测成绩查询" data-desc="查看各学期体测得分与等级明细。" data-reveal>
+          <figure class="shot-card" data-cat="gdut" data-title="体测成绩" data-desc="历年体测总分与单项明细。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：体测成绩">
               <div class="shot-frame">
                 <img src="./assets/shot-physical-test.webp" data-light="./assets/shot-physical-test.webp" width="1233" height="2673" alt="体测成绩" loading="lazy">
@@ -436,7 +436,7 @@
             <figcaption>体测成绩</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="daily" data-title="今日" data-desc="当天的课程、考场座位、待取快递和待办。" data-reveal>
+          <figure class="shot-card" data-cat="daily" data-title="今日" data-desc="当天课程、考场、快递与待办。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：今日">
               <div class="shot-frame">
                 <img src="./assets/shot-today.webp" data-light="./assets/shot-today.webp" data-dark="./assets/shot-today-dark.webp" width="1233" height="2673" alt="今日" loading="lazy">
@@ -445,7 +445,7 @@
             <figcaption>今日</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="daily" data-title="周课表" data-desc="低饱和课程色块，同课多实验机房会自动折叠。" data-reveal>
+          <figure class="shot-card" data-cat="daily" data-title="课表" data-desc="周视图排课，多机房实验自动折叠。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：课表">
               <div class="shot-frame">
                 <img src="./assets/shot-timetable.webp" data-light="./assets/shot-timetable.webp" data-dark="./assets/shot-timetable-dark.webp" width="1233" height="2673" alt="课表" loading="lazy">
@@ -454,7 +454,7 @@
             <figcaption>课表</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="daily" data-title="日历" data-desc="教学周次与月历对照，标出日程密度与考试日期。" data-reveal>
+          <figure class="shot-card" data-cat="daily" data-title="日历" data-desc="教学周对照与考试日期标记。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：日历">
               <div class="shot-frame">
                 <img src="./assets/shot-calendar.webp" data-light="./assets/shot-calendar.webp" data-dark="./assets/shot-calendar-dark.webp" width="1233" height="2673" alt="日历" loading="lazy">
@@ -463,7 +463,7 @@
             <figcaption>日历</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="daily" data-title="待办清单" data-desc="底部单行输入识别日期时间，支持优先级和截止提醒。" data-reveal>
+          <figure class="shot-card" data-cat="daily" data-title="待办" data-desc="单行输入解析时间，支持优先级。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：待办">
               <div class="shot-frame">
                 <img src="./assets/shot-todo.webp" data-light="./assets/shot-todo.webp" data-dark="./assets/shot-todo-dark.webp" width="1233" height="2673" alt="待办" loading="lazy">
@@ -472,7 +472,7 @@
             <figcaption>待办</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="daily" data-title="桌面小组件" data-desc="5 款桌面小组件，下节课、取件码与考场座位直接呈现在桌面。" data-reveal>
+          <figure class="shot-card" data-cat="daily" data-title="桌面小组件" data-desc="5 款桌面微件，支持直接勾选。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：桌面小组件">
               <div class="shot-frame">
                 <img src="./assets/shot-widgets.webp" data-light="./assets/shot-widgets.webp" data-dark="./assets/shot-widgets-dark.webp" width="1233" height="2673" alt="桌面小组件" loading="lazy">
@@ -481,7 +481,7 @@
             <figcaption>桌面小组件</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="daily" data-title="快递取件胶囊" data-desc="本地规则自动解析驿站短信，轻点取件码即可复制。" data-reveal>
+          <figure class="shot-card" data-cat="daily" data-title="快递取件" data-desc="本地提取取件码，点按复制。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：快递取件">
               <div class="shot-frame">
                 <img src="./assets/shot-parcel.webp" data-light="./assets/shot-parcel.webp" width="1233" height="2673" alt="快递取件" loading="lazy">
@@ -490,7 +490,7 @@
             <figcaption>快递取件</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="daily" data-title="外观与主题" data-desc="6 套低饱和配色预设与 8 种课程色块，支持深色模式与壁纸取色。" data-reveal>
+          <figure class="shot-card" data-cat="daily" data-title="外观与主题" data-desc="6 套配色、深色模式与壁纸取色。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：外观与主题">
               <div class="shot-frame">
                 <img src="./assets/shot-appearance.webp" data-light="./assets/shot-appearance.webp" width="1233" height="2673" alt="外观与主题" loading="lazy">
@@ -499,7 +499,7 @@
             <figcaption>外观与主题</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="geek" data-title="局域网网页管理" data-desc="手机开启开关后，电脑浏览器可以直接编辑课表和待办。" data-reveal>
+          <figure class="shot-card" data-cat="geek" data-title="局域网 Web" data-desc="同网络下通过电脑浏览器编辑。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：局域网 Web">
               <div class="shot-frame">
                 <img src="./assets/shot-lan-web.webp" data-light="./assets/shot-lan-web.webp" data-dark="./assets/shot-lan-web-dark.webp" width="1233" height="2673" alt="局域网 Web" loading="lazy">
@@ -508,7 +508,7 @@
             <figcaption>局域网 Web</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="geek" data-title="自建 Go + SQLite 同步" data-desc="单二进制同步服务端，支持增量同步与整库 JSON 备份。" data-reveal>
+          <figure class="shot-card" data-cat="geek" data-title="多端同步" data-desc="自建 Go + SQLite 增量同步与备份。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：多端同步">
               <div class="shot-frame">
                 <img src="./assets/shot-sync.webp" data-light="./assets/shot-sync.webp" width="1233" height="2673" alt="多端同步" loading="lazy">
@@ -517,7 +517,7 @@
             <figcaption>多端同步</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="geek" data-title="MCP 接口与 QuickJS 脚本" data-desc="通过本地或云端 MCP 接给 AI 助手，QuickJS 支持修改差异预览与撤回。" data-reveal>
+          <figure class="shot-card" data-cat="geek" data-title="AI MCP" data-desc="本地与云端 MCP 接口，供 AI 读写。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：AI MCP">
               <div class="shot-frame">
                 <img src="./assets/shot-mcp.webp" data-light="./assets/shot-mcp.webp" width="1233" height="2673" alt="AI MCP" loading="lazy">
@@ -538,12 +538,12 @@
                 <span class="abi-name mono" id="dlApkName">MintCal-0.0.1-beta.7-arm64-v8a.apk</span>
                 <span class="tag-rec">arm64-v8a</span>
               </div>
-              <p>Android 8.0+ · <a href="https://github.com/xihale/mintcal#构建与测试">其他架构源码编译</a></p>
+              <p>Android 8.0+ · <a href="https://github.com/xihale/mintcal#构建与测试">源码构建</a></p>
               <p class="dl-meta mono" id="dlSha">SHA-256: ffff1a2f73ce77d52ca8e8dd687c4f3d16504fc783f50c17ccd2affc46f4d5be</p>
             </div>
             <div class="dl-act">
               <span class="dl-size mono" id="dlSize">3.83 MiB</span>
-              <a class="btn btn-primary btn-sm" id="dlApkBtn" href="./downloads/MintCal-0.0.1-beta.7-arm64-v8a.apk">直接下载</a>
+              <a class="btn btn-primary btn-sm" id="dlApkBtn" href="./downloads/MintCal-0.0.1-beta.7-arm64-v8a.apk">下载</a>
             </div>
           </div>
         </div>
