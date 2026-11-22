@@ -37,9 +37,19 @@
     var imgs = Array.prototype.slice.call(screen.querySelectorAll('.screen-img'));
     var hotspots = Array.prototype.slice.call(screen.querySelectorAll('.phone-nav-hotspot button'));
     var thumb = tablist.querySelector('.seg-thumb');
+    var currentIdx = -1;
+    var slideTimer = null;
+
+    function clearSlideClasses() {
+      imgs.forEach(function (img) {
+        img.classList.remove('is-animating', 'is-leaving');
+        img.style.transform = '';
+      });
+    }
 
     function activateTab(index, focusTab) {
       var i = (index + tabs.length) % tabs.length;
+      var prevIdx = currentIdx;
       var key = tabs[i].getAttribute('data-tab');
 
       tabs.forEach(function (btn, idx) {
@@ -49,10 +59,50 @@
         btn.tabIndex = on ? 0 : -1;
       });
 
-      imgs.forEach(function (img) {
-        img.classList.toggle('is-active', img.getAttribute('data-tab') === key);
-      });
+      if (slideTimer) {
+        clearTimeout(slideTimer);
+        slideTimer = null;
+      }
 
+      if (prevIdx >= 0 && prevIdx !== i && !reduceMotion) {
+        var dir = i > prevIdx ? 1 : -1;
+        var oldKey = tabs[prevIdx].getAttribute('data-tab');
+        clearSlideClasses();
+        imgs.forEach(function (img) {
+          var tab = img.getAttribute('data-tab');
+          if (tab === oldKey) {
+            img.classList.remove('is-active');
+            img.classList.add('is-leaving');
+          } else if (tab === key) {
+            img.classList.add('is-active');
+            img.style.transform = 'translateX(' + (dir * 100) + '%)';
+          } else {
+            img.classList.remove('is-active');
+          }
+        });
+        void screen.offsetWidth;
+        imgs.forEach(function (img) {
+          var tab = img.getAttribute('data-tab');
+          if (tab === oldKey) {
+            img.classList.add('is-animating');
+            img.style.transform = 'translateX(' + (-dir * 26) + '%)';
+          } else if (tab === key) {
+            img.classList.add('is-animating');
+            img.style.transform = 'translateX(0%)';
+          }
+        });
+        slideTimer = setTimeout(function () {
+          clearSlideClasses();
+          slideTimer = null;
+        }, 380);
+      } else {
+        clearSlideClasses();
+        imgs.forEach(function (img) {
+          img.classList.toggle('is-active', img.getAttribute('data-tab') === key);
+        });
+      }
+
+      currentIdx = i;
       if (thumb) thumb.style.transform = 'translateX(' + (i * 100) + '%)';
       if (focusTab) tabs[i].focus();
     }
