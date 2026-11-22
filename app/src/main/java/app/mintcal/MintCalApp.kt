@@ -14,6 +14,7 @@ import app.mintcal.data.SecretStore
 import app.mintcal.data.SettingsStore
 import app.mintcal.data.UpdateChecker
 import app.mintcal.jxfw.JxfwManager
+import app.mintcal.jxfw.TzcsManager
 import app.mintcal.lanweb.LanWebManager
 import app.mintcal.mcp.LocalMcpManager
 import app.mintcal.mcp.McpStore
@@ -62,6 +63,8 @@ open class MintCalApp : Application() {
         private set
     lateinit var jxfw: JxfwManager
         private set
+    lateinit var tzcs: TzcsManager
+        private set
     lateinit var lanWeb: LanWebManager
         private set
     lateinit var updateChecker: UpdateChecker
@@ -100,6 +103,7 @@ open class MintCalApp : Application() {
         sync = SyncManager(repo, SyncStore(this, secrets), scope)
         calendarSync = SystemCalendarSync(this, repo, settings, CalendarSyncStore(this), scope)
         jxfw = JxfwManager(this, repo, secrets)
+        tzcs = TzcsManager(this, secrets)
         lanWeb = LanWebManager(this, repo)
         updateChecker = UpdateChecker(settings)
         scope.launch {
@@ -108,6 +112,7 @@ open class MintCalApp : Application() {
             launch(Dispatchers.IO) {
                 parcelRules.preload()
                 jxfw.hydrate()
+                tzcs.hydrate()
                 sync.hydrate()
                 updateChecker.clearStalePendingUpdate(cacheDir)
                 Notifications.ensureChannels(this@MintCalApp)

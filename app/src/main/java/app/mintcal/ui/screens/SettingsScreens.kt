@@ -49,6 +49,7 @@ import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Grade
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
@@ -103,6 +104,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import app.mintcal.BuildConfig
 import app.mintcal.R
 import app.mintcal.core.jxfw.JxfwParse
+import app.mintcal.core.jxfw.TzcsParse
 import app.mintcal.data.DarkMode
 import app.mintcal.data.DownloadError
 import app.mintcal.data.InstallLaunchResult
@@ -237,6 +239,7 @@ fun SettingsScreen() {
                     }
                 FormSection(stringResource(R.string.me_hub_campus_section)) {
                     GradesNavRow { nav.push(Route.Grades) }
+                    PhysicalTestNavRow { nav.push(Route.PhysicalTest) }
                     NavRow(
                         stringResource(R.string.parcel_title),
                         null,
@@ -509,6 +512,27 @@ private fun GradesNavRow(onOpen: () -> Unit) {
         stringResource(R.string.grades_title),
         null,
         Icons.Rounded.Grade,
+        trailing = trailing,
+        onClick = onOpen,
+    )
+}
+
+@Composable
+private fun PhysicalTestNavRow(onOpen: () -> Unit) {
+    val app = LocalApp.current
+    val tzcsState by app.tzcs.state.collectAsState()
+    val latest = tzcsState.latestSummaryReport
+    val trailing =
+        if (latest != null && TzcsParse.hasRecordedScores(latest) && latest.totalScore.isNotBlank()) {
+            val scoreText = stringResource(R.string.tzcs_score_value, latest.totalScore)
+            if (latest.totalGrade.isNotBlank()) "$scoreText · ${latest.totalGrade}" else scoreText
+        } else {
+            null
+        }
+    NavRow(
+        stringResource(R.string.tzcs_title),
+        null,
+        Icons.Rounded.FitnessCenter,
         trailing = trailing,
         onClick = onOpen,
     )

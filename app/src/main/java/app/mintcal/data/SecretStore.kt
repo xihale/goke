@@ -118,6 +118,16 @@ class SecretStore(
 
     fun jxfwPassword(): String? = get("jxfw_password")
 
+    /** 体测平台（tzcs.gdut.edu.cn）密码：加密落盘，退出体测登录时清除。 */
+    fun setTzcsPassword(plain: String) = put("tzcs_password", plain)
+
+    fun tzcsPassword(): String? = get("tzcs_password")
+
+    /** 体测平台会话 Cookie（JSON）：加密落盘，用于会话未过期时免验证码刷新，退出登录或过期时清除。 */
+    fun setTzcsCookies(plain: String) = put("tzcs_cookies", plain)
+
+    fun tzcsCookies(): String? = get("tzcs_cookies")
+
     /** 本地 MCP 服务的 Bearer 令牌：加密落盘，仅用于本机或局域网 AI Agent 连接鉴权。 */
     override fun setMcpToken(plain: String) = put("mcp_token", plain)
 

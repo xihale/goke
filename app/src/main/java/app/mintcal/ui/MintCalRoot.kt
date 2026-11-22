@@ -91,6 +91,7 @@ import app.mintcal.ui.screens.LanWebScreen
 import app.mintcal.ui.screens.McpScreen
 import app.mintcal.ui.screens.ParcelScreen
 import app.mintcal.ui.screens.PeriodsScreen
+import app.mintcal.ui.screens.PhysicalTestScreen
 import app.mintcal.ui.screens.ReliabilityScreen
 import app.mintcal.ui.screens.SettingsScreen
 import app.mintcal.ui.screens.SyncScreen
@@ -354,6 +355,7 @@ fun NavGraphBuilder.mintDestinations(
     composable<Route.Sync> { SyncScreen(back) }
     composable<Route.Jxfw> { JxfwScreen(back) }
     composable<Route.Grades> { GradesScreen(back) }
+    composable<Route.PhysicalTest> { PhysicalTestScreen(back) }
     composable<Route.Reliability> { ReliabilityScreen(back) }
     composable<Route.Import> { e -> ImportScreen(e.toRoute<Route.Import>().uri, back) }
     composable<Route.CourseEdit> { e ->

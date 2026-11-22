@@ -90,6 +90,7 @@ import app.mintcal.ui.screens.McpScreen
 import app.mintcal.ui.screens.MorningSheet
 import app.mintcal.ui.screens.ParcelScreen
 import app.mintcal.ui.screens.PeriodsScreen
+import app.mintcal.ui.screens.PhysicalTestScreen
 import app.mintcal.ui.screens.ReliabilityScreen
 import app.mintcal.ui.screens.RepeatPickDialog
 import app.mintcal.ui.screens.RescheduleSheet
@@ -295,6 +296,7 @@ class ScreensSmokeTest {
                 "about" to { AboutScreen {} },
                 "mcp" to { McpScreen {} },
                 "grades" to { GradesScreen {} },
+                "physical_test" to { PhysicalTestScreen {} },
                 "lan_web" to { LanWebScreen {} },
                 "root_shell" to { MintCalRoot(app, null) {} },
             )
@@ -323,6 +325,7 @@ class ScreensSmokeTest {
                     "course_edit" to "course_edit_dark",
                     "widgets" to "widgets_dark",
                     "grades" to "grades_dark",
+                    "physical_test" to "physical_test_dark",
                     "lan_web" to "lan_web_dark",
                 )
             darkTargets.forEach { (keyName, shotName) ->
