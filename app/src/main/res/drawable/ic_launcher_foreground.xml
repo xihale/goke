@@ -7,26 +7,13 @@
     <group
         android:pivotX="256"
         android:pivotY="256"
-        android:scaleX="0.74"
-        android:scaleY="0.74"
-        android:translateY="-4">
+        android:scaleX="0.86"
+        android:scaleY="0.86">
         <path
             android:fillColor="#F2F7F5"
-            android:pathData="M160,136 H352 A48,48 0 0,1 400,184 V352 A48,48 0 0,1 352,400 H160 A48,48 0 0,1 112,352 V184 A48,48 0 0,1 160,136 Z" />
+            android:pathData="M130.00,184.00 A54.00,54.00 0 0,1 184.00,130.00 L259.15,130.00 A16.00,16.00 0 0,1 274.36,150.94 L202.88,370.94 A16.00,16.00 0 0,1 187.66,382.00 L161.18,382.00 A31.18,31.18 0 0,1 130.00,350.82 Z" />
         <path
-            android:fillColor="#CDEBE3"
-            android:pathData="M160,136 H352 A48,48 0 0,1 400,184 V220 H112 V184 A48,48 0 0,1 160,136 Z" />
-        <path
-            android:fillColor="#1B473F"
-            android:pathData="M192,96 A16,16 0 0,1 208,112 V156 A16,16 0 0,1 176,156 V112 A16,16 0 0,1 192,96 Z" />
-        <path
-            android:fillColor="#1B473F"
-            android:pathData="M320,96 A16,16 0 0,1 336,112 V156 A16,16 0 0,1 304,156 V112 A16,16 0 0,1 320,96 Z" />
-        <path
-            android:fillColor="#4FA796"
-            android:pathData="M256,366 C204,358 182,316 190,270 C234,274 260,296 256,366 Z" />
-        <path
-            android:fillColor="#7CCDBA"
-            android:pathData="M256,366 C264,314 292,290 334,290 C334,334 310,362 256,366 Z" />
+            android:fillColor="#8AE0CB"
+            android:pathData="M309.12,141.06 A16.00,16.00 0 0,1 324.34,130.00 L350.82,130.00 A31.18,31.18 0 0,1 382.00,161.18 L382.00,328.00 A54.00,54.00 0 0,1 328.00,382.00 L252.85,382.00 A16.00,16.00 0 0,1 237.64,361.06 Z" />
     </group>
 </vector>

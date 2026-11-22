@@ -60,7 +60,6 @@ import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.School
-import androidx.compose.material.icons.rounded.Spa
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material.icons.rounded.Widgets
@@ -90,6 +89,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -956,7 +956,7 @@ fun AboutScreen(onBack: () -> Unit) {
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        Icons.Rounded.Spa,
+                        painter = painterResource(R.drawable.ic_goke_mark),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(28.dp),

@@ -2,7 +2,7 @@
 <resources>
     <!-- 与 Theme.kt brandLight / web theme.js 同源；深色见 values-night。 -->
     <color name="window_bg">#F2F7F5</color>
-    <color name="ic_launcher_bg">#4FA796</color>
+    <color name="ic_launcher_bg">#286D62</color>
     <color name="widget_bg">#F2F7F5</color>
     <color name="widget_card">#FFFFFF</color>
     <color name="widget_text">#24312D</color>
