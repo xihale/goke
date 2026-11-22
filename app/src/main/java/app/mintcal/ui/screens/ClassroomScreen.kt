@@ -354,7 +354,10 @@ private data class ClassroomBoxSel(
 
 /** 「空教室」：按教学楼与节次查空闲教室，查看单间周课表并框选/点按新建日程。 */
 @Composable
-fun ClassroomScreen(onBack: () -> Unit) {
+fun ClassroomScreen(
+    onBack: () -> Unit,
+    initialRoomCode: String? = null,
+) {
     val ctx = LocalContext.current
     val app = LocalApp.current
     val nav = LocalNav.current
@@ -394,7 +397,7 @@ fun ClassroomScreen(onBack: () -> Unit) {
     var roomError by remember { mutableStateOf<String?>(null) }
     var roomErrorKind by remember { mutableStateOf<JxfwException.Kind?>(null) }
 
-    var selectedRoomCode by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedRoomCode by rememberSaveable(initialRoomCode) { mutableStateOf(initialRoomCode) }
     var overlayPersonal by rememberSaveable { mutableStateOf(true) }
     var detailOccupancy by remember { mutableStateOf<ClassroomOccupancy?>(null) }
     var reloadToken by remember { mutableIntStateOf(0) }

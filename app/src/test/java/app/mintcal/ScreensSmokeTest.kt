@@ -60,6 +60,7 @@ import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
 import app.mintcal.core.model.TaskList
 import app.mintcal.core.parcel.ParcelInfo
+import app.mintcal.core.time.SemesterCalendar
 import app.mintcal.core.util.Ids
 import app.mintcal.data.Attachments
 import app.mintcal.data.DarkMode
@@ -78,6 +79,7 @@ import app.mintcal.ui.rememberNav
 import app.mintcal.ui.screens.AboutScreen
 import app.mintcal.ui.screens.AppearanceScreen
 import app.mintcal.ui.screens.CalendarScreen
+import app.mintcal.ui.screens.ClassroomScreen
 import app.mintcal.ui.screens.CourseEditScreen
 import app.mintcal.ui.screens.DataScreen
 import app.mintcal.ui.screens.EditTimetableScreen
@@ -168,6 +170,21 @@ class ScreensSmokeTest {
                 )
             val meeting = Task(Ids.next(), "社团例会", listId = list.id, blockStart = today.atTime(19, 0), blockMinutes = 90, remindMinutes = 15)
             val exam = Task(Ids.next(), "考试：期末考试", blockStart = today.plusDays(10).atTime(9, 0), blockMinutes = 120, tags = listOf("考试"))
+            val nowDt = LocalDateTime.now()
+            val examStart = if (nowDt.hour < 21) nowDt.plusMinutes(30) else today.atTime(21, 0)
+            val examEnd = examStart.plusMinutes(120).let { if (it.toLocalDate() != today) today.atTime(23, 59) else it }
+            val examEvent =
+                Event(
+                    id = Ids.next(),
+                    title = "高等数学期末考",
+                    start = examStart,
+                    end = examEnd,
+                    location = "教1-203",
+                    note = "座位号 18",
+                    kind = EventKind.EXAM,
+                    colorIndex = 1,
+                    source = Source.MANUAL,
+                )
             val parcel =
                 ParcelTasks.build(
                     app,
@@ -180,7 +197,16 @@ class ScreensSmokeTest {
                         ruleId = "builtin",
                     ),
                 )
-            app.repo.commit(Edits.saveAll(app.repo.snapshot.value, listOf<app.mintcal.core.model.Record>(list) + tasks + meeting + exam + parcel, "seed", now))
+            app.repo.commit(
+                Edits.saveAll(
+                    app.repo.snapshot.value,
+                    listOf<app.mintcal.core.model.Record>(list) + tasks + meeting + exam + examEvent + parcel,
+                    "seed",
+                    now,
+                ),
+            )
+            val weekStart = SemesterCalendar(sem2).let { sCal -> sCal.weekStart(sCal.weekOf(today).coerceIn(1, sem2.totalWeeks)) }
+            app.jxfw.seedClassroomDemoForTest(weekStart)
         }
     }
 
@@ -296,6 +322,8 @@ class ScreensSmokeTest {
                 "about" to { AboutScreen {} },
                 "mcp" to { McpScreen {} },
                 "grades" to { GradesScreen {} },
+                "classroom" to { ClassroomScreen(onBack = {}) },
+                "classroom_grid" to { ClassroomScreen(onBack = {}, initialRoomCode = "011030101") },
                 "physical_test" to { PhysicalTestScreen {} },
                 "lan_web" to { LanWebScreen {} },
                 "root_shell" to { MintCalRoot(app, null) {} },
@@ -325,6 +353,8 @@ class ScreensSmokeTest {
                     "course_edit" to "course_edit_dark",
                     "widgets" to "widgets_dark",
                     "grades" to "grades_dark",
+                    "classroom" to "classroom_dark",
+                    "classroom_grid" to "classroom_grid_dark",
                     "physical_test" to "physical_test_dark",
                     "lan_web" to "lan_web_dark",
                 )
