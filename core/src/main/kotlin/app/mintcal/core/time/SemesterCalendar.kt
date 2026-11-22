@@ -1,6 +1,8 @@
 package app.mintcal.core.time
 
 import app.mintcal.core.model.Course
+import app.mintcal.core.model.GdutCampus
+import app.mintcal.core.model.GdutPeriods
 import app.mintcal.core.model.PeriodTime
 import app.mintcal.core.model.Semester
 import java.time.DayOfWeek
@@ -19,6 +21,12 @@ class SemesterCalendar(
 
     // 排序一次缓存：period()/startTime() 在每次课程展开里逐节调用，原来每口都重新 sortedBy
     val periods: List<PeriodTime> = semester.periods.sortedBy { it.index }
+
+    private val campusPeriods: Map<GdutCampus, List<PeriodTime>> by lazy {
+        GdutCampus.entries.associateWith { campus -> GdutPeriods.forCampus(campus).sortedBy { it.index } }
+    }
+
+    fun periodsFor(course: Course): List<PeriodTime> = course.campusOverride?.let { campusPeriods[it] } ?: periods
 
     /** 日期所在周次，学期开始前为 ≤0。 */
     fun weekOf(date: LocalDate): Int = Math.floorDiv(ChronoUnit.DAYS.between(base, date), 7L).toInt() + 1
@@ -44,6 +52,16 @@ class SemesterCalendar(
 
     fun endTime(period: Int): LocalTime? = period(period)?.end
 
+    fun startTime(
+        course: Course,
+        period: Int,
+    ): LocalTime? = periodsFor(course).firstOrNull { it.index == period }?.start
+
+    fun endTime(
+        course: Course,
+        period: Int,
+    ): LocalTime? = periodsFor(course).firstOrNull { it.index == period }?.end
+
     /** 起始时间落在哪一节（精确匹配开始时间，否则取最近的不晚于它的节次）。 */
     fun periodAtOrBefore(time: LocalTime): Int? = periods.lastOrNull { !it.start.isAfter(time) }?.index
 
@@ -55,7 +73,7 @@ class SemesterCalendar(
         dow: Int = course.dayOfWeek,
         startPeriod: Int = course.startPeriod,
     ): LocalDateTime? {
-        val t = startTime(startPeriod) ?: return null
+        val t = startTime(course, startPeriod) ?: return null
         return LocalDateTime.of(dateOf(week, dow), t)
     }
 
@@ -65,7 +83,7 @@ class SemesterCalendar(
         dow: Int = course.dayOfWeek,
         endPeriod: Int = course.endPeriod,
     ): LocalDateTime? {
-        val t = endTime(endPeriod) ?: return null
+        val t = endTime(course, endPeriod) ?: return null
         return LocalDateTime.of(dateOf(week, dow), t)
     }
 }

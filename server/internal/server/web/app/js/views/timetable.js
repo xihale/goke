@@ -3,7 +3,7 @@
 import { ctx } from '../ctx.js';
 import { h, icon } from '../dom.js';
 import { openCourseDetail, openCourseForm, openSemesterForm } from '../forms.js';
-import { currentSemester, expandCourses, semesterCalendar } from '../model.js';
+import { GDUT_CAMPUS_LABELS, currentSemester, expandCourses, semesterCalendar } from '../model.js';
 import { WEEKDAYS, dow, todayNum, ymd } from '../util.js';
 import { emptyState } from './shared.js';
 
@@ -115,11 +115,12 @@ export const timetableView = {
       if (r1 == null || r2 == null) continue;
       const span = o.endPeriod - o.startPeriod + 1;
       const c = o.course;
+      const campusNote = c.campusOverride && GDUT_CAMPUS_LABELS[c.campusOverride] ? `，${GDUT_CAMPUS_LABELS[c.campusOverride]}作息` : '';
       grid.append(h('button', {
         type: 'button',
         class: `tt-block c${c.colorIndex % 8}${o.rescheduled ? ' moved' : ''}${span === 1 ? ' short' : ''}`,
         style: { 'grid-row': `${r1 + 2} / ${r2 + 3}`, 'grid-column': dow(o.day) + 1, '--lane': o.lane, '--lanes': o.lanes },
-        'aria-label': `${c.name}，${WEEKDAYS[dow(o.day) - 1]}第${o.startPeriod}到${o.endPeriod}节${o.room ? `，${o.room}` : ''}`,
+        'aria-label': `${c.name}，${WEEKDAYS[dow(o.day) - 1]}第${o.startPeriod}到${o.endPeriod}节${o.room ? `，${o.room}` : ''}${campusNote}`,
         onclick: () => openCourseDetail(o),
       }, h('b', {}, c.name), o.room ? h('span', {}, o.room) : null, !o.room && c.teacher ? h('span', {}, c.teacher) : null));
     }

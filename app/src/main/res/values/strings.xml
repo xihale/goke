@@ -687,6 +687,7 @@
     <string name="widget_next_empty">当前空闲</string>
     <string name="widget_next_label">接下来</string>
     <string name="widget_ongoing">进行中</string>
+    <string name="widget_exam_seat_suffix">座</string>
     <!-- 系统日历双向同步 -->
     <string name="cal_sync_section">系统日历与桌面账号</string>
     <string name="cal_sync_enable">系统日历双向同步</string>
@@ -736,6 +737,8 @@
     <string name="remind_hours_value">提前 %1$d 小时</string>
     <string name="remind_follow_default">跟随默认（%1$s）</string>
     <string name="course_info_section">课程信息</string>
+    <string name="course_campus_override_label">上课校区（作息）</string>
+    <string name="course_campus_follow_semester">跟随学期默认</string>
     <string name="course_period_range_hint">再点一节设为结束</string>
     <string name="periods_morning">上午</string>
     <string name="periods_afternoon">下午</string>
@@ -910,6 +913,13 @@
     <string name="grades_credit_value">%1$s 学分</string>
     <string name="grades_gpa_value">绩点 %1$s</string>
     <string name="grades_relogin_jxfw">前往教务账号</string>
+    <string name="grades_earned_credits">已修学分 %1$s</string>
+    <string name="grades_filter_section">按类别筛选</string>
+    <string name="grades_filter_all">全部</string>
+    <string name="grades_filter_reset">重置筛选</string>
+    <string name="grades_filter_excluded_count">已排除 %1$d 门</string>
+    <string name="grades_filter_toggle_hint">点击成绩条目可临时排除/恢复均绩计算</string>
+    <string name="grades_filtered_gpa">筛选均绩 (GPA)</string>
     <!-- Physical fitness test (tzcs) -->
     <string name="tzcs_title">体测成绩</string>
     <string name="tzcs_score_value">%1$s 分</string>

@@ -79,6 +79,7 @@ data class Course(
     val remindMinutes: Int? = null,
     val note: String = "",
     val source: Source = Source.MANUAL,
+    val campusOverride: GdutCampus? = null,
     override val updatedAt: Long = 0,
     override val deletedAt: Long? = null,
     override val userId: String? = null,
@@ -88,6 +89,8 @@ data class Course(
         deletedAt: Long?,
     ) = copy(updatedAt = updatedAt, deletedAt = deletedAt)
 }
+
+fun Course.effectivePeriods(semester: Semester): List<PeriodTime> = campusOverride?.let(GdutPeriods::forCampus) ?: semester.periods
 
 @Serializable
 @SerialName("courseException")

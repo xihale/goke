@@ -15,11 +15,45 @@ export const TYPES = {
   task: 'Task',
 };
 
-export const GDUT_PERIODS = [
-  ['08:30', '09:15'], ['09:20', '10:05'], ['10:25', '11:10'], ['11:15', '12:00'],
-  ['13:50', '14:35'], ['14:40', '15:25'], ['15:30', '16:15'], ['16:30', '17:15'],
-  ['17:20', '18:05'], ['18:30', '19:15'], ['19:20', '20:05'], ['20:10', '20:55'],
-].map(([start, end], i) => ({ index: i + 1, start, end }));
+const toPeriods = (pairs) => pairs.map(([start, end], i) => ({ index: i + 1, start, end }));
+
+export const GDUT_CAMPUS_LABELS = {
+  HEMC: '大学城',
+  LONGDONG: '龙洞',
+  DONGFENG: '东风路',
+  JIEYANG: '揭阳',
+};
+
+export const GDUT_CAMPUS_PERIODS = {
+  HEMC: toPeriods([
+    ['08:30', '09:15'], ['09:20', '10:05'], ['10:25', '11:10'], ['11:15', '12:00'],
+    ['13:50', '14:35'], ['14:40', '15:25'], ['15:30', '16:15'], ['16:30', '17:15'],
+    ['17:20', '18:05'], ['18:30', '19:15'], ['19:20', '20:05'], ['20:10', '20:55'],
+  ]),
+  LONGDONG: toPeriods([
+    ['08:30', '09:15'], ['09:20', '10:05'], ['10:25', '11:10'], ['11:15', '12:00'],
+    ['13:30', '14:15'], ['14:20', '15:05'], ['15:25', '16:10'], ['16:15', '17:00'],
+    ['17:05', '17:50'], ['18:30', '19:15'], ['19:20', '20:05'], ['20:10', '20:55'],
+  ]),
+  DONGFENG: toPeriods([
+    ['08:30', '09:15'], ['09:20', '10:05'], ['10:25', '11:10'], ['11:15', '12:00'],
+    ['14:00', '14:45'], ['14:50', '15:35'], ['15:55', '16:40'], ['16:45', '17:30'],
+    ['17:35', '18:20'], ['19:00', '19:45'], ['19:50', '20:35'], ['20:40', '21:25'],
+  ]),
+  JIEYANG: toPeriods([
+    ['08:30', '09:15'], ['09:20', '10:05'], ['10:25', '11:10'], ['11:15', '12:00'],
+    ['14:00', '14:45'], ['14:50', '15:35'], ['15:45', '16:30'], ['16:35', '17:20'],
+    ['17:25', '18:10'], ['19:00', '19:45'], ['19:50', '20:35'], ['20:40', '21:25'],
+  ]),
+};
+
+export const GDUT_PERIODS = GDUT_CAMPUS_PERIODS.HEMC;
+
+export function effectiveCoursePeriods(course, sem) {
+  const override = course?.campusOverride;
+  if (override && GDUT_CAMPUS_PERIODS[override]) return GDUT_CAMPUS_PERIODS[override];
+  return sem?.periods || GDUT_PERIODS;
+}
 
 // ---------- 记录的整理 ----------
 
@@ -144,6 +178,15 @@ function range(a, b) {
 /** 展开 [from, to]（天数，含）内所有课程出现，按开始时间排序。 */
 export function expandCourses(sem, courses, exceptions, from, to) {
   const cal = semesterCalendar(sem);
+  const campusCache = new Map();
+  const periodsFor = (course) => {
+    const key = course?.campusOverride;
+    if (!key || !GDUT_CAMPUS_PERIODS[key]) return null;
+    if (!campusCache.has(key)) {
+      campusCache.set(key, new Map(GDUT_CAMPUS_PERIODS[key].map((p) => [p.index, p])));
+    }
+    return campusCache.get(key);
+  };
   const exByKey = new Map();
   for (const e of exceptions) {
     if (e.deletedAt != null) continue;
@@ -152,6 +195,7 @@ export function expandCourses(sem, courses, exceptions, from, to) {
   const out = [];
   for (const c of courses) {
     if (c.deletedAt != null || c.semesterId !== sem.id) continue;
+    const pMap = periodsFor(c);
     for (const w of [...c.weeks].sort((a, b) => a - b)) {
       const ex = exByKey.get(`${c.id}|${w}`);
       if (ex && ex.type === 'CANCEL') continue;
@@ -162,8 +206,8 @@ export function expandCourses(sem, courses, exceptions, from, to) {
       const ep = re?.newEndPeriod ?? c.endPeriod;
       const day = cal.dateOf(week, d);
       if (day < from || day > to) continue;
-      const s = cal.startMin(sp);
-      const e = cal.endMin(ep);
+      const s = pMap ? (pMap.has(sp) ? parseTime(pMap.get(sp).start) : null) : cal.startMin(sp);
+      const e = pMap ? (pMap.has(ep) ? parseTime(pMap.get(ep).end) : null) : cal.endMin(ep);
       if (s == null || e == null) continue;
       out.push({
         kind: 'course', course: c, week, origWeek: w, day, startPeriod: sp, endPeriod: ep,
@@ -453,6 +497,7 @@ export function newCourse(f, now = Date.now()) {
     remindMinutes: f.remindMinutes ?? null,
     note: f.note || '',
     source: 'MANUAL',
+    campusOverride: f.campusOverride ?? null,
   };
 }
 
