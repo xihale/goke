@@ -3,6 +3,7 @@ package app.mintcal.core.jxfw
 import app.mintcal.core.model.GdutCampus
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -203,6 +204,24 @@ class JwcwxParseTest {
 
         assertEquals(OccupancyType.OTHER, list[4].type)
         assertEquals(listOf(8, 9), list[4].periods)
+    }
+
+    @Test
+    fun parseBuildingsOrThrowAndParseOccupancyOrThrowRejectErrorsAndNullData() {
+        val errJson = """{"code":-1,"data":null,"message":"未绑定"}"""
+        assertTrue(JwcwxParse.parseBuildings(errJson).isEmpty())
+        assertTrue(JwcwxParse.parseOccupancy(errJson).isEmpty())
+
+        val bErr = assertFailsWith<IllegalStateException> { JwcwxParse.parseBuildingsOrThrow(errJson) }
+        assertTrue("code=-1" in bErr.message.orEmpty())
+        assertTrue("未绑定" in bErr.message.orEmpty())
+
+        val oErr = assertFailsWith<IllegalStateException> { JwcwxParse.parseOccupancyOrThrow(errJson) }
+        assertTrue("code=-1" in oErr.message.orEmpty())
+        assertTrue("未绑定" in oErr.message.orEmpty())
+
+        assertFailsWith<IllegalStateException> { JwcwxParse.parseBuildingsOrThrow("""{"code":0,"data":null}""") }
+        assertFailsWith<IllegalStateException> { JwcwxParse.parseOccupancyOrThrow("not json") }
     }
 
     @Test
