@@ -11,7 +11,7 @@ test('导出 canonical ExportBundle 格式', () => {
   const recs = new Map([[sem.id, sem], [task.id, task], ['dead', M.tombstone(M.newTask({ title: '已删' }, 100), 300)]]);
   const view = M.liveView(recs);
   const bundle = buildExportBundle(view, 9999);
-  assert.equal(bundle.app, 'mintcal');
+  assert.equal(bundle.app, 'goke');
   assert.equal(bundle.version, 1);
   assert.equal(bundle.exportedAt, 9999);
   assert.deepEqual(Object.keys(bundle.snapshot).sort(), ['courses', 'events', 'exceptions', 'lists', 'semesters', 'tasks']);
@@ -21,7 +21,7 @@ test('导出 canonical ExportBundle 格式', () => {
 
 test('导入兼容 canonical ExportBundle（含无 _t 的 Android 备份）与旧版 mintcal-web', () => {
   const canonicalText = JSON.stringify({
-    app: 'mintcal',
+    app: 'goke',
     version: 1,
     exportedAt: 1700000000000,
     snapshot: {
@@ -81,9 +81,9 @@ test('restoreBackupRecords 覆盖现有记录并递增 updatedAt 以便同步', 
 
 test('buildMcpConfig 生成合法的 mcpServers JSON', () => {
   const cfg = JSON.parse(buildMcpConfig('https://cal.example.com/'));
-  assert.equal(cfg.mcpServers.mintcal.type, 'http');
-  assert.equal(cfg.mcpServers.mintcal.url, 'https://cal.example.com/mcp');
-  assert.equal(cfg.mcpServers.mintcal.headers.Authorization, 'Bearer <token>');
+  assert.equal(cfg.mcpServers.goke.type, 'http');
+  assert.equal(cfg.mcpServers.goke.url, 'https://cal.example.com/mcp');
+  assert.equal(cfg.mcpServers.goke.headers.Authorization, 'Bearer <token>');
 });
 
 test('convertEventToTask 将有时间日程与全天日程转为待办', () => {

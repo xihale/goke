@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xihale/mintcal/server/internal/mcp"
-	"github.com/xihale/mintcal/server/internal/store"
+	"github.com/xihale/goke/server/internal/mcp"
+	"github.com/xihale/goke/server/internal/store"
 )
 
 //go:embed web

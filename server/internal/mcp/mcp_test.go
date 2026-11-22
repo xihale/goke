@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/xihale/mintcal/server/internal/store"
+	"github.com/xihale/goke/server/internal/store"
 )
 
 // TestReadsRealFixture 用 App / Web 真实产生的记录回放：Go 侧读取视图必须能解一切已知字段形状。

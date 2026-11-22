@@ -11,8 +11,8 @@ import { timetableView } from './views/timetable.js';
 import { todayView } from './views/today.js';
 import { todoView } from './views/todo.js';
 
-const TOKEN_KEY = 'mintcal-web-token';
-const USER_KEY = 'mintcal-web-user';
+const TOKEN_KEY = 'goke-web-token';
+const USER_KEY = 'goke-web-user';
 const VIEWS = { today: todayView, timetable: timetableView, calendar: calendarView, todo: todoView, settings: settingsView };
 const NAV = [['today', '今日', 'sun'], ['timetable', '课表', 'grid'], ['calendar', '日历', 'calendar'], ['todo', '待办', 'check'], ['settings', '设置', 'settings']];
 

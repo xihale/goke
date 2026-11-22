@@ -7,9 +7,9 @@ PORT="${PORT:-18080}"
 TMP="$(mktemp -d)"
 trap 'kill "$SRV_PID" 2>/dev/null || true; rm -rf "$TMP"' EXIT
 
-(cd server && go build -o "$TMP/mintcal-server" ./cmd/mintcal-server)
-MINTCAL_ADDR="127.0.0.1:$PORT" MINTCAL_DB="$TMP/e2e.db" MINTCAL_ADMIN_USER=root MINTCAL_ADMIN_PASSWORD=rootpassword \
-  "$TMP/mintcal-server" > "$TMP/server.log" 2>&1 &
+(cd server && go build -o "$TMP/goke-server" ./cmd/goke-server)
+GOKE_ADDR="127.0.0.1:$PORT" GOKE_DB="$TMP/e2e.db" GOKE_ADMIN_USER=root GOKE_ADMIN_PASSWORD=rootpassword \
+  "$TMP/goke-server" > "$TMP/server.log" 2>&1 &
 SRV_PID=$!
 for _ in $(seq 1 50); do curl -sf "http://127.0.0.1:$PORT/healthz" >/dev/null && break; sleep 0.2; done
 
@@ -18,5 +18,5 @@ TOKEN=$(curl -sf -X POST "http://127.0.0.1:$PORT/api/v1/login" -H 'Content-Type:
 curl -sf -X POST "http://127.0.0.1:$PORT/api/v1/admin/users" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"username":"alice","password":"alicepassword"}' >/dev/null
 
-export MINTCAL_TEST_SERVER="http://127.0.0.1:$PORT" MINTCAL_TEST_USER=alice MINTCAL_TEST_PASS=alicepassword
-./gradlew --console=plain :app:testDebugUnitTest --tests 'app.mintcal.SyncIntegrationTest' --rerun-tasks
+export GOKE_TEST_SERVER="http://127.0.0.1:$PORT" GOKE_TEST_USER=alice GOKE_TEST_PASS=alicepassword
+./gradlew --console=plain :app:testDebugUnitTest --tests 'app.goke.SyncIntegrationTest' --rerun-tasks

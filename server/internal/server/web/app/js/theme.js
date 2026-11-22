@@ -85,7 +85,7 @@ export function palette(seed, dark) {
   };
 }
 
-const KEY = 'mintcal-theme';
+const KEY = 'goke-theme';
 
 export function loadTheme(storage = globalThis.localStorage) {
   try {

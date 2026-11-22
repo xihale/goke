@@ -4,7 +4,7 @@
 - 背景：App 本地优先，数据是「一条记录一份 JSON，带 id / updatedAt / deletedAt」，服务端只需存储与同步，不需要复用 `:core` 的课表逻辑，所以不必用 Ktor。
 - 决定：
   - 后端放在仓库 `server/`，Go 标准库 `net/http` + 纯 Go SQLite（`modernc.org/sqlite`，无需 cgo），单二进制 + Dockerfile。
-  - **没有开放注册，没有邮箱**。首次启动创建管理员（`MINTCAL_ADMIN_USER` / `MINTCAL_ADMIN_PASSWORD`，不设密码则随机生成并只打印一次）；之后由管理员在 `/admin/` 后台创建、停用、重置密码、删除用户，并可让某用户的所有设备退出。
+  - **没有开放注册，没有邮箱**。首次启动创建管理员（`GOKE_ADMIN_USER` / `GOKE_ADMIN_PASSWORD`，不设密码则随机生成并只打印一次）；之后由管理员在 `/admin/` 后台创建、停用、重置密码、删除用户，并可让某用户的所有设备退出。
   - 登录用「用户名 + 密码」换取**每台设备一个令牌**（随机 256 位，服务端只存 SHA-256；可单独注销）。密码用 PBKDF2-HMAC-SHA256（60 万次）存储。登录失败限速（同 IP + 用户名 10 分钟内 8 次）。
   - 同步按记录：`pull?since=<游标>` 拉取服务器序号之后的变化，`push` 推送本地变化。冲突按单条记录 `updatedAt` 较新者胜（last-write-wins），相同内容为空操作，落后的推送被拒绝并返回服务器版本；删除是墓碑（`deletedAt`）。
   - 本地模式 = 不登录；云端模式 = 登录自建服务器。App 始终读写本地 SQLite，同步只是后台把变化推拉一下，断网不影响使用。

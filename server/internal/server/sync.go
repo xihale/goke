@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/xihale/mintcal/server/internal/store"
+	"github.com/xihale/goke/server/internal/store"
 )
 
 const (

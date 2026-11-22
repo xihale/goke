@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/xihale/mintcal/server/internal/store"
+	"github.com/xihale/goke/server/internal/store"
 )
 
 // ---------- 输入结构（字段描述会进入工具的 JSON Schema） ----------

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/xihale/mintcal/server/internal/store"
+	"github.com/xihale/goke/server/internal/store"
 )
 
 func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request, ss *session) {

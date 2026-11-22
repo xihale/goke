@@ -143,7 +143,7 @@ const SNAPSHOT_TYPES = [
 
 export function buildExportBundle(view, now = Date.now()) {
   return {
-    app: 'mintcal',
+    app: 'goke',
     version: 1,
     exportedAt: now,
     snapshot: {
@@ -166,7 +166,7 @@ export function parseBackup(input) {
 
   const raw = [];
   if (obj.snapshot && typeof obj.snapshot === 'object' && !Array.isArray(obj.snapshot)) {
-    if (obj.app != null && obj.app !== 'mintcal') throw new Error('不支持的备份应用标识');
+    if (obj.app != null && obj.app !== 'goke' && obj.app !== 'mintcal') throw new Error('不支持的备份应用标识');
     for (const [key, type] of SNAPSHOT_TYPES) {
       const list = obj.snapshot[key] ?? [];
       if (!Array.isArray(list)) throw new Error(`备份字段 ${key} 格式无效`);
@@ -177,7 +177,7 @@ export function parseBackup(input) {
       }
     }
   } else if (Array.isArray(obj.records)) {
-    if (obj.app != null && obj.app !== 'mintcal-web' && obj.app !== 'mintcal') throw new Error('不支持的备份应用标识');
+    if (obj.app != null && obj.app !== 'mintcal-web' && obj.app !== 'goke') throw new Error('不支持的备份应用标识');
     for (const r of obj.records) {
       if (r && typeof r === 'object' && typeof r.id === 'string' && r.id && TYPES[r._t] && r.deletedAt == null) {
         raw.push({ ...r, deletedAt: null });
@@ -218,7 +218,7 @@ export function buildMcpConfig(origin) {
   const base = String(origin || '').replace(/\/+$/, '');
   return JSON.stringify({
     mcpServers: {
-      mintcal: {
+      goke: {
         type: 'http',
         url: `${base}/mcp`,
         headers: {
@@ -253,7 +253,7 @@ async function copyText(text, okMsg) {
 function exportJson() {
   const bundle = buildExportBundle(ctx.store.view(), Date.now());
   const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
-  const a = h('a', { href: URL.createObjectURL(blob), download: `mintcal-${new Date().toISOString().slice(0, 10)}.json` });
+  const a = h('a', { href: URL.createObjectURL(blob), download: `goke-${new Date().toISOString().slice(0, 10)}.json` });
   document.body.append(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);

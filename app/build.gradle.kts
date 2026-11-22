@@ -114,11 +114,11 @@ plugins {
 }
 
 android {
-    namespace = "app.mintcal"
+    namespace = "app.goke"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "app.mintcal"
+        applicationId = "app.goke"
         minSdk = 26
         targetSdk = 36
         versionCode = appVersion.second
@@ -151,7 +151,7 @@ android {
             }
         }
         debug {
-            // 包名后缀区分：debug 装在 app.mintcal.debug，与 release 并存
+            // 包名后缀区分：debug 装在 app.goke.debug，与 release 并存
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }

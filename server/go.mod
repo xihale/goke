@@ -1,4 +1,4 @@
-module github.com/xihale/mintcal/server
+module github.com/xihale/goke/server
 
 go 1.26.0
 

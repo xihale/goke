@@ -19,7 +19,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "mintcal"
+rootProject.name = "goke"
 include(":core")
 include(":script")
 include(":app")

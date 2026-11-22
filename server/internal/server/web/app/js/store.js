@@ -77,7 +77,7 @@ export function createStore({ api, storage = null, clock = () => Date.now(), deb
     clearTimeout(retryTimer);
     stopPolling();
     reset();
-    userKey = `mintcal-cache:${user.id}`;
+    userKey = `goke-cache:${user.id}`;
     if (storage) {
       try {
         const c = JSON.parse(storage.getItem(userKey) || 'null');

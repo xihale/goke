@@ -1,17 +1,17 @@
 # 自建示例：docker compose up -d
-# 首次启动会创建管理员；密码在 `docker compose logs` 里（只显示一次），或用 MINTCAL_ADMIN_PASSWORD 指定。
-# 对外请放在 HTTPS 反向代理（Caddy / Nginx）后面，并开启 MINTCAL_TRUST_PROXY=1。
+# 首次启动会创建管理员；密码在 `docker compose logs` 里（只显示一次），或用 GOKE_ADMIN_PASSWORD 指定。
+# 对外请放在 HTTPS 反向代理（Caddy / Nginx）后面，并开启 GOKE_TRUST_PROXY=1。
 services:
-  mintcal:
+  goke:
     build: .
     restart: unless-stopped
     ports: ["8080:8080"]
     environment:
-      MINTCAL_ADMIN_USER: admin
-      # MINTCAL_ADMIN_PASSWORD: 请改成自己的密码，不设置则随机生成
-      # MINTCAL_TRUST_PROXY: "1"
+      GOKE_ADMIN_USER: admin
+      # GOKE_ADMIN_PASSWORD: 请改成自己的密码，不设置则随机生成
+      # GOKE_TRUST_PROXY: "1"
     volumes:
-      - mintcal-data:/data
+      - goke-data:/data
 
 volumes:
-  mintcal-data:
+  goke-data:

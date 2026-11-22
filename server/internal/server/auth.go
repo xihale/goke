@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/xihale/mintcal/server/internal/store"
+	"github.com/xihale/goke/server/internal/store"
 )
 
 // dummyHash 用于「用户不存在」时也做一次密码运算，避免通过响应时间探测用户名。

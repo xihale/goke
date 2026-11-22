@@ -9,31 +9,31 @@
 ```bash
 cd server
 docker compose up -d
-docker compose logs mintcal | grep 管理员   # 未预设密码时，初始密码仅在首次日志中打印一次
+docker compose logs goke | grep 管理员   # 未预设密码时，初始密码仅在首次日志中打印一次
 ```
 
 ### 本地运行（需 Go 1.26+）
 
 ```bash
 cd server
-go run ./cmd/mintcal-server
+go run ./cmd/goke-server
 ```
 
 常用环境变量：
 
 | 变量 | 说明 | 默认值 |
 | --- | --- | --- |
-| `MINTCAL_ADDR` | 监听地址 | `:8080` |
-| `MINTCAL_DB` | SQLite 数据库路径 | `./data/mintcal.db`（Docker 为 `/data/mintcal.db`） |
-| `MINTCAL_ADMIN_USER` | 首次启动创建的管理员用户名 | `admin` |
-| `MINTCAL_ADMIN_PASSWORD` | 首次启动管理员密码（不填则随机生成） | 随机 |
-| `MINTCAL_TRUST_PROXY` | 设为 `1` 时信任 `X-Forwarded-For`（反代部署时开启） | 关闭 |
+| `GOKE_ADDR` | 监听地址 | `:8080` |
+| `GOKE_DB` | SQLite 数据库路径 | `./data/goke.db`（Docker 为 `/data/goke.db`） |
+| `GOKE_ADMIN_USER` | 首次启动创建的管理员用户名 | `admin` |
+| `GOKE_ADMIN_PASSWORD` | 首次启动管理员密码（不填则随机生成） | 随机 |
+| `GOKE_TRUST_PROXY` | 设为 `1` 时信任 `X-Forwarded-For`（反代部署时开启） | 关闭 |
 
 ## Web 端与管理后台
 
 - **Web 端（`/`）**：使用与 App 相同的账号登录，可在浏览器查看和编辑课表、日历与待办，并与 App 自动双向同步。
 - **管理后台（`/admin/`）**：使用管理员账号登录，可创建用户、重置密码、停用/启用账号、强制下线设备或删除用户。
-- **重置管理员密码**：执行 `mintcal-server passwd <用户名>` 并按提示输入新密码。
+- **重置管理员密码**：执行 `goke-server passwd <用户名>` 并按提示输入新密码。
 
 ## 云端 MCP（可选）
 
@@ -51,14 +51,14 @@ curl -s https://你的域名/api/v1/login \
 
 ```bash
 # Claude Code
-claude mcp add --transport http mintcal https://你的域名/mcp \
+claude mcp add --transport http goke https://你的域名/mcp \
   --header "Authorization: Bearer <token>"
 ```
 
 ```json
 {
   "mcpServers": {
-    "mintcal": {
+    "goke": {
       "url": "https://你的域名/mcp",
       "headers": {
         "Authorization": "Bearer <token>"
@@ -72,8 +72,8 @@ claude mcp add --transport http mintcal https://你的域名/mcp \
 
 ## 公网部署与备份
 
-- **HTTPS 反向代理**：公网使用时建议置于 Caddy / Nginx 等 HTTPS 反代之后，并设置 `MINTCAL_TRUST_PROXY=1`。
-- **数据备份**：停止服务后备份数据库文件，或使用 `sqlite3 mintcal.db ".backup backup.db"` 在线备份。
+- **HTTPS 反向代理**：公网使用时建议置于 Caddy / Nginx 等 HTTPS 反代之后，并设置 `GOKE_TRUST_PROXY=1`。
+- **数据备份**：停止服务后备份数据库文件，或使用 `sqlite3 goke.db ".backup backup.db"` 在线备份。
 
 ## 开发与测试
 

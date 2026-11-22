@@ -3,10 +3,10 @@ plugins {
 }
 
 // Macrobenchmark：独立的 com.android.test 模块，targetProjectPath 指向 :app 的 benchmark 变体。
-// 目标 APK 是 release 优化（R8 + 资源收缩）+ debug 签名 + app.mintcal.bench 后缀，
+// 目标 APK 是 release 优化（R8 + 资源收缩）+ debug 签名 + app.goke.bench 后缀，
 // 不会覆盖设备上已装的 release / debug 包。
 android {
-    namespace = "app.mintcal.benchmark"
+    namespace = "app.goke.benchmark"
     compileSdk = 37
 
     defaultConfig {

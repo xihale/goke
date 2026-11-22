@@ -4,8 +4,8 @@
 # 通配符 ** 匹配任意段 / 方法 / 签名。
 
 # 应用与 core / script 模块（同包名空间）
-HSPLapp/mintcal/**->**(**)**
-Lapp/mintcal/**
+HSPLapp/goke/**->**(**)**
+Lapp/goke/**
 
 # Compose 运行时 / UI / Material3 / Foundation
 HSPLandroidx/compose/**->**(**)**

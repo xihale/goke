@@ -17,8 +17,8 @@
 
 | 层 | 选型 | 位置 |
 |---|---|---|
-| Android UI | Jetpack Compose + Material 3 Expressive + `material-kolor` | `app/src/main/java/app/mintcal/ui/` |
-| 导航 | `navigation-compose`（`@Serializable` 类型安全路由） | `ui/Nav.kt`、`ui/MintCalRoot.kt` |
+| Android UI | Jetpack Compose + Material 3 Expressive + `material-kolor` | `app/src/main/java/app/goke/ui/` |
+| 导航 | `navigation-compose`（`@Serializable` 类型安全路由） | `ui/Nav.kt`、`ui/GokeRoot.kt` |
 | 图标 | `material-icons-extended`（矢量，不落地位图） | 各组件 `Icons.*` |
 | 构建与格式 | Gradle KTS + AGP + Kotlin + Spotless / ktlint | `build.gradle.kts`、`.editorconfig` |
 | 测试 | `:core` / `:script` JUnit 5；`:app` Robolectric + JUnit 4；`:benchmark` Macrobenchmark | `docs/testing.md` |
@@ -32,7 +32,7 @@
 3. **文案外部化**：所有用户可见文案放在 `app/src/main/res/values/strings.xml`，禁止在 Kotlin 代码里写死中文字符串；改完运行 `check_strings.py` 校验。
 4. **Web 端零外链与 CSP**：无 CDN、无外链字体/图片；遵守 `script-src 'self'; style-src 'self'`，禁止内联样式与字符串拼 HTML。
 5. **依赖与资产登记**：新增第三方库或矢量插图许可证须登记到 [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md)。
-6. **发版与更新日志**：每次打 `v*` tag 发版前，须先在 [CHANGELOG.md](CHANGELOG.md) 顶部补充对应版本（`## v<semver> (YYYY-MM-DD)`）面向用户的简洁中文更新日志（纯文本友好，供 GitHub Release 与应用内更新弹窗共用），提交后再打 tag 推送；CI 会在构建前强校验并提取该段作为 Release 正文。
+6. **发版与更新日志**：每次打 `v*` tag 发版前，须先在 [CHANGELOG.md](CHANGELOG.md) 顶部补充对应版本（`## v<semver> (YYYY-MM-DD)`）面向用户的简洁中文更新日志（纯文本友好，供 GitHub Release 与应用内更新弹窗共用），提交后再打 tag 推送；CI 会在构建前强校验并提取该段作为 Release 正文。Release 完成后须通过 `ssh gx` 检查并确认落地页（`deployd`）与 APK 镜像同步（`sync-releases`）已成功拉取最新版本与 `downloads/latest.json`（详见 [scripts/server/README.md](scripts/server/README.md)）。
 
 ## 4. 高频命令
 

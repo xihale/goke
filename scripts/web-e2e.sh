@@ -8,9 +8,9 @@ TMP="$(mktemp -d)"
 SRV_PID=""
 trap '[ -n "$SRV_PID" ] && kill "$SRV_PID" 2>/dev/null || true; rm -rf "$TMP"' EXIT
 
-(cd server && go build -o "$TMP/mintcal-server" ./cmd/mintcal-server)
-MINTCAL_ADDR="127.0.0.1:$PORT" MINTCAL_DB="$TMP/e2e.db" MINTCAL_ADMIN_USER=root MINTCAL_ADMIN_PASSWORD=rootpassword \
-  "$TMP/mintcal-server" > "$TMP/server.log" 2>&1 &
+(cd server && go build -o "$TMP/goke-server" ./cmd/goke-server)
+GOKE_ADDR="127.0.0.1:$PORT" GOKE_DB="$TMP/e2e.db" GOKE_ADMIN_USER=root GOKE_ADMIN_PASSWORD=rootpassword \
+  "$TMP/goke-server" > "$TMP/server.log" 2>&1 &
 SRV_PID=$!
 for _ in $(seq 1 50); do curl -sf "http://127.0.0.1:$PORT/healthz" >/dev/null && break; sleep 0.2; done
 
@@ -26,4 +26,4 @@ done
 echo "static assets OK"
 
 cd server
-MINTCAL_URL="$BASE" MINTCAL_USER=webuser MINTCAL_PASSWORD=webuserpassword node --test webtest/*.test.mjs
+GOKE_URL="$BASE" GOKE_USER=webuser GOKE_PASSWORD=webuserpassword node --test webtest/*.test.mjs

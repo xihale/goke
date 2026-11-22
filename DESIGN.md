@@ -285,7 +285,7 @@ Goke 追求贴近纸面的轻盈质感，靠色调层级（Tonal Surface）与�
 
 ### Token 真源与跨端同步
 
-- **Android（唯一真源）**：`app/src/main/java/app/mintcal/ui/theme/Theme.kt`
+- **Android（唯一真源）**：`app/src/main/java/app/goke/ui/theme/Theme.kt`
   - 品牌主题色：`brandLight()` / `brandDark()`（薄荷为手写品牌 Token；其余预设与自定义由种子色通过 `material-kolor` 生成）。
   - 主题解析链 `resolveColorScheme(settings, dark)`：`DYNAMIC`（SDK ≥ 31）→ `CUSTOM`（seed）→ `PRESET`（非 `MINT` 种子）→ `MINT` 回退。
   - 扩展语义色 `MintColors`（`MintTheme.colors`）：8 组课程 `courseBg`/`courseFg`、`added`/`modified`/`onModified`/`removed`/`conflictBg`/`success`、`priority`（低/中/高）。

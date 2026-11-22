@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xihale/mintcal/server/internal/store"
+	"github.com/xihale/goke/server/internal/store"
 )
 
 func init() { Iterations = 1000 } // 测试里加快密码运算

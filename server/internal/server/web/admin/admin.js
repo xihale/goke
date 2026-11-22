@@ -1,6 +1,6 @@
 'use strict';
 const $ = (id) => document.getElementById(id);
-let token = sessionStorage.getItem('mintcal-admin-token');
+let token = sessionStorage.getItem('goke-admin-token');
 
 async function api(method, path, body) {
   const res = await fetch('/api/v1' + path, {
@@ -35,7 +35,7 @@ $('loginForm').addEventListener('submit', async (e) => {
       throw new Error('该账号不是管理员');
     }
     token = r.token;
-    sessionStorage.setItem('mintcal-admin-token', token);
+    sessionStorage.setItem('goke-admin-token', token);
     e.target.reset();
     say($('loginMsg'), '');
     await load();
@@ -48,7 +48,7 @@ $('loginForm').addEventListener('submit', async (e) => {
 $('logout').addEventListener('click', async () => {
   await api('POST', '/logout').catch(() => {});
   token = null;
-  sessionStorage.removeItem('mintcal-admin-token');
+  sessionStorage.removeItem('goke-admin-token');
   show(false);
 });
 
@@ -80,7 +80,7 @@ async function load() {
   try {
     data = await api('GET', '/admin/users');
   } catch (err) {
-    if (err.status === 401 || err.status === 403) { token = null; sessionStorage.removeItem('mintcal-admin-token'); show(false); return; }
+    if (err.status === 401 || err.status === 403) { token = null; sessionStorage.removeItem('goke-admin-token'); show(false); return; }
     say($('msg'), err.message, true);
     return;
   }

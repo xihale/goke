@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/xihale/mintcal/server/internal/store"
+	"github.com/xihale/goke/server/internal/store"
 )
 
 const version = "0.1.0"
@@ -57,7 +57,7 @@ type user struct {
 }
 
 func newServer(st *store.Store, userID int64) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "mintcal", Version: version}, nil)
+	s := mcp.NewServer(&mcp.Implementation{Name: "goke", Version: version}, nil)
 	u := user{st: st, id: userID}
 	add(s, "list_lists", "列出待办清单，含每个清单的待办数量", u.listLists)
 	add(s, "create_list", "新建待办清单", u.createList)

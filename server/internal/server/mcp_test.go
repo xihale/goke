@@ -10,7 +10,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/xihale/mintcal/server/internal/store"
+	"github.com/xihale/goke/server/internal/store"
 )
 
 type mcpTransport struct {
@@ -28,7 +28,7 @@ func (r mcpTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 func mcpSession(t *testing.T, h http.Handler, token string) (*mcp.ClientSession, func()) {
 	t.Helper()
 	ts := httptest.NewServer(h)
-	client := mcp.NewClient(&mcp.Implementation{Name: "mintcal-test", Version: "0.0.0"}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "goke-test", Version: "0.0.0"}, nil)
 	tr := &mcp.StreamableClientTransport{
 		Endpoint:             ts.URL + "/mcp",
 		HTTPClient:           &http.Client{Transport: mcpTransport{base: http.DefaultTransport, token: token}},

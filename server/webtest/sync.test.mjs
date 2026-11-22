@@ -1,5 +1,5 @@
 // 同步层测试：两台「设备」（两个 store）通过服务器互相同步。
-// 默认对内置的模拟服务运行；设置 MINTCAL_URL / MINTCAL_USER / MINTCAL_PASSWORD 则对真实的 Go 服务端运行。
+// 默认对内置的模拟服务运行；设置 GOKE_URL / GOKE_USER / GOKE_PASSWORD 则对真实的 Go 服务端运行。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApi, ApiError } from '../internal/server/web/app/js/api.js';
@@ -7,7 +7,7 @@ import { createStore } from '../internal/server/web/app/js/store.js';
 import * as M from '../internal/server/web/app/js/model.js';
 import { startMock } from './mock.mjs';
 
-const real = process.env.MINTCAL_URL;
+const real = process.env.GOKE_URL;
 let mock = null;
 let base;
 let user;
@@ -16,8 +16,8 @@ let password;
 test.before(async () => {
   if (real) {
     base = real;
-    user = process.env.MINTCAL_USER;
-    password = process.env.MINTCAL_PASSWORD;
+    user = process.env.GOKE_USER;
+    password = process.env.GOKE_PASSWORD;
   } else {
     mock = await startMock();
     base = mock.url;

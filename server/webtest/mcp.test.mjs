@@ -1,14 +1,14 @@
 // MCP 端到端：外部助手经 POST /mcp 增删改待办，网页客户端（真实 store）同步后应一致；
-// 反向：客户端改动经 push 落库后，MCP 读取也应看到。只在真实 Go 服务端下运行（需 MINTCAL_URL）。
+// 反向：客户端改动经 push 落库后，MCP 读取也应看到。只在真实 Go 服务端下运行（需 GOKE_URL）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApi } from '../internal/server/web/app/js/api.js';
 import { createStore } from '../internal/server/web/app/js/store.js';
 import * as M from '../internal/server/web/app/js/model.js';
 
-const base = process.env.MINTCAL_URL;
-const user = process.env.MINTCAL_USER;
-const password = process.env.MINTCAL_PASSWORD;
+const base = process.env.GOKE_URL;
+const user = process.env.GOKE_USER;
+const password = process.env.GOKE_PASSWORD;
 
 let token = null;
 let rpcId = 0;

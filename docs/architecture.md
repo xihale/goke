@@ -13,10 +13,10 @@
 ## 目录结构
 
 ```text
-app/src/main/java/app/mintcal/
-├── MintCalApp.kt / MainActivity.kt / DeepLink.kt / BenchSeed.kt
+app/src/main/java/app/goke/
+├── GokeApp.kt / MainActivity.kt / DeepLink.kt / BenchSeed.kt
 ├── ui/
-│   ├── MintCalRoot.kt      # Tabs（5 个常驻 Tab）+ mintDestinations 路由表 + 撤销浮钮
+│   ├── GokeRoot.kt      # Tabs（5 个常驻 Tab）+ gokeDestinations 路由表 + 撤销浮钮
 │   ├── Nav.kt              # Route sealed interface、Nav 门面、Actions（变更集）
 │   ├── Common.kt           # LocalTabVisible / gated / liveSnapshot / rememberNow
 │   ├── Format.kt
@@ -25,7 +25,7 @@ app/src/main/java/app/mintcal/
 │   └── screens/            # 按功能分文件，一屏一文件
 ├── data/                   # Repository / Settings / Attachments / SecretStore …
 ├── calendar/ jxfw/ lanweb/ links/ mcp/ notify/ share/ sync/ widget/ advanced/
-core/src/main/kotlin/app/mintcal/core/
+core/src/main/kotlin/app/goke/core/
 ├── model/ agenda/ change/ recurrence/ todo/ time/ importer/ export/ sync/ jxfw/ parcel/ util/
 script/                     # QuickJS 沙箱
 server/internal/server/web/app/   # Web 客户端（js/views + app.css）
@@ -35,12 +35,12 @@ server/internal/server/web/app/   # Web 客户端（js/views + app.css）
 
 - **无 ViewModel**：状态经 `LocalApp` / `LocalActions` / `LocalNav` CompositionLocal 与参数下传，屏幕保持纯函数。
 - **写操作统一走变更集**：页面通过 `LocalActions.current.commit(cs, message, undoable)` 提交 `ChangeSet`，可撤销操作通过左下角撤销浮钮回滚，不可撤销操作退化为系统 Toast。
-- **路由表**：`Route` 为 `@Serializable sealed interface`（`ui/Nav.kt`），压栈页统一注册在 `ui/MintCalRoot.kt` 的 `NavGraphBuilder.mintDestinations`。
+- **路由表**：`Route` 为 `@Serializable sealed interface`（`ui/Nav.kt`），压栈页统一注册在 `ui/GokeRoot.kt` 的 `NavGraphBuilder.gokeDestinations`。
 - **Tab 层常驻**：`HOME` 目的地承载 `Tab.TODAY` / `Tab.TIMETABLE` / `Tab.CALENDAR` / `Tab.TODO` / `Tab.ME` 五个常驻 Tab，切换零重组，不参与压栈转场。
 
 ## 屏幕 ↔ 文件映射
 
-| 屏幕 / 浮层 | Compose 入口 | 文件（`app/src/main/java/app/mintcal/ui/screens/`） |
+| 屏幕 / 浮层 | Compose 入口 | 文件（`app/src/main/java/app/goke/ui/screens/`） |
 |---|---|---|
 | 今日 | `TodayScreen()`（`Tab.TODAY`） | `TodayScreen.kt` |
 | 课表 | `TimetableScreen()`（`Tab.TIMETABLE`） | `TimetableScreen.kt`（含私有 `SlotSheet`/`CourseSheet`） |

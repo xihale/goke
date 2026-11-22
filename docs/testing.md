@@ -5,7 +5,7 @@
 ```bash
 ./gradlew :core:test :script:test          # 纯 JVM 单元测试（JUnit 5）
 ./gradlew :app:testDebugUnitTest           # Robolectric 渲染冒烟 + 截图输出 app/build/shots/
-./gradlew :app:assembleDebug               # Debug APK（包名 app.mintcal.debug）
+./gradlew :app:assembleDebug               # Debug APK（包名 app.goke.debug）
 ./gradlew spotlessCheck                    # ktlint 格式检查（spotlessApply 自动修复）
 python3 scripts/check_strings.py --unused  # 检查缺失与未使用的 strings.xml 资源
 ```
@@ -24,12 +24,12 @@ bash scripts/xbuild.sh <gradle-task>       # 在远程构建机拉取代码并�
 ./gradlew :benchmark:connectedBenchmarkAndroidTest   # 全量基准（启动 / 切页 / 交互）
 # 只跑单一用例，避免每次全量：
 ./gradlew :benchmark:connectedBenchmarkAndroidTest \
-  -Pandroid.testInstrumentationRunnerArguments.class=app.mintcal.benchmark.TabSwitchBenchmark
+  -Pandroid.testInstrumentationRunnerArguments.class=app.goke.benchmark.TabSwitchBenchmark
 ```
 
-- **目标包名 `app.mintcal.bench`**：`:app` 的 `benchmark` 变体开启 R8/资源收缩与 `profileable`，使用 debug 签名，不会覆盖 `app.mintcal` 或 `app.mintcal.debug`。
+- **目标包名 `app.goke.bench`**：`:app` 的 `benchmark` 变体开启 R8/资源收缩与 `profileable`，使用 debug 签名，不会覆盖 `app.goke` 或 `app.goke.debug`。
 - **测试数据**：首次启动由 `BenchSeed`（`BuildConfig.BENCHMARK` 分支）写入可滚动的课表与待办；`release` / `debug` 下该分支被常量折叠并在 R8 阶段移除。
-- **用例清单（`benchmark/src/main/java/app/mintcal/benchmark/`）**：
+- **用例清单（`benchmark/src/main/java/app/goke/benchmark/`）**：
   - `StartupBenchmark`：冷/温/热启动及无 Baseline Profile 对照（`StartupTimingMetric`）
   - `TabSwitchBenchmark`：底栏 4 Tab 切换（`FrameTimingMetric`）
   - `NavigationBenchmark`：设置 / 外观 / 数据 / 课程与待办编辑页压栈转场（`FrameTimingMetric`）

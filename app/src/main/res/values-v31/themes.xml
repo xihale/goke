@@ -2,9 +2,9 @@
 <!-- API 31+：启动屏不带图标（透明矢量，只留 @color/window_bg 底色），观感即直接进软件。
      限定符优先级 night > v31，故 Starting 只留在 values/ 与 values-v31/，勿在 values-night/ 重复定义。 -->
 <resources>
-    <style name="Theme.MintCal.Starting" parent="Theme.SplashScreen">
+    <style name="Theme.Goke.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/window_bg</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon_transparent</item>
-        <item name="postSplashScreenTheme">@style/Theme.MintCal</item>
+        <item name="postSplashScreenTheme">@style/Theme.Goke</item>
     </style>
 </resources>
