@@ -524,8 +524,7 @@ private fun PhysicalTestNavRow(onOpen: () -> Unit) {
     val latest = tzcsState.latestSummaryReport
     val trailing =
         if (latest != null && TzcsParse.hasRecordedScores(latest) && latest.totalScore.isNotBlank()) {
-            val scoreText = stringResource(R.string.tzcs_score_value, latest.totalScore)
-            if (latest.totalGrade.isNotBlank()) "$scoreText · ${latest.totalGrade}" else scoreText
+            stringResource(R.string.tzcs_score_value, latest.totalScore)
         } else {
             null
         }

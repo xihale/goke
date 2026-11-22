@@ -204,7 +204,6 @@ fun PhysicalTestScreen(onBack: () -> Unit) {
                     item(key = "empty") {
                         EmptyState(
                             title = stringResource(R.string.tzcs_empty_title),
-                            hint = stringResource(R.string.tzcs_empty_hint),
                             icon = Icons.Rounded.FitnessCenter,
                             actionLabel = if (tzcsState.busy) null else stringResource(R.string.tzcs_refresh),
                             onAction = if (tzcsState.busy) null else onRefresh,
@@ -409,12 +408,6 @@ private fun TzcsLoginPanel(
                 Text(stringResource(R.string.tzcs_login_action))
             }
         }
-        Text(
-            stringResource(R.string.tzcs_keystore_reassurance),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 4.dp),
-        )
     }
 }
 
