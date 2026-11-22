@@ -329,7 +329,7 @@ code {
 .demo-stage {
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: #14221E;
+  background: var(--surface-high);
   border: 4px solid var(--surface);
   box-shadow: 0 0 0 1px var(--line), var(--shadow-phone);
   aspect-ratio: 16 / 9;
@@ -338,7 +338,7 @@ code {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  background: #14221E;
+  background: var(--surface-high);
 }
 .chapter-row {
   display: flex; flex-wrap: wrap; gap: 8px;
