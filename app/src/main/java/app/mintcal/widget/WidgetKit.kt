@@ -8,6 +8,9 @@ import androidx.core.graphics.ColorUtils
 import app.mintcal.MainActivity
 import app.mintcal.MintCalApp
 import app.mintcal.R
+import app.mintcal.core.jxfw.JxfwSync
+import app.mintcal.core.model.Event
+import app.mintcal.core.model.EventKind
 import app.mintcal.core.model.Semester
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
@@ -74,6 +77,20 @@ internal object WidgetKit {
         val w = cal.weekOf(today)
         return if (w in 1..sem.totalWeeks) ctx.getString(R.string.week_n, w) else null
     }
+
+    fun eventLocation(
+        ctx: Context,
+        event: Event,
+    ): String? =
+        if (event.kind == EventKind.EXAM) {
+            JxfwSync.formatExamLocation(
+                event.location,
+                event.note,
+                ctx.getString(R.string.widget_exam_seat_suffix),
+            )
+        } else {
+            event.location.trim().takeIf { it.isNotEmpty() }
+        }
 
     fun isParcel(task: Task): Boolean = task.source == Source.PARCEL || parcelCode(task) != null
 

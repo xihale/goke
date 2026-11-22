@@ -15,6 +15,7 @@ import app.mintcal.R
 import app.mintcal.core.agenda.Agenda
 import app.mintcal.core.agenda.BlockItem
 import app.mintcal.core.agenda.CourseItem
+import app.mintcal.core.agenda.EventItem
 import app.mintcal.core.agenda.NextUps
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.todo.SmartList
@@ -60,6 +61,7 @@ class NextWidgetProvider : AppWidgetProvider() {
         val uri: Uri,
         val taskId: String? = null,
         val courseId: String? = null,
+        val eventId: String? = null,
         val courseDate: String? = null,
         val startPeriod: Int? = null,
         val endPeriod: Int? = null,
@@ -94,6 +96,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                         when (item) {
                             is CourseItem -> listOf(item.occ.start, item.occ.end)
                             is BlockItem -> if (!item.task.done) listOf(item.start, item.end) else emptyList()
+                            is EventItem -> if (!item.allDay) listOf(item.start, item.end) else emptyList()
                             else -> emptyList()
                         }
                     }.filter { it.isAfter(now) }
@@ -167,6 +170,23 @@ class NextWidgetProvider : AppWidgetProvider() {
                         }
                     }
 
+                    is EventItem -> {
+                        if (!item.allDay && !item.start.isAfter(now) && item.end.isAfter(now)) {
+                            return Summary(
+                                badge = ctx.getString(R.string.widget_ongoing),
+                                sub =
+                                    listOfNotNull(
+                                        "${item.start.hm()}–${item.end.hm()}",
+                                        WidgetKit.eventLocation(ctx, item.event),
+                                    ).joinToString(" · "),
+                                title = item.event.title,
+                                barColor = WidgetKit.courseFg(ctx, item.event.colorIndex),
+                                uri = DeepLinks.todayUri(),
+                                eventId = item.event.id,
+                            )
+                        }
+                    }
+
                     else -> {}
                 }
             }
@@ -176,7 +196,8 @@ class NextWidgetProvider : AppWidgetProvider() {
                 dayItems
                     .filter {
                         (it is CourseItem && it.occ.start.isAfter(now)) ||
-                            (it is BlockItem && !it.task.done && it.start.isAfter(now))
+                            (it is BlockItem && !it.task.done && it.start.isAfter(now)) ||
+                            (it is EventItem && !it.allDay && it.start.isAfter(now))
                     }.minByOrNull { it.sortKey }
             if (upcomingTimed is CourseItem) {
                 val o = upcomingTimed.occ
@@ -202,6 +223,16 @@ class NextWidgetProvider : AppWidgetProvider() {
                     barColor = WidgetKit.priorityColor(ctx, t.priority),
                     uri = DeepLinks.taskUri(t.id),
                     taskId = t.id,
+                )
+            }
+            if (upcomingTimed is EventItem) {
+                return Summary(
+                    badge = upcomingTimed.start.hm(),
+                    sub = WidgetKit.eventLocation(ctx, upcomingTimed.event),
+                    title = upcomingTimed.event.title,
+                    barColor = WidgetKit.courseFg(ctx, upcomingTimed.event.colorIndex),
+                    uri = DeepLinks.todayUri(),
+                    eventId = upcomingTimed.event.id,
                 )
             }
 
@@ -289,6 +320,10 @@ class NextWidgetProvider : AppWidgetProvider() {
                             50,
                             WidgetOverlayActivity.courseIntent(ctx, s.courseId, s.courseDate, s.startPeriod, s.endPeriod),
                         )
+                    }
+
+                    s.eventId != null -> {
+                        WidgetKit.overlayIntent(ctx, 50, WidgetOverlayActivity.eventIntent(ctx, s.eventId))
                     }
 
                     else -> {

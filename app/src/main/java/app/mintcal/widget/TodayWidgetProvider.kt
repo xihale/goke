@@ -191,7 +191,7 @@ class TodayWidgetProvider : AppWidgetProvider() {
                                 key = "e_${item.event.id}_${item.start}",
                                 time = if (item.allDay) ctx.getString(R.string.all_day) else item.start.hm(),
                                 title = item.event.title,
-                                sub = item.event.location.takeIf { it.isNotBlank() },
+                                sub = WidgetKit.eventLocation(ctx, item.event),
                                 code = null,
                                 colorIndex = item.event.colorIndex,
                                 priority = 0,
