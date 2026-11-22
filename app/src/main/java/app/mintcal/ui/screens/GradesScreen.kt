@@ -39,9 +39,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.mintcal.R
@@ -59,6 +65,7 @@ import app.mintcal.ui.components.EmptyState
 import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.SectionLabel
+import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.theme.MintTheme
 import kotlinx.coroutines.launch
 import java.text.DecimalFormat
@@ -77,7 +84,37 @@ fun GradesScreen(onBack: () -> Unit) {
     val jxfwState by app.jxfw.state.collectAsState()
     val gradesState by app.jxfw.gradesState.collectAsState()
     LaunchedEffect(Unit) { app.jxfw.hydrateGrades() }
+
+    val onRefresh: () -> Unit = {
+        scope.launch {
+            app.jxfw
+                .refreshGrades()
+                .onSuccess { list ->
+                    actions.toast(ctx.getString(R.string.grades_refreshed_toast, list.size))
+                }
+        }
+    }
+
+    GradesContent(
+        loggedIn = jxfwState.loggedIn,
+        gradesState = gradesState,
+        onBack = onBack,
+        onOpenJxfw = { nav.push(Route.Jxfw) },
+        onRefresh = onRefresh,
+    )
+}
+
+@Composable
+internal fun GradesContent(
+    loggedIn: Boolean,
+    gradesState: JxfwGradesState,
+    onBack: () -> Unit,
+    onOpenJxfw: () -> Unit,
+    onRefresh: () -> Unit,
+) {
     var selectedTerm by rememberSaveable { mutableStateOf<String?>(null) }
+    var excludedKeys by remember { mutableStateOf(emptySet<String>()) }
+    var excludedCategories by remember { mutableStateOf(emptySet<String>()) }
 
     val terms =
         remember(gradesState.grades) {
@@ -90,7 +127,7 @@ fun GradesScreen(onBack: () -> Unit) {
                 .toList()
         }
     val activeTerm = selectedTerm?.takeIf { it in terms }
-    val displayedGrades =
+    val termGrades =
         remember(gradesState.grades, activeTerm) {
             val base =
                 if (activeTerm == null) {
@@ -100,29 +137,39 @@ fun GradesScreen(onBack: () -> Unit) {
                 }
             base.sortedByDescending { it.term }
         }
+    val categories = remember(termGrades) { JxfwParse.gradeCategories(termGrades) }
+    val activeExcludedCategories =
+        remember(excludedCategories, categories) {
+            excludedCategories.intersect(categories.toSet())
+        }
+    val activeExcludedKeys =
+        remember(excludedKeys, termGrades) {
+            val validKeys = termGrades.mapTo(HashSet()) { it.filterKey }
+            excludedKeys.intersect(validKeys)
+        }
+    val visibleGrades =
+        remember(termGrades, activeExcludedCategories) {
+            JxfwParse.filterGrades(termGrades, excludedCategories = activeExcludedCategories)
+        }
     val summary =
-        remember(displayedGrades) {
-            JxfwParse.summarizeGrades(displayedGrades)
+        remember(termGrades, activeExcludedKeys, activeExcludedCategories) {
+            JxfwParse.summarizeGrades(
+                termGrades,
+                excludedKeys = activeExcludedKeys,
+                excludedCategories = activeExcludedCategories,
+            )
         }
-
-    val onRefresh: () -> Unit = {
-        scope.launch {
-            app.jxfw
-                .refreshGrades()
-                .onSuccess { list ->
-                    actions.toast(ctx.getString(R.string.grades_refreshed_toast, list.size))
-                }
-        }
-    }
+    val excludedCount = termGrades.size - summary.count
+    val hasFilter = activeExcludedKeys.isNotEmpty() || activeExcludedCategories.isNotEmpty()
 
     MintScreen(title = stringResource(R.string.grades_title), onBack = onBack) {
-        if (!jxfwState.loggedIn) {
+        if (!loggedIn) {
             EmptyState(
                 title = stringResource(R.string.grades_not_logged_in_title),
                 hint = stringResource(R.string.grades_not_logged_in_hint),
                 icon = Icons.Rounded.School,
                 actionLabel = stringResource(R.string.jxfw_card_bind_action),
-                onAction = { nav.push(Route.Jxfw) },
+                onAction = onOpenJxfw,
                 modifier = Modifier.padding(top = 48.dp, start = 24.dp, end = 24.dp),
             )
             return@MintScreen
@@ -138,6 +185,12 @@ fun GradesScreen(onBack: () -> Unit) {
                     summary = summary,
                     gradesState = gradesState,
                     filteredByTerm = activeTerm != null,
+                    hasFilter = hasFilter,
+                    excludedCount = excludedCount,
+                    onResetFilter = {
+                        excludedKeys = emptySet()
+                        excludedCategories = emptySet()
+                    },
                     onRefresh = onRefresh,
                 )
             }
@@ -146,7 +199,7 @@ fun GradesScreen(onBack: () -> Unit) {
                 item(key = "error") {
                     GradesErrorBanner(
                         gradesState = gradesState,
-                        onOpenJxfw = { nav.push(Route.Jxfw) },
+                        onOpenJxfw = onOpenJxfw,
                     )
                 }
             }
@@ -175,6 +228,46 @@ fun GradesScreen(onBack: () -> Unit) {
                 }
             }
 
+            if (categories.isNotEmpty()) {
+                item(key = "categories-header") {
+                    SectionLabel(
+                        stringResource(R.string.grades_filter_section),
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                item(key = "categories") {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        item(key = "category-all") {
+                            ChipPill(
+                                label = stringResource(R.string.grades_filter_all),
+                                on = activeExcludedCategories.isEmpty(),
+                                role = Role.Checkbox,
+                                onClick = { excludedCategories = emptySet() },
+                            )
+                        }
+                        items(categories, key = { it }) { category ->
+                            val included = category !in activeExcludedCategories
+                            ChipPill(
+                                label = category,
+                                on = included,
+                                role = Role.Checkbox,
+                                onClick = {
+                                    excludedCategories =
+                                        if (category in excludedCategories) {
+                                            excludedCategories - category
+                                        } else {
+                                            excludedCategories + category
+                                        }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
             if (gradesState.grades.isEmpty()) {
                 item(key = "empty") {
                     EmptyState(
@@ -188,18 +281,36 @@ fun GradesScreen(onBack: () -> Unit) {
                 }
             } else {
                 item(key = "list-header") {
-                    SectionLabel(
-                        stringResource(R.string.grades_list_section, displayedGrades.size),
+                    Column(
                         modifier = Modifier.padding(top = 2.dp),
-                    )
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        SectionLabel(stringResource(R.string.grades_list_section, visibleGrades.size))
+                        Text(
+                            stringResource(R.string.grades_filter_toggle_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 itemsIndexed(
-                    displayedGrades,
-                    key = { index, g -> "$index|${g.term}|${g.code}|${g.name}" },
+                    visibleGrades,
+                    key = { index, g -> "$index|${g.filterKey}" },
                 ) { _, grade ->
+                    val excluded = grade.filterKey in activeExcludedKeys
                     GradeRow(
                         grade = grade,
                         showTerm = activeTerm == null,
+                        excluded = excluded,
+                        onToggleExclude = {
+                            val key = grade.filterKey
+                            excludedKeys =
+                                if (key in excludedKeys) {
+                                    excludedKeys - key
+                                } else {
+                                    excludedKeys + key
+                                }
+                        },
                     )
                 }
             }
@@ -212,6 +323,9 @@ private fun GradesSummaryCard(
     summary: JxfwGradeSummary,
     gradesState: JxfwGradesState,
     filteredByTerm: Boolean,
+    hasFilter: Boolean,
+    excludedCount: Int,
+    onResetFilter: () -> Unit,
     onRefresh: () -> Unit,
 ) {
     val dash = stringResource(R.string.grades_dash)
@@ -219,12 +333,19 @@ private fun GradesSummaryCard(
         summary.weightedGpa?.let {
             String.format(Locale.US, "%.2f", it)
         } ?: dash
+    val earnedCreditsText = stringResource(R.string.grades_earned_credits, formatCompactDecimal(summary.earnedCredits))
     val creditsText = stringResource(R.string.grades_total_credits, formatCompactDecimal(summary.totalCredits))
     val countText = stringResource(R.string.grades_course_count, summary.count)
     val fetchedText =
         gradesState.fetchedAt?.let {
             stringResource(R.string.grades_last_fetched, jxfwStamp(it))
         } ?: stringResource(R.string.grades_never_fetched)
+    val gpaTitleRes =
+        when {
+            hasFilter -> R.string.grades_filtered_gpa
+            filteredByTerm -> R.string.grades_weighted_gpa_term
+            else -> R.string.grades_weighted_gpa
+        }
 
     MintCard(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)) {
         Row(
@@ -234,7 +355,7 @@ private fun GradesSummaryCard(
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    stringResource(if (filteredByTerm) R.string.grades_weighted_gpa_term else R.string.grades_weighted_gpa),
+                    stringResource(gpaTitleRes),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -271,10 +392,29 @@ private fun GradesSummaryCard(
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            "$creditsText · $countText · $fetchedText",
+            "$earnedCreditsText · $creditsText · $countText · $fetchedText",
             style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (hasFilter) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    stringResource(R.string.grades_filter_excluded_count, excludedCount),
+                    style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                ChipPill(
+                    label = stringResource(R.string.grades_filter_reset),
+                    on = null,
+                    onClick = onResetFilter,
+                )
+            }
+        }
         Spacer(Modifier.height(6.dp))
         Text(
             stringResource(R.string.grades_disclaimer),
@@ -306,6 +446,8 @@ private fun GradesErrorBanner(
 private fun GradeRow(
     grade: JxfwGrade,
     showTerm: Boolean,
+    excluded: Boolean,
+    onToggleExclude: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val dash = stringResource(R.string.grades_dash)
@@ -323,19 +465,27 @@ private fun GradeRow(
     val scoreText = grade.score.ifBlank { dash }
     val failed = grade.gpa == 0.0 || grade.score.toDoubleOrNull()?.let { it < 60.0 } == true
     val scoreColor =
-        if (failed) {
-            MintTheme.colors.removed
-        } else {
-            MaterialTheme.colorScheme.primary
+        when {
+            excluded -> MaterialTheme.colorScheme.onSurfaceVariant
+            failed -> MintTheme.colors.removed
+            else -> MaterialTheme.colorScheme.primary
         }
 
     Surface(
         shape = MaterialTheme.shapes.medium,
-        color = MintTheme.card,
-        modifier = Modifier.fillMaxWidth(),
+        color = if (excluded) MaterialTheme.colorScheme.surfaceContainerLow else MintTheme.card,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .semantics {
+                    toggleableState = if (excluded) ToggleableState.Off else ToggleableState.On
+                }.mintClickable(pressedScale = 0.98f, role = Role.Checkbox, onClick = onToggleExclude),
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .alpha(if (excluded) 0.55f else 1f),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -344,6 +494,7 @@ private fun GradeRow(
                     grade.name,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
+                    textDecoration = if (excluded) TextDecoration.LineThrough else null,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
