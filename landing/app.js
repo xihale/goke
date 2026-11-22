@@ -222,42 +222,7 @@
     }
   }
 
-  /* 4. Demo video chapter jump pills */
-  var video = document.getElementById('demoVideo');
-  var chaptersWrap = document.getElementById('demoChapters');
-  if (video && chaptersWrap) {
-    var chapterBtns = Array.prototype.slice.call(chaptersWrap.querySelectorAll('.chapter-pill'));
-
-    function setActiveChapter(targetBtn) {
-      chapterBtns.forEach(function (btn) {
-        btn.classList.toggle('is-active', btn === targetBtn);
-      });
-    }
-
-    chapterBtns.forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var sec = parseFloat(btn.getAttribute('data-time') || '0');
-        setActiveChapter(btn);
-        try {
-          video.currentTime = sec;
-          var p = video.play();
-          if (p && typeof p.catch === 'function') p.catch(function () {});
-        } catch (err) {}
-      });
-    });
-
-    video.addEventListener('timeupdate', function () {
-      var t = video.currentTime;
-      var active = chapterBtns[0];
-      for (var i = 0; i < chapterBtns.length; i++) {
-        var start = parseFloat(chapterBtns[i].getAttribute('data-time') || '0');
-        if (t >= start - 0.3) active = chapterBtns[i];
-      }
-      if (active) setActiveChapter(active);
-    });
-  }
-
-  /* 5. Screens filter, sliding thumbs, light/dark toggle & lightbox */
+  /* 4. Screens filter, sliding thumbs, light/dark toggle & lightbox */
   var shotGrid = document.getElementById('shotGrid');
   var filterWrap = document.getElementById('screenFilters');
   var modeWrap = document.getElementById('galleryModeSwitch');
@@ -375,7 +340,7 @@
     });
   }
 
-  /* 6. Hydrate latest release info from latest.json */
+  /* 5. Hydrate latest release info from latest.json */
   function formatMiB(bytes) {
     return (bytes / (1024 * 1024)).toFixed(2) + ' MiB';
   }
