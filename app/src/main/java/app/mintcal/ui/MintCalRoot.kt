@@ -131,9 +131,10 @@ val LocalModalHost =
 fun MintCalRoot(
     app: MintCalApp,
     incoming: Uri?,
+    initialTab: Tab = Tab.TIMETABLE,
     onIncomingHandled: () -> Unit,
 ) {
-    val nav = rememberNav()
+    val nav = rememberNav(initialTab)
     val scope = rememberCoroutineScope()
     val actions = remember { Actions(app, scope, nav) }
     val ready by app.repo.ready.collectAsState()

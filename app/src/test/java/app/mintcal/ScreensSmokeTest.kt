@@ -56,6 +56,7 @@ import app.mintcal.core.model.Attachment
 import app.mintcal.core.model.Event
 import app.mintcal.core.model.EventKind
 import app.mintcal.core.model.Freq
+import app.mintcal.core.model.GdutCampus
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
 import app.mintcal.core.model.TaskList
@@ -72,6 +73,7 @@ import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
 import app.mintcal.ui.MintCalRoot
+import app.mintcal.ui.Tab
 import app.mintcal.ui.components.AttachmentEditor
 import app.mintcal.ui.liveSnapshot
 import app.mintcal.ui.mintDestinations
@@ -159,6 +161,18 @@ class ScreensSmokeTest {
             app.repo.commit(ChangeSet("sem", "sem", Source.MANUAL, now, listOf(Change.Modify(sem, sem2))))
             val courses = IcsImporter.toCourses(cal, sem2, now).value!!.courses
             app.repo.commit(ImportPlanner.planCourses(app.repo.snapshot.value, sem2, courses, now, "导入课表"))
+            val firstCourse =
+                app.repo.snapshot.value.courses
+                    .first()
+            app.repo.commit(
+                ChangeSet(
+                    "course-campus",
+                    "course-campus",
+                    Source.MANUAL,
+                    now,
+                    listOf(Change.Modify(firstCourse, firstCourse.copy(campusOverride = GdutCampus.LONGDONG))),
+                ),
+            )
             val list = TaskList(Ids.next(), "学习", 1, 0)
             val today = LocalDate.now()
             val tasks =
@@ -207,6 +221,7 @@ class ScreensSmokeTest {
             )
             val weekStart = SemesterCalendar(sem2).let { sCal -> sCal.weekStart(sCal.weekOf(today).coerceIn(1, sem2.totalWeeks)) }
             app.jxfw.seedClassroomDemoForTest(weekStart)
+            app.tzcs.seedPhysicalTestDemoForTest()
         }
     }
 
@@ -247,10 +262,10 @@ class ScreensSmokeTest {
                 .first()
         val screens: List<Pair<String, @Composable () -> Unit>> =
             listOf(
-                "today" to { TodayScreen() },
-                "timetable" to { TimetableScreen() },
-                "calendar" to { CalendarScreen() },
-                "todo" to { TodoScreen() },
+                "today" to { MintCalRoot(app, null, initialTab = Tab.TODAY) {} },
+                "timetable" to { MintCalRoot(app, null, initialTab = Tab.TIMETABLE) {} },
+                "calendar" to { MintCalRoot(app, null, initialTab = Tab.CALENDAR) {} },
+                "todo" to { MintCalRoot(app, null, initialTab = Tab.TODO) {} },
                 "course_edit" to { CourseEditScreen(first.id) {} },
                 "course_new" to { CourseEditScreen(null) {} },
                 "slot_sheet" to {
@@ -308,7 +323,7 @@ class ScreensSmokeTest {
                 "periods" to { PeriodsScreen {} },
                 "appearance" to { AppearanceScreen {} },
                 "widgets" to { WidgetsScreen {} },
-                "settings" to { SettingsScreen() },
+                "settings" to { MintCalRoot(app, null, initialTab = Tab.ME) {} },
                 "data" to { DataScreen {} },
                 "sync" to { SyncScreen {} },
                 "jxfw" to { JxfwScreen {} },

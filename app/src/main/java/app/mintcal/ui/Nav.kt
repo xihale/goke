@@ -108,8 +108,9 @@ sealed interface Route {
  */
 class Nav(
     val controller: NavHostController,
+    initialTab: Tab = Tab.TIMETABLE,
 ) {
-    var tab by mutableStateOf(Tab.TIMETABLE)
+    var tab by mutableStateOf(initialTab)
 
     /** 外部分享来的多行文字，待办页的快速添加接手并给出批量预览。 */
     var pendingAddText by mutableStateOf<String?>(null)
@@ -147,9 +148,9 @@ class Nav(
 }
 
 @Composable
-fun rememberNav(): Nav {
+fun rememberNav(initialTab: Tab = Tab.TIMETABLE): Nav {
     val controller = rememberNavController()
-    return remember { Nav(controller) }
+    return remember { Nav(controller, initialTab) }
 }
 
 /** 页面里发起的写操作:统一走变更集。可撤销的操作留一条说明，直到下一次操作或用户关掉；不能撤销的提示走系统 Toast。 */
