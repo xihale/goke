@@ -3,12 +3,19 @@ package app.mintcal.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -70,12 +77,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -92,6 +101,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -130,6 +140,7 @@ import app.mintcal.ui.reduceMotion
 import app.mintcal.ui.rememberToday
 import app.mintcal.ui.theme.MintTheme
 import app.mintcal.ui.weekdayShort
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import kotlin.math.roundToInt
 
@@ -809,16 +820,22 @@ private fun ClassroomFinderView(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
                         )
+                        val chevronRotation by animateFloatAsState(
+                            if (showBuildingSheet) 180f else 0f,
+                            MintTheme.press(),
+                            label = "building-chevron-rotation",
+                        )
                         Icon(
                             Icons.Rounded.KeyboardArrowDown,
                             contentDescription = stringResource(R.string.classroom_building_picker_cd),
                             tint = scheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = chevronRotation },
                         )
                     }
                 }
 
                 CompactWeekCapsule(
+                    week = week,
                     label = stringResource(R.string.classroom_week_label, week),
                     canPrev = week > 1,
                     canNext = week < maxWeeks,
@@ -831,31 +848,49 @@ private fun ClassroomFinderView(
         // Compact control panel MintCard: 7-col equal-width weekday strip + period quick-filter row
         item(key = "control-panel") {
             MintCard(color = scheme.surfaceContainerLow, shape = RoundedCornerShape(22.dp)) {
+                val pillPos by animateFloatAsState(
+                    (selectedDayOfWeek - 1).toFloat(),
+                    MintTheme.spec(),
+                    label = "weekday-pill-pos",
+                )
+                val pillColor = scheme.primaryContainer
                 Row(
-                    Modifier.fillMaxWidth(),
+                    Modifier
+                        .fillMaxWidth()
+                        .drawBehind {
+                            val gap = 4.dp.toPx()
+                            val colW = (size.width - gap * 6f) / 7f
+                            val left = pillPos * (colW + gap)
+                            val radius = 14.dp.toPx()
+                            drawRoundRect(
+                                color = pillColor,
+                                topLeft = Offset(left, 0f),
+                                size = Size(colW, size.height),
+                                cornerRadius = CornerRadius(radius, radius),
+                            )
+                        },
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     for (dow in 1..7) {
                         val date = weekStart.plusDays((dow - 1).toLong())
                         val isSelected = dow == selectedDayOfWeek
                         val isToday = date == today
-                        val pillBg by animateColorAsState(
-                            if (isSelected) scheme.primaryContainer else Color.Transparent,
-                            MintTheme.spec(),
-                            label = "day-pill-bg",
-                        )
-                        val textColor =
+                        val targetTextColor =
                             when {
                                 isSelected -> scheme.onPrimaryContainer
                                 isToday -> scheme.primary
                                 else -> scheme.onSurfaceVariant
                             }
+                        val textColor by animateColorAsState(
+                            targetTextColor,
+                            MintTheme.press(),
+                            label = "weekday-text-color",
+                        )
                         Column(
                             Modifier
                                 .weight(1f)
                                 .heightIn(min = 52.dp)
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(pillBg)
                                 .semantics {
                                     role = Role.RadioButton
                                     selected = isSelected
@@ -883,7 +918,7 @@ private fun ClassroomFinderView(
                                         .padding(top = 2.dp)
                                         .size(4.dp)
                                         .clip(CircleShape)
-                                        .background(if (isSelected) scheme.onPrimaryContainer else scheme.primary),
+                                        .background(textColor),
                                 )
                             } else {
                                 Spacer(Modifier.height(6.dp))
@@ -927,12 +962,19 @@ private fun ClassroomFinderView(
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        stringResource(R.string.classroom_summary_count, totalRoomsCount, freeRoomsCount),
-                        style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
-                        color = scheme.onSurfaceVariant,
+                    val summaryFadeSpec = MintTheme.spec<Float>()
+                    AnimatedContent(
+                        targetState = totalRoomsCount to freeRoomsCount,
+                        transitionSpec = { fadeIn(summaryFadeSpec) togetherWith fadeOut(summaryFadeSpec) },
                         modifier = Modifier.weight(1f),
-                    )
+                        label = "classroom-summary-count",
+                    ) { (total, free) ->
+                        Text(
+                            stringResource(R.string.classroom_summary_count, total, free),
+                            style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                            color = scheme.onSurfaceVariant,
+                        )
+                    }
                     Text(
                         stringResource(
                             R.string.classroom_summary_week_range,
@@ -967,11 +1009,19 @@ private fun ClassroomFinderView(
             }
         } else {
             items(rooms, key = { it.code }) { room ->
+                val roomFadeIn = MintTheme.spec<Float>()
+                val roomPlacement = MintTheme.spec<IntOffset>()
+                val roomFadeOut = MintTheme.press<Float>()
                 ClassroomRoomRow(
                     room = room,
                     dayOccupancies = dayOccupancies,
                     targetPeriods = targetPeriods,
-                    modifier = Modifier.animateItem(),
+                    modifier =
+                        Modifier.animateItem(
+                            fadeInSpec = roomFadeIn,
+                            placementSpec = roomPlacement,
+                            fadeOutSpec = roomFadeOut,
+                        ),
                     onClick = { onSelectRoom(room) },
                 )
             }
@@ -995,6 +1045,7 @@ private fun ClassroomFinderView(
 
 @Composable
 private fun CompactWeekCapsule(
+    week: Int,
     label: String,
     canPrev: Boolean,
     canNext: Boolean,
@@ -1003,6 +1054,9 @@ private fun CompactWeekCapsule(
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val reduce = reduceMotion()
+    val slideSpec = MintTheme.press<IntOffset>()
+    val fadeSpec = MintTheme.press<Float>()
     Surface(
         shape = CircleShape,
         color = scheme.surfaceContainerHighest,
@@ -1023,14 +1077,33 @@ private fun CompactWeekCapsule(
                     modifier = Modifier.size(20.dp),
                 )
             }
-            Text(
-                label,
-                style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
-                fontWeight = FontWeight.SemiBold,
-                color = scheme.onSurface,
-                maxLines = 1,
-                softWrap = false,
-            )
+            AnimatedContent(
+                targetState = week to label,
+                transitionSpec = {
+                    val transition =
+                        if (reduce) {
+                            fadeIn(snap()) togetherWith fadeOut(snap())
+                        } else if (targetState.first > initialState.first) {
+                            (slideInVertically(slideSpec) { it / 2 } + fadeIn(fadeSpec)) togetherWith
+                                (slideOutVertically(slideSpec) { -it / 2 } + fadeOut(fadeSpec))
+                        } else {
+                            (slideInVertically(slideSpec) { -it / 2 } + fadeIn(fadeSpec)) togetherWith
+                                (slideOutVertically(slideSpec) { it / 2 } + fadeOut(fadeSpec))
+                        }
+                    transition.using(SizeTransform(clip = true))
+                },
+                contentAlignment = Alignment.Center,
+                label = "compact-week-label",
+            ) { (_, weekText) ->
+                Text(
+                    weekText,
+                    style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                    fontWeight = FontWeight.SemiBold,
+                    color = scheme.onSurface,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
             Box(
                 Modifier
                     .size(width = 36.dp, height = 48.dp)
@@ -1122,6 +1195,9 @@ private fun ClassroomBuildingPickerSheet(
                     modifier = Modifier.padding(vertical = 20.dp),
                 )
             } else {
+                val itemFadeIn = MintTheme.spec<Float>()
+                val itemPlacement = MintTheme.spec<IntOffset>()
+                val itemFadeOut = MintTheme.press<Float>()
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1129,7 +1205,13 @@ private fun ClassroomBuildingPickerSheet(
                 ) {
                     items(rows, key = { pair -> pair.joinToString(",") { it.code } }) { pair ->
                         Row(
-                            Modifier.fillMaxWidth(),
+                            Modifier
+                                .fillMaxWidth()
+                                .animateItem(
+                                    fadeInSpec = itemFadeIn,
+                                    placementSpec = itemPlacement,
+                                    fadeOutSpec = itemFadeOut,
+                                ),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             pair.forEach { b ->
@@ -1380,6 +1462,7 @@ private fun ClassroomRoomScheduleView(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             CompactWeekCapsule(
+                week = week,
                 label =
                     stringResource(
                         R.string.classroom_week_capsule_range,
@@ -1441,20 +1524,20 @@ private fun ClassroomRoomScheduleView(
                     }
                 }
             val personalItems =
-                remember(snap, pageWeek, pageWeekStart, periods, overlayPersonal) {
-                    if (!overlayPersonal) {
-                        emptyList()
-                    } else {
-                        ClassroomGridHelper.personalOverlayForWeek(snap, pageWeek, pageWeekStart, periods)
-                    }
+                remember(snap, pageWeek, pageWeekStart, periods) {
+                    ClassroomGridHelper.personalOverlayForWeek(snap, pageWeek, pageWeekStart, periods)
                 }
             val personalBusyByDay =
-                remember(personalItems) {
-                    personalItems
-                        .groupBy { it.dayOfWeek }
-                        .mapValues { (_, list) ->
-                            list.flatMapTo(HashSet()) { it.startPeriod..it.endPeriod }
-                        }
+                remember(personalItems, overlayPersonal) {
+                    if (!overlayPersonal) {
+                        emptyMap()
+                    } else {
+                        personalItems
+                            .groupBy { it.dayOfWeek }
+                            .mapValues { (_, list) ->
+                                list.flatMapTo(HashSet()) { it.startPeriod..it.endPeriod }
+                            }
+                    }
                 }
 
             ClassroomWeekGrid(
@@ -1463,6 +1546,7 @@ private fun ClassroomRoomScheduleView(
                 today = today,
                 occByDay = occByDay,
                 personalItems = personalItems,
+                showPersonalOverlay = overlayPersonal,
                 gridWidth = gridWidth,
                 scroll = scroll,
                 modifier = Modifier.fillMaxSize(),
@@ -1482,6 +1566,7 @@ private fun ClassroomWeekGrid(
     today: LocalDate,
     occByDay: Map<Int, List<ClassroomOccupancy>>,
     personalItems: List<PersonalOverlayItem>,
+    showPersonalOverlay: Boolean,
     gridWidth: Dp,
     scroll: androidx.compose.foundation.ScrollState,
     modifier: Modifier = Modifier,
@@ -1687,31 +1772,54 @@ private fun ClassroomWeekGrid(
                 }
 
                 // Overlaid personal courses & tasks when room itself is free in those periods
-                personalItems.forEach { item ->
-                    val roomOccs = occByDay[item.dayOfWeek].orEmpty()
-                    val overlapsRoom = roomOccs.any { occ -> occ.periods.any { it in item.startPeriod..item.endPeriod } }
-                    if (!overlapsRoom) {
-                        val sp = item.startPeriod.coerceIn(1, n)
-                        val ep = item.endPeriod.coerceIn(sp, n)
-                        val top = ClassroomGridHelper.calcPeriodTop(sp, n, rowH, groupGap) + 2.dp
-                        val bottom = ClassroomGridHelper.calcPeriodTop(ep, n, rowH, groupGap) + rowH - 2.dp
-                        Box(
-                            Modifier
-                                .absoluteOffset(timeColW + colW * (item.dayOfWeek - 1) + 1.5.dp, top)
-                                .width(colW - 3.dp)
-                                .height(bottom - top)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(scheme.surfaceContainerHighest.copy(alpha = 0.65f))
-                                .border(0.8.dp, scheme.outline.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
-                                .padding(4.dp),
-                        ) {
-                            Text(
-                                stringResource(R.string.classroom_personal_prefix, item.title),
-                                style = blockSubStyle,
-                                color = variantColor,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                val reduce = reduceMotion()
+                val overlayFadeInSpec = MintTheme.spec<Float>()
+                val overlayScaleInSpec = MintTheme.spec<Float>()
+                val overlayFadeOutSpec = MintTheme.press<Float>()
+                val overlayScaleOutSpec = MintTheme.press<Float>()
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showPersonalOverlay && personalItems.isNotEmpty(),
+                    enter =
+                        if (reduce) {
+                            fadeIn(snap())
+                        } else {
+                            fadeIn(overlayFadeInSpec) + scaleIn(overlayScaleInSpec, initialScale = 0.96f)
+                        },
+                    exit =
+                        if (reduce) {
+                            fadeOut(snap())
+                        } else {
+                            fadeOut(overlayFadeOutSpec) + scaleOut(overlayScaleOutSpec, targetScale = 0.96f)
+                        },
+                ) {
+                    Box(Modifier.fillMaxSize()) {
+                        personalItems.forEach { item ->
+                            val roomOccs = occByDay[item.dayOfWeek].orEmpty()
+                            val overlapsRoom = roomOccs.any { occ -> occ.periods.any { it in item.startPeriod..item.endPeriod } }
+                            if (!overlapsRoom) {
+                                val sp = item.startPeriod.coerceIn(1, n)
+                                val ep = item.endPeriod.coerceIn(sp, n)
+                                val top = ClassroomGridHelper.calcPeriodTop(sp, n, rowH, groupGap) + 2.dp
+                                val bottom = ClassroomGridHelper.calcPeriodTop(ep, n, rowH, groupGap) + rowH - 2.dp
+                                Box(
+                                    Modifier
+                                        .absoluteOffset(timeColW + colW * (item.dayOfWeek - 1) + 1.5.dp, top)
+                                        .width(colW - 3.dp)
+                                        .height(bottom - top)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(scheme.surfaceContainerHighest.copy(alpha = 0.65f))
+                                        .border(0.8.dp, scheme.outline.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                                        .padding(4.dp),
+                                ) {
+                                    Text(
+                                        stringResource(R.string.classroom_personal_prefix, item.title),
+                                        style = blockSubStyle,
+                                        color = variantColor,
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1776,24 +1884,79 @@ private fun ClassroomWeekGrid(
                 }
 
                 // BoxSel highlight + floating time preview badge positioned via IntOffset
-                box?.let { b ->
-                    val boxAlpha by animateFloatAsState(1f, MintTheme.spec(), label = "classroom-box-sel")
-                    val top = ClassroomGridHelper.calcPeriodTop(b.first, n, rowH, groupGap) + 2.dp
-                    val bottom = ClassroomGridHelper.calcPeriodTop(b.last, n, rowH, groupGap) + rowH - 2.dp
+                var lastBox by remember { mutableStateOf<ClassroomBoxSel?>(null) }
+                var wasActive by remember { mutableStateOf(false) }
+                val boxVisible = box != null
+                val boxAlpha by animateFloatAsState(
+                    if (boxVisible) 1f else 0f,
+                    MintTheme.press(),
+                    label = "classroom-box-alpha",
+                )
+                val boxScale by animateFloatAsState(
+                    if (boxVisible) 1f else 0.94f,
+                    MintTheme.press(),
+                    label = "classroom-box-scale",
+                )
+                val animLeft = remember { Animatable(0f) }
+                val animTop = remember { Animatable(0f) }
+                val animWidth = remember { Animatable(0f) }
+                val animHeight = remember { Animatable(0f) }
+                val boxSpringSpec = MintTheme.press<Float>()
+
+                LaunchedEffect(box, colW, rowH) {
+                    val b = box
+                    if (b == null) {
+                        wasActive = false
+                        return@LaunchedEffect
+                    }
                     val d1 = minOf(b.day1, b.day2)
                     val d2 = maxOf(b.day1, b.day2)
-                    val boxW = colW * (d2 - d1 + 1) - 3.dp
-                    val boxH = bottom - top
-                    val boxXPx = with(localDensity) { (timeColW + colW * (d1 - 1) + 1.5.dp).toPx() }.roundToInt()
-                    val boxYPx = with(localDensity) { top.toPx() }.roundToInt()
+                    val top = ClassroomGridHelper.calcPeriodTop(b.first, n, rowH, groupGap) + 2.dp
+                    val bottom = ClassroomGridHelper.calcPeriodTop(b.last, n, rowH, groupGap) + rowH - 2.dp
+                    val targetLeft = with(localDensity) { (timeColW + colW * (d1 - 1) + 1.5.dp).toPx() }
+                    val targetTop = with(localDensity) { top.toPx() }
+                    val targetWidth = with(localDensity) { (colW * (d2 - d1 + 1) - 3.dp).toPx() }
+                    val targetHeight = with(localDensity) { (bottom - top).toPx() }
+                    if (!wasActive) {
+                        animLeft.snapTo(targetLeft)
+                        animTop.snapTo(targetTop)
+                        animWidth.snapTo(targetWidth)
+                        animHeight.snapTo(targetHeight)
+                        wasActive = true
+                        lastBox = b
+                    } else {
+                        lastBox = b
+                        launch { animLeft.animateTo(targetLeft, boxSpringSpec) }
+                        launch { animTop.animateTo(targetTop, boxSpringSpec) }
+                        launch { animWidth.animateTo(targetWidth, boxSpringSpec) }
+                        launch { animHeight.animateTo(targetHeight, boxSpringSpec) }
+                    }
+                }
+                LaunchedEffect(boxVisible, boxAlpha) {
+                    if (!boxVisible && boxAlpha == 0f) {
+                        lastBox = null
+                    }
+                }
+
+                val activeBox = box ?: lastBox
+                if (activeBox != null && (boxVisible || boxAlpha > 0.001f)) {
+                    val b = activeBox
+                    val d1 = minOf(b.day1, b.day2)
+                    val d2 = maxOf(b.day1, b.day2)
 
                     Box(
                         Modifier
-                            .offset { IntOffset(boxXPx, boxYPx) }
-                            .graphicsLayer { alpha = boxAlpha }
-                            .width(boxW)
-                            .height(boxH)
-                            .clip(RoundedCornerShape(14.dp))
+                            .offset { IntOffset(animLeft.value.roundToInt(), animTop.value.roundToInt()) }
+                            .layout { measurable, _ ->
+                                val w = animWidth.value.roundToInt().coerceAtLeast(0)
+                                val h = animHeight.value.roundToInt().coerceAtLeast(0)
+                                val placeable = measurable.measure(Constraints.fixed(w, h))
+                                layout(w, h) { placeable.place(0, 0) }
+                            }.graphicsLayer {
+                                alpha = boxAlpha
+                                scaleX = boxScale
+                                scaleY = boxScale
+                            }.clip(RoundedCornerShape(14.dp))
                             .background(scheme.primary.copy(alpha = 0.28f))
                             .border(2.dp, scheme.primary, RoundedCornerShape(14.dp)),
                     )
@@ -1823,20 +1986,9 @@ private fun ClassroomWeekGrid(
                             }
                         val gridWPx = with(localDensity) { gridWidth.toPx() }.roundToInt()
                         val timeColPx = with(localDensity) { timeColW.toPx() }.roundToInt()
-                        val boxWPx = with(localDensity) { boxW.toPx() }.roundToInt()
-                        val boxHPx = with(localDensity) { boxH.toPx() }.roundToInt()
                         val gapPx = with(localDensity) { 6.dp.toPx() }.roundToInt()
                         var badgeW by remember { mutableIntStateOf(0) }
                         var badgeH by remember { mutableIntStateOf(0) }
-                        val badgeX =
-                            (boxXPx + (boxWPx - badgeW) / 2)
-                                .coerceIn(timeColPx, (gridWPx - badgeW).coerceAtLeast(timeColPx))
-                        val badgeY =
-                            if (b.first > 1 && boxYPx - badgeH - gapPx >= 0) {
-                                boxYPx - badgeH - gapPx
-                            } else {
-                                boxYPx + boxHPx + gapPx
-                            }
 
                         Surface(
                             shape = CircleShape,
@@ -1844,8 +1996,26 @@ private fun ClassroomWeekGrid(
                             shadowElevation = 4.dp,
                             modifier =
                                 Modifier
-                                    .offset { IntOffset(badgeX, badgeY) }
-                                    .onSizeChanged {
+                                    .offset {
+                                        val boxX = animLeft.value.roundToInt()
+                                        val boxY = animTop.value.roundToInt()
+                                        val boxW = animWidth.value.roundToInt()
+                                        val boxH = animHeight.value.roundToInt()
+                                        val badgeX =
+                                            (boxX + (boxW - badgeW) / 2)
+                                                .coerceIn(timeColPx, (gridWPx - badgeW).coerceAtLeast(timeColPx))
+                                        val badgeY =
+                                            if (b.first > 1 && boxY - badgeH - gapPx >= 0) {
+                                                boxY - badgeH - gapPx
+                                            } else {
+                                                boxY + boxH + gapPx
+                                            }
+                                        IntOffset(badgeX, badgeY)
+                                    }.graphicsLayer {
+                                        alpha = boxAlpha
+                                        scaleX = boxScale
+                                        scaleY = boxScale
+                                    }.onSizeChanged {
                                         badgeW = it.width
                                         badgeH = it.height
                                     },
