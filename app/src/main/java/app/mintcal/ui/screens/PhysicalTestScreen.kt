@@ -694,6 +694,8 @@ private fun TzcsVerifyRefreshDialog(
 
     var password by remember { mutableStateOf(initialPassword) }
     var vercode by remember { mutableStateOf("") }
+    // 已存密码时只要求填验证码（密码静默复用）；无存密码或密码被服务端拒绝时才露出密码框
+    var revealPassword by remember { mutableStateOf(initialPassword.isBlank()) }
     var captchaBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var captchaLoading by remember { mutableStateOf(false) }
     var captchaError by remember { mutableStateOf<String?>(null) }
@@ -733,12 +735,14 @@ private fun TzcsVerifyRefreshDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                TonalField(
-                    label = stringResource(R.string.tzcs_password),
-                    value = password,
-                    onChange = { password = it },
-                    secret = true,
-                )
+                if (revealPassword) {
+                    TonalField(
+                        label = stringResource(R.string.tzcs_password),
+                        value = password,
+                        onChange = { password = it },
+                        secret = true,
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.Bottom,
@@ -780,6 +784,9 @@ private fun TzcsVerifyRefreshDialog(
                                 onRefreshed(list.size)
                             }.onFailure { err ->
                                 errorMsg = err.message
+                                if ((err as? TzcsException)?.kind == TzcsException.Kind.CREDENTIALS) {
+                                    revealPassword = true
+                                }
                                 vercode = ""
                                 reloadCaptcha()
                             }
