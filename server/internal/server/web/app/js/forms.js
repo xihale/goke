@@ -79,7 +79,7 @@ export function openSemesterForm({ semester, create = false } = {}) {
       });
       const fields2 = { name: nm, week1Monday: monday.value, totalWeeks: total, periods: ps };
       if (!isNew) {
-        store.put(touch(cur, fields2));
+        store.put(touch(store.get(cur.id) || cur, fields2));
         return false;
       }
       const sem = newSemester({ ...fields2, isCurrent: true });
@@ -92,7 +92,7 @@ export function openSemesterForm({ semester, create = false } = {}) {
       return false;
     },
     extraActions: !isNew && store.view().semesters.length > 1 && !cur.isCurrent
-      ? [h('button', { type: 'button', class: 'btn tonal', onclick: () => { setCurrentSemester(cur); toast('已切换到该学期'); } }, '设为当前学期')]
+      ? [h('button', { type: 'button', class: 'btn tonal', onclick: (e) => { setCurrentSemester(store.get(cur.id) || cur); e.currentTarget.disabled = true; toast('已切换到该学期'); } }, '设为当前学期')]
       : [],
   });
 }
@@ -154,7 +154,7 @@ export function openCourseForm({ course, day, period } = {}) {
   }
   [dayS, sp, ep].forEach((el) => el.addEventListener('change', checkConflict));
   checkConflict();
-  formSheet({
+  const { dlg } = formSheet({
     title: c ? '编辑课程' : '添加课程',
     wide: true,
     fields: [
@@ -170,7 +170,7 @@ export function openCourseForm({ course, day, period } = {}) {
       field('上课校区（作息）', campusS),
       field('备注', note),
     ],
-    extraActions: c ? [h('button', { type: 'button', class: 'btn danger-ghost', onclick: async () => { if (await confirmDialog(`删除课程「${c.name}」？`, '删除', { danger: true })) { dlgClose(); removeCourse(c); } } }, '删除')] : [],
+    extraActions: c ? [h('button', { type: 'button', class: 'btn danger-ghost', onclick: async () => { if (await confirmDialog(`删除课程「${c.name}」？`, '删除', { danger: true })) { dlg.close(); removeCourse(c); } } }, '删除')] : [],
     onSubmit: async () => {
       const nm = name.value.trim();
       if (!nm) throw new Error('请填写课程名称');
@@ -187,8 +187,6 @@ export function openCourseForm({ course, day, period } = {}) {
       return false;
     },
   });
-  // 删除按钮需要关闭当前对话框
-  function dlgClose() { document.querySelector('dialog.sheet[open]')?.close(); }
 }
 
 /** 点击课表里的课程：显示详情与「停课 / 调课 / 编辑 / 删除」。occ 是 expandCourses 的一项。 */
@@ -236,10 +234,10 @@ function openRescheduleForm(c, week, existing) {
   const sp = select(popts, ex?.newStartPeriod ?? c.startPeriod);
   const ep = select(popts, ex?.newEndPeriod ?? c.endPeriod);
   const room = textInput(ex?.newRoom ?? '', { placeholder: c.room ? `沿用「${c.room}」` : '教室' });
-  formSheet({
+  const { dlg } = formSheet({
     title: `调课：第 ${week} 周「${c.name}」`,
     fields: [h('div', { class: 'grid-2' }, field('调到', nw), field('星期', nd)), h('div', { class: 'grid-2' }, field('开始节', sp), field('结束节', ep)), field('新教室', room)],
-    extraActions: existing ? [h('button', { type: 'button', class: 'btn danger-ghost', onclick: () => { ctx.store.put(tombstone(existing)); document.querySelector('dialog.sheet[open]')?.close(); toast('已取消调课'); } }, '取消调课')] : [],
+    extraActions: existing ? [h('button', { type: 'button', class: 'btn danger-ghost', onclick: () => { ctx.store.put(tombstone(existing)); dlg.close(); toast('已取消调课'); } }, '取消调课')] : [],
     onSubmit: async () => {
       const s = Number(sp.value);
       const e = Number(ep.value);
@@ -319,7 +317,7 @@ export function openEventForm({ event, date } = {}) {
     ed.value = fmtDate(day);
     et.value = fmtTime(total - day * 1440);
   }));
-  formSheet({
+  const { dlg } = formSheet({
     title: ev ? '编辑日程' : '添加日程',
     wide: true,
     fields: [
@@ -342,7 +340,7 @@ export function openEventForm({ event, date } = {}) {
           const now = Date.now();
           const task = convertEventToTask(ev, now);
           const dead = tombstone(ev, now);
-          document.querySelector('dialog.sheet[open]')?.close();
+          dlg.close();
           store.put(task, dead);
           toast(`已将「${ev.title}」转为待办`, {
             action: '撤销',
@@ -353,7 +351,7 @@ export function openEventForm({ event, date } = {}) {
           });
         },
       }, '转为待办'),
-      h('button', { type: 'button', class: 'btn danger-ghost', onclick: async () => { if (await confirmDialog(`删除日程「${ev.title}」${ev.recurrence ? '（整个重复系列）' : ''}？`, '删除', { danger: true })) { document.querySelector('dialog.sheet[open]')?.close(); removeRecords([ev], ev.title); } } }, '删除'),
+      h('button', { type: 'button', class: 'btn danger-ghost', onclick: async () => { if (await confirmDialog(`删除日程「${ev.title}」${ev.recurrence ? '（整个重复系列）' : ''}？`, '删除', { danger: true })) { dlg.close(); removeRecords([ev], ev.title); } } }, '删除'),
     ] : [],
     onSubmit: async () => {
       const t = title.value.trim();
@@ -427,7 +425,7 @@ export function openTaskForm({ task, listId, due } = {}) {
     const v = subInput.value.trim();
     if (v) { subs.push({ rec: null, title: v, done: false, removed: false }); subInput.value = ''; renderSubs(); }
   });
-  formSheet({
+  const { dlg } = formSheet({
     title: t ? '编辑待办' : '添加待办',
     wide: true,
     fields: [
@@ -446,7 +444,7 @@ export function openTaskForm({ task, listId, due } = {}) {
       field('备注', note),
       group('子任务', h('div', {}, subBox, subInput)),
     ],
-    extraActions: t ? [h('button', { type: 'button', class: 'btn danger-ghost', onclick: async () => { if (await confirmDialog(`删除待办「${t.title}」？`, '删除', { danger: true })) { document.querySelector('dialog.sheet[open]')?.close(); removeTask(t); } } }, '删除')] : [],
+    extraActions: t ? [h('button', { type: 'button', class: 'btn danger-ghost', onclick: async () => { if (await confirmDialog(`删除待办「${t.title}」？`, '删除', { danger: true })) { dlg.close(); removeTask(t); } } }, '删除')] : [],
     onSubmit: async () => {
       const text = title.value.trim();
       if (!text) throw new Error('请填写标题');
@@ -513,10 +511,10 @@ export function openTaskForm({ task, listId, due } = {}) {
 export function openListForm({ list } = {}) {
   const name = textInput(list?.name || '', { placeholder: '清单名称', maxLength: 30 });
   const color = colorSwatches(list?.colorIndex ?? 1);
-  formSheet({
+  const { dlg } = formSheet({
     title: list ? '编辑清单' : '新建清单',
     fields: [field('名称', name), group('颜色', color.el)],
-    extraActions: list ? [h('button', { type: 'button', class: 'btn danger-ghost', onclick: async () => { if (await confirmDialog(`删除清单「${list.name}」？其中的待办会保留（移到「无清单」）。`, '删除', { danger: true })) { document.querySelector('dialog.sheet[open]')?.close(); removeList(list); if (ctx.onListRemoved) ctx.onListRemoved(list); } } }, '删除')] : [],
+    extraActions: list ? [h('button', { type: 'button', class: 'btn danger-ghost', onclick: async () => { if (await confirmDialog(`删除清单「${list.name}」？其中的待办会保留（移到「无清单」）。`, '删除', { danger: true })) { dlg.close(); removeList(list); if (ctx.onListRemoved) ctx.onListRemoved(list); } } }, '删除')] : [],
     onSubmit: async () => {
       const nm = name.value.trim();
       if (!nm) throw new Error('请填写清单名称');

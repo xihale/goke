@@ -79,16 +79,24 @@ export function periodOptions(periods) {
 export function formSheet({ title, fields, submitText = '保存', onSubmit, extraActions = [], wide = false }) {
   const err = h('p', { class: 'form-error', role: 'alert', hidden: true });
   const form = h('form', { class: 'form', noValidate: true });
+  const submitBtn = h('button', { type: 'submit', class: 'btn primary' }, submitText);
   let dlg;
+  let submitting = false;
   const setError = (msg) => { err.textContent = msg || ''; err.hidden = !msg; };
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (submitting) return;
+    submitting = true;
+    submitBtn.disabled = true;
     setError('');
     try {
       const keepOpen = await onSubmit({ close: () => dlg.close(), setError });
       if (!keepOpen) dlg.close();
     } catch (ex) {
       setError(ex.message || '保存失败');
+    } finally {
+      submitting = false;
+      submitBtn.disabled = false;
     }
   });
   form.append(
@@ -99,7 +107,7 @@ export function formSheet({ title, fields, submitText = '保存', onSubmit, extr
     h('div', { class: 'sheet-foot' },
       h('div', { class: 'foot-left' }, extraActions),
       h('button', { type: 'button', class: 'btn ghost', onclick: () => dlg.close() }, '取消'),
-      h('button', { type: 'submit', class: 'btn primary' }, submitText)));
+      submitBtn));
   dlg = openDialog(form, { label: title, wide });
   const first = form.querySelector('input:not([type=checkbox]):not([type=hidden]),textarea');
   if (first && !matchMedia('(pointer: coarse)').matches) first.focus();
