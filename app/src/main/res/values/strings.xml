@@ -679,12 +679,12 @@
     <string name="parcel_status_on">已开启</string>
     <string name="parcel_status_off">未开启</string>
     <string name="widget_parcel_name">待取快递</string>
-    <string name="widget_parcel_desc">大号取件码、驿站地点与一键已取</string>
+    <string name="widget_parcel_desc">待取件码与驿站地点，勾选标记已取</string>
     <string name="widget_parcel_title">待取件</string>
     <string name="widget_parcel_empty">(〃\'▽\'〃) 暂无待取快递</string>
     <string name="widget_parcel_station">快递驿站</string>
     <string name="widget_next_name">下一件事</string>
-    <string name="widget_next_desc">紧凑展示下一节课、日程或待办，一键新建</string>
+    <string name="widget_next_desc">下一节课、日程或待办，点＋新建</string>
     <string name="widget_next_empty">当前空闲</string>
     <string name="widget_next_label">接下来</string>
     <string name="widget_ongoing">进行中</string>
@@ -716,7 +716,7 @@
     <string name="course_name_placeholder">课程名称</string>
     <string name="course_end_period">结束节次</string>
     <string name="jxfw_card_title">广工教务同步</string>
-    <string name="jxfw_card_unbound_desc">登录广工统一身份认证，一键导入本学期课表与考试安排</string>
+    <string name="jxfw_card_unbound_desc">登录广工统一身份认证，导入本学期课表与考试安排</string>
     <string name="jxfw_card_bind_action">登录教务</string>
     <string name="jxfw_card_bound_meta">学号 %1$s · %2$s</string>
     <string name="jxfw_card_sync_now">立即同步</string>
@@ -771,7 +771,7 @@
     <string name="mcp_token_regenerated">已生成新令牌</string>
     <string name="mcp_footer_hint">供 AI 客户端读写课表与待办</string>
     <string name="mcp_lan_ip_unavailable">未检测到 Wi‑Fi 局域网地址</string>
-    <string name="about_tagline">广工学子的课表 · 日程 · 待办</string>
+    <string name="about_tagline">广工课表与日程</string>
     <!-- Wave 2 UX & Parity -->
     <string name="quick_add_new_list">+ 新清单</string>
     <string name="quick_add_new_tag">+ 新标签</string>
@@ -796,7 +796,7 @@
     <string name="sync_relogin_desc">登录状态已失效，重新验证密码以继续同步并保留本地修改。</string>
     <string name="sync_relogin_title">重新验证账号</string>
     <string name="sync_cloud_mcp_title">云端 MCP</string>
-    <string name="sync_cloud_mcp_desc">随时随地供桌面 AI 客户端访问云端待办与日程（不含仅本机运行的课表脚本）。</string>
+    <string name="sync_cloud_mcp_desc">供桌面 AI 客户端访问云端待办与日程（不含本机课表脚本）。</string>
     <string name="sync_cloud_mcp_endpoint">云端地址</string>
     <string name="sync_copy_mcp_config">复制云端 MCP 配置</string>
     <string name="sync_copied_mcp_config">已复制云端 MCP 配置 JSON</string>
@@ -819,7 +819,7 @@
     <string name="lan_web_notif_text">访问 %1$s · 连接码 %2$s</string>
     <string name="lan_web_notif_stop">停止服务</string>
     <string name="lan_web_title">局域网电脑端管理</string>
-    <string name="lan_web_subtitle">手机本地直连，在电脑浏览器大屏编辑课表与待办</string>
+    <string name="lan_web_subtitle">手机局域网直连，在电脑浏览器编辑课表与待办</string>
     <string name="lan_web_nav_running">运行中 · 端口 %1$d</string>
     <string name="lan_web_nav_off">未开启 · 电脑浏览器直连管理</string>
     <string name="lan_web_status_on">运行中</string>
@@ -859,7 +859,7 @@
     <string name="widgets_blocked_desc">系统可能拦截了「桌面快捷方式」权限，或当前桌面不支持应用内直接添加。\n\n• 前往「应用设置 → 权限管理」开启「桌面快捷方式」后重试\n• 或在手机桌面长按空白处，选择「添加小组件」搜索「工课」</string>
     <string name="widgets_open_app_settings">打开应用设置</string>
     <string name="widgets_perm_needed_title">需先开启「桌面快捷方式」权限</string>
-    <string name="widgets_perm_needed_desc">系统当前未允许向桌面添加组件，开启后即可一键添加到桌面。</string>
+    <string name="widgets_perm_needed_desc">系统当前未允许向桌面添加组件，开启后可直接添加到桌面。</string>
     <string name="widgets_perm_go_enable">去开启</string>
     <string name="widgets_perm_toast">请先开启「桌面快捷方式」权限</string>
     <string name="widgets_go_home">回到桌面</string>
@@ -1062,7 +1062,7 @@
     <string name="todo_today_untimed_toast">已移到今天（全天）</string>
     <!-- Smart Empty Classroom Finder -->
     <string name="classroom_title">空教室</string>
-    <string name="classroom_jxfw_entry_desc">按教学楼与节次查空闲教室、一键建日程</string>
+    <string name="classroom_jxfw_entry_desc">按教学楼与节次查空教室，框选建日程</string>
     <string name="classroom_not_logged_in_title">尚未绑定广工教务</string>
     <string name="classroom_not_logged_in_hint">绑定后即可查询各校区教学楼实时空闲教室</string>
     <string name="classroom_retry">重试</string>
