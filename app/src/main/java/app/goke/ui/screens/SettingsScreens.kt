@@ -1198,7 +1198,7 @@ private val OSS_LICENSES =
         OssLicenseEntry(
             nameRes = R.string.lic_app_name,
             license = "AGPL-3.0",
-            url = "github.com/xihale/mintcal",
+            url = "github.com/xihale/goke",
             textRes = R.raw.license_agpl_3,
         ),
         OssLicenseEntry(

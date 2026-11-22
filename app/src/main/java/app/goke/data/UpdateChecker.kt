@@ -373,7 +373,7 @@ class UpdateChecker(
 
     companion object {
         const val LANDING_URL = "https://goke.xeed.ink"
-        const val PROJECT_URL = "https://github.com/xihale/mintcal"
+        const val PROJECT_URL = "https://github.com/xihale/goke"
         private const val RELEASES_MANIFEST_URL = "https://goke.xeed.ink/downloads/latest.json"
         private const val UPDATES_DIR = "updates"
         private const val APK_MIME = "application/vnd.android.package-archive"
