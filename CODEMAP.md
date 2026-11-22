@@ -1,4 +1,4 @@
-# 工课 Goke（`app.mintcal`）Codemap
+# Goke（`app.mintcal`）Codemap
 
 > **Token Guard**: Discovery first (`csearch` MCP `search_code` or `rg -n`), then targeted `read_file` slices (`<= 120-180` lines around hit lines). Android strings: two-step `rg -l "<text>" app/src/main/res` -> `rg -n "<key>"` (do not query Chinese UI copy in `csearch`; `strings.xml` & `DESIGN.md` are excluded from `.csearch`).
 

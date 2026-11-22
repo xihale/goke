@@ -52,7 +52,7 @@ data class CalendarSyncState(
 /**
  * Android 系统日历（CalendarContract）双向同步管理器：
  * - 支持读取并关联手机中已登录的 Google / 小米 / 华为 / DAVx5 / Exchange 等系统日历账本；
- * - 支持一键创建「工课」本地日历账本，供系统桌面自带日历小组件、负一屏与智能手表直接展示日程与课表；
+ * - 支持一键创建「Goke」本地日历账本，供系统桌面自带日历小组件、负一屏与智能手表直接展示日程与课表；
  * - 监听本地快照与系统日历 ContentObserver，防抖对账、零回声循环。
  */
 class SystemCalendarSync(
@@ -162,7 +162,7 @@ class SystemCalendarSync(
         if (next.enabled || !export) requestSync(300L)
     }
 
-    /** 创建本地「工课」系统日历账本，供无云端日历账号的设备及桌面自带日历插件读取。 */
+    /** 创建本地「Goke」系统日历账本，供无云端日历账号的设备及桌面自带日历插件读取。 */
     suspend fun ensureLocalCalendar(): Long? =
         withContext(Dispatchers.IO) {
             if (!hasPermissions()) return@withContext null

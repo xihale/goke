@@ -1,4 +1,4 @@
-/* 工课 Goke landing — 宣纸 Motion 交互版（零外链、零构建、严格 CSP） */
+/* Goke landing — 宣纸 Motion 交互版（零外链、零构建、严格 CSP） */
 
 :root {
   --bg: #F2F7F5;
@@ -16,7 +16,7 @@
   --ink-muted: #5E6F69;
   --line: #DCE6E2;
 
-  --font-sans: "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Noto Sans CJK SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: "Adwaita Sans", "Inter", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Noto Sans CJK SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 
   --ease: cubic-bezier(.2, .8, .2, 1);

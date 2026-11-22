@@ -1,4 +1,4 @@
-/* 工课 Goke landing — Motion 编排、光刃斜切预览、小组件聚焦、BoxSel 交互试玩、截图筛选与释放同步 */
+/* Goke landing — Motion 编排、光刃斜切预览、小组件聚焦、BoxSel 交互试玩、截图筛选与释放同步 */
 (function () {
   'use strict';
 

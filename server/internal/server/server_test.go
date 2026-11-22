@@ -322,7 +322,7 @@ func TestWebAppServed(t *testing.T) {
 		{"/", "text/html", "manifest.webmanifest"},
 		{"/app/js/main.js", "javascript", "import"},
 		{"/app/app.css", "text/css", "--primary"},
-		{"/app/manifest.webmanifest", "", "工课"},
+		{"/app/manifest.webmanifest", "", "Goke"},
 		{"/app/icon-192.png", "image/png", ""},
 		{"/admin/", "text/html", "管理后台"},
 	}

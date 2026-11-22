@@ -1,4 +1,4 @@
-// mintcal-server：工课（Goke）的自建同步服务。
+// mintcal-server：Goke 的自建同步服务。
 //
 //	mintcal-server                      启动服务（默认）
 //	mintcal-server passwd <用户名>       从标准输入读取新密码并重置（忘记管理员密码时使用）
@@ -76,7 +76,7 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 	go func() {
-		log.Printf("工课同步服务已启动：%s（管理后台：/admin/）", addr)
+		log.Printf("Goke 同步服务已启动：%s（管理后台：/admin/）", addr)
 		if err := hs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal(err)
 		}

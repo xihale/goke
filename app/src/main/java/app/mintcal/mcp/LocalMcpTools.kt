@@ -210,7 +210,7 @@ internal class LocalMcpTools(
             ),
             McpToolDef(
                 name = "get_script_sdk",
-                description = "【高级修改必读】获取工课（Goke）QuickJS 脚本沙箱的 TypeScript 声明（mintcal.d.ts）与常用示例。在对课程、学期、调停课或大批量待办做编程式高级修改前请先调用此工具。",
+                description = "【高级修改必读】获取 Goke QuickJS 脚本沙箱的 TypeScript 声明（mintcal.d.ts）与常用示例。在对课程、学期、调停课或大批量待办做编程式高级修改前请先调用此工具。",
                 inputSchema = emptyObjectSchema(),
                 handler = { getScriptSdk() },
             ),
