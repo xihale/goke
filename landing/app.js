@@ -29,10 +29,9 @@
     thumb.style.transform = 'translateX(' + (btn.offsetLeft - 4) + 'px)';
   }
 
-  /* 1. Hero 5-tab switcher, 18-deg diagonal blade dark wipe, and subtle pointer tilt */
+  /* 1. Hero 5-tab switcher and 18-deg diagonal blade dark wipe */
   var tablist = document.getElementById('heroTabs');
   var screen = document.getElementById('heroScreen');
-  var stage = document.getElementById('heroStage');
   if (tablist && screen) {
     var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
     var imgs = Array.prototype.slice.call(screen.querySelectorAll('.screen-img'));
@@ -94,21 +93,6 @@
         bladeTimer = setTimeout(function () {
           screen.classList.remove('is-blading');
         }, 640);
-      });
-    }
-
-    if (stage && !reduceMotion) {
-      stage.addEventListener('pointermove', function (e) {
-        if (e.pointerType !== 'mouse') return;
-        var rect = screen.getBoundingClientRect();
-        var nx = ((e.clientX - rect.left) / rect.width) - 0.5;
-        var ny = ((e.clientY - rect.top) / rect.height) - 0.5;
-        screen.style.setProperty('--tilt-x', (-ny * 6).toFixed(2) + 'deg');
-        screen.style.setProperty('--tilt-y', (nx * 7).toFixed(2) + 'deg');
-      });
-      stage.addEventListener('pointerleave', function () {
-        screen.style.setProperty('--tilt-x', '0deg');
-        screen.style.setProperty('--tilt-y', '0deg');
       });
     }
   }
