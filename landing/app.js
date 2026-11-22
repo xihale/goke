@@ -8,6 +8,7 @@
   if (tablist && screen) {
     var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
     var imgs = Array.prototype.slice.call(screen.querySelectorAll('.screen-img'));
+    var hotspots = Array.prototype.slice.call(screen.querySelectorAll('.phone-nav-hotspot button'));
     var thumb = tablist.querySelector('.seg-thumb');
 
     function activateTab(index, focusTab) {
@@ -41,6 +42,14 @@
 
     var initial = tabs.findIndex(function (b) { return b.getAttribute('aria-selected') === 'true'; });
     activateTab(initial >= 0 ? initial : 0, false);
+
+    hotspots.forEach(function (btn, idx) {
+      btn.addEventListener('click', function () {
+        var key = btn.getAttribute('data-tab');
+        var targetIdx = tabs.findIndex(function (t) { return t.getAttribute('data-tab') === key; });
+        activateTab(targetIdx >= 0 ? targetIdx : idx, false);
+      });
+    });
 
     var heroThemeBtn = document.getElementById('heroThemeToggle');
     var heroThemeLabel = document.getElementById('heroThemeLabel');

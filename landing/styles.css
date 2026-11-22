@@ -158,6 +158,19 @@ code {
   transition: opacity .24s var(--ease);
 }
 .screen-img.is-active { opacity: 1; pointer-events: auto; }
+.phone-nav-hotspot {
+  position: absolute;
+  left: 4%; right: 4%; bottom: 1.5%; height: 9%;
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  z-index: 3;
+}
+.phone-nav-hotspot button {
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  border-radius: var(--radius-pill);
+}
 
 .seg-pill {
   position: relative;
