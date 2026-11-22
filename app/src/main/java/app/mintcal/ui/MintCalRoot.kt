@@ -80,6 +80,7 @@ import app.mintcal.ui.components.mintClickable
 import app.mintcal.ui.screens.AboutScreen
 import app.mintcal.ui.screens.AppearanceScreen
 import app.mintcal.ui.screens.CalendarScreen
+import app.mintcal.ui.screens.ClassroomScreen
 import app.mintcal.ui.screens.CourseEditScreen
 import app.mintcal.ui.screens.DataScreen
 import app.mintcal.ui.screens.EditTimetableScreen
@@ -356,6 +357,7 @@ fun NavGraphBuilder.mintDestinations(
     composable<Route.Jxfw> { JxfwScreen(back) }
     composable<Route.Grades> { GradesScreen(back) }
     composable<Route.PhysicalTest> { PhysicalTestScreen(back) }
+    composable<Route.Classroom> { ClassroomScreen(back) }
     composable<Route.Reliability> { ReliabilityScreen(back) }
     composable<Route.Import> { e -> ImportScreen(e.toRoute<Route.Import>().uri, back) }
     composable<Route.CourseEdit> { e ->
@@ -373,6 +375,7 @@ fun NavGraphBuilder.mintDestinations(
             courseArg = r.courseId,
             extraDatesArg = r.extraDates,
             noteDraft = r.note,
+            locationArg = r.location,
             listArg = r.listId,
             remindArg = r.remindMinutes,
             remindPersistentArg = r.remindPersistent,

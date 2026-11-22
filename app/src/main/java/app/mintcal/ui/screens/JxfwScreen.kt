@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Grade
+import androidx.compose.material.icons.rounded.MeetingRoom
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -290,6 +291,12 @@ private fun AccountPanel(state: JxfwState) {
             subtitle = stringResource(R.string.grades_jxfw_entry_desc),
             icon = Icons.Rounded.Grade,
             onClick = { nav.push(Route.Grades) },
+        )
+        NavRow(
+            title = stringResource(R.string.classroom_title),
+            subtitle = stringResource(R.string.classroom_jxfw_entry_desc),
+            icon = Icons.Rounded.MeetingRoom,
+            onClick = { nav.push(Route.Classroom) },
         )
     }
 

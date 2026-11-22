@@ -145,6 +145,7 @@ fun TodoEditScreen(
     courseArg: String? = null,
     extraDatesArg: String? = null,
     noteDraft: String? = null,
+    locationArg: String? = null,
     listArg: String? = null,
     remindArg: Int? = null,
     remindPersistentArg: Boolean = false,
@@ -219,6 +220,7 @@ fun TodoEditScreen(
 
     var field by remember { mutableStateOf(TextFieldValue(existing?.title ?: textDraft.orEmpty())) }
     var note by remember { mutableStateOf(existing?.note ?: noteDraft.orEmpty()) }
+    var location by remember { mutableStateOf(existing?.extra?.get("location") ?: locationArg.orEmpty()) }
     var attachments by remember { mutableStateOf(existing?.attachments.orEmpty()) }
     var picked by remember { mutableStateOf(initWhen) }
     var cleared by remember { mutableStateOf(false) }
@@ -294,6 +296,7 @@ fun TodoEditScreen(
         whenPick?.date != initialWhen?.date || whenPick?.start != initialWhen?.start || whenPick?.minutes != initialWhen?.minutes
     val hasChanges =
         text != existing?.title.orEmpty() || note != existing?.note.orEmpty() ||
+            location.trim() != existing?.extra?.get("location").orEmpty() ||
             attachments != existing?.attachments.orEmpty() || listId != existing?.listId || priority != (existing?.priority ?: 0) ||
             remind != existing?.remindMinutes || persistent != (existing?.remindPersistent == true) || freq != existing?.repeat?.freq ||
             dueBeforeNextClass != (existing?.dueBeforeNextClass ?: false) ||
@@ -380,10 +383,16 @@ fun TodoEditScreen(
                 dueAt = w.date.atTime(23, 59)
             }
         }
+        val nextExtra =
+            base.extra.toMutableMap().apply {
+                val loc = location.trim()
+                if (loc.isNotEmpty()) put("location", loc) else remove("location")
+            }
         val next =
             base.copy(
                 title = title,
                 note = note,
+                extra = nextExtra,
                 attachments = attachments,
                 listId = listId,
                 priority = priority,
@@ -631,6 +640,7 @@ fun TodoEditScreen(
                 }
             }
             Spacer(Modifier.height(8.dp))
+            FlatField(location, stringResource(R.string.field_location), onChange = { location = it }, singleLine = true)
             FlatField(note, stringResource(R.string.label_note), onChange = { note = it }, singleLine = false)
             if (attachments.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))

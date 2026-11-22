@@ -55,6 +55,7 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LaptopMac
 import androidx.compose.material.icons.rounded.LocalShipping
+import androidx.compose.material.icons.rounded.MeetingRoom
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.RestartAlt
@@ -240,6 +241,11 @@ fun SettingsScreen() {
                 FormSection(stringResource(R.string.me_hub_campus_section)) {
                     GradesNavRow { nav.push(Route.Grades) }
                     PhysicalTestNavRow { nav.push(Route.PhysicalTest) }
+                    NavRow(
+                        stringResource(R.string.classroom_title),
+                        null,
+                        Icons.Rounded.MeetingRoom,
+                    ) { nav.push(Route.Classroom) }
                     NavRow(
                         stringResource(R.string.parcel_title),
                         null,

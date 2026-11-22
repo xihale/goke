@@ -60,6 +60,8 @@ sealed interface Route {
 
     @Serializable data object PhysicalTest : Route
 
+    @Serializable data object Classroom : Route
+
     @Serializable data object Reliability : Route
 
     /** uri 为空表示先让用户选择文件。 */
@@ -83,6 +85,8 @@ sealed interface Route {
         val text: String? = null,
         /** 快速添加带过来的备注草稿。 */
         val note: String? = null,
+        /** 从空教室等入口预填地点。 */
+        val location: String? = null,
         /** 从课程页「加一条待办」带过来的关联课程。 */
         val courseId: String? = null,
         /** 周历上框选了几天：其余日期（ISO，逗号分隔）跟着一起建。 */
