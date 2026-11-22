@@ -859,10 +859,10 @@ private fun WeekGrid(
                         g.map { i ->
                             if (i < courseCount) {
                                 val o = cells[i].occ
-                                val from = cal.startTime(o.startPeriod)
+                                val from = cal.startTime(o.course, o.startPeriod)
                                 SlotEntry(
                                     o.course.name,
-                                    "${from?.hm().orEmpty()}–${cal.endTime(o.endPeriod)?.hm().orEmpty()} · ${ctx.getString(R.string.entity_course)}",
+                                    "${from?.hm().orEmpty()}–${cal.endTime(o.course, o.endPeriod)?.hm().orEmpty()} · ${ctx.getString(R.string.entity_course)}",
                                     o.course.colorIndex,
                                     o.date.atTime(from ?: java.time.LocalTime.MIN),
                                     cells[i],
@@ -1890,7 +1890,7 @@ private fun CourseSheet(
                         Text(c.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                     }
                     Text(
-                        "${ctx.weekdayShort(o.date.dayOfWeek.value).let { stringResource(R.string.weekday_prefix, it) }} ${cal.startTime(o.startPeriod)?.hm().orEmpty()}–${cal.endTime(o.endPeriod)?.hm().orEmpty()} · ${stringResource(R.string.periods_range, o.startPeriod, o.endPeriod)}",
+                        "${ctx.weekdayShort(o.date.dayOfWeek.value).let { stringResource(R.string.weekday_prefix, it) }} ${cal.startTime(c, o.startPeriod)?.hm().orEmpty()}–${cal.endTime(c, o.endPeriod)?.hm().orEmpty()} · ${stringResource(R.string.periods_range, o.startPeriod, o.endPeriod)}",
                         style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 14.dp, bottom = if (o.rescheduled) 2.dp else 8.dp),
@@ -2047,7 +2047,7 @@ private fun ReschedulePanel(
     val scheme = MaterialTheme.colorScheme
     val c = occ.course
     val origW = occ.originalWeek
-    val periodCount = cal.periods.size.coerceAtLeast(1)
+    val periodCount = cal.periodsFor(c).size.coerceAtLeast(1)
 
     val seedKey = prefill ?: occ
     var newWeek by remember(seedKey) { mutableIntStateOf((prefill?.week ?: occ.week).coerceIn(1, cal.totalWeeks)) }
@@ -2067,9 +2067,9 @@ private fun ReschedulePanel(
 
     val targetDate = remember(cal, newWeek, dow) { cal.dateOf(newWeek, dow) }
     val clockText =
-        remember(cal, start, end) {
-            val s = cal.startTime(start)?.hm()
-            val e = cal.endTime(end)?.hm()
+        remember(cal, c, start, end) {
+            val s = cal.startTime(c, start)?.hm()
+            val e = cal.endTime(c, end)?.hm()
             if (s != null && e != null) "$s–$e" else ""
         }
     val periodSpanText =

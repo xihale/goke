@@ -36,6 +36,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -77,6 +78,8 @@ import app.mintcal.core.change.Edits
 import app.mintcal.core.change.apply
 import app.mintcal.core.model.Course
 import app.mintcal.core.model.ExceptionType
+import app.mintcal.core.model.GdutCampus
+import app.mintcal.core.model.GdutPeriods
 import app.mintcal.core.model.PeriodTime
 import app.mintcal.core.model.Source
 import app.mintcal.core.time.WeekSets
@@ -127,6 +130,16 @@ private fun clockRange(
     return "$start–$end"
 }
 
+@Composable
+private fun campusOverrideLabel(campus: GdutCampus?): String =
+    when (campus) {
+        null -> stringResource(R.string.course_campus_follow_semester)
+        GdutCampus.HEMC -> stringResource(R.string.campus_hemc)
+        GdutCampus.LONGDONG -> stringResource(R.string.campus_longdong)
+        GdutCampus.DONGFENG -> stringResource(R.string.campus_dongfeng)
+        GdutCampus.JIEYANG -> stringResource(R.string.campus_jieyang)
+    }
+
 /**
  * 课程编辑：三段式结构化表单（课程身份 → 上课时段与提醒 → 课程信息与关联待办）。
  * 顶栏隐去重复标题，让正文首行大字课程名成为唯一视觉焦点；返回即整体保存为一个变更集。
@@ -162,6 +175,11 @@ fun CourseEditScreen(
     var teacher by remember { mutableStateOf(existing?.teacher.orEmpty()) }
     var color by remember { mutableIntStateOf(existing?.colorIndex ?: (snap.courses.size % 8)) }
     var note by remember { mutableStateOf(existing?.note.orEmpty()) }
+    var campusOverride by remember { mutableStateOf(existing?.campusOverride) }
+    val effectivePeriods =
+        remember(periods, campusOverride) {
+            campusOverride?.let { GdutPeriods.forCampus(it).sortedBy { p -> p.index } } ?: periods
+        }
 
     // ── 时段：同名记录即同一门课（与「另一天」的历史约定一致） ──
     val initialSlots =
@@ -191,6 +209,7 @@ fun CourseEditScreen(
     var slots by remember(id) { mutableStateOf(initialSlots) }
     var openSlot by remember { mutableStateOf<String?>(null) }
     var remindDlg by remember { mutableStateOf(false) }
+    var campusDlg by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
     var pageMenu by remember { mutableStateOf(false) }
@@ -270,17 +289,18 @@ fun CourseEditScreen(
             slots.all { it.weeks.isNotEmpty() && it.endPeriod >= it.startPeriod }
     val fieldDirty =
         if (origin == null) {
-            name.isNotBlank() || teacher.isNotBlank() || note.isNotBlank()
+            name.isNotBlank() || teacher.isNotBlank() || note.isNotBlank() || campusOverride != null
         } else {
             name.trim() != origin.name || teacher.trim() != origin.teacher ||
-                color != origin.colorIndex || note.trim() != origin.note
+                color != origin.colorIndex || note.trim() != origin.note ||
+                campusOverride != origin.campusOverride
         }
     val dirty = fieldDirty || slots != initialSlots
 
     // 冲突检测只与已排课表、学期及当前时段配置（星期/节次/周次）相关，
     // 课程名/教师/颜色/备注变动不改变冲突关系，避免表单打字时每帧触发全学期排课展开
     val conflictMatches =
-        remember(snap, slots) {
+        remember(snap, slots, campusOverride) {
             val list =
                 slots.mapNotNull { s ->
                     if (s.weeks.isEmpty()) return@mapNotNull null
@@ -291,6 +311,7 @@ fun CourseEditScreen(
                             startPeriod = s.startPeriod,
                             endPeriod = s.endPeriod,
                             weeks = s.weeks,
+                            campusOverride = campusOverride,
                         )
                     } else {
                         Course(
@@ -306,6 +327,7 @@ fun CourseEditScreen(
                             colorIndex = 0,
                             remindMinutes = null,
                             note = "",
+                            campusOverride = campusOverride,
                             source = Source.MANUAL,
                         )
                     }
@@ -341,6 +363,7 @@ fun CourseEditScreen(
                 teacher = teacher,
                 colorIndex = color,
                 note = note,
+                campusOverride = campusOverride,
                 initialSlots = initialSlots,
                 slots = slots,
                 liveExceptions = snap.exceptions,
@@ -458,7 +481,7 @@ fun CourseEditScreen(
                     SlotRow(
                         slot = s,
                         color = color,
-                        clock = clockRange(periods, s.startPeriod, s.endPeriod),
+                        clock = clockRange(effectivePeriods, s.startPeriod, s.endPeriod),
                         onOpen = { openSlot = s.id },
                     )
                 }
@@ -502,6 +525,12 @@ fun CourseEditScreen(
                 value = if (remind == null) defaultRemindSummary else remindLabel(remind),
                 onClick = { remindDlg = true },
                 valueColor = if (remind != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ValueRow(
+                label = stringResource(R.string.course_campus_override_label),
+                value = campusOverrideLabel(campusOverride),
+                onClick = { campusDlg = true },
+                valueColor = if (campusOverride != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             // ── 第三段：课程信息与关联待办 ──
@@ -632,7 +661,7 @@ fun CourseEditScreen(
             openSlot = null
         } else {
             SlotEditorSheet(
-                periods = periods,
+                periods = effectivePeriods,
                 totalWeeks = totalWeeks,
                 slot = slot,
                 onChange = { updated -> slots = slots.map { if (it.id == key) updated else it } },
@@ -662,6 +691,36 @@ fun CourseEditScreen(
             slots = slots.map { it.copy(remindMinutes = minutes) }
             remindDlg = false
         }
+    }
+
+    if (campusDlg) {
+        val options =
+            listOf(
+                null to stringResource(R.string.course_campus_follow_semester),
+                GdutCampus.HEMC to stringResource(R.string.campus_hemc),
+                GdutCampus.LONGDONG to stringResource(R.string.campus_longdong),
+                GdutCampus.DONGFENG to stringResource(R.string.campus_dongfeng),
+                GdutCampus.JIEYANG to stringResource(R.string.campus_jieyang),
+            )
+        AlertDialog(
+            onDismissRequest = { campusDlg = false },
+            title = { Text(stringResource(R.string.course_campus_override_label)) },
+            text = {
+                ChipChoice(
+                    options = options,
+                    selected = campusOverride,
+                    onSelect = {
+                        campusOverride = it
+                        campusDlg = false
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { campusDlg = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
     }
 
     if (confirmDiscard) {
@@ -1048,6 +1107,7 @@ internal fun buildSlotChanges(
     teacher: String,
     colorIndex: Int,
     note: String,
+    campusOverride: GdutCampus? = null,
     initialSlots: List<SlotDraft>,
     slots: List<SlotDraft>,
     liveExceptions: List<app.mintcal.core.model.CourseException>,
@@ -1074,6 +1134,7 @@ internal fun buildSlotChanges(
                 colorIndex = colorIndex,
                 remindMinutes = s.remindMinutes,
                 note = nt,
+                campusOverride = campusOverride,
             )
         } else {
             Course(
@@ -1089,6 +1150,7 @@ internal fun buildSlotChanges(
                 colorIndex = colorIndex,
                 remindMinutes = s.remindMinutes,
                 note = nt,
+                campusOverride = campusOverride,
                 source = Source.MANUAL,
             )
         }
