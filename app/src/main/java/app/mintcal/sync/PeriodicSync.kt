@@ -78,7 +78,7 @@ class SyncWorker(
     }
 }
 
-/** 一次后台系统日历对账：无需网络，确保桌面或系统日历里的改动定期同步进薄荷日程。 */
+/** 一次后台系统日历对账：无需网络，确保桌面或系统日历里的改动定期同步进工课。 */
 class CalendarSyncWorker(
     context: Context,
     params: WorkerParameters,

@@ -1,4 +1,4 @@
-// Package server 是薄荷日程的自建同步服务：管理员创建用户，客户端登录后按记录同步。
+// Package server 是工课（Goke）的自建同步服务：管理员创建用户，客户端登录后按记录同步。
 package server
 
 import (

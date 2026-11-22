@@ -114,8 +114,8 @@ export const settingsView = {
         h('button', { type: 'button', class: 'btn tonal', onclick: exportJson }, icon('download', 16), '导出 JSON 备份'),
         h('button', { type: 'button', class: 'btn tonal', onclick: () => fileInput.click() }, icon('list', 16), '导入 JSON 备份')),
       h('p', { class: 'hint' }, lan
-        ? '支持 MintCal 通用备份（Android / Web）与旧版网页备份；改动会直接同步到你的手机本地。'
-        : '支持 MintCal 通用备份（Android / Web）与旧版网页备份；所有数据都存放在你自己的服务器上。'));
+        ? '支持工课通用备份（Android / Web）与旧版网页备份；改动会直接同步到你的手机本地。'
+        : '支持工课通用备份（Android / Web）与旧版网页备份；所有数据都存放在你自己的服务器上。'));
 
     const origin = typeof location !== 'undefined' ? location.origin : '';
     const endpoint = `${origin}/mcp`;

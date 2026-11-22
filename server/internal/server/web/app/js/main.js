@@ -60,7 +60,7 @@ function render() {
   shell.eyebrow.textContent = head.eyebrow || '';
   shell.eyebrow.hidden = !head.eyebrow;
   shell.title.textContent = head.title;
-  document.title = `${head.title} · 薄荷广工`;
+  document.title = `${head.title} · 工课`;
   shell.navItems.forEach((b) => {
     if (b.dataset.route === route) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
@@ -153,13 +153,13 @@ function showLogin(message = '') {
       }
     } },
     h('img', { class: 'login-logo', src: '/app/icon.svg', alt: '', width: 72, height: 72 }),
-    h('h1', {}, '薄荷广工'),
+    h('h1', {}, '工课'),
     h('p', { class: 'login-sub' }, '手机局域网直连：输入手机端显示的 6 位连接码，实时管理课表与待办'),
     h('label', { class: 'field' }, h('span', { class: 'field-label' }, '6 位连接码（PIN）'), pin),
     err, btn,
     h('p', { class: 'hint center' }, '连接码仅本次共享有效；20 分钟无操作手机端将自动停止。'));
     root.replaceChildren(h('main', { class: 'login' }, form));
-    document.title = '连接手机 · 薄荷广工';
+    document.title = '连接手机 · 工课';
     pin.focus();
     return;
   }
@@ -189,7 +189,7 @@ function showLogin(message = '') {
     }
   } },
   h('img', { class: 'login-logo', src: '/app/icon.svg', alt: '', width: 72, height: 72 }),
-  h('h1', {}, '薄荷广工'),
+  h('h1', {}, '工课'),
   h('p', { class: 'login-sub' }, '登录你自己的服务器账号，查看并编辑课表、日程与待办'),
   h('label', { class: 'field' }, h('span', { class: 'field-label' }, '用户名'), user),
   h('label', { class: 'field' }, h('span', { class: 'field-label' }, '密码'), pass),
@@ -197,7 +197,7 @@ function showLogin(message = '') {
   err, btn,
   h('p', { class: 'hint center' }, '没有账号？请联系服务器管理员创建，这里不提供注册。'));
   root.replaceChildren(h('main', { class: 'login' }, form));
-  document.title = '登录 · 薄荷广工';
+  document.title = '登录 · 工课';
   user.focus();
 }
 

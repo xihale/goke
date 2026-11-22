@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">薄荷广工</string>
+    <string name="app_name">工课</string>
     <string name="widget_today_name">今日安排</string>
     <string name="widget_today_desc">在桌面查看今天的课程、日程与待办</string>
     <string name="widget_todo_name">待办清单</string>
@@ -11,7 +11,7 @@
     <string name="notif_action_snooze">1 小时后再提醒</string>
     <string name="shortcut_add_task">新建待办</string>
     <string name="shortcut_today">今天</string>
-    <string name="process_text_label">加到薄荷待办</string>
+    <string name="process_text_label">加到工课待办</string>
     <string name="widget_empty">(〃\'▽\'〃) 今天没有安排啦</string>
     <string name="channel_reminder">课程与待办提醒</string>
     <string name="channel_parcel">快递取件</string>
@@ -562,11 +562,11 @@
     <string name="reliability_battery">不受电池优化限制</string>
     <string name="reliability_battery_desc">省电策略可能在后台推迟或丢弃闹钟。建议把本应用设为「不限制」。</string>
     <string name="reliability_vendor">后台运行保护指南</string>
-    <string name="reliability_vendor_desc">部分国产系统还有无法自动检测的后台限制，请手动确认：\n1. 应用管理 → 薄荷广工 → 开启「自启动」；\n2. 同一页「省电策略」选「无限制」；\n3. 最近任务里长按卡片「锁定」，避免被一键清理。</string>
+    <string name="reliability_vendor_desc">部分国产系统还有无法自动检测的后台限制，请手动确认：\n1. 应用管理 → 工课 → 开启「自启动」；\n2. 同一页「省电策略」选「无限制」；\n3. 最近任务里长按卡片「锁定」，避免被一键清理。</string>
     <string name="reliability_open_details">打开应用详情</string>
     <string name="reliability_test">测试提醒</string>
     <string name="reliability_test_button">1 分钟后发测试提醒</string>
-    <string name="reliability_test_title">薄荷广工 · 测试提醒</string>
+    <string name="reliability_test_title">工课 · 测试提醒</string>
     <string name="reliability_test_text">看到这条说明提醒可以正常送达</string>
     <string name="reliability_test_scheduled">已安排，1 分钟后弹出</string>
     <string name="reliability_test_failed">安排失败，请检查闹钟权限</string>
@@ -695,14 +695,14 @@
     <string name="cal_sync_grant">授权</string>
     <string name="cal_sync_accounts">同步日历账本</string>
     <string name="cal_sync_no_calendars">未发现可用系统日历账本</string>
-    <string name="cal_sync_create_local">创建「薄荷广工」本地系统日历</string>
+    <string name="cal_sync_create_local">创建「工课」本地系统日历</string>
     <string name="cal_sync_local_created">已创建本地系统日历账本</string>
     <string name="cal_sync_courses">同步课程表到系统日历</string>
     <string name="cal_sync_courses_desc">供系统自带桌面日历、负一屏与手表读取</string>
-    <string name="cal_sync_duplicate_reminder_hint">开启系统日历同步后，系统日历与薄荷可能会同时发出提醒，建议保留一侧提醒即可</string>
+    <string name="cal_sync_duplicate_reminder_hint">开启系统日历同步后，系统日历与工课可能会同时发出提醒，建议保留一侧提醒即可</string>
     <string name="cal_sync_done_toast">系统日历同步完成（更新 %1$d 项）</string>
-    <string name="cal_sync_local_account_name">薄荷广工</string>
-    <!-- 薄荷广工 · 设计系统与子页重设计 -->
+    <string name="cal_sync_local_account_name">工课</string>
+    <!-- 工课 Goke · 设计系统与子页重设计 -->
     <string name="fmt_rooms_folded">%1$s 等 %2$d 处</string>
     <string name="campus_preset_section">广工校区作息预设</string>
     <string name="campus_hemc">大学城</string>
@@ -726,11 +726,11 @@
     <string name="parcel_rules_manage">短信识别规则</string>
     <string name="parcel_rules_enabled_count">已启用 %1$d 条规则</string>
     <string name="reliability_vendor_xiaomi">小米 / HyperOS 后台保护</string>
-    <string name="reliability_vendor_xiaomi_desc">1. 应用信息 → 省电策略 → 设为「无限制」；\n2. 开启「自启动」权限；\n3. 最近任务下滑/长按卡片锁定薄荷广工。</string>
+    <string name="reliability_vendor_xiaomi_desc">1. 应用信息 → 省电策略 → 设为「无限制」；\n2. 开启「自启动」权限；\n3. 最近任务下滑/长按卡片锁定工课。</string>
     <string name="reliability_vendor_huawei">华为 / 荣耀后台保护</string>
     <string name="reliability_vendor_huawei_desc">1. 应用启动管理 → 关闭「自动管理」；\n2. 手动开启「允许自启动 / 允许后台活动」；\n3. 最近任务下滑卡片加锁。</string>
     <string name="reliability_vendor_oppo">OPPO / ColorOS 后台保护</string>
-    <string name="reliability_vendor_oppo_desc">1. 耗电管理 → 允许完全后台行为、允许自启动；\n2. 最近任务右上角菜单锁定薄荷广工。</string>
+    <string name="reliability_vendor_oppo_desc">1. 耗电管理 → 允许完全后台行为、允许自启动；\n2. 最近任务右上角菜单锁定工课。</string>
     <string name="reliability_vendor_vivo">vivo / OriginOS 后台保护</string>
     <string name="reliability_vendor_vivo_desc">1. 应用耗电管理 → 选「后台高耗电允许」；\n2. 权限管理 → 开启「自启动」；\n3. 最近任务下滑锁定卡片。</string>
     <string name="reliability_vendor_all_toggle">查看其他系统设置说明</string>
@@ -853,9 +853,9 @@
     <string name="widgets_add_to_home_a11y">将「%1$s」添加到桌面</string>
     <string name="widgets_pin_confirmed_toast">已将「%1$s」添加到桌面</string>
     <string name="widgets_unsupported_title">请从桌面手动添加</string>
-    <string name="widgets_unsupported_desc">当前桌面启动器不支持从应用内直接添加。请在手机桌面长按空白处，选择「添加小组件 / 窗口小工具」，搜索「薄荷广工」即可添加。</string>
+    <string name="widgets_unsupported_desc">当前桌面启动器不支持从应用内直接添加。请在手机桌面长按空白处，选择「添加小组件 / 窗口小工具」，搜索「工课」即可添加。</string>
     <string name="widgets_blocked_title">未能弹出桌面添加确认</string>
-    <string name="widgets_blocked_desc">系统可能拦截了「桌面快捷方式」权限，或当前桌面不支持应用内直接添加。\n\n• 前往「应用设置 → 权限管理」开启「桌面快捷方式」后重试\n• 或在手机桌面长按空白处，选择「添加小组件」搜索「薄荷广工」</string>
+    <string name="widgets_blocked_desc">系统可能拦截了「桌面快捷方式」权限，或当前桌面不支持应用内直接添加。\n\n• 前往「应用设置 → 权限管理」开启「桌面快捷方式」后重试\n• 或在手机桌面长按空白处，选择「添加小组件」搜索「工课」</string>
     <string name="widgets_open_app_settings">打开应用设置</string>
     <string name="widgets_perm_needed_title">需先开启「桌面快捷方式」权限</string>
     <string name="widgets_perm_needed_desc">系统当前未允许向桌面添加组件，开启后即可一键添加到桌面。</string>
@@ -1002,7 +1002,7 @@
     <string name="about_ack_quickjs_desc">dokar3 · 高级修改 JavaScript 沙箱引擎（MIT）</string>
     <string name="about_ack_community_title">开源社区与测试同学</string>
     <string name="about_ack_community_desc">感谢提供课表样本、使用建议与问题反馈的每一位同学</string>
-    <string name="lic_app_name">薄荷广工 (MintCal)</string>
+    <string name="lic_app_name">工课 (Goke)</string>
     <string name="lic_jetpack_name">AndroidX &amp; Jetpack Compose</string>
     <string name="lic_kotlin_name">Kotlin / kotlinx</string>
     <string name="lic_kolor_name">material-kolor</string>

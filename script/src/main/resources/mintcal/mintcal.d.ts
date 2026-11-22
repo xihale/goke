@@ -1,4 +1,4 @@
-// 薄荷日程 MintCal · 高级修改 SDK 类型声明
+// 工课 Goke · 高级修改 SDK 类型声明
 // 脚本在沙箱中同步执行：没有网络、文件、定时器；通过全局对象 mc 读写数据，结束时可 return 一个结果。
 // 日期统一用字符串："YYYY-MM-DD"；日期时间用 "YYYY-MM-DDTHH:mm"。dayOfWeek：1=周一 … 7=周日。
 

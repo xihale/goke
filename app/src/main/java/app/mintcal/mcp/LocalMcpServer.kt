@@ -265,7 +265,7 @@ internal class LocalMcpServer(
                     }
                     put(
                         "instructions",
-                        "薄荷广工本地 MCP 服务：可直接查询与修改手机上的课表、日程时间块与待办事项。" +
+                        "工课（Goke）本地 MCP 服务：可直接查询与修改手机上的课表、日程时间块与待办事项。" +
                             "需要执行批量调课、停课、作息调整或复杂筛选修改时，请先调用 get_script_sdk 查看 QuickJS 沙箱 API，再通过 preview_script 预览变更与冲突检查，确认后用 apply_script 提交。所有修改均记录在操作历史中，支持随时撤销。",
                     )
                 }

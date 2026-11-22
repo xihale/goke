@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: 薄荷日程 MintCal 同步服务
+  title: 工课 Goke 同步服务
   version: 0.1.0
   description: 自建服务。管理员创建用户；客户端登录后按记录同步。所有接口（除 login、healthz）都需要 `Authorization: Bearer <token>`。另有 MCP 端点 `POST /mcp`（Streamable HTTP，供外部 AI 助手使用），非 REST 接口、不在本文件描述，见 server/README.md 与 docs/specs/015-mcp.md。
 servers:
