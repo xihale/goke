@@ -7,7 +7,7 @@ import {
   textarea, textInput,
 } from './formkit.js';
 import {
-  GDUT_CAMPUS_LABELS, GDUT_PERIODS, WeekSets, courseConflicts, currentSemester, effectiveCoursePeriods, newCourse,
+  GDUT_PERIODS, WeekSets, courseConflicts, currentSemester, newCourse,
   newEvent, newException, newList, newRecurrence, newSemester, newTask, restore, semesterCalendar, subtasks, tombstone,
   touch,
 } from './model.js';
@@ -104,27 +104,13 @@ export function openCourseForm({ course, day, period } = {}) {
   if (!sem) return;
   const { store } = ctx;
   const cal = semesterCalendar(sem);
-  const c = course;
-  const campusOptions = [
-    ['', '跟随学期默认'],
-    ...Object.entries(GDUT_CAMPUS_LABELS),
-  ];
-  const campusS = select(campusOptions, c?.campusOverride || '');
-  const activePeriods = () => effectiveCoursePeriods({ campusOverride: campusS.value || null }, sem);
-  const popts = periodOptions(activePeriods());
+  const popts = periodOptions(sem.periods);
   const name = textInput(c?.name || '', { placeholder: '课程名称', maxLength: 60 });
   const teacher = textInput(c?.teacher || '', { maxLength: 40 });
   const room = textInput(c?.room || '', { maxLength: 40 });
   const dayS = select(WEEKDAY_OPTIONS, c?.dayOfWeek ?? day ?? 1);
   const sp = select(popts, c?.startPeriod ?? period ?? 1);
   const ep = select(popts, c?.endPeriod ?? Math.min(period ? period + 1 : 2, popts.length));
-  campusS.addEventListener('change', () => {
-    const nextOpts = periodOptions(activePeriods());
-    const curS = sp.value;
-    const curE = ep.value;
-    sp.replaceChildren(...nextOpts.map(([v, l]) => h('option', { value: v, selected: String(v) === curS }, l)));
-    ep.replaceChildren(...nextOpts.map(([v, l]) => h('option', { value: v, selected: String(v) === curE }, l)));
-  });
   const note = textarea(c?.note || '', { rows: 2 });
   const remind = remindSelect(c?.remindMinutes, '默认（按设置）');
   const color = colorSwatches(c?.colorIndex ?? store.view().courses.length % 8);
@@ -167,7 +153,6 @@ export function openCourseForm({ course, day, period } = {}) {
         quick('清空', [])), grid, weekText)),
       group('颜色', color.el),
       field('提醒', remind),
-      field('上课校区（作息）', campusS),
       field('备注', note),
     ],
     extraActions: c ? [h('button', { type: 'button', class: 'btn danger-ghost', onclick: async () => { if (await confirmDialog(`删除课程「${c.name}」？`, '删除', { danger: true })) { dlg.close(); removeCourse(c); } } }, '删除')] : [],
@@ -181,7 +166,6 @@ export function openCourseForm({ course, day, period } = {}) {
       const f = {
         name: nm, teacher: teacher.value.trim(), room: room.value.trim(), dayOfWeek: Number(dayS.value), startPeriod: s, endPeriod: e,
         weeks: [...chosen].sort((a, b) => a - b), colorIndex: color.get(), remindMinutes: remindValue(remind), note: note.value,
-        campusOverride: campusS.value || null,
       };
       store.put(c ? touch(c, f) : newCourse({ ...f, semesterId: sem.id }));
       return false;
@@ -197,9 +181,8 @@ export function openCourseDetail(occ) {
   const c = occ.course;
   const ex = store.view().exceptions.find((e) => e.courseId === c.id && e.week === occ.origWeek);
   const cancelled = ex && ex.type === 'CANCEL';
-  const campusTag = c.campusOverride && GDUT_CAMPUS_LABELS[c.campusOverride] ? ` · ${GDUT_CAMPUS_LABELS[c.campusOverride]}作息` : '';
   const rows = [
-    ['clock', `${weekdayName(occ.day)} 第 ${occ.startPeriod}–${occ.endPeriod} 节　${fmtTime(occ.startMin)}–${fmtTime(occ.endMin)}${campusTag}`],
+    ['clock', `${weekdayName(occ.day)} 第 ${occ.startPeriod}–${occ.endPeriod} 节　${fmtTime(occ.startMin)}–${fmtTime(occ.endMin)}`],
     ['calendar', `第 ${occ.week} 周（${shortDate(occ.day)}）${occ.rescheduled ? ' · 已调课' : ''}`],
     c.room || occ.room ? ['pin', occ.room || c.room] : null,
     c.teacher ? ['user', c.teacher] : null,

@@ -65,7 +65,6 @@ import app.mintcal.core.change.ChangeSet
 import app.mintcal.core.change.Edits
 import app.mintcal.core.change.apply
 import app.mintcal.core.model.Course
-import app.mintcal.core.model.GdutCampus
 import app.mintcal.core.model.GdutPeriods
 import app.mintcal.core.model.PeriodTime
 import app.mintcal.core.model.Semester
@@ -86,7 +85,6 @@ import app.mintcal.ui.components.MintCard
 import app.mintcal.ui.components.MintScreen
 import app.mintcal.ui.components.NavRow
 import app.mintcal.ui.components.SectionLabel
-import app.mintcal.ui.components.SegmentedPill
 import app.mintcal.ui.components.Tag
 import app.mintcal.ui.components.TimePickerDlg
 import app.mintcal.ui.components.ValueRow
@@ -101,16 +99,6 @@ import app.mintcal.ui.weekdayShort
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
-
-@Composable
-private fun campusLabel(campus: GdutCampus?): String =
-    when (campus) {
-        GdutCampus.HEMC -> stringResource(R.string.campus_hemc)
-        GdutCampus.LONGDONG -> stringResource(R.string.campus_longdong)
-        GdutCampus.DONGFENG -> stringResource(R.string.campus_dongfeng)
-        GdutCampus.JIEYANG -> stringResource(R.string.campus_jieyang)
-        null -> stringResource(R.string.semester_schedule_custom)
-    }
 
 @Composable
 fun EditTimetableScreen(onBack: () -> Unit) {
@@ -186,8 +174,13 @@ fun EditTimetableScreen(onBack: () -> Unit) {
             weeksNow > total -> stringResource(R.string.semester_ended)
             else -> stringResource(R.string.week_n, weeksNow.toInt())
         }
-    val detectedCampus = remember(sem.periods) { GdutPeriods.detectCampus(sem.periods) }
-    val scheduleSummary = stringResource(R.string.semester_schedule_value, campusLabel(detectedCampus), sem.periods.size)
+    val isDefaultPeriods = remember(sem.periods) { sem.periods == GdutPeriods.default }
+    val scheduleSummary =
+        stringResource(
+            R.string.semester_schedule_value,
+            stringResource(if (isDefaultPeriods) R.string.semester_schedule_default else R.string.semester_schedule_custom),
+            sem.periods.size,
+        )
 
     MintScreen(title = stringResource(R.string.edit_timetable), onBack = onBack) {
         Column(
@@ -413,7 +406,6 @@ private fun CreateSemesterScreen(
     var name by remember { mutableStateOf(defaultName) }
     var week1 by remember { mutableStateOf(LocalDate.now().with(java.time.DayOfWeek.MONDAY)) }
     var total by remember { mutableIntStateOf(18) }
-    var campus by remember { mutableStateOf(GdutCampus.HEMC) }
     var pickDate by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
 
@@ -438,13 +430,6 @@ private fun CreateSemesterScreen(
                 ValueRow(stringResource(R.string.label_week1_monday), ctx.fullDate(week1), { pickDate = true })
                 Stepper(stringResource(R.string.label_total_weeks), total, 1, 30, { ctx.getString(R.string.week_n_total, it) }) { total = it }
             }
-            FormSection(stringResource(R.string.semester_schedule_label)) {
-                SegmentedPill(
-                    options = GdutCampus.entries.map { it to campusLabel(it) },
-                    selected = campus,
-                    onSelect = { campus = it },
-                )
-            }
             Spacer(Modifier.height(4.dp))
             Button(
                 enabled = !submitted && name.isNotBlank(),
@@ -457,7 +442,7 @@ private fun CreateSemesterScreen(
                             name = name.trim(),
                             week1Monday = week1.with(java.time.DayOfWeek.MONDAY),
                             totalWeeks = total,
-                            periods = GdutPeriods.forCampus(campus),
+                            periods = GdutPeriods.default,
                             isCurrent = true,
                         )
                     val desc = ctx.getString(R.string.semester_create_title)
@@ -648,22 +633,6 @@ fun PeriodsScreen(onBack: () -> Unit) {
         }
     }
 
-    // 广工四校区作息：点一下就整套换掉，省得逐节改时间
-    val campus = GdutPeriods.detectCampus(periods)
-    val campusOptions: List<Pair<GdutCampus?, String>> =
-        listOf(
-            GdutCampus.HEMC to stringResource(R.string.campus_hemc),
-            GdutCampus.LONGDONG to stringResource(R.string.campus_longdong),
-            GdutCampus.DONGFENG to stringResource(R.string.campus_dongfeng),
-            GdutCampus.JIEYANG to stringResource(R.string.campus_jieyang),
-        )
-    val presetTrailing =
-        if (campus != null) {
-            stringResource(R.string.edit_periods_desc, periods.size)
-        } else {
-            stringResource(R.string.periods_custom_desc, periods.size)
-        }
-
     MintScreen(
         title = stringResource(R.string.edit_periods),
         onBack = onBack,
@@ -690,22 +659,10 @@ fun PeriodsScreen(onBack: () -> Unit) {
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp),
         ) {
-            FormSection(
-                title = stringResource(R.string.campus_preset_section),
-                trailing = presetTrailing,
-            ) {
-                SegmentedPill(
-                    options = campusOptions,
-                    selected = campus,
-                    onSelect = { picked -> if (picked != null) periods = GdutPeriods.forCampus(picked) },
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-
             periods.forEachIndexed { i, p ->
                 val prev = periods.getOrNull(i - 1)
                 when {
-                    i == 0 -> SectionLabel(stringResource(R.string.periods_morning), modifier = Modifier.padding(top = 12.dp))
+                    i == 0 -> SectionLabel(stringResource(R.string.periods_morning), modifier = Modifier.padding(top = 8.dp))
                     prev != null && prev.index == 4 -> SectionLabel(stringResource(R.string.periods_afternoon), modifier = Modifier.padding(top = 14.dp))
                     prev != null && prev.index == 9 -> SectionLabel(stringResource(R.string.periods_evening), modifier = Modifier.padding(top = 14.dp))
                 }

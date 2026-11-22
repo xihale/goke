@@ -56,7 +56,6 @@ import app.mintcal.core.model.Attachment
 import app.mintcal.core.model.Event
 import app.mintcal.core.model.EventKind
 import app.mintcal.core.model.Freq
-import app.mintcal.core.model.GdutCampus
 import app.mintcal.core.model.Source
 import app.mintcal.core.model.Task
 import app.mintcal.core.model.TaskList
@@ -161,18 +160,6 @@ class ScreensSmokeTest {
             app.repo.commit(ChangeSet("sem", "sem", Source.MANUAL, now, listOf(Change.Modify(sem, sem2))))
             val courses = IcsImporter.toCourses(cal, sem2, now).value!!.courses
             app.repo.commit(ImportPlanner.planCourses(app.repo.snapshot.value, sem2, courses, now, "导入课表"))
-            val firstCourse =
-                app.repo.snapshot.value.courses
-                    .first()
-            app.repo.commit(
-                ChangeSet(
-                    "course-campus",
-                    "course-campus",
-                    Source.MANUAL,
-                    now,
-                    listOf(Change.Modify(firstCourse, firstCourse.copy(campusOverride = GdutCampus.LONGDONG))),
-                ),
-            )
             val list = TaskList(Ids.next(), "学习", 1, 0)
             val today = LocalDate.now()
             val tasks =

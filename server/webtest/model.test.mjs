@@ -188,21 +188,14 @@ test('liveView 与当天汇总', () => {
   assert.ok(!marks.has(D('2026-09-05')) || !marks.get(D('2026-09-05')).event);
 });
 
-test('课程 campusOverride 与未知字段往返保留', () => {
-  const cHemc = course({ name: '大学城课', startPeriod: 5, endPeriod: 6 });
-  const cDongfeng = course({ name: '东风路课', startPeriod: 5, endPeriod: 6, campusOverride: 'DONGFENG' });
+test('课程未知字段往返保留', () => {
+  const c = course({ name: '高数', startPeriod: 5, endPeriod: 6 });
   const cal = M.semesterCalendar(sem);
-  const occ = M.expandCourses(sem, [cHemc, cDongfeng], [], cal.weekStart(1), cal.weekEnd(1));
-  const oHemc = occ.find((o) => o.course.id === cHemc.id);
-  const oDf = occ.find((o) => o.course.id === cDongfeng.id);
-  assert.equal(oHemc.startMin, 13 * 60 + 50); // 大学城第 5 节 13:50
-  assert.equal(oDf.startMin, 14 * 60); // 东风路第 5 节 14:00
-  assert.equal(oDf.endMin, 15 * 60 + 35); // 东风路第 6 节 15:35
-  assert.equal(M.effectiveCoursePeriods(cDongfeng, sem)[4].start, '14:00');
-  assert.equal(M.effectiveCoursePeriods(cHemc, sem)[4].start, '13:50');
+  const occ = M.expandCourses(sem, [c], [], cal.weekStart(1), cal.weekEnd(1));
+  assert.equal(occ[0].startMin, 13 * 60 + 50); // 第 5 节 13:50
+  assert.equal(occ[0].endMin, 15 * 60 + 25); // 第 6 节 15:25
 
-  const withExtra = { ...cDongfeng, customUnknownField: 'keep-me' };
+  const withExtra = { ...c, customUnknownField: 'keep-me' };
   const touched = M.touch(withExtra, { room: '教4-101' }, 5000);
-  assert.equal(touched.campusOverride, 'DONGFENG');
   assert.equal(touched.customUnknownField, 'keep-me');
 });

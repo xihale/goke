@@ -9,9 +9,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
 import app.mintcal.MintCalApp
 import app.mintcal.SmokeTestApp
+import app.mintcal.core.jxfw.ClassroomBuilding
 import app.mintcal.core.jxfw.ClassroomOccupancy
 import app.mintcal.core.jxfw.OccupancyType
-import app.mintcal.core.model.GdutCampus
+import app.mintcal.core.model.GdutPeriods
 import app.mintcal.data.Settings
 import app.mintcal.ui.screens.ClassroomGridHelper
 import app.mintcal.ui.screens.TodoEditScreen
@@ -33,12 +34,11 @@ class ClassroomGridHelperTest {
     @get:Rule val rule = createComposeRule()
 
     @Test
-    fun boxSelectionMapsPeriodsToCampusDatetimesAndExtraDates() {
+    fun boxSelectionMapsPeriodsToUnifiedDatetimesAndExtraDates() {
         val weekStart = LocalDate.of(2026, 9, 7)
         val sel =
             ClassroomGridHelper.resolveClassroomBoxSelection(
-                buildingCampusCode = "1",
-                fallbackCampus = GdutCampus.LONGDONG,
+                periods = GdutPeriods.default,
                 weekStart = weekStart,
                 days = 2..4,
                 firstPeriod = 1,
@@ -52,39 +52,30 @@ class ClassroomGridHelperTest {
         assertEquals("教3-101", sel.location)
         assertFalse(sel.overlapsOccupancy)
         assertFalse(sel.overlapsPersonal)
-    }
 
-    @Test
-    fun boxSelectionUsesCampusBellAndFallsBackForUnknownCampus() {
-        val weekStart = LocalDate.of(2026, 9, 7)
-        // 龙洞校区下午第 5 节 13:30–14:15
-        val longdong =
+        val afternoon =
             ClassroomGridHelper.resolveClassroomBoxSelection(
-                buildingCampusCode = "2",
-                fallbackCampus = GdutCampus.HEMC,
+                periods = GdutPeriods.default,
                 weekStart = weekStart,
                 days = 1..1,
                 firstPeriod = 5,
                 lastPeriod = 5,
                 roomName = "实验楼-202",
             )!!
-        assertEquals("2026-09-07T13:30", longdong.start)
-        assertEquals("2026-09-07T14:15", longdong.end)
-        assertNull(longdong.extraDates)
+        assertEquals("2026-09-07T13:50", afternoon.start)
+        assertEquals("2026-09-07T14:35", afternoon.end)
+        assertNull(afternoon.extraDates)
+    }
 
-        // 番禺校区("4")未知作息，回退到 fallbackCampus (东风路 14:00–14:45)
-        val fallback =
-            ClassroomGridHelper.resolveClassroomBoxSelection(
-                buildingCampusCode = "4",
-                fallbackCampus = GdutCampus.DONGFENG,
-                weekStart = weekStart,
-                days = 3..3,
-                firstPeriod = 5,
-                lastPeriod = 5,
-                roomName = "番禺-101",
-            )!!
-        assertEquals("2026-09-09T14:00", fallback.start)
-        assertEquals("2026-09-09T14:45", fallback.end)
+    @Test
+    fun defaultCampusNamePrefersHemcAndFallsBackToFirstNonBlank() {
+        val buildings =
+            listOf(
+                ClassroomBuilding(code = "0029", name = "教学楼", campusCode = "2", campusName = "龙洞校区"),
+                ClassroomBuilding(code = "0005", name = "教学三号楼(城)", campusCode = "1", campusName = "大学城校区"),
+            )
+        assertEquals("大学城校区", ClassroomGridHelper.defaultCampusName(buildings))
+        assertEquals("龙洞校区", ClassroomGridHelper.defaultCampusName(buildings.take(1)))
     }
 
     @Test
@@ -99,8 +90,7 @@ class ClassroomGridHelperTest {
             )
         val sel =
             ClassroomGridHelper.resolveClassroomBoxSelection(
-                buildingCampusCode = "1",
-                fallbackCampus = GdutCampus.HEMC,
+                periods = GdutPeriods.default,
                 weekStart = weekStart,
                 days = 2..2,
                 firstPeriod = 2,

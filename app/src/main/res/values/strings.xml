@@ -228,7 +228,6 @@
     <string name="import_jw">教务系统导入</string>
     <string name="import_jw_desc">登录学校教务系统自动获取课表</string>
     <string name="edit_periods">调整节次时间</string>
-    <string name="edit_periods_desc">共 %1$d 节</string>
     <string name="edit_periods_op">调整节次时间</string>
     <string name="copy_next_semester">复制到下学期</string>
     <string name="copy_next_semester_desc">带上全部课程，创建新学期</string>
@@ -705,11 +704,6 @@
     <string name="cal_sync_local_account_name">Goke</string>
     <!-- Goke (工课) · 设计系统与子页重设计 -->
     <string name="fmt_rooms_folded">%1$s 等 %2$d 处</string>
-    <string name="campus_preset_section">广工校区作息预设</string>
-    <string name="campus_hemc">大学城</string>
-    <string name="campus_longdong">龙洞</string>
-    <string name="campus_dongfeng">东风路</string>
-    <string name="campus_jieyang">揭阳</string>
     <string name="course_slots_section">上课时段</string>
     <string name="course_add_slot">添加时段</string>
     <string name="course_slot_sheet_title">编辑上课时段</string>
@@ -738,15 +732,13 @@
     <string name="remind_hours_value">提前 %1$d 小时</string>
     <string name="remind_follow_default">跟随默认（%1$s）</string>
     <string name="course_info_section">课程信息</string>
-    <string name="course_campus_override_label">上课校区（作息）</string>
-    <string name="course_campus_follow_semester">跟随学期默认</string>
     <string name="course_period_range_hint">再点一节设为结束</string>
     <string name="periods_morning">上午</string>
     <string name="periods_afternoon">下午</string>
     <string name="periods_evening">晚上</string>
-    <string name="periods_custom_desc">自定义 · 共 %1$d 节</string>
     <string name="semester_schedule_label">作息与节次</string>
     <string name="semester_schedule_value">%1$s · %2$d 节</string>
+    <string name="semester_schedule_default">广工标准</string>
     <string name="semester_schedule_custom">自定义</string>
     <string name="import_timetable_file">导入课表文件</string>
     <string name="import_timetable_file_desc">支持 Excel (.xlsx) 与 WakeUp / ICS 日历</string>

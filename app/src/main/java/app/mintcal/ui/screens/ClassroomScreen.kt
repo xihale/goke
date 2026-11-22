@@ -115,7 +115,6 @@ import app.mintcal.core.jxfw.ClassroomOccupancy
 import app.mintcal.core.jxfw.ClassroomRoom
 import app.mintcal.core.jxfw.JwcwxParse
 import app.mintcal.core.jxfw.OccupancyType
-import app.mintcal.core.model.GdutCampus
 import app.mintcal.core.model.GdutPeriods
 import app.mintcal.core.model.PeriodTime
 import app.mintcal.core.model.Snapshot
@@ -200,17 +199,10 @@ internal object ClassroomGridHelper {
         return rowH * (p - 1) + groupGap * gaps
     }
 
-    fun defaultCampusName(
-        buildings: List<ClassroomBuilding>,
-        semesterCampus: GdutCampus,
-    ): String? {
+    fun defaultCampusName(buildings: List<ClassroomBuilding>): String? {
         if (buildings.isEmpty()) return null
-        val matched =
-            buildings.firstOrNull { b ->
-                b.campusName.isNotBlank() &&
-                    JwcwxParse.resolveCampus(b.campusCode, semesterCampus) == semesterCampus
-            }
-        return matched?.campusName ?: buildings.firstOrNull { it.campusName.isNotBlank() }?.campusName
+        val hemc = buildings.firstOrNull { it.campusName.isNotBlank() && it.campusCode.trim() == "1" }
+        return hemc?.campusName ?: buildings.firstOrNull { it.campusName.isNotBlank() }?.campusName
     }
 
     fun isRoomFree(
@@ -239,8 +231,7 @@ internal object ClassroomGridHelper {
     }
 
     fun resolveClassroomBoxSelection(
-        buildingCampusCode: String,
-        fallbackCampus: GdutCampus,
+        periods: List<PeriodTime>,
         weekStart: LocalDate,
         days: IntRange,
         firstPeriod: Int,
@@ -249,12 +240,11 @@ internal object ClassroomGridHelper {
         roomOccupanciesByDay: Map<Int, List<ClassroomOccupancy>> = emptyMap(),
         personalBusyByDay: Map<Int, Set<Int>> = emptyMap(),
     ): ClassroomBoxSelection? {
-        val campus = JwcwxParse.resolveCampus(buildingCampusCode, fallbackCampus)
-        val periods = GdutPeriods.forCampus(campus).sortedBy { it.index }
+        val sortedPeriods = periods.sortedBy { it.index }
         val p1 = minOf(firstPeriod, lastPeriod)
         val p2 = maxOf(firstPeriod, lastPeriod)
-        val startP = periods.firstOrNull { it.index == p1 } ?: return null
-        val endP = periods.firstOrNull { it.index == p2 } ?: return null
+        val startP = sortedPeriods.firstOrNull { it.index == p1 } ?: return null
+        val endP = sortedPeriods.firstOrNull { it.index == p2 } ?: return null
         val d1 = minOf(days.first, days.last).coerceIn(1, 7)
         val d2 = maxOf(days.first, days.last).coerceIn(1, 7)
         val dayRange = d1..d2
@@ -371,7 +361,7 @@ fun ClassroomScreen(
 
     val semester = snap.currentSemester
     val cal = remember(semester) { semester?.let { SemesterCalendar(it) } }
-    val fallbackCampus = remember(semester) { semester?.let { GdutPeriods.detectCampus(it.periods) } ?: GdutCampus.HEMC }
+    val periods = remember(semester) { (semester?.periods ?: GdutPeriods.default).sortedBy { it.index } }
     val maxWeeks = semester?.totalWeeks ?: 20
     val defaultWeek =
         remember(cal, today, maxWeeks) {
@@ -414,7 +404,7 @@ fun ClassroomScreen(
             val list = app.jxfw.fetchClassroomBuildings(forceRefresh = reloadToken > 0)
             buildings = list
             if (selectedCampus == null || list.none { it.campusName == selectedCampus }) {
-                selectedCampus = ClassroomGridHelper.defaultCampusName(list, fallbackCampus)
+                selectedCampus = ClassroomGridHelper.defaultCampusName(list)
             }
         } catch (e: JxfwException) {
             buildingsError = e.message
@@ -566,7 +556,7 @@ fun ClassroomScreen(
                     ClassroomRoomScheduleView(
                         building = building,
                         room = room,
-                        fallbackCampus = fallbackCampus,
+                        periods = periods,
                         week = selectedWeek,
                         maxWeeks = maxWeeks,
                         weekStartFor = ::weekStartFor,
@@ -586,8 +576,7 @@ fun ClassroomScreen(
                         onSelectBox = { boxWeekStart, days, firstP, lastP, occByDay, personalByDay ->
                             val sel =
                                 ClassroomGridHelper.resolveClassroomBoxSelection(
-                                    buildingCampusCode = building.campusCode,
-                                    fallbackCampus = fallbackCampus,
+                                    periods = periods,
                                     weekStart = boxWeekStart,
                                     days = days,
                                     firstPeriod = firstP,
@@ -697,9 +686,6 @@ fun ClassroomScreen(
     }
 
     detailOccupancy?.let { occ ->
-        val campus =
-            activeBuilding?.let { JwcwxParse.resolveCampus(it.campusCode, fallbackCampus) } ?: fallbackCampus
-        val periods = remember(campus) { GdutPeriods.forCampus(campus).sortedBy { it.index } }
         ClassroomOccupancyDialog(
             occ = occ,
             periods = periods,
@@ -1396,7 +1382,7 @@ private fun ClassroomRoomRow(
 private fun ClassroomRoomScheduleView(
     building: ClassroomBuilding,
     room: ClassroomRoom,
-    fallbackCampus: GdutCampus,
+    periods: List<PeriodTime>,
     week: Int,
     maxWeeks: Int,
     weekStartFor: (Int) -> LocalDate,
@@ -1422,8 +1408,6 @@ private fun ClassroomRoomScheduleView(
 ) {
     val ctx = LocalContext.current
     val reduce = reduceMotion()
-    val campus = remember(building.campusCode, fallbackCampus) { JwcwxParse.resolveCampus(building.campusCode, fallbackCampus) }
-    val periods = remember(campus) { GdutPeriods.forCampus(campus).sortedBy { it.index } }
     val pageCount = maxWeeks.coerceAtLeast(1)
     val pager = rememberPagerState(initialPage = (week - 1).coerceIn(0, pageCount - 1), pageCount = { pageCount })
     val scroll = rememberScrollState()

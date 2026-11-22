@@ -7,12 +7,10 @@ import app.mintcal.core.agenda.EventItem
 import app.mintcal.core.agenda.TaskItem
 import app.mintcal.core.model.Course
 import app.mintcal.core.model.Event
-import app.mintcal.core.model.GdutCampus
 import app.mintcal.core.model.GdutPeriods
 import app.mintcal.core.model.Semester
 import app.mintcal.core.model.Snapshot
 import app.mintcal.core.model.Task
-import app.mintcal.core.model.effectivePeriods
 import app.mintcal.core.time.SemesterCalendar
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -116,36 +114,5 @@ class AgendaTest {
         assertEquals(1, wedItems.size)
         val wedTask = assertIs<TaskItem>(wedItems.single())
         assertEquals("t1", wedTask.task.id)
-    }
-
-    @Test
-    fun courseCampusOverrideUsesCampusPeriodsInAgendaAndCalendar() {
-        val sem = Semester("s1", "2026秋", mon, totalWeeks = 20, periods = GdutPeriods.hemc)
-        val hemcCourse = Course("c1", "s1", "大学城课", dayOfWeek = 1, startPeriod = 5, endPeriod = 6, weeks = setOf(1))
-        val dongfengCourse =
-            Course(
-                "c2",
-                "s1",
-                "东风路课",
-                dayOfWeek = 1,
-                startPeriod = 5,
-                endPeriod = 6,
-                weeks = setOf(1),
-                campusOverride = GdutCampus.DONGFENG,
-            )
-
-        assertEquals(GdutPeriods.hemc, hemcCourse.effectivePeriods(sem))
-        assertEquals(GdutPeriods.dongfeng, dongfengCourse.effectivePeriods(sem))
-
-        val cal = SemesterCalendar(sem)
-        assertEquals(mon.atTime(13, 50), cal.courseStart(hemcCourse, 1))
-        assertEquals(mon.atTime(14, 0), cal.courseStart(dongfengCourse, 1))
-        assertEquals(mon.atTime(15, 35), cal.courseEnd(dongfengCourse, 1))
-
-        val snap = Snapshot(semesters = listOf(sem), courses = listOf(hemcCourse, dongfengCourse))
-        val items = Agenda.forDay(snap, mon).filterIsInstance<CourseItem>()
-        assertEquals(listOf("c1", "c2"), items.map { it.occ.course.id })
-        assertEquals(mon.atTime(13, 50), items[0].occ.start)
-        assertEquals(mon.atTime(14, 0), items[1].occ.start)
     }
 }

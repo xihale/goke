@@ -1,6 +1,5 @@
 package app.mintcal.core.jxfw
 
-import app.mintcal.core.model.GdutCampus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -222,15 +221,5 @@ class JwcwxParseTest {
 
         assertFailsWith<IllegalStateException> { JwcwxParse.parseBuildingsOrThrow("""{"code":0,"data":null}""") }
         assertFailsWith<IllegalStateException> { JwcwxParse.parseOccupancyOrThrow("not json") }
-    }
-
-    @Test
-    fun resolveCampusMapsKnownCodesAndFallsBackForUnknown() {
-        assertEquals(GdutCampus.HEMC, JwcwxParse.resolveCampus("1"))
-        assertEquals(GdutCampus.LONGDONG, JwcwxParse.resolveCampus("2"))
-        assertEquals(GdutCampus.DONGFENG, JwcwxParse.resolveCampus("3"))
-        assertEquals(GdutCampus.JIEYANG, JwcwxParse.resolveCampus("108291461"))
-        assertEquals(GdutCampus.HEMC, JwcwxParse.resolveCampus("4"))
-        assertEquals(GdutCampus.LONGDONG, JwcwxParse.resolveCampus("4", fallback = GdutCampus.LONGDONG))
     }
 }

@@ -45,8 +45,8 @@ object CourseExpander {
                 val ep = if (ex?.type == ExceptionType.RESCHEDULE) ex.newEndPeriod ?: c.endPeriod else c.endPeriod
                 val date = cal.dateOf(week, dow)
                 if (date.isBefore(from) || date.isAfter(to)) continue
-                val s = cal.courseStart(c, week, dow, sp) ?: continue
-                val e = cal.courseEnd(c, week, dow, ep) ?: continue
+                val s = cal.startTime(sp)?.let { date.atTime(it) } ?: continue
+                val e = cal.endTime(ep)?.let { date.atTime(it) } ?: continue
                 out +=
                     CourseOccurrence(
                         course = c,
