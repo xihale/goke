@@ -116,6 +116,7 @@ internal data class SlotDraft(
     val weeks: Set<Int>,
     val room: String,
     val remindMinutes: Int?,
+    val teacher: String? = null,
 )
 
 /** 时段在课表上的真实钟点，如 `08:30–10:05`；节次越界时留空。 */
@@ -171,7 +172,6 @@ fun CourseEditScreen(
 
     // ── 课程级字段：一门课只有一套，保存时统一落到全部时段上 ──
     var name by remember { mutableStateOf(existing?.name.orEmpty()) }
-    var teacher by remember { mutableStateOf(existing?.teacher.orEmpty()) }
     var color by remember { mutableIntStateOf(existing?.colorIndex ?: (snap.courses.size % 8)) }
     var note by remember { mutableStateOf(existing?.note.orEmpty()) }
     var campusOverride by remember { mutableStateOf(existing?.campusOverride) }
@@ -187,7 +187,7 @@ fun CourseEditScreen(
                 snap.courses
                     .filter { it.deletedAt == null && it.semesterId == sem.id && it.name == existing.name }
                     .sortedWith(compareBy({ it.weeks.minOrNull() ?: 99 }, { it.dayOfWeek }, { it.startPeriod }))
-                    .map { SlotDraft(it.id, it, it.dayOfWeek, it.startPeriod, it.endPeriod, it.weeks, it.room, it.remindMinutes) }
+                    .map { SlotDraft(it.id, it, it.dayOfWeek, it.startPeriod, it.endPeriod, it.weeks, it.room, it.remindMinutes, it.teacher) }
             } else {
                 val sp = (initialPeriod ?: 1).coerceIn(1, periodCount)
                 val ep = (sp + 1).coerceAtMost(periodCount).coerceAtLeast(sp)
@@ -201,10 +201,23 @@ fun CourseEditScreen(
                         weeks = WeekSets.all(totalWeeks),
                         room = "",
                         remindMinutes = null,
+                        teacher = "",
                     ),
                 )
             }
         }
+    val initialTeacher =
+        remember(id) {
+            if (existing != null) {
+                initialSlots
+                    .mapNotNull { it.teacher?.trim()?.takeIf { t -> t.isNotEmpty() } }
+                    .distinct()
+                    .joinToString("、")
+            } else {
+                ""
+            }
+        }
+    var teacher by remember(id) { mutableStateOf(initialTeacher) }
     var slots by remember(id) { mutableStateOf(initialSlots) }
     var openSlot by remember { mutableStateOf<String?>(null) }
     var pendingNewSlot by remember { mutableStateOf<SlotDraft?>(null) }
@@ -230,7 +243,7 @@ fun CourseEditScreen(
     fun materialize(s: SlotDraft): Course? {
         if (s.weeks.isEmpty()) return null
         val n = name.trim()
-        val t = teacher.trim()
+        val t = s.teacher?.trim() ?: teacher.trim()
         val r = s.room.trim()
         val nt = note.trim()
         val b = s.base
@@ -280,6 +293,7 @@ fun CourseEditScreen(
                 weeks = last?.weeks ?: WeekSets.all(totalWeeks),
                 room = last?.room.orEmpty(),
                 remindMinutes = last?.remindMinutes,
+                teacher = last?.teacher ?: teacher,
             )
     }
 
@@ -290,7 +304,7 @@ fun CourseEditScreen(
         if (origin == null) {
             name.isNotBlank() || teacher.isNotBlank() || note.isNotBlank() || campusOverride != null
         } else {
-            name.trim() != origin.name || teacher.trim() != origin.teacher ||
+            name.trim() != origin.name || teacher.trim() != initialTeacher ||
                 color != origin.colorIndex || note.trim() != origin.note ||
                 campusOverride != origin.campusOverride
         }
@@ -469,12 +483,17 @@ fun CourseEditScreen(
                 trailing = if (slots.size > 1) ctx.getString(R.string.courses_slots_count, slots.size) else null,
                 modifier = Modifier.padding(top = 14.dp),
             )
+            val showSlotTeacher =
+                remember(slots) {
+                    slots.mapNotNull { it.teacher?.trim()?.takeIf { t -> t.isNotEmpty() } }.distinct().size > 1
+                }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 slots.forEach { s ->
                     SlotRow(
                         slot = s,
                         color = color,
                         clock = clockRange(effectivePeriods, s.startPeriod, s.endPeriod),
+                        showTeacher = showSlotTeacher,
                         onOpen = { openSlot = s.id },
                     )
                 }
@@ -531,7 +550,10 @@ fun CourseEditScreen(
             TonalField(
                 label = stringResource(R.string.label_teacher),
                 value = teacher,
-                onChange = { teacher = it },
+                onChange = { next ->
+                    teacher = next
+                    slots = slots.map { s -> s.copy(teacher = next) }
+                },
                 placeholder = stringResource(R.string.course_teacher_placeholder),
             )
             Spacer(Modifier.height(4.dp))
@@ -659,12 +681,19 @@ fun CourseEditScreen(
             totalWeeks = totalWeeks,
             slot = editingSlot,
             onChange = { updated ->
-                if (editingPending != null) {
-                    slots = slots + updated
-                    pendingNewSlot = null
-                } else {
-                    slots = slots.map { if (it.id == editingSlot.id) updated else it }
-                }
+                val nextSlots =
+                    if (editingPending != null) {
+                        pendingNewSlot = null
+                        slots + updated
+                    } else {
+                        slots.map { if (it.id == editingSlot.id) updated else it }
+                    }
+                slots = nextSlots
+                teacher =
+                    nextSlots
+                        .mapNotNull { it.teacher?.trim()?.takeIf { t -> t.isNotEmpty() } }
+                        .distinct()
+                        .joinToString("、")
             },
             onDismiss = {
                 if (editingPending != null) {
@@ -676,7 +705,13 @@ fun CourseEditScreen(
             onDelete =
                 if (editingPending == null && slots.size > 1) {
                     {
-                        slots = slots.filterNot { it.id == editingSlot.id }
+                        val nextSlots = slots.filterNot { it.id == editingSlot.id }
+                        slots = nextSlots
+                        teacher =
+                            nextSlots
+                                .mapNotNull { it.teacher?.trim()?.takeIf { t -> t.isNotEmpty() } }
+                                .distinct()
+                                .joinToString("、")
                         openSlot = null
                     }
                 } else {
@@ -778,6 +813,7 @@ private fun SlotRow(
     slot: SlotDraft,
     color: Int,
     clock: String,
+    showTeacher: Boolean = false,
     onOpen: () -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -819,6 +855,7 @@ private fun SlotRow(
                 listOfNotNull(
                     clock.takeIf { it.isNotEmpty() },
                     ctx.formatRooms(slot.room).takeIf { it.isNotEmpty() },
+                    slot.teacher?.trim()?.takeIf { showTeacher && it.isNotEmpty() },
                 )
             val sub = parts.joinToString(" · ")
             if (sub.isNotEmpty()) {
@@ -977,12 +1014,19 @@ internal fun SlotEditorSheet(
                 }
             }
 
-            // 教室
+            // 教室与教师
             Spacer(Modifier.height(10.dp))
             TonalField(
                 label = stringResource(R.string.label_room),
                 value = draft.room,
                 onChange = { draft = draft.copy(room = it) },
+            )
+            Spacer(Modifier.height(10.dp))
+            TonalField(
+                label = stringResource(R.string.label_teacher),
+                value = draft.teacher.orEmpty(),
+                onChange = { draft = draft.copy(teacher = it) },
+                placeholder = stringResource(R.string.course_teacher_placeholder),
             )
 
             // 周次（5 列矩阵：20 周正好 4×5 满行对齐）
@@ -1137,11 +1181,12 @@ internal fun buildSlotChanges(
     fun materializeSlot(s: SlotDraft): Course? {
         if (s.weeks.isEmpty()) return null
         val r = s.room.trim()
+        val slotTeacher = s.teacher?.trim() ?: t
         val b = s.base
         return if (b != null) {
             b.copy(
                 name = n,
-                teacher = t,
+                teacher = slotTeacher,
                 room = r,
                 dayOfWeek = s.dayOfWeek,
                 startPeriod = s.startPeriod,
@@ -1157,7 +1202,7 @@ internal fun buildSlotChanges(
                 id = s.id,
                 semesterId = semesterId,
                 name = n,
-                teacher = t,
+                teacher = slotTeacher,
                 room = r,
                 dayOfWeek = s.dayOfWeek,
                 startPeriod = s.startPeriod,

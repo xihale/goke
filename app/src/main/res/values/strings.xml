@@ -460,6 +460,7 @@
     <string name="jxfw_logout_message">将删除保存的教务密码并停止自动同步。已导入的课程和考试会保留。</string>
     <string name="jxfw_progress_login">正在登录教务系统…</string>
     <string name="jxfw_progress_courses">正在获取课表与考试（%1$d/%2$d）…</string>
+    <string name="jxfw_progress_refine_weeks">正在核对分周教室与教师（%1$d/%2$d）…</string>
     <string name="jxfw_progress_saving">正在导入课表…</string>
     <string name="jxfw_progress_week">正在获取第 %1$d 周课表…</string>
     <string name="jxfw_result_full">已导入 %1$d 门课、%2$d 场考试</string>

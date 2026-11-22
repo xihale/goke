@@ -124,4 +124,31 @@ class CourseGridOpsTest {
             )
         assertTrue(changes.isEmpty())
     }
+
+    @Test
+    fun multiTeacherSlotsPreservePerSlotTeacherWhenSummaryUnchanged() {
+        val c1 = baseCourse("c1", dow = 1, weeks = setOf(1, 2), room = "实2-301").copy(teacher = "陈老师")
+        val c2 = baseCourse("c2", dow = 1, weeks = setOf(3, 4), room = "实2-405").copy(teacher = "林老师")
+        val initial = listOf(slotOf(c1).copy(teacher = c1.teacher), slotOf(c2).copy(teacher = c2.teacher))
+        val edited = listOf(initial[0], initial[1].copy(room = "实2-406"))
+        val changes =
+            buildSlotChanges(
+                semesterId = "sem1",
+                name = c1.name,
+                teacher = "陈老师、林老师",
+                colorIndex = 5,
+                note = "实验",
+                initialSlots = initial,
+                slots = edited,
+                liveExceptions = emptyList(),
+            )
+        val mods =
+            changes
+                .filterIsInstance<Change.Modify>()
+                .map { it.after as Course }
+                .associateBy { it.id }
+        assertEquals("陈老师", mods.getValue("c1").teacher)
+        assertEquals("林老师", mods.getValue("c2").teacher)
+        assertEquals("实2-406", mods.getValue("c2").room)
+    }
 }
