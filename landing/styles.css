@@ -273,7 +273,7 @@ code {
 .theme-pill[aria-pressed="true"] .theme-dot { background: var(--mint-glow); }
 
 /* Sections */
-.section { padding: 64px 0; border-top: 1px solid var(--line); }
+.section { padding: 64px 0; border-top: 1px solid var(--line); scroll-margin-top: 72px; }
 .section--mist {
   background: radial-gradient(840px 480px at 78% 35%, rgba(205, 235, 227, 0.62), transparent 72%), var(--mist);
 }

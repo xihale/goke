@@ -151,14 +151,15 @@
   var widgetMatrix = document.getElementById('widgetMatrix');
   if (widgetMatrix) {
     var wCards = Array.prototype.slice.call(widgetMatrix.querySelectorAll('.w-card'));
-    widgetMatrix.classList.add('has-focus');
     function focusWidget(target) {
       wCards.forEach(function (c) { c.classList.toggle('is-focus', c === target); });
     }
     wCards.forEach(function (card) {
       card.addEventListener('mouseenter', function () { focusWidget(card); });
+      card.addEventListener('focus', function () { focusWidget(card); });
       card.addEventListener('click', function () { focusWidget(card); });
     });
+    widgetMatrix.addEventListener('mouseleave', function () { focusWidget(null); });
   }
 
   /* 3. Interactive 1:1 BoxSel Playground (auto-demo + real drag over Thu P6-P7) */
@@ -312,10 +313,12 @@
       positionSmallThumb(modeWrap, activeMode);
     }
 
-    window.addEventListener('resize', function () {
+    function syncGalleryThumbs() {
       if (filterWrap) positionSmallThumb(filterWrap, filterWrap.querySelector('.is-active'));
       if (modeWrap) positionSmallThumb(modeWrap, modeWrap.querySelector('.is-active'));
-    });
+    }
+    window.addEventListener('resize', syncGalleryThumbs);
+    window.addEventListener('load', syncGalleryThumbs);
 
     /* Lightbox */
     var lightbox = document.getElementById('shotLightbox');
@@ -363,6 +366,12 @@
       lbClose.addEventListener('click', function () { lightbox.close(); });
       lightbox.addEventListener('click', function (e) {
         if (e.target === lightbox) lightbox.close();
+      });
+      lightbox.addEventListener('close', function () {
+        if (activeCard) {
+          var trigger = activeCard.querySelector('.shot-btn');
+          if (trigger) trigger.focus();
+        }
       });
     }
     if (lbPrev) lbPrev.addEventListener('click', function () { stepLightbox(-1); });
