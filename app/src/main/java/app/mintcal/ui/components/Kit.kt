@@ -647,15 +647,21 @@ fun ConfirmDialog(
     onDismiss: () -> Unit,
     danger: Boolean = false,
 ) {
+    var handled by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { Text(text) },
         confirmButton = {
-            TextButton(onClick = {
-                onConfirm()
-                onDismiss()
-            }) {
+            TextButton(
+                enabled = !handled,
+                onClick = {
+                    if (handled) return@TextButton
+                    handled = true
+                    onConfirm()
+                    onDismiss()
+                },
+            ) {
                 Text(confirm, color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
             }
         },
@@ -671,26 +677,25 @@ fun DatePickerDlg(
     onPick: (LocalDate) -> Unit,
 ) {
     var picked by remember { mutableStateOf(initial ?: LocalDate.now()) }
+    var handled by remember { mutableStateOf(false) }
+
+    fun confirm(date: LocalDate) {
+        if (handled) return
+        handled = true
+        onPick(date)
+        onDismiss()
+    }
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = {
-                onPick(picked)
-                onDismiss()
-            }) { Text(stringResource(R.string.ok)) }
+            TextButton(enabled = !handled, onClick = { confirm(picked) }) { Text(stringResource(R.string.ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     ) {
         Column {
             Row(Modifier.padding(start = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = {
-                    onPick(LocalDate.now())
-                    onDismiss()
-                }) { Text(stringResource(R.string.today)) }
-                TextButton(onClick = {
-                    onPick(LocalDate.now().plusDays(1))
-                    onDismiss()
-                }) { Text(stringResource(R.string.tomorrow)) }
+                TextButton(enabled = !handled, onClick = { confirm(LocalDate.now()) }) { Text(stringResource(R.string.today)) }
+                TextButton(enabled = !handled, onClick = { confirm(LocalDate.now().plusDays(1)) }) { Text(stringResource(R.string.tomorrow)) }
             }
             MonthPager(selected = picked, initial = YearMonth.from(initial ?: LocalDate.now()), onPick = { picked = it })
         }
@@ -705,13 +710,19 @@ fun TimePickerDlg(
 ) {
     var hour by remember { mutableIntStateOf(initial.hour) }
     var minute by remember { mutableIntStateOf(initial.minute) }
+    var handled by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = {
-                onPick(LocalTime.of(hour, minute))
-                onDismiss()
-            }) { Text(stringResource(R.string.ok)) }
+            TextButton(
+                enabled = !handled,
+                onClick = {
+                    if (handled) return@TextButton
+                    handled = true
+                    onPick(LocalTime.of(hour, minute))
+                    onDismiss()
+                },
+            ) { Text(stringResource(R.string.ok)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
         text = { TimeWheels(hour, minute, { hour = it }, { minute = it }) },

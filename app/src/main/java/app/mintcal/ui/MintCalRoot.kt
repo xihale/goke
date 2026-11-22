@@ -64,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -337,33 +338,51 @@ fun MintCalRoot(
     }
 }
 
+private fun safeBack(
+    nav: Nav,
+    entry: NavBackStackEntry,
+    back: () -> Unit,
+): () -> Unit =
+    {
+        when {
+            nav.controller.currentBackStackEntry?.id == entry.id -> {
+                back()
+            }
+
+            nav.controller.currentBackStack.value
+                .any { it.id == entry.id } -> {
+                nav.controller.popBackStack(entry.destination.id, inclusive = true)
+            }
+        }
+    }
+
 /** 全部压栈页目的地；Tab 层（home）由宿主自行 composable 定义（正式 App 是 Tabs，测试是内容桩）。 */
 fun NavGraphBuilder.mintDestinations(
     nav: Nav,
     back: () -> Unit,
 ) {
-    composable<Route.EditTimetable> { EditTimetableScreen(back) }
-    composable<Route.Appearance> { AppearanceScreen(back) }
-    composable<Route.Widgets> { WidgetsScreen(back) }
-    composable<Route.Permission> { ReliabilityScreen(back) }
-    composable<Route.Trash> { TrashScreen(back) }
-    composable<Route.History> { HistoryScreen(back) }
-    composable<Route.Parcel> { ParcelScreen(back) }
-    composable<Route.Mcp> { McpScreen(back) }
-    composable<Route.LanWeb> { LanWebScreen(back) }
-    composable<Route.Periods> { PeriodsScreen(back) }
-    composable<Route.About> { AboutScreen(back) }
-    composable<Route.Data> { DataScreen(back) }
-    composable<Route.Sync> { SyncScreen(back) }
-    composable<Route.Jxfw> { JxfwScreen(back) }
-    composable<Route.Grades> { GradesScreen(back) }
-    composable<Route.PhysicalTest> { PhysicalTestScreen(back) }
-    composable<Route.Classroom> { ClassroomScreen(back) }
-    composable<Route.Reliability> { ReliabilityScreen(back) }
-    composable<Route.Import> { e -> ImportScreen(e.toRoute<Route.Import>().uri, back) }
+    composable<Route.EditTimetable> { e -> EditTimetableScreen(safeBack(nav, e, back)) }
+    composable<Route.Appearance> { e -> AppearanceScreen(safeBack(nav, e, back)) }
+    composable<Route.Widgets> { e -> WidgetsScreen(safeBack(nav, e, back)) }
+    composable<Route.Permission> { e -> ReliabilityScreen(safeBack(nav, e, back)) }
+    composable<Route.Trash> { e -> TrashScreen(safeBack(nav, e, back)) }
+    composable<Route.History> { e -> HistoryScreen(safeBack(nav, e, back)) }
+    composable<Route.Parcel> { e -> ParcelScreen(safeBack(nav, e, back)) }
+    composable<Route.Mcp> { e -> McpScreen(safeBack(nav, e, back)) }
+    composable<Route.LanWeb> { e -> LanWebScreen(safeBack(nav, e, back)) }
+    composable<Route.Periods> { e -> PeriodsScreen(safeBack(nav, e, back)) }
+    composable<Route.About> { e -> AboutScreen(safeBack(nav, e, back)) }
+    composable<Route.Data> { e -> DataScreen(safeBack(nav, e, back)) }
+    composable<Route.Sync> { e -> SyncScreen(safeBack(nav, e, back)) }
+    composable<Route.Jxfw> { e -> JxfwScreen(safeBack(nav, e, back)) }
+    composable<Route.Grades> { e -> GradesScreen(safeBack(nav, e, back)) }
+    composable<Route.PhysicalTest> { e -> PhysicalTestScreen(safeBack(nav, e, back)) }
+    composable<Route.Classroom> { e -> ClassroomScreen(safeBack(nav, e, back)) }
+    composable<Route.Reliability> { e -> ReliabilityScreen(safeBack(nav, e, back)) }
+    composable<Route.Import> { e -> ImportScreen(e.toRoute<Route.Import>().uri, safeBack(nav, e, back)) }
     composable<Route.CourseEdit> { e ->
         val r = e.toRoute<Route.CourseEdit>()
-        CourseEditScreen(r.id, r.initialDow, r.initialPeriod, back)
+        CourseEditScreen(r.id, r.initialDow, r.initialPeriod, safeBack(nav, e, back))
     }
     composable<Route.TodoEdit> { e ->
         val r = e.toRoute<Route.TodoEdit>()
@@ -385,9 +404,8 @@ fun NavGraphBuilder.mintDestinations(
             repeatUntilArg = r.repeatUntil,
             repeatByDaysArg = r.repeatByDays,
             repeatByMonthsArg = r.repeatByMonths,
-        ) {
-            if (nav.controller.currentBackStackEntry == e) back()
-        }
+            onBack = safeBack(nav, e, back),
+        )
     }
 }
 

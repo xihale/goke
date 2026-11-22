@@ -459,6 +459,8 @@ fun EventDetailSheet(
                 TextButton(
                     enabled = !converting,
                     onClick = {
+                        if (converting) return@TextButton
+                        converting = true
                         val desc = ctx.getString(R.string.delete_desc, e.title)
                         actions.commit(Edits.delete(snap, e, desc, System.currentTimeMillis()), desc)
                         onDismiss()
@@ -470,6 +472,7 @@ fun EventDetailSheet(
                 Button(
                     enabled = !converting,
                     onClick = {
+                        if (converting) return@Button
                         converting = true
                         val newId = Ids.next()
                         val sortOrder = (snap.tasks.maxOfOrNull { it.sortOrder } ?: 0) + 1

@@ -90,17 +90,23 @@ internal fun RescheduleSheet(
     val scope = rememberCoroutineScope()
     val today = LocalDate.now()
     var pickDate by remember { mutableStateOf(false) }
+    var submitting by remember { mutableStateOf(false) }
     val title = if (tasks.size == 1) tasks[0].title else ctx.getString(R.string.todo_selected_count, tasks.size)
 
     fun finish(
         cs: ChangeSet,
         msg: String,
     ) {
+        if (submitting) return
+        submitting = true
         actions.commit(cs, msg)
         onDone()
         scope.launch {
-            sheet.hide()
-            onDismiss()
+            try {
+                sheet.hide()
+            } finally {
+                onDismiss()
+            }
         }
     }
 
@@ -118,7 +124,11 @@ internal fun RescheduleSheet(
         )
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
+    ModalBottomSheet(
+        onDismissRequest = { if (!submitting) onDismiss() },
+        sheetState = sheet,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
             Column(Modifier.padding(horizontal = 8.dp).padding(bottom = 8.dp)) {
                 Text(
@@ -143,7 +153,7 @@ internal fun RescheduleSheet(
             SheetOption(Icons.Rounded.WbSunny, stringResource(R.string.tomorrow)) { moveTo(today.plusDays(1)) }
             SheetOption(Icons.Rounded.Weekend, stringResource(R.string.date_weekend)) { moveTo(today.with(TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY))) }
             SheetOption(Icons.Rounded.Upcoming, stringResource(R.string.date_next_monday)) { moveTo(today.with(TemporalAdjusters.next(DayOfWeek.MONDAY))) }
-            SheetOption(Icons.Rounded.CalendarMonth, stringResource(R.string.date_pick)) { pickDate = true }
+            SheetOption(Icons.Rounded.CalendarMonth, stringResource(R.string.date_pick)) { if (!submitting) pickDate = true }
             SheetOption(Icons.Rounded.Inbox, stringResource(R.string.todo_no_date)) { moveTo(null) }
             // 普通操作与危险操作靠纵向留白呼吸隔开
             Spacer(Modifier.height(12.dp))
@@ -202,16 +212,21 @@ internal fun MorningSheet(
     val sheet = rememberModalSheetState()
     val today = now.toLocalDate()
     var lastTasks by remember { mutableStateOf(tasks) }
+    var handledIds by remember { mutableStateOf(emptySet<String>()) }
     LaunchedEffect(tasks) {
         if (tasks.isNotEmpty()) lastTasks = tasks
     }
     val displayTasks = if (tasks.isNotEmpty()) tasks else lastTasks
+    val remainingTasks = remember(tasks, handledIds) { tasks.filter { it.id !in handledIds } }
 
     // 全部处理完就自动收起
     LaunchedEffect(tasks.isEmpty()) {
         if (tasks.isEmpty()) {
-            sheet.hide()
-            onDismiss()
+            try {
+                sheet.hide()
+            } finally {
+                onDismiss()
+            }
         }
     }
 
@@ -219,19 +234,22 @@ internal fun MorningSheet(
         list: List<Task>,
         d: LocalDate,
     ) {
+        val pending = list.filter { it.id !in handledIds }
+        if (pending.isEmpty()) return
+        handledIds = handledIds + pending.map { it.id }
         val desc =
-            if (list.size > 1) {
-                ctx.getString(R.string.todo_reschedule_bulk_desc, list.size)
+            if (pending.size > 1) {
+                ctx.getString(R.string.todo_reschedule_bulk_desc, pending.size)
             } else {
-                ctx.getString(R.string.todo_reschedule_desc, list.first().title)
+                ctx.getString(R.string.todo_reschedule_desc, pending.first().title)
             }
         val clearedPastTime =
             d == today &&
-                list.any { t ->
+                pending.any { t ->
                     t.dueHasTime && t.due?.toLocalTime()?.let { LocalDateTime.of(d, it).isBefore(now) } == true
                 }
         actions.commit(
-            Edits.reschedule(list, d, desc, System.currentTimeMillis(), clearTimeIfPast = if (d == today) now else null),
+            Edits.reschedule(pending, d, desc, System.currentTimeMillis(), clearTimeIfPast = if (d == today) now else null),
             if (clearedPastTime) {
                 ctx.getString(R.string.todo_today_untimed_toast)
             } else {
@@ -241,19 +259,26 @@ internal fun MorningSheet(
     }
 
     fun drop(list: List<Task>) {
+        val pending = list.filter { it.id !in handledIds }
+        if (pending.isEmpty()) return
+        handledIds = handledIds + pending.map { it.id }
         val desc =
-            if (list.size > 1) {
-                ctx.getString(R.string.todo_drop_bulk_desc, list.size)
+            if (pending.size > 1) {
+                ctx.getString(R.string.todo_drop_bulk_desc, pending.size)
             } else {
-                ctx.getString(R.string.todo_drop_desc, list.first().title)
+                ctx.getString(R.string.todo_drop_desc, pending.first().title)
             }
         actions.commit(
-            Edits.dropTasks(list, desc, System.currentTimeMillis()),
-            ctx.getString(R.string.todo_dropped_toast, list.size),
+            Edits.dropTasks(pending, desc, System.currentTimeMillis()),
+            ctx.getString(R.string.todo_dropped_toast, pending.size),
         )
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheet,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
             Text(
                 stringResource(R.string.todo_tidy_title, displayTasks.size),
@@ -266,8 +291,8 @@ internal fun MorningSheet(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     FilledTonalButton(
-                        onClick = { move(tasks, today) },
-                        enabled = tasks.isNotEmpty(),
+                        onClick = { move(remainingTasks, today) },
+                        enabled = remainingTasks.isNotEmpty(),
                         modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                         colors =
                             ButtonDefaults.filledTonalButtonColors(
@@ -276,8 +301,8 @@ internal fun MorningSheet(
                             ),
                     ) { Text(stringResource(R.string.todo_all_to_today)) }
                     FilledTonalButton(
-                        onClick = { drop(tasks) },
-                        enabled = tasks.isNotEmpty(),
+                        onClick = { drop(remainingTasks) },
+                        enabled = remainingTasks.isNotEmpty(),
                         modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                         colors =
                             ButtonDefaults.filledTonalButtonColors(
@@ -303,6 +328,7 @@ internal fun MorningSheet(
                                     modifier = Modifier.padding(top = 2.dp),
                                 )
                             }
+                            val itemEnabled = tasks.isNotEmpty() && t.id !in handledIds
                             Row(
                                 Modifier.fillMaxWidth().padding(top = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -312,16 +338,19 @@ internal fun MorningSheet(
                                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                     bold = true,
+                                    enabled = itemEnabled,
                                 ) { move(listOf(t), today) }
                                 TidyActionPill(
                                     label = stringResource(R.string.tomorrow),
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                     contentColor = MaterialTheme.colorScheme.onSurface,
+                                    enabled = itemEnabled,
                                 ) { move(listOf(t), today.plusDays(1)) }
                                 TidyActionPill(
                                     label = stringResource(R.string.todo_drop),
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                     contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    enabled = itemEnabled,
                                 ) { drop(listOf(t)) }
                             }
                         }
@@ -338,6 +367,7 @@ private fun TidyActionPill(
     containerColor: Color,
     contentColor: Color,
     bold: Boolean = false,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     Box(
@@ -346,7 +376,7 @@ private fun TidyActionPill(
                 .heightIn(min = 36.dp)
                 .clip(RoundedCornerShape(999.dp))
                 .background(containerColor)
-                .mintClickable(pressedScale = 0.96f, role = Role.Button, onClick = onClick)
+                .mintClickable(enabled = enabled, pressedScale = 0.96f, role = Role.Button, onClick = onClick)
                 .padding(horizontal = 12.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center,
     ) {

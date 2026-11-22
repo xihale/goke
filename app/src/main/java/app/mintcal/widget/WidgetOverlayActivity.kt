@@ -360,12 +360,17 @@ internal fun WidgetOverlayRoot(
     val scheme = MaterialTheme.colorScheme
     val settings by app.settings.flow.collectAsState()
     var shown by remember { mutableStateOf(false) }
+    var closing by remember { mutableStateOf(false) }
     var externalDismissHook by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     LaunchedEffect(Unit) { shown = true }
-    LaunchedEffect(target) { externalDismissHook = null }
+    LaunchedEffect(target) {
+        externalDismissHook = null
+        closing = false
+    }
 
     fun handleBackdropDismiss() {
+        if (closing) return
         val hook = externalDismissHook
         if (hook != null) hook() else onDismiss()
     }
@@ -378,19 +383,25 @@ internal fun WidgetOverlayRoot(
         closeAfter: Boolean = false,
         thenOpenUri: Uri? = null,
     ) {
+        if (closing) return
+        if (closeAfter || thenOpenUri != null) closing = true
         scope.launch {
-            app.repo.commit(cs)
-            app.scope.launch(Dispatchers.Default) {
-                WidgetKit.refreshAllWidgets(app)
-            }
-            if (!toast.isNullOrBlank()) {
-                Handler(Looper.getMainLooper()).post {
-                    Toast.makeText(ctx, toast, Toast.LENGTH_SHORT).show()
+            try {
+                app.repo.commit(cs)
+                app.scope.launch(Dispatchers.Default) {
+                    WidgetKit.refreshAllWidgets(app)
                 }
-            }
-            when {
-                thenOpenUri != null -> onOpenInApp(thenOpenUri)
-                closeAfter -> onDismiss()
+                if (!toast.isNullOrBlank()) {
+                    Handler(Looper.getMainLooper()).post {
+                        Toast.makeText(ctx, toast, Toast.LENGTH_SHORT).show()
+                    }
+                }
+                when {
+                    thenOpenUri != null -> onOpenInApp(thenOpenUri)
+                    closeAfter -> onDismiss()
+                }
+            } finally {
+                closing = false
             }
         }
     }

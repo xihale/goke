@@ -63,6 +63,7 @@ import app.mintcal.R
 import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
 import app.mintcal.core.change.Edits
+import app.mintcal.core.change.apply
 import app.mintcal.core.model.Course
 import app.mintcal.core.model.GdutCampus
 import app.mintcal.core.model.GdutPeriods
@@ -126,6 +127,7 @@ fun EditTimetableScreen(onBack: () -> Unit) {
     var name by remember(sem.id) { mutableStateOf(sem.name) }
     var week1 by remember(sem.id) { mutableStateOf(sem.week1Monday) }
     var total by remember(sem.id) { mutableIntStateOf(sem.totalWeeks) }
+    var skipDisposeFlush by remember(sem.id) { mutableStateOf(false) }
     var pickDate by remember { mutableStateOf(false) }
     var copyDlg by remember { mutableStateOf(false) }
     var switchDlg by remember { mutableStateOf(false) }
@@ -136,20 +138,24 @@ fun EditTimetableScreen(onBack: () -> Unit) {
     val semNow by rememberUpdatedState(sem)
     val snapNow by rememberUpdatedState(snap)
 
-    fun flushPendingSemesterEdit(): Semester {
+    fun flushPendingSemesterEdit(): Pair<Snapshot, Semester> {
         val trimmed = name.trim()
         val monday = week1.with(java.time.DayOfWeek.MONDAY)
         if (trimmed.isNotBlank() && (trimmed != sem.name || monday != sem.week1Monday || total != sem.totalWeeks)) {
             val upd = sem.copy(name = trimmed, week1Monday = monday, totalWeeks = total)
             val desc = ctx.getString(R.string.edit_semester_desc)
-            actions.commit(Edits.save(snap, upd, desc, System.currentTimeMillis()), desc)
-            return upd
+            val nowMs = System.currentTimeMillis()
+            val cs = Edits.save(snap, upd, desc, nowMs)
+            actions.commit(cs, desc)
+            skipDisposeFlush = true
+            return snap.apply(cs, nowMs) to upd
         }
-        return sem
+        return snap to sem
     }
 
     DisposableEffect(sem.id) {
         onDispose {
+            if (skipDisposeFlush) return@onDispose
             val (n, w, t) = latest
             val s = semNow
             val trimmed = n.trim()
@@ -284,9 +290,10 @@ fun EditTimetableScreen(onBack: () -> Unit) {
             },
             confirmButton = {
                 TextButton(enabled = newName.isNotBlank(), onClick = {
-                    val baseSem = flushPendingSemesterEdit()
+                    val (updatedSnap, baseSem) = flushPendingSemesterEdit()
+                    skipDisposeFlush = true
                     actions.commit(
-                        Edits.copyToNextSemester(snap, baseSem, newName.trim(), newStart.with(java.time.DayOfWeek.MONDAY), System.currentTimeMillis(), ctx.getString(R.string.copy_semester_desc, newName.trim())),
+                        Edits.copyToNextSemester(updatedSnap, baseSem, newName.trim(), newStart.with(java.time.DayOfWeek.MONDAY), System.currentTimeMillis(), ctx.getString(R.string.copy_semester_desc, newName.trim())),
                         ctx.getString(R.string.copied_toast),
                     )
                     copyDlg = false
@@ -313,13 +320,13 @@ fun EditTimetableScreen(onBack: () -> Unit) {
                                 .clip(RoundedCornerShape(12.dp))
                                 .mintClickable(pressedScale = 0.98f) {
                                     if (!isCur) {
-                                        val baseSem = flushPendingSemesterEdit()
+                                        val (updatedSnap, _) = flushPendingSemesterEdit()
+                                        skipDisposeFlush = true
                                         val nowMs = System.currentTimeMillis()
                                         val changes =
-                                            snap.semesters.mapNotNull { s ->
-                                                val effective = if (s.id == baseSem.id) baseSem else s
-                                                val want = effective.id == target.id
-                                                if (effective.isCurrent != want) Change.Modify(effective, effective.copy(isCurrent = want)) else null
+                                            updatedSnap.semesters.mapNotNull { s ->
+                                                val want = s.id == target.id
+                                                if (s.isCurrent != want) Change.Modify(s, s.copy(isCurrent = want)) else null
                                             }
                                         if (changes.isNotEmpty()) {
                                             val desc = ctx.getString(R.string.semester_switched_toast, target.name)
@@ -372,6 +379,7 @@ fun EditTimetableScreen(onBack: () -> Unit) {
             text = stringResource(R.string.semester_delete_confirm, target.name),
             confirm = stringResource(R.string.delete),
             onConfirm = {
+                if (target.id == sem.id) skipDisposeFlush = true
                 val nowMs = System.currentTimeMillis()
                 val changes = mutableListOf<Change>(Change.Remove(target))
                 val targetCourses = snap.courses.filter { it.semesterId == target.id }
@@ -407,6 +415,7 @@ private fun CreateSemesterScreen(
     var total by remember { mutableIntStateOf(18) }
     var campus by remember { mutableStateOf(GdutCampus.HEMC) }
     var pickDate by remember { mutableStateOf(false) }
+    var submitted by remember { mutableStateOf(false) }
 
     MintScreen(title = stringResource(R.string.semester_create_title), onBack = onBack) {
         Column(
@@ -438,8 +447,10 @@ private fun CreateSemesterScreen(
             }
             Spacer(Modifier.height(4.dp))
             Button(
-                enabled = name.isNotBlank(),
+                enabled = !submitted && name.isNotBlank(),
                 onClick = {
+                    if (submitted) return@Button
+                    submitted = true
                     val created =
                         Semester(
                             id = Ids.next(),

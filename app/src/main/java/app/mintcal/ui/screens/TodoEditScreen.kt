@@ -241,6 +241,7 @@ fun TodoEditScreen(
     var subReset by remember { mutableIntStateOf(0) }
     var subsOpen by remember { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
+    var committed by remember { mutableStateOf(false) }
     // 底栏的清单 / 优先级就地展开，不弹浮层：键盘不动，也不会浮层飘在正文上留一块空
     var barPanel by remember { mutableStateOf<BarPanel?>(null) }
     // 顶栏「更多」仍在原位弹菜单，但它不抢焦点
@@ -342,15 +343,19 @@ fun TodoEditScreen(
             }
         }
     val clashes =
-        remember(clashInstances, whenPick?.start, whenPick?.minutes, snap, existing?.id) {
+        remember(clashInstances, whenPick?.start, whenPick?.minutes, snap, existing?.id, committed) {
             val ws = whenPick?.start
             val wm = whenPick?.minutes
-            if (ws == null || wm == null || clashInstances.isEmpty()) emptyList() else clashesOf(snap, existing?.id, clashInstances, ws, wm)
+            if (committed || ws == null || wm == null || clashInstances.isEmpty()) emptyList() else clashesOf(snap, existing?.id, clashInstances, ws, wm)
         }
     val title = text.trim()
     val desc = stringResource(if (existing == null) R.string.add_task_desc else R.string.edit_task_desc, title)
 
     fun commit() {
+        if (committed) {
+            onBack()
+            return
+        }
         if (title.isEmpty()) return
         val ms = System.currentTimeMillis()
         val base =
@@ -459,6 +464,7 @@ fun TodoEditScreen(
                 emptyList()
             }
         val changes = mainChanges + subChanges
+        committed = true
         if (changes.isEmpty()) {
             onBack()
             return
@@ -479,6 +485,7 @@ fun TodoEditScreen(
     // 修改：返回即保存（空标题等于放弃）；新建：返回一律不落库——带内容的草稿先确认放弃，空白直接走
     fun requestBack() {
         when {
+            committed -> onBack()
             existing != null -> if (title.isNotBlank() && hasChanges) commit() else onBack()
             title.isBlank() -> onBack()
             else -> confirmDiscard = true
@@ -524,6 +531,8 @@ fun TodoEditScreen(
                                 leadingIcon = { Icon(Icons.Rounded.Delete, null) },
                                 onClick = {
                                     pageMenu = false
+                                    if (committed) return@DropdownMenuItem
+                                    committed = true
                                     // 删除不做二次确认：落库后出撤回浮钮（4.5s），回收站也能恢复
                                     actions.commit(
                                         Edits.delete(snap, existing, ctx.getString(R.string.delete_desc, existing.title), System.currentTimeMillis()),
@@ -536,7 +545,7 @@ fun TodoEditScreen(
                     }
                 } else {
                     // 新建：明确一个「确定」键，返回就是丢弃
-                    TextButton(enabled = title.isNotEmpty(), onClick = { commit() }) { Text(stringResource(R.string.confirm)) }
+                    TextButton(enabled = !committed && title.isNotEmpty(), onClick = { commit() }) { Text(stringResource(R.string.confirm)) }
                 }
             }
         }

@@ -62,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -109,6 +110,7 @@ import app.mintcal.core.todo.TaskLogic
 import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalNav
+import app.mintcal.ui.LocalTabVisible
 import app.mintcal.ui.Route
 import app.mintcal.ui.components.ChipPill
 import app.mintcal.ui.components.ConfirmDialog
@@ -202,8 +204,18 @@ internal fun QuickAddSheet(
     var panelByDays by remember { mutableStateOf(emptySet<Int>()) }
     var panelByMonths by remember { mutableStateOf(emptySet<Int>()) }
     var confirmDiscard by remember { mutableStateOf(false) }
+    var submitted by remember { mutableStateOf(false) }
     val settings = settingsState()
     val parsed = remember(text, now) { if (text.isBlank()) null else QuickAdd.parse(text, now) }
+    val isTabVisible = LocalTabVisible.current.value
+    val currentOnDismiss by rememberUpdatedState(onDismiss)
+
+    LaunchedEffect(isTabVisible) {
+        if (!isTabVisible) {
+            confirmDiscard = false
+            currentOnDismiss()
+        }
+    }
 
     // 只有可见时向外报状态
     DisposableEffect(Unit) {
@@ -308,20 +320,21 @@ internal fun QuickAddSheet(
     }
 
     val hasDraft = text.isNotBlank() || panelWhen != null || panelRemind != null || panelFreq != null
+    val hasBodyText = parsed != null && !(parsed.tokens.isNotEmpty() && parsed.title == text.trim())
 
     fun requestDiscard() {
         if (hasDraft) confirmDiscard = true else discard()
     }
 
+    val currentRequestDiscard by rememberUpdatedState(::requestDiscard)
+
     // 返回 = 空白直接收起，有草稿先确认放弃
-    BackHandler(enabled = true) { requestDiscard() }
+    BackHandler(enabled = isTabVisible) { requestDiscard() }
 
     /** 点「确定」（或键盘完成键）：写了内容就落库，没写就是取消。 */
     fun finish() {
-        if (parsed == null) {
-            onDismiss()
-            return
-        }
+        if (submitted || !hasBodyText) return
+        submitted = true
         commitItems(listOf(QuickBatchItem(parsed, null)))
         clearDraft()
         onDismiss()
@@ -385,7 +398,6 @@ internal fun QuickAddSheet(
             else -> null
         }
     val defaultListLabel = remember(snap.lists, listFilter) { listFilter?.let { id -> snap.lists.firstOrNull { it.id == id }?.name } }
-    val hasBodyText = parsed != null && !(parsed.tokens.isNotEmpty() && parsed.title == text.trim())
 
     Box(modifier.fillMaxSize()) {
         // 遮罩：点空白 = 空白直接收起，有草稿先确认放弃。压浅一点，列表还看得见。
@@ -393,7 +405,7 @@ internal fun QuickAddSheet(
             Modifier
                 .matchParentSize()
                 .background(Color.Black.copy(alpha = 0.2f))
-                .pointerInput(Unit) { detectTapGestures { requestDiscard() } },
+                .pointerInput(Unit) { detectTapGestures { currentRequestDiscard() } },
         )
         Surface(
             modifier =
@@ -432,7 +444,7 @@ internal fun QuickAddSheet(
                         expandLabel = stringResource(R.string.detail_editor_full_edit),
                         onExpand = { openDetail() },
                         submitLabel = stringResource(R.string.confirm),
-                        canSubmit = hasBodyText,
+                        canSubmit = hasBodyText && !submitted,
                         onSubmit = { finish() },
                         onOpenWhenPanel = { whenPanel = true },
                         onClearWhenOverrides = {
@@ -615,7 +627,7 @@ internal fun QuickAddComposer(
                     maxLines = 4,
                     visualTransformation = highlight,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { onSubmit() }),
+                    keyboardActions = KeyboardActions(onDone = { if (canSubmit) onSubmit() }),
                 )
                 if (text.isEmpty()) {
                     Text(
@@ -967,8 +979,9 @@ private fun BatchPreviewDialog(
     onConfirm: () -> Unit,
 ) {
     val ctx = LocalContext.current
+    var submitted by remember(items) { mutableStateOf(false) }
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!submitted) onDismiss() },
         title = { Text(stringResource(R.string.todo_batch_title, items.size)) },
         text = {
             LazyColumn(Modifier.fillMaxWidth()) {
@@ -990,8 +1003,17 @@ private fun BatchPreviewDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.todo_batch_add_all)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+        confirmButton = {
+            TextButton(
+                enabled = !submitted,
+                onClick = {
+                    if (submitted) return@TextButton
+                    submitted = true
+                    onConfirm()
+                },
+            ) { Text(stringResource(R.string.todo_batch_add_all)) }
+        },
+        dismissButton = { TextButton(enabled = !submitted, onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 

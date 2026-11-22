@@ -71,6 +71,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -401,7 +402,6 @@ fun ClassroomScreen(
     var overlayPersonal by rememberSaveable { mutableStateOf(true) }
     var detailOccupancy by remember { mutableStateOf<ClassroomOccupancy?>(null) }
     var reloadToken by remember { mutableIntStateOf(0) }
-    var forceRefreshNext by remember { mutableStateOf(false) }
 
     fun weekStartFor(week: Int): LocalDate = cal?.weekStart(week) ?: GdutPeriods.week1Monday.plusWeeks((week - 1).toLong())
 
@@ -411,7 +411,7 @@ fun ClassroomScreen(
         buildingsError = null
         buildingsErrorKind = null
         try {
-            val list = app.jxfw.fetchClassroomBuildings(forceRefresh = forceRefreshNext)
+            val list = app.jxfw.fetchClassroomBuildings(forceRefresh = reloadToken > 0)
             buildings = list
             if (selectedCampus == null || list.none { it.campusName == selectedCampus }) {
                 selectedCampus = ClassroomGridHelper.defaultCampusName(list, fallbackCampus)
@@ -439,14 +439,15 @@ fun ClassroomScreen(
         }
 
     val weekStart = remember(cal, selectedWeek) { weekStartFor(selectedWeek) }
+    var lastRoomReloadToken by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(jxfwState.loggedIn, activeBuilding?.code, weekStart, reloadToken) {
         val bCode = activeBuilding?.code ?: return@LaunchedEffect
         roomLoading = true
         roomError = null
         roomErrorKind = null
-        val force = forceRefreshNext
-        forceRefreshNext = false
+        val force = reloadToken > 0 && reloadToken != lastRoomReloadToken
+        lastRoomReloadToken = reloadToken
         try {
             if (force || !roomsByBuilding.containsKey(bCode)) {
                 val rList = app.jxfw.fetchClassroomRooms(bCode, forceRefresh = force)
@@ -518,7 +519,6 @@ fun ClassroomScreen(
             if (jxfwState.loggedIn) {
                 IconButton(
                     onClick = {
-                        forceRefreshNext = true
                         reloadToken++
                     },
                 ) {
@@ -579,7 +579,6 @@ fun ClassroomScreen(
                         onToggleOverlay = { overlayPersonal = !overlayPersonal },
                         onWeekChange = { selectedWeek = it.coerceIn(1, maxWeeks) },
                         onRetry = {
-                            forceRefreshNext = true
                             reloadToken++
                         },
                         onOpenJxfw = { nav.push(Route.Jxfw) },
@@ -675,7 +674,6 @@ fun ClassroomScreen(
                         error = buildingsError ?: roomError,
                         errorKind = buildingsErrorKind ?: roomErrorKind,
                         onRetry = {
-                            forceRefreshNext = true
                             reloadToken++
                         },
                         onOpenJxfw = { nav.push(Route.Jxfw) },
@@ -1604,6 +1602,9 @@ private fun ClassroomWeekGrid(
     val blockSubStyle = remember(labelSmall) { labelSmall.copy(fontSize = 9.5.sp, lineHeight = 11.sp, letterSpacing = 0.sp) }
     val weekdayShorts = remember(ctx) { (1..7).map { ctx.weekdayShort(it) } }
 
+    val currentOnSelectBox by rememberUpdatedState(onSelectBox)
+    val currentOccByDay by rememberUpdatedState(occByDay)
+
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(start = timeColW)) {
             for (d in 1..7) {
@@ -1663,7 +1664,7 @@ private fun ClassroomWeekGrid(
                                 size = Size(lineW, groupLineH),
                             )
                         }
-                    }.pointerInput(n, timeColW, rowH, occByDay) {
+                    }.pointerInput(n, timeColW, rowH) {
                         val timeColPx = timeColW.toPx()
                         val colPx = (size.width - timeColPx) / 7f
                         val rowPx = rowH.toPx()
@@ -1683,9 +1684,9 @@ private fun ClassroomWeekGrid(
                                 if (box == null && off.x >= timeColPx) {
                                     val d = colOf(off.x)
                                     val p = slotOf(off.y)
-                                    val occupied = occByDay[d].orEmpty().any { p in it.periods }
+                                    val occupied = currentOccByDay[d].orEmpty().any { p in it.periods }
                                     if (!occupied) {
-                                        onSelectBox(d..d, p, p)
+                                        currentOnSelectBox(d..d, p, p)
                                     }
                                 }
                             },
@@ -1729,7 +1730,7 @@ private fun ClassroomWeekGrid(
                             },
                             onDragEnd = {
                                 box?.let { b ->
-                                    onSelectBox(minOf(b.day1, b.day2)..maxOf(b.day1, b.day2), b.first, b.last)
+                                    currentOnSelectBox(minOf(b.day1, b.day2)..maxOf(b.day1, b.day2), b.first, b.last)
                                 }
                                 box = null
                             },

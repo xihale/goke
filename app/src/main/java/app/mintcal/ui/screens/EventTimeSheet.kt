@@ -157,16 +157,29 @@ internal fun WhenPanel(
 
     fun close(whenPick: WhenPick?) {
         onPick(
-            WhenPanelResult(
-                whenPick = whenPick,
-                remindMinutes = remind,
-                remindPersistent = remind != null && persistent,
-                freq = freq,
-                interval = interval,
-                until = if (freq == null) null else until,
-                byDays = if (freq == Freq.WEEKLY || freq == Freq.MONTHLY || freq == Freq.YEARLY) byDays else emptySet(),
-                byMonths = if (freq == Freq.YEARLY) byMonths else emptySet(),
-            ),
+            if (whenPick == null) {
+                WhenPanelResult(
+                    whenPick = null,
+                    remindMinutes = null,
+                    remindPersistent = false,
+                    freq = null,
+                    interval = 1,
+                    until = null,
+                    byDays = emptySet(),
+                    byMonths = emptySet(),
+                )
+            } else {
+                WhenPanelResult(
+                    whenPick = whenPick,
+                    remindMinutes = remind,
+                    remindPersistent = remind != null && persistent,
+                    freq = freq,
+                    interval = interval,
+                    until = if (freq == null) null else until,
+                    byDays = if (freq == Freq.WEEKLY || freq == Freq.MONTHLY || freq == Freq.YEARLY) byDays else emptySet(),
+                    byMonths = if (freq == Freq.YEARLY) byMonths else emptySet(),
+                )
+            },
         )
     }
     val m = minutes

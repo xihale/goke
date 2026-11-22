@@ -536,9 +536,10 @@ private fun ChangePasswordDialog(onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var old by remember { mutableStateOf("") }
     var new by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(stringResource(R.string.sync_change_password)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -554,19 +555,31 @@ private fun ChangePasswordDialog(onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(enabled = old.isNotEmpty() && new.length >= 8, onClick = {
-                scope.launch {
-                    try {
-                        app.sync.changePassword(old, new)
-                        actions.toast(ctx.getString(R.string.sync_password_changed))
-                        onDismiss()
-                    } catch (e: SyncException) {
-                        error = e.message
+            TextButton(
+                enabled = !busy && old.isNotEmpty() && new.length >= 8,
+                onClick = {
+                    if (busy) return@TextButton
+                    busy = true
+                    error = null
+                    scope.launch {
+                        try {
+                            app.sync.changePassword(old, new)
+                            actions.toast(ctx.getString(R.string.sync_password_changed))
+                            onDismiss()
+                        } catch (e: SyncException) {
+                            error = e.message
+                        } finally {
+                            busy = false
+                        }
                     }
-                }
-            }) { Text(stringResource(R.string.save)) }
+                },
+            ) {
+                if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.save))
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+        dismissButton = {
+            TextButton(enabled = !busy, onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
     )
 }
 

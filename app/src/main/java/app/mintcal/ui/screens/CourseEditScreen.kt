@@ -74,7 +74,6 @@ import app.mintcal.R
 import app.mintcal.core.change.Change
 import app.mintcal.core.change.ChangeSet
 import app.mintcal.core.change.Conflicts
-import app.mintcal.core.change.Edits
 import app.mintcal.core.change.apply
 import app.mintcal.core.model.Course
 import app.mintcal.core.model.ExceptionType
@@ -208,6 +207,8 @@ fun CourseEditScreen(
         }
     var slots by remember(id) { mutableStateOf(initialSlots) }
     var openSlot by remember { mutableStateOf<String?>(null) }
+    var pendingNewSlot by remember { mutableStateOf<SlotDraft?>(null) }
+    var committed by remember { mutableStateOf(false) }
     var remindDlg by remember { mutableStateOf(false) }
     var campusDlg by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -269,7 +270,7 @@ fun CourseEditScreen(
         val last = slots.lastOrNull()
         val sp = (last?.startPeriod ?: 1).coerceIn(1, periodCount)
         val ep = (last?.endPeriod ?: (sp + 1).coerceAtMost(periodCount)).coerceIn(sp, periodCount)
-        val draft =
+        pendingNewSlot =
             SlotDraft(
                 id = Ids.next(),
                 base = null,
@@ -280,8 +281,6 @@ fun CourseEditScreen(
                 room = last?.room.orEmpty(),
                 remindMinutes = last?.remindMinutes,
             )
-        slots = slots + draft
-        openSlot = draft.id
     }
 
     val valid =
@@ -300,44 +299,32 @@ fun CourseEditScreen(
     // 冲突检测只与已排课表、学期及当前时段配置（星期/节次/周次）相关，
     // 课程名/教师/颜色/备注变动不改变冲突关系，避免表单打字时每帧触发全学期排课展开
     val conflictMatches =
-        remember(snap, slots, campusOverride) {
-            val list =
-                slots.mapNotNull { s ->
-                    if (s.weeks.isEmpty()) return@mapNotNull null
-                    val b = s.base
-                    if (b != null) {
-                        b.copy(
-                            dayOfWeek = s.dayOfWeek,
-                            startPeriod = s.startPeriod,
-                            endPeriod = s.endPeriod,
-                            weeks = s.weeks,
-                            campusOverride = campusOverride,
-                        )
-                    } else {
-                        Course(
-                            id = s.id,
-                            semesterId = sem.id,
-                            name = "",
-                            teacher = "",
-                            room = s.room,
-                            dayOfWeek = s.dayOfWeek,
-                            startPeriod = s.startPeriod,
-                            endPeriod = s.endPeriod,
-                            weeks = s.weeks,
-                            colorIndex = 0,
-                            remindMinutes = null,
-                            note = "",
-                            campusOverride = campusOverride,
-                            source = Source.MANUAL,
-                        )
-                    }
-                }
-            if (list.isEmpty()) {
+        remember(snap, slots, campusOverride, committed) {
+            if (committed) return@remember emptyList()
+            val activeIds = slots.filter { it.weeks.isNotEmpty() }.map { it.id }
+            if (activeIds.isEmpty()) {
                 emptyList()
             } else {
-                val synthetic = snap.apply(Edits.saveAll(snap, list, "", 0), 0)
-                list
-                    .flatMap { c -> Conflicts.detect(synthetic, setOf(c.id)) }
+                val changes =
+                    buildSlotChanges(
+                        semesterId = sem.id,
+                        name = "",
+                        teacher = "",
+                        colorIndex = 0,
+                        note = "",
+                        campusOverride = campusOverride,
+                        initialSlots = initialSlots,
+                        slots = slots,
+                        liveExceptions = snap.exceptions,
+                    )
+                val synthetic =
+                    if (changes.isEmpty()) {
+                        snap
+                    } else {
+                        snap.apply(ChangeSet("", "", Source.MANUAL, 0L, changes), 0L)
+                    }
+                activeIds
+                    .flatMap { cid -> Conflicts.detect(synthetic, setOf(cid)) }
                     .distinctBy { listOf(it.aId, it.bId, it.start) }
             }
         }
@@ -355,6 +342,8 @@ fun CourseEditScreen(
         }
 
     fun persist(leave: Boolean) {
+        if (committed) return
+        if (leave) committed = true
         val ms = System.currentTimeMillis()
         val changes =
             buildSlotChanges(
@@ -382,14 +371,18 @@ fun CourseEditScreen(
 
     fun requestBack() {
         when {
+            committed -> onBack()
+
             name.isBlank() && dirty -> confirmDiscard = true
 
             name.isBlank() -> onBack()
 
-            !valid -> actions.toast(ctx.getString(R.string.weeks_invalid))
-
             // 新建课程：返回不落库，改过内容先确认放弃；修改照旧自动保存
             origin == null && dirty -> confirmDiscard = true
+
+            origin == null -> onBack()
+
+            !valid -> actions.toast(ctx.getString(R.string.weeks_invalid))
 
             dirty -> persist(leave = true)
 
@@ -410,7 +403,7 @@ fun CourseEditScreen(
         actions = {
             if (origin == null) {
                 // 新建：明确一个「确定」键；返回 = 放弃（改过的内容会先确认）
-                TextButton(enabled = valid, onClick = { persist(leave = true) }) {
+                TextButton(enabled = !committed && valid, onClick = { persist(leave = true) }) {
                     Text(stringResource(R.string.confirm))
                 }
             } else {
@@ -655,28 +648,41 @@ fun CourseEditScreen(
         }
     }
 
-    openSlot?.let { key ->
-        val slot = slots.firstOrNull { it.id == key }
-        if (slot == null) {
-            openSlot = null
-        } else {
-            SlotEditorSheet(
-                periods = effectivePeriods,
-                totalWeeks = totalWeeks,
-                slot = slot,
-                onChange = { updated -> slots = slots.map { if (it.id == key) updated else it } },
-                onDismiss = { openSlot = null },
-                onDelete =
-                    if (slots.size > 1) {
-                        {
-                            slots = slots.filterNot { it.id == key }
-                            openSlot = null
-                        }
-                    } else {
-                        null
-                    },
-            )
-        }
+    val editingPending = pendingNewSlot
+    val editingSlot = editingPending ?: openSlot?.let { key -> slots.firstOrNull { it.id == key } }
+    if (openSlot != null && editingSlot == null) {
+        openSlot = null
+    }
+    if (editingSlot != null) {
+        SlotEditorSheet(
+            periods = effectivePeriods,
+            totalWeeks = totalWeeks,
+            slot = editingSlot,
+            onChange = { updated ->
+                if (editingPending != null) {
+                    slots = slots + updated
+                    pendingNewSlot = null
+                } else {
+                    slots = slots.map { if (it.id == editingSlot.id) updated else it }
+                }
+            },
+            onDismiss = {
+                if (editingPending != null) {
+                    pendingNewSlot = null
+                } else {
+                    openSlot = null
+                }
+            },
+            onDelete =
+                if (editingPending == null && slots.size > 1) {
+                    {
+                        slots = slots.filterNot { it.id == editingSlot.id }
+                        openSlot = null
+                    }
+                } else {
+                    null
+                },
+        )
     }
 
     if (remindDlg) {
@@ -728,7 +734,13 @@ fun CourseEditScreen(
             stringResource(R.string.detail_editor_discard_title),
             stringResource(R.string.detail_editor_discard_desc),
             stringResource(R.string.detail_editor_discard),
-            onConfirm = { onBack() },
+            onConfirm = {
+                if (!committed) {
+                    committed = true
+                    confirmDiscard = false
+                    onBack()
+                }
+            },
             onDismiss = { confirmDiscard = false },
             danger = true,
         )
@@ -739,16 +751,20 @@ fun CourseEditScreen(
             stringResource(R.string.delete_to_trash_hint),
             stringResource(R.string.delete),
             onConfirm = {
-                val desc = ctx.getString(R.string.delete_desc, origin.name)
-                val changes =
-                    buildList {
-                        initialSlots.mapNotNull { it.base }.forEach { b ->
-                            add(Change.Remove(b))
-                            snap.exceptions.filter { it.deletedAt == null && it.courseId == b.id }.forEach { add(Change.Remove(it)) }
+                if (!committed) {
+                    committed = true
+                    confirmDelete = false
+                    val desc = ctx.getString(R.string.delete_desc, origin.name)
+                    val changes =
+                        buildList {
+                            initialSlots.mapNotNull { it.base }.forEach { b ->
+                                add(Change.Remove(b))
+                                snap.exceptions.filter { it.deletedAt == null && it.courseId == b.id }.forEach { add(Change.Remove(it)) }
+                            }
                         }
-                    }
-                actions.commit(ChangeSet(Ids.next(), desc, Source.MANUAL, System.currentTimeMillis(), changes), desc)
-                onBack()
+                    actions.commit(ChangeSet(Ids.next(), desc, Source.MANUAL, System.currentTimeMillis(), changes), desc)
+                    onBack()
+                }
             },
             onDismiss = { confirmDelete = false },
             danger = true,

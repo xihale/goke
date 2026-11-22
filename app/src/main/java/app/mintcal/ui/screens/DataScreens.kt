@@ -400,6 +400,7 @@ fun ImportScreen(
                 }
 
                 is ImportState.Ready -> {
+                    var committed by remember(s) { mutableStateOf(false) }
                     val now = System.currentTimeMillis()
                     val cal: IcsCalendar? =
                         remember(s) {
@@ -495,18 +496,28 @@ fun ImportScreen(
                                 Text(stringResource(R.string.changes_breakdown, cs.addCount, cs.modifyCount, cs.removeCount), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 ChangeList(cs, snap)
                                 Spacer(Modifier.height(4.dp))
-                                Button(onClick = {
-                                    actions.commit(cs, ctx.getString(R.string.imported_toast))
-                                    nav.tab = Tab.TIMETABLE
-                                    nav.clearToRoot()
-                                }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.apply_changes)) }
+                                Button(
+                                    enabled = !committed,
+                                    onClick = {
+                                        if (committed) return@Button
+                                        committed = true
+                                        actions.commit(cs, ctx.getString(R.string.imported_toast))
+                                        nav.tab = Tab.TIMETABLE
+                                        nav.clearToRoot()
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text(stringResource(R.string.apply_changes)) }
                             }
                         }
                     }
-                    FilledTonalButton(onClick = {
-                        state = ImportState.Pick
-                        useSuggestedWeek1 = false
-                    }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.import_pick_again)) }
+                    FilledTonalButton(
+                        enabled = !committed,
+                        onClick = {
+                            state = ImportState.Pick
+                            useSuggestedWeek1 = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(stringResource(R.string.import_pick_again)) }
                 }
             }
         }

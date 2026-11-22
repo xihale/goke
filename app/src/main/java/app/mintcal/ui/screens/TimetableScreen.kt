@@ -141,6 +141,7 @@ import app.mintcal.core.util.Ids
 import app.mintcal.ui.LocalActions
 import app.mintcal.ui.LocalApp
 import app.mintcal.ui.LocalNav
+import app.mintcal.ui.LocalTabVisible
 import app.mintcal.ui.Route
 import app.mintcal.ui.Tab
 import app.mintcal.ui.components.ConflictCard
@@ -255,7 +256,7 @@ fun TimetableScreen() {
     // 调课「课表选位」模式：选定课程后翻周点击目标格，自动带入周/星期/节次进入调课确认面板
     var pickingRescheduleFor by remember { mutableStateOf<CourseOccurrence?>(null) }
     var reschedulePrefill by remember { mutableStateOf<ReschedulePrefill?>(null) }
-    BackHandler(enabled = pickingRescheduleFor != null) { pickingRescheduleFor = null }
+    BackHandler(enabled = LocalTabVisible.current.value && pickingRescheduleFor != null) { pickingRescheduleFor = null }
     // 同一时段多条安排：先列出让人挑，再进各自的详情
     var slotPick by remember { mutableStateOf<List<SlotEntry>?>(null) }
     var parcelSheet by remember { mutableStateOf<Pair<LocalDate, List<Task>>?>(null) }
@@ -1317,7 +1318,7 @@ private fun InWindowSheet(
     onDismiss: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    BackHandler(enabled = visible) { onDismiss() }
+    BackHandler(enabled = visible && LocalTabVisible.current.value) { onDismiss() }
     val reduce = reduceMotion()
     val enterSpec = if (reduce) snap() else MintTheme.spec<IntOffset>()
     val exitSpec = if (reduce) snap() else MintTheme.spec<IntOffset>()
@@ -1386,12 +1387,19 @@ private fun SlotSheet(
     onDismiss: () -> Unit,
     onOpen: (SlotEntry) -> Unit,
 ) {
+    val visible = entries != null
     var lastEntries by remember { mutableStateOf(entries) }
-    LaunchedEffect(entries) { if (entries != null) lastEntries = entries }
+    var submitted by remember { mutableStateOf(false) }
+    LaunchedEffect(entries) {
+        if (entries != null) {
+            lastEntries = entries
+            submitted = false
+        }
+    }
     val active = entries ?: lastEntries
 
     InWindowSheet(
-        visible = entries != null,
+        visible = visible,
         onDismiss = onDismiss,
     ) {
         if (active == null) return@InWindowSheet
@@ -1408,8 +1416,11 @@ private fun SlotSheet(
                         .fillMaxWidth()
                         .heightIn(min = 52.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .mintClickable(pressedScale = 0.98f) { onOpen(e) }
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                        .mintClickable(enabled = visible && !submitted, pressedScale = 0.98f) {
+                            if (!visible || submitted) return@mintClickable
+                            submitted = true
+                            onOpen(e)
+                        }.padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -1847,17 +1858,22 @@ private fun CourseSheet(
     val activeOcc = activePrefill?.occ ?: activeCell?.occ
 
     var inReschedule by remember { mutableStateOf(false) }
+    var submitted by remember { mutableStateOf(false) }
     LaunchedEffect(cell, prefill) {
-        inReschedule = prefill != null
+        if (cell != null || prefill != null) {
+            inReschedule = prefill != null
+            submitted = false
+        }
     }
-    BackHandler(enabled = visible && inReschedule && prefill == null) {
-        inReschedule = false
-    }
+    val canAct = visible && !submitted
 
     InWindowSheet(
         visible = visible,
         onDismiss = onDismiss,
     ) {
+        BackHandler(enabled = visible && LocalTabVisible.current.value && inReschedule && prefill == null) {
+            inReschedule = false
+        }
         if (activeOcc == null) return@InWindowSheet
         val ctx = LocalContext.current
         val nav = LocalNav.current
@@ -1865,6 +1881,13 @@ private fun CourseSheet(
         val o = activeOcc
         val c = o.course
         val fadeSpec = MintTheme.spec<Float>()
+
+        fun openEdit() {
+            if (!visible || submitted) return
+            submitted = true
+            onDismiss()
+            nav.push(Route.CourseEdit(c.id))
+        }
 
         AnimatedContent(
             targetState = inReschedule,
@@ -1919,21 +1942,12 @@ private fun CourseSheet(
                                     .joinToString(" / ")
                                     .ifBlank { o.room }
                             }
-                        ValueRow(stringResource(R.string.label_room), fullRoom, onClick = {
-                            onDismiss()
-                            nav.push(Route.CourseEdit(c.id))
-                        })
+                        ValueRow(stringResource(R.string.label_room), fullRoom, onClick = ::openEdit)
                     }
                     if (c.teacher.isNotBlank()) {
-                        ValueRow(stringResource(R.string.label_teacher), c.teacher, onClick = {
-                            onDismiss()
-                            nav.push(Route.CourseEdit(c.id))
-                        })
+                        ValueRow(stringResource(R.string.label_teacher), c.teacher, onClick = ::openEdit)
                     }
-                    ValueRow(stringResource(R.string.week_label), WeekSets.format(c.weeks), onClick = {
-                        onDismiss()
-                        nav.push(Route.CourseEdit(c.id))
-                    })
+                    ValueRow(stringResource(R.string.week_label), WeekSets.format(c.weeks), onClick = ::openEdit)
                     if (c.note.isNotBlank()) {
                         Text(
                             c.note,
@@ -1961,14 +1975,15 @@ private fun CourseSheet(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Button(
-                                onClick = {
-                                    onDismiss()
-                                    nav.push(Route.CourseEdit(c.id))
-                                },
+                                enabled = canAct,
+                                onClick = ::openEdit,
                                 modifier = Modifier.heightIn(min = 48.dp),
                             ) { Text(stringResource(R.string.edit)) }
                             FilledTonalButton(
+                                enabled = canAct,
                                 onClick = {
+                                    if (!visible || submitted) return@FilledTonalButton
+                                    submitted = true
                                     val origW = o.originalWeek
                                     val ex = CourseException(Ids.next(), c.id, origW, ExceptionType.CANCEL)
                                     val old = snap.exceptions.firstOrNull { it.deletedAt == null && it.courseId == c.id && it.week == origW }
@@ -1980,33 +1995,39 @@ private fun CourseSheet(
                                 colors = secondaryColors,
                             ) { Text(stringResource(R.string.cancel_class_this_week)) }
                             FilledTonalButton(
-                                onClick = { inReschedule = true },
+                                enabled = canAct,
+                                onClick = { if (visible && !submitted) inReschedule = true },
                                 modifier = Modifier.heightIn(min = 48.dp),
                                 colors = secondaryColors,
                             ) { Text(stringResource(R.string.reschedule)) }
                         }
                         if (o.rescheduled) {
-                            TextButton(onClick = {
-                                val origW = o.originalWeek
-                                val changes =
-                                    snap.exceptions
-                                        .filter { it.deletedAt == null && it.courseId == c.id && it.week == origW }
-                                        .map { Change.Remove(it) }
-                                if (changes.isNotEmpty()) {
-                                    actions.commit(
-                                        ChangeSet(
-                                            Ids.next(),
-                                            ctx.getString(R.string.restore_class_desc, c.name),
-                                            Source.MANUAL,
-                                            System.currentTimeMillis(),
-                                            changes,
-                                        ),
-                                        ctx.getString(R.string.restore_class_toast),
-                                    )
-                                    onJumpToWeek(origW)
-                                }
-                                onDismiss()
-                            }) { Text(stringResource(R.string.restore_class)) }
+                            TextButton(
+                                enabled = canAct,
+                                onClick = {
+                                    if (!visible || submitted) return@TextButton
+                                    submitted = true
+                                    val origW = o.originalWeek
+                                    val changes =
+                                        snap.exceptions
+                                            .filter { it.deletedAt == null && it.courseId == c.id && it.week == origW }
+                                            .map { Change.Remove(it) }
+                                    if (changes.isNotEmpty()) {
+                                        actions.commit(
+                                            ChangeSet(
+                                                Ids.next(),
+                                                ctx.getString(R.string.restore_class_desc, c.name),
+                                                Source.MANUAL,
+                                                System.currentTimeMillis(),
+                                                changes,
+                                            ),
+                                            ctx.getString(R.string.restore_class_toast),
+                                        )
+                                        onJumpToWeek(origW)
+                                    }
+                                    onDismiss()
+                                },
+                            ) { Text(stringResource(R.string.restore_class)) }
                         }
                     }
                 }
@@ -2017,10 +2038,29 @@ private fun CourseSheet(
                     sem = sem,
                     snap = snap,
                     cal = cal,
-                    onBack = {
-                        if (activePrefill != null) onDismiss() else inReschedule = false
+                    canAct = canAct,
+                    trySubmit = {
+                        if (!visible || submitted) {
+                            false
+                        } else {
+                            submitted = true
+                            true
+                        }
                     },
-                    onPickOnGrid = { onPickOnGrid(o) },
+                    onBack = {
+                        if (!visible || submitted) return@ReschedulePanel
+                        if (activePrefill != null) {
+                            submitted = true
+                            onDismiss()
+                        } else {
+                            inReschedule = false
+                        }
+                    },
+                    onPickOnGrid = {
+                        if (!visible || submitted) return@ReschedulePanel
+                        submitted = true
+                        onPickOnGrid(o)
+                    },
                     onCommitted = { targetWeek ->
                         onDismiss()
                         onJumpToWeek(targetWeek)
@@ -2038,6 +2078,8 @@ private fun ReschedulePanel(
     sem: Semester,
     snap: Snapshot,
     cal: SemesterCalendar,
+    canAct: Boolean,
+    trySubmit: () -> Boolean,
     onBack: () -> Unit,
     onPickOnGrid: () -> Unit,
     onCommitted: (Int) -> Unit,
@@ -2369,7 +2411,9 @@ private fun ReschedulePanel(
 
         Spacer(Modifier.height(14.dp))
         Button(
+            enabled = canAct,
             onClick = {
+                if (!trySubmit()) return@Button
                 val trimmedRoom = room.trim()
                 val old = snap.exceptions.firstOrNull { it.deletedAt == null && it.courseId == c.id && it.week == origW }
                 val sameAsOriginal =
