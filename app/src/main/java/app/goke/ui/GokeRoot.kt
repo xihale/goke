@@ -356,56 +356,74 @@ private fun safeBack(
         }
     }
 
+@Composable
+private fun RouteHost(
+    nav: Nav,
+    entry: NavBackStackEntry,
+    back: () -> Unit,
+    content: @Composable (onBack: () -> Unit) -> Unit,
+) {
+    val onBack = remember(nav, entry, back) { safeBack(nav, entry, back) }
+    val current by nav.controller.currentBackStackEntryAsState()
+    // 拦截系统返回（优先级高于 NavHost 内部 PredictiveBackHandler，低于子页内部 BackHandler）：
+    // 规避 navigation-compose 2.9.5 中 PredictiveBackHandler 在栈深降至 1 取消协程时
+    // 跳过 `inPredictiveBack = false` 重置，导致 NavHost 过渡永久卡死、所有二级页无法退出的缺陷。
+    BackHandler(enabled = current?.id == entry.id) { onBack() }
+    content(onBack)
+}
+
 /** 全部压栈页目的地；Tab 层（home）由宿主自行 composable 定义（正式 App 是 Tabs，测试是内容桩）。 */
 fun NavGraphBuilder.gokeDestinations(
     nav: Nav,
     back: () -> Unit,
 ) {
-    composable<Route.EditTimetable> { e -> EditTimetableScreen(safeBack(nav, e, back)) }
-    composable<Route.Appearance> { e -> AppearanceScreen(safeBack(nav, e, back)) }
-    composable<Route.Widgets> { e -> WidgetsScreen(safeBack(nav, e, back)) }
-    composable<Route.Permission> { e -> ReliabilityScreen(safeBack(nav, e, back)) }
-    composable<Route.Trash> { e -> TrashScreen(safeBack(nav, e, back)) }
-    composable<Route.History> { e -> HistoryScreen(safeBack(nav, e, back)) }
-    composable<Route.Parcel> { e -> ParcelScreen(safeBack(nav, e, back)) }
-    composable<Route.Mcp> { e -> McpScreen(safeBack(nav, e, back)) }
-    composable<Route.LanWeb> { e -> LanWebScreen(safeBack(nav, e, back)) }
-    composable<Route.Periods> { e -> PeriodsScreen(safeBack(nav, e, back)) }
-    composable<Route.About> { e -> AboutScreen(safeBack(nav, e, back)) }
-    composable<Route.Data> { e -> DataScreen(safeBack(nav, e, back)) }
-    composable<Route.Sync> { e -> SyncScreen(safeBack(nav, e, back)) }
-    composable<Route.Jxfw> { e -> JxfwScreen(safeBack(nav, e, back)) }
-    composable<Route.Grades> { e -> GradesScreen(safeBack(nav, e, back)) }
-    composable<Route.PhysicalTest> { e -> PhysicalTestScreen(safeBack(nav, e, back)) }
-    composable<Route.Classroom> { e -> ClassroomScreen(safeBack(nav, e, back)) }
-    composable<Route.Reliability> { e -> ReliabilityScreen(safeBack(nav, e, back)) }
-    composable<Route.Import> { e -> ImportScreen(e.toRoute<Route.Import>().uri, safeBack(nav, e, back)) }
+    composable<Route.EditTimetable> { e -> RouteHost(nav, e, back) { EditTimetableScreen(it) } }
+    composable<Route.Appearance> { e -> RouteHost(nav, e, back) { AppearanceScreen(it) } }
+    composable<Route.Widgets> { e -> RouteHost(nav, e, back) { WidgetsScreen(it) } }
+    composable<Route.Permission> { e -> RouteHost(nav, e, back) { ReliabilityScreen(it) } }
+    composable<Route.Trash> { e -> RouteHost(nav, e, back) { TrashScreen(it) } }
+    composable<Route.History> { e -> RouteHost(nav, e, back) { HistoryScreen(it) } }
+    composable<Route.Parcel> { e -> RouteHost(nav, e, back) { ParcelScreen(it) } }
+    composable<Route.Mcp> { e -> RouteHost(nav, e, back) { McpScreen(it) } }
+    composable<Route.LanWeb> { e -> RouteHost(nav, e, back) { LanWebScreen(it) } }
+    composable<Route.Periods> { e -> RouteHost(nav, e, back) { PeriodsScreen(it) } }
+    composable<Route.About> { e -> RouteHost(nav, e, back) { AboutScreen(it) } }
+    composable<Route.Data> { e -> RouteHost(nav, e, back) { DataScreen(it) } }
+    composable<Route.Sync> { e -> RouteHost(nav, e, back) { SyncScreen(it) } }
+    composable<Route.Jxfw> { e -> RouteHost(nav, e, back) { JxfwScreen(it) } }
+    composable<Route.Grades> { e -> RouteHost(nav, e, back) { GradesScreen(it) } }
+    composable<Route.PhysicalTest> { e -> RouteHost(nav, e, back) { PhysicalTestScreen(it) } }
+    composable<Route.Classroom> { e -> RouteHost(nav, e, back) { ClassroomScreen(it) } }
+    composable<Route.Reliability> { e -> RouteHost(nav, e, back) { ReliabilityScreen(it) } }
+    composable<Route.Import> { e -> RouteHost(nav, e, back) { ImportScreen(e.toRoute<Route.Import>().uri, it) } }
     composable<Route.CourseEdit> { e ->
         val r = e.toRoute<Route.CourseEdit>()
-        CourseEditScreen(r.id, r.initialDow, r.initialPeriod, safeBack(nav, e, back))
+        RouteHost(nav, e, back) { CourseEditScreen(r.id, r.initialDow, r.initialPeriod, it) }
     }
     composable<Route.TodoEdit> { e ->
         val r = e.toRoute<Route.TodoEdit>()
-        TodoEditScreen(
-            id = r.id,
-            dateArg = r.date,
-            startArg = r.start,
-            endArg = r.end,
-            textDraft = r.text,
-            courseArg = r.courseId,
-            extraDatesArg = r.extraDates,
-            noteDraft = r.note,
-            locationArg = r.location,
-            listArg = r.listId,
-            remindArg = r.remindMinutes,
-            remindPersistentArg = r.remindPersistent,
-            repeatFreqArg = r.repeatFreq,
-            repeatIntervalArg = r.repeatInterval,
-            repeatUntilArg = r.repeatUntil,
-            repeatByDaysArg = r.repeatByDays,
-            repeatByMonthsArg = r.repeatByMonths,
-            onBack = safeBack(nav, e, back),
-        )
+        RouteHost(nav, e, back) { onBack ->
+            TodoEditScreen(
+                id = r.id,
+                dateArg = r.date,
+                startArg = r.start,
+                endArg = r.end,
+                textDraft = r.text,
+                courseArg = r.courseId,
+                extraDatesArg = r.extraDates,
+                noteDraft = r.note,
+                locationArg = r.location,
+                listArg = r.listId,
+                remindArg = r.remindMinutes,
+                remindPersistentArg = r.remindPersistent,
+                repeatFreqArg = r.repeatFreq,
+                repeatIntervalArg = r.repeatInterval,
+                repeatUntilArg = r.repeatUntil,
+                repeatByDaysArg = r.repeatByDays,
+                repeatByMonthsArg = r.repeatByMonths,
+                onBack = onBack,
+            )
+        }
     }
 }
 

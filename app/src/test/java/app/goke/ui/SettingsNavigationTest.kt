@@ -10,6 +10,7 @@ import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -163,5 +164,88 @@ class SettingsNavigationTest {
         rule.waitForIdle()
         assertEquals(0, rule.onAllNodesWithContentDescription(app.getString(R.string.back)).fetchSemanticsNodes().size)
         rule.onNodeWithText(app.getString(R.string.grades_title)).assertIsDisplayed()
+    }
+
+    @Test
+    fun popDuringPredictiveBackDoesNotWedgeNavHost() {
+        rule.setContent {
+            val st by app.settings.flow.collectAsState()
+            GokeTheme(st) {
+                GokeRoot(app, null, initialTab = Tab.ME) {}
+            }
+        }
+        rule.waitForIdle()
+
+        rule.onNodeWithText(app.getString(R.string.data_title)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription(app.getString(R.string.back)).assertIsDisplayed()
+
+        // Start predictive back (sets NavHost's internal inPredictiveBack = true)
+        rule.runOnUiThread {
+            val d = rule.activity.onBackPressedDispatcher
+            d.dispatchOnBackStarted(BackEventCompat(0f, 100f, 0.0f, BackEventCompat.EDGE_LEFT))
+            d.dispatchOnBackProgressed(BackEventCompat(50f, 100f, 0.2f, BackEventCompat.EDGE_LEFT))
+        }
+        rule.waitForIdle()
+
+        // Pop via TopBar back while predictive back is active -> drops backStack size to 1
+        rule.onNodeWithContentDescription(app.getString(R.string.back)).performClick()
+        rule.waitForIdle()
+        // Gesture finishes/cancels when finger lifts
+        rule.runOnUiThread {
+            rule.activity.onBackPressedDispatcher.dispatchOnBackCancelled()
+        }
+        rule.waitForIdle()
+
+        // Must exit DataScreen cleanly and NOT wedge NavHost!
+        assertEquals(0, rule.onAllNodesWithContentDescription(app.getString(R.string.back)).fetchSemanticsNodes().size)
+        rule.onNodeWithText(app.getString(R.string.data_title)).assertIsDisplayed()
+
+        // Re-entering DataScreen -> ImportScreen and exiting both must still work cleanly
+        rule.onNodeWithText(app.getString(R.string.data_title)).performClick()
+        rule.waitForIdle()
+        rule.onAllNodesWithText(app.getString(R.string.import_file)).onLast().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription(app.getString(R.string.back)).performClick()
+        rule.waitForIdle()
+        rule.onAllNodesWithText(app.getString(R.string.import_file)).onLast().assertIsDisplayed()
+        rule.runOnUiThread {
+            rule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+        rule.waitForIdle()
+        assertEquals(0, rule.onAllNodesWithContentDescription(app.getString(R.string.back)).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun subpageLocalBackHandlerTakesPrecedenceOverRouteHost() {
+        rule.setContent {
+            val st by app.settings.flow.collectAsState()
+            GokeTheme(st) {
+                GokeRoot(app, null, initialTab = Tab.ME) {}
+            }
+        }
+        rule.waitForIdle()
+
+        rule.onNodeWithText(app.getString(R.string.parcel_title)).performClick()
+        rule.waitForIdle()
+
+        // Open inner rules view inside ParcelScreen (has its own BackHandler(enabled = showRules))
+        rule.onNodeWithText(app.getString(R.string.parcel_rules_manage)).performClick()
+        rule.waitForIdle()
+
+        // First system back must close rules overlay, NOT pop ParcelScreen
+        rule.runOnUiThread {
+            rule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(R.string.parcel_enable)).assertIsDisplayed()
+
+        // Second system back must pop ParcelScreen back to Settings
+        rule.runOnUiThread {
+            rule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+        rule.waitForIdle()
+        assertEquals(0, rule.onAllNodesWithContentDescription(app.getString(R.string.back)).fetchSemanticsNodes().size)
+        rule.onNodeWithText(app.getString(R.string.parcel_title)).assertIsDisplayed()
     }
 }
