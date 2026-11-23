@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -157,7 +158,10 @@ fun PhysicalTestScreen(onBack: () -> Unit) {
 
             if (tzcsState.lastError != null) {
                 item(key = "error") {
-                    TzcsErrorBanner(tzcsState.lastError!!)
+                    TzcsErrorBanner(
+                        message = tzcsState.lastError!!,
+                        isNetworkError = tzcsState.lastErrorKind == TzcsException.Kind.NETWORK,
+                    )
                 }
             }
 
@@ -337,6 +341,7 @@ private fun TzcsLoginPanel(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp),
         )
+        TzcsCampusNetHint()
         TonalField(
             label = stringResource(R.string.tzcs_username),
             value = user,
@@ -588,13 +593,47 @@ private fun TzcsSummaryCard(
 }
 
 @Composable
-private fun TzcsErrorBanner(message: String) {
+private fun TzcsCampusNetHint() {
+    MintCard(color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                Icons.Rounded.Wifi,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                stringResource(R.string.tzcs_campus_net_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TzcsErrorBanner(
+    message: String,
+    isNetworkError: Boolean = false,
+) {
     MintCard(color = MintTheme.colors.conflictBg) {
-        Text(
-            message,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            if (isNetworkError) {
+                Text(
+                    stringResource(R.string.tzcs_campus_net_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
