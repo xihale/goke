@@ -43,6 +43,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -63,6 +64,8 @@ import app.goke.core.model.EventKind
 import app.goke.core.model.Snapshot
 import app.goke.core.model.Source
 import app.goke.core.model.Task
+import app.goke.core.time.CourseProgress
+import app.goke.core.time.TimePhase
 import app.goke.core.util.Ids
 import app.goke.ui.Actions
 import app.goke.ui.LocalActions
@@ -96,7 +99,8 @@ fun AgendaRow(
     when (item) {
         is CourseItem -> {
             val o = item.occ
-            val past = o.end.isBefore(now)
+            val phase = CourseProgress.phase(o.start, o.end, now)
+            val progress = CourseProgress.fraction(o.start, o.end, now)
             val roomText = ctx.formatRooms(o.room)
             RowShell(
                 modifier = modifier,
@@ -105,7 +109,8 @@ fun AgendaRow(
                 fg = colors.fg(o.course.colorIndex),
                 title = o.course.name,
                 subtitle = listOf(roomText, if (showTeacher) o.course.teacher else "").filter { it.isNotBlank() }.joinToString(" · "),
-                dim = past,
+                phase = phase,
+                progress = progress,
                 onClick = { onOpenCourse(o.course.id) },
                 tag = if (o.rescheduled) stringResource(R.string.rescheduled) else null,
             )
@@ -113,7 +118,8 @@ fun AgendaRow(
 
         is EventItem -> {
             val e = item.event
-            val past = !item.allDay && item.end.isBefore(now)
+            val phase = if (item.allDay) TimePhase.UPCOMING else CourseProgress.phase(item.start, item.end, now)
+            val progress = if (item.allDay) 0f else CourseProgress.fraction(item.start, item.end, now)
             val timeLabel = if (item.allDay) stringResource(R.string.all_day) else item.start.hm()
             val kindTag =
                 when (e.kind) {
@@ -128,7 +134,8 @@ fun AgendaRow(
                 fg = colors.fg(e.colorIndex),
                 title = e.title,
                 subtitle = ctx.formatRooms(e.location),
-                dim = past,
+                phase = phase,
+                progress = progress,
                 onClick = { onOpenEvent(e.id) },
                 tag = kindTag,
             )
@@ -158,30 +165,48 @@ private fun RowShell(
     fg: androidx.compose.ui.graphics.Color,
     title: String,
     subtitle: String,
-    dim: Boolean,
+    phase: TimePhase,
+    progress: Float,
     onClick: () -> Unit,
     tag: String? = null,
     modifier: Modifier = Modifier,
 ) {
-    // 过期置灰随时间平滑过渡（30s 心跳）；只淡背景，文字保持独立可读强度
-    val bgAlpha by animateFloatAsState(if (dim) 0.45f else 1f, MintTheme.press(), label = "row-dim")
+    // 进行中按时间比例从左向右渐进置灰，已结束整行退灰；文字保持可读对比度
+    val textFg = rememberCourseProgressFg(fg, phase)
+    val stateDesc =
+        when (phase) {
+            TimePhase.ONGOING -> stringResource(R.string.course_progress_ongoing, (progress * 100f).toInt().coerceIn(0, 100))
+            TimePhase.FINISHED -> stringResource(R.string.course_progress_finished)
+            TimePhase.UPCOMING -> null
+        }
     Row(
         modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
-            .background(bg.copy(alpha = bgAlpha))
-            .mintClickable(pressedScale = 0.98f, onClick = onClick)
+            .courseProgressBackground(
+                activeBg = bg,
+                activeFg = fg,
+                phase = phase,
+                progress = progress,
+                axis = CourseProgressAxis.HORIZONTAL,
+            ).then(
+                if (stateDesc != null) {
+                    Modifier.semantics { stateDescription = stateDesc }
+                } else {
+                    Modifier
+                },
+            ).mintClickable(pressedScale = 0.98f, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // 40dp 时间槽 + 8dp 间隔：与 TaskRow 的勾选框槽（8+48+4=60）同起点，混排时标题左沿对齐
-        Text(time, color = fg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.width(40.dp))
+        Text(time, color = textFg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.width(40.dp))
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, color = fg, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (subtitle.isNotBlank()) Text(subtitle, color = fg.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, color = textFg, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitle.isNotBlank()) Text(subtitle, color = textFg.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (tag != null) Tag(tag, fg.copy(alpha = 0.15f), fg)
+        if (tag != null) Tag(tag, textFg.copy(alpha = 0.15f), textFg)
     }
 }
 

@@ -102,6 +102,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -135,7 +136,9 @@ import app.goke.core.model.Source
 import app.goke.core.model.Task
 import app.goke.core.recurrence.CourseExpander
 import app.goke.core.recurrence.CourseOccurrence
+import app.goke.core.time.CourseProgress
 import app.goke.core.time.SemesterCalendar
+import app.goke.core.time.TimePhase
 import app.goke.core.time.WeekSets
 import app.goke.core.util.Ids
 import app.goke.ui.LocalActions
@@ -145,6 +148,7 @@ import app.goke.ui.LocalTabVisible
 import app.goke.ui.Route
 import app.goke.ui.Tab
 import app.goke.ui.components.ConflictCard
+import app.goke.ui.components.CourseProgressAxis
 import app.goke.ui.components.EmptyState
 import app.goke.ui.components.FieldText
 import app.goke.ui.components.MintCard
@@ -152,9 +156,11 @@ import app.goke.ui.components.NavListInset
 import app.goke.ui.components.TaskRow
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.ValueRow
+import app.goke.ui.components.courseProgressBackground
 import app.goke.ui.components.mintClickable
 import app.goke.ui.components.mintPressable
 import app.goke.ui.components.parcelCode
+import app.goke.ui.components.rememberCourseProgressFg
 import app.goke.ui.dueLabel
 import app.goke.ui.formatRooms
 import app.goke.ui.hm
@@ -162,7 +168,7 @@ import app.goke.ui.liveSnapshot
 import app.goke.ui.monthDay
 import app.goke.ui.monthDayWeekday
 import app.goke.ui.reduceMotion
-import app.goke.ui.rememberTodayGated
+import app.goke.ui.rememberNowGated
 import app.goke.ui.settingsState
 import app.goke.ui.theme.MintColors
 import app.goke.ui.theme.MintTheme
@@ -222,8 +228,9 @@ fun TimetableScreen() {
     val actions = LocalActions.current
     val snap = liveSnapshot()
     val settings = settingsState()
-    // today 走门控派生态：隐藏 Tab 不养 30 秒后台协程，仅跨天时重组周网格
-    val today = rememberTodayGated()
+    // now 走门控派生态：隐藏 Tab 不养 30 秒后台协程；仅本周网格消费 now，其余周不随 30 秒心跳重组
+    val now = rememberNowGated()
+    val today = remember(now) { now.toLocalDate() }
     val adv by app.advanced.state.collectAsState()
     val sem = snap.currentSemester
     // 还没建学期：保留 64dp 头部骨架，给一个入口引导去课表设置
@@ -481,7 +488,9 @@ fun TimetableScreen() {
                         sem,
                         cal,
                         week,
+                        currentWeek,
                         today,
+                        if (week == currentWeek) now else null,
                         cells,
                         blocks,
                         settings.defaultBlockMinutes,
@@ -740,7 +749,9 @@ private fun WeekGrid(
     sem: Semester,
     cal: SemesterCalendar,
     week: Int,
+    currentWeek: Int,
     today: LocalDate,
+    now: LocalDateTime?,
     cells: List<TimetableCell>,
     blocks: List<BlockRow>,
     defaultBlockMinutes: Int,
@@ -1117,11 +1128,26 @@ private fun WeekGrid(
                             else -> laneW
                         }
                     val isWide = blockW >= 64.dp
+                    val phase =
+                        when {
+                            week < currentWeek -> TimePhase.FINISHED
+                            week > currentWeek -> TimePhase.UPCOMING
+                            now != null -> CourseProgress.phase(o.start, o.end, now)
+                            else -> TimePhase.UPCOMING
+                        }
+                    val progress =
+                        when (phase) {
+                            TimePhase.UPCOMING -> 0f
+                            TimePhase.FINISHED -> 1f
+                            TimePhase.ONGOING -> now?.let { CourseProgress.fraction(o.start, o.end, it) } ?: 0f
+                        }
                     CourseBlock(
                         cell,
                         showTeacher,
                         slot.overlap,
                         isWide,
+                        phase,
+                        progress,
                         mintColors,
                         courseTitleStyle,
                         if (isWide) courseRoomStyleWide else courseRoomStyleNarrow,
@@ -1688,6 +1714,8 @@ private fun CourseBlock(
     /** 块宽是否 ≥64dp（宽列加「@」前缀区分教室）。由调用方按已知的块宽传入，
      *  不再每个块起一个 BoxWithConstraints 子组合（一页 30 块 = 30 次 subcompose）。 */
     wide: Boolean,
+    phase: TimePhase,
+    progress: Float,
     colors: MintColors,
     titleStyle: TextStyle,
     roomStyle: TextStyle,
@@ -1706,13 +1734,36 @@ private fun CourseBlock(
             CellKind.REMOVED -> colors.removed
             CellKind.NORMAL -> Color.Transparent
         }
-    val cellBg = if (isRemoved) colors.conflictBg else bg
+    val textFg = if (isRemoved) colors.removed else rememberCourseProgressFg(fg, phase)
+    val stateDesc =
+        if (isRemoved) {
+            null
+        } else {
+            when (phase) {
+                TimePhase.ONGOING -> stringResource(R.string.course_progress_ongoing, (progress * 100f).toInt().coerceIn(0, 100))
+                TimePhase.FINISHED -> stringResource(R.string.course_progress_finished)
+                TimePhase.UPCOMING -> null
+            }
+        }
+    val bgMod =
+        if (isRemoved) {
+            Modifier.background(colors.conflictBg)
+        } else {
+            Modifier.courseProgressBackground(
+                activeBg = bg,
+                activeFg = fg,
+                phase = phase,
+                progress = progress,
+                axis = CourseProgressAxis.VERTICAL,
+            )
+        }
     Box(
         modifier
             .mintPressable(pressedScale = 0.97f) { onClick() }
             .then(if (isRemoved) Modifier.graphicsLayer { alpha = 0.6f } else Modifier)
             .clip(CourseBlockShape)
-            .background(cellBg)
+            .then(bgMod)
+            .then(if (stateDesc != null) Modifier.semantics { stateDescription = stateDesc } else Modifier)
             .then(if (borderColor != Color.Transparent) Modifier.border(2.dp, borderColor, CourseBlockShape) else Modifier),
     ) {
         // 一列就 40dp 出头：教室 / 老师照样要显示，靠换行和省略号交代；
@@ -1722,7 +1773,7 @@ private fun CourseBlock(
             // 字号统一由 WeekGrid 记住传入；时间/教室数字用 tnum
             Text(
                 o.course.name,
-                color = if (isRemoved) colors.removed else fg,
+                color = textFg,
                 style = titleStyle,
                 fontWeight = FontWeight.Bold,
                 maxLines =
@@ -1749,7 +1800,7 @@ private fun CourseBlock(
                     Text(
                         if (wide) "@" + roomText else roomText,
                         modifier = Modifier.weight(1f, fill = false),
-                        color = (if (isRemoved) colors.removed else fg).copy(alpha = 0.85f),
+                        color = textFg.copy(alpha = 0.85f),
                         // 窄卡与宽卡字号：至少 10sp，保证 TalkBack 及大字号无障碍要求
                         style = roomStyle,
                         maxLines = roomMaxLines,
@@ -1761,7 +1812,7 @@ private fun CourseBlock(
             if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) {
                 Text(
                     o.course.teacher,
-                    color = fg.copy(alpha = 0.75f),
+                    color = textFg.copy(alpha = 0.75f),
                     style = roomStyle,
                     maxLines = 1,
                     softWrap = false,
@@ -1771,7 +1822,7 @@ private fun CourseBlock(
             if (o.rescheduled) {
                 Text(
                     stringResource(R.string.rescheduled),
-                    color = fg,
+                    color = textFg,
                     style = roomStyle,
                     fontWeight = FontWeight.Bold,
                 )
@@ -1779,7 +1830,7 @@ private fun CourseBlock(
             if (overlap > 1) {
                 OverlapBadge(
                     overlap = overlap,
-                    fg = if (isRemoved) colors.removed else fg,
+                    fg = textFg,
                 )
             }
         }

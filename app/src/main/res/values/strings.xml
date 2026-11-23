@@ -72,6 +72,8 @@
     <string name="semester_not_started">学期尚未开始</string>
     <string name="semester_ended">学期已结束</string>
     <string name="rescheduled">调课</string>
+    <string name="course_progress_ongoing">进行中 %1$d%%</string>
+    <string name="course_progress_finished">已结束</string>
     <string name="cancel_class_this_week">本周停课</string>
     <string name="cancel_class_desc">本周停课：%1$s</string>
     <string name="cancel_class_toast">已将「%1$s」本周停课</string>
