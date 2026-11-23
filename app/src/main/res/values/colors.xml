@@ -15,6 +15,10 @@
     <color name="widget_priority_low">#5E6F69</color>
     <color name="widget_now_bg">#CDEBE3</color>
     <color name="widget_now_fg">#1B473F</color>
+    <color name="widget_course_done_bg">#E4EAE8</color>
+    <color name="widget_course_done_fg">#7C8C87</color>
+    <color name="widget_course_progress_overlay">#8AC4CEC9</color>
+    <color name="widget_next_progress_overlay">#2424312D</color>
 
     <!-- 8 组植物课表色（浅底深字），与 Theme.kt MintColors / web COURSE_COLORS.light 一致 -->
     <color name="widget_course0_bg">#D9E8EF</color>

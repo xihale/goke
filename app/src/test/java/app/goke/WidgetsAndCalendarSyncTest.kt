@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.BaseAdapter
 import android.widget.FrameLayout
 import android.widget.ListView
+import android.widget.ProgressBar
 import android.widget.RemoteViews
 import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
@@ -244,11 +245,59 @@ class WidgetsAndCalendarSyncTest {
             // 5. 下一件事 4×1 胶囊小组件 + 深链路由
             val nextSummary = NextWidgetProvider.pickSummary(app, snap, st, now)
             assertEquals(course1.id, nextSummary.courseId)
+            assertTrue(nextSummary.ongoing)
+            assertTrue(nextSummary.progress > 0f && nextSummary.progress < 1f)
             val nextView = renderRemoteViews("widget_next", NextWidgetProvider.build(app, snap, st, now), 340, 68)
-            assertEquals(app.getString(R.string.widget_ongoing), nextView.findViewById<TextView>(R.id.next_badge).text.toString())
+            assertEquals("–10:05", nextView.findViewById<TextView>(R.id.next_badge).text.toString())
+            assertEquals(View.VISIBLE, nextView.findViewById<ProgressBar>(R.id.next_progress).visibility)
             assertEquals("高等数学", nextView.findViewById<TextView>(R.id.next_title).text.toString())
             assertEquals(DeepLink.Course("c1"), DeepLinks.parseUri(DeepLinks.courseUri("c1")))
             assertEquals(DeepLink.Add("买牛奶", "c1"), DeepLinks.parseUri(DeepLinks.addUri("买牛奶", "c1")))
+
+            // 6. 两格窄宽（compact = true）与已结束置灰 / 进行中渐进置灰验证
+            val midDay = LocalDateTime.of(today, java.time.LocalTime.of(14, 45)) // course1 已结束，course2 进行中
+            val schedMid = renderRemoteViews("widget_schedule_progress", ScheduleWidgetProvider.build(app, snap, st, midDay), 320, 210)
+            assertEquals(View.GONE, schedMid.findViewById<ProgressBar>(R.id.sched_progress0).visibility)
+            assertEquals(View.VISIBLE, schedMid.findViewById<ProgressBar>(R.id.sched_progress1).visibility)
+            assertTrue(schedMid.findViewById<ProgressBar>(R.id.sched_progress1).progress in 40..980)
+
+            val schedCompact =
+                renderRemoteViews("widget_schedule_2cell", ScheduleWidgetProvider.build(app, snap, st, midDay, compact = true), 140, 210)
+            assertEquals(View.GONE, schedCompact.findViewById<View>(R.id.sched_week).visibility)
+            assertEquals(View.GONE, schedCompact.findViewById<View>(R.id.sched_time_col0).visibility)
+
+            val todayMidRows = TodayWidgetProvider.buildRows(app, snap, st, midDay)
+            assertTrue(todayMidRows.any { it.title == "高等数学" && it.finished && !it.ongoing })
+            assertTrue(todayMidRows.any { it.title == "操作系统" && it.ongoing && !it.finished && it.progress > 0f })
+            val todayCompact =
+                renderRemoteViews(
+                    name = "widget_today_2cell",
+                    rv = TodayWidgetProvider.build(app, 3, snap, st, midDay, compact = true),
+                    widthDp = 140,
+                    heightDp = 240,
+                    listViewId = R.id.today_list,
+                    emptyViewId = R.id.today_empty,
+                    items = todayMidRows.map { TodayWidgetService.itemView(app, it, compact = true) },
+                )
+            assertEquals(View.GONE, todayCompact.findViewById<View>(R.id.today_week).visibility)
+
+            val nextCompact =
+                renderRemoteViews("widget_next_2cell", NextWidgetProvider.build(app, snap, st, midDay, compact = true), 140, 68)
+            assertEquals(View.GONE, nextCompact.findViewById<View>(R.id.next_add).visibility)
+            assertEquals(View.GONE, nextCompact.findViewById<View>(R.id.next_bar).visibility)
+            assertEquals(View.VISIBLE, nextCompact.findViewById<ProgressBar>(R.id.next_progress).visibility)
+
+            val parcelCompact =
+                renderRemoteViews(
+                    name = "widget_parcel_2cell",
+                    rv = ParcelWidgetProvider.build(app, 1, now, compact = true),
+                    widthDp = 140,
+                    heightDp = 185,
+                    listViewId = R.id.parcel_list,
+                    emptyViewId = R.id.parcel_empty,
+                    items = parcelRows.map { ParcelWidgetService.itemView(app, it) },
+                )
+            assertEquals(app.getString(R.string.widget_parcel_title), parcelCompact.findViewById<TextView>(R.id.parcel_title).text.toString())
             Unit
         }
 

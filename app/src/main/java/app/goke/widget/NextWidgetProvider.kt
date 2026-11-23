@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
 import app.goke.DeepLinks
@@ -37,9 +38,23 @@ class NextWidgetProvider : AppWidgetProvider() {
         val app = context.gokeApp
         val snap = if (app.repo.ready.value) app.repo.snapshot.value else null
         val st = app.settings.value
-        val views = build(context, snap, st)
-        for (id in appWidgetIds) manager.updateAppWidget(id, views)
+        for (id in appWidgetIds) {
+            val compact = WidgetKit.isCompactWidth(manager, id)
+            manager.updateAppWidget(id, build(context, snap, st, compact = compact))
+        }
         if (snap != null) scheduleTick(context, snap, st)
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        val app = context.gokeApp
+        val snap = if (app.repo.ready.value) app.repo.snapshot.value else null
+        val st = app.settings.value
+        appWidgetManager.updateAppWidget(appWidgetId, build(context, snap, st, compact = WidgetKit.isCompactWidth(newOptions)))
     }
 
     override fun onReceive(
@@ -59,6 +74,8 @@ class NextWidgetProvider : AppWidgetProvider() {
         val title: String,
         val barColor: Int,
         val uri: Uri,
+        val ongoing: Boolean = false,
+        val progress: Float = 0f,
         val taskId: String? = null,
         val courseId: String? = null,
         val eventId: String? = null,
@@ -78,8 +95,10 @@ class NextWidgetProvider : AppWidgetProvider() {
             val mgr = AppWidgetManager.getInstance(ctx)
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, NextWidgetProvider::class.java))
             if (ids.isEmpty()) return
-            val views = build(ctx, snap, st)
-            for (id in ids) mgr.updateAppWidget(id, views)
+            for (id in ids) {
+                val compact = WidgetKit.isCompactWidth(mgr, id)
+                mgr.updateAppWidget(id, build(ctx, snap, st, compact = compact))
+            }
             scheduleTick(ctx, snap, st)
         }
 
@@ -89,9 +108,18 @@ class NextWidgetProvider : AppWidgetProvider() {
             st: Settings,
             now: LocalDateTime = LocalDateTime.now(),
         ) {
-            val next =
-                Agenda
-                    .forDay(snap, now.toLocalDate(), st.defaultBlockMinutes)
+            val dayItems = Agenda.forDay(snap, now.toLocalDate(), st.defaultBlockMinutes)
+            val hasOngoing =
+                dayItems.any { item ->
+                    when (item) {
+                        is CourseItem -> WidgetKit.timePhase(item.occ.start, item.occ.end, now) == WidgetKit.TimePhase.ONGOING
+                        is BlockItem -> !item.task.done && WidgetKit.timePhase(item.start, item.end, now) == WidgetKit.TimePhase.ONGOING
+                        is EventItem -> !item.allDay && WidgetKit.timePhase(item.start, item.end, now) == WidgetKit.TimePhase.ONGOING
+                        else -> false
+                    }
+                }
+            val nextTransition =
+                dayItems
                     .flatMap { item ->
                         when (item) {
                             is CourseItem -> listOf(item.occ.start, item.occ.end)
@@ -106,6 +134,12 @@ class NextWidgetProvider : AppWidgetProvider() {
                         .plusDays(1)
                         .atStartOfDay()
                         .plusMinutes(1)
+            val next =
+                if (hasOngoing) {
+                    minOf(nextTransition, now.plusMinutes(WidgetKit.ONGOING_TICK_MINUTES))
+                } else {
+                    nextTransition
+                }
             val pi =
                 PendingIntent.getBroadcast(
                     ctx,
@@ -137,18 +171,20 @@ class NextWidgetProvider : AppWidgetProvider() {
             val today = now.toLocalDate()
             val dayItems = Agenda.forDay(live, today, st.defaultBlockMinutes)
 
-            // 1. 当前正在进行的课程或时间块
+            // 1. 当前正在进行的课程或时间块（用进度置灰底取代「进行中」标签）
             for (item in dayItems) {
                 when (item) {
                     is CourseItem -> {
                         val o = item.occ
-                        if (!o.start.isAfter(now) && o.end.isAfter(now)) {
+                        if (WidgetKit.timePhase(o.start, o.end, now) == WidgetKit.TimePhase.ONGOING) {
                             return Summary(
-                                badge = ctx.getString(R.string.widget_ongoing),
-                                sub = listOfNotNull("${o.start.hm()}–${o.end.hm()}", o.room.takeIf { it.isNotBlank() }).joinToString(" · "),
+                                badge = "–${o.end.hm()}",
+                                sub = o.room.takeIf { it.isNotBlank() } ?: o.start.hm(),
                                 title = o.course.name,
                                 barColor = WidgetKit.courseFg(ctx, o.course.colorIndex),
                                 uri = DeepLinks.courseUri(o.course.id),
+                                ongoing = true,
+                                progress = WidgetKit.timeProgress(o.start, o.end, now),
                                 courseId = o.course.id,
                                 courseDate = o.date.toString(),
                                 startPeriod = o.startPeriod,
@@ -158,30 +194,30 @@ class NextWidgetProvider : AppWidgetProvider() {
                     }
 
                     is BlockItem -> {
-                        if (!item.task.done && !item.start.isAfter(now) && item.end.isAfter(now)) {
+                        if (!item.task.done && WidgetKit.timePhase(item.start, item.end, now) == WidgetKit.TimePhase.ONGOING) {
                             return Summary(
-                                badge = ctx.getString(R.string.widget_ongoing),
-                                sub = "${item.start.hm()}–${item.end.hm()}",
+                                badge = "–${item.end.hm()}",
+                                sub = item.start.hm(),
                                 title = item.task.title,
                                 barColor = WidgetKit.priorityColor(ctx, item.task.priority),
                                 uri = DeepLinks.taskUri(item.task.id),
+                                ongoing = true,
+                                progress = WidgetKit.timeProgress(item.start, item.end, now),
                                 taskId = item.task.id,
                             )
                         }
                     }
 
                     is EventItem -> {
-                        if (!item.allDay && !item.start.isAfter(now) && item.end.isAfter(now)) {
+                        if (!item.allDay && WidgetKit.timePhase(item.start, item.end, now) == WidgetKit.TimePhase.ONGOING) {
                             return Summary(
-                                badge = ctx.getString(R.string.widget_ongoing),
-                                sub =
-                                    listOfNotNull(
-                                        "${item.start.hm()}–${item.end.hm()}",
-                                        WidgetKit.eventLocation(ctx, item.event),
-                                    ).joinToString(" · "),
+                                badge = "–${item.end.hm()}",
+                                sub = WidgetKit.eventLocation(ctx, item.event) ?: item.start.hm(),
                                 title = item.event.title,
                                 barColor = WidgetKit.courseFg(ctx, item.event.colorIndex),
                                 uri = DeepLinks.todayUri(),
+                                ongoing = true,
+                                progress = WidgetKit.timeProgress(item.start, item.end, now),
                                 eventId = item.event.id,
                             )
                         }
@@ -295,9 +331,18 @@ class NextWidgetProvider : AppWidgetProvider() {
             snap: Snapshot?,
             st: Settings,
             now: LocalDateTime = LocalDateTime.now(),
+            compact: Boolean = false,
         ): RemoteViews {
             val views = RemoteViews(ctx.packageName, R.layout.widget_next)
             val s = pickSummary(ctx, snap, st, now)
+            if (s.ongoing) {
+                views.setViewVisibility(R.id.next_progress, View.VISIBLE)
+                views.setProgressBar(R.id.next_progress, WidgetKit.PROGRESS_MAX, WidgetKit.progressPermille(s.progress), false)
+            } else {
+                views.setViewVisibility(R.id.next_progress, View.GONE)
+            }
+            views.setViewVisibility(R.id.next_bar, if (compact) View.GONE else View.VISIBLE)
+            views.setViewVisibility(R.id.next_add, if (compact) View.GONE else View.VISIBLE)
             views.setInt(R.id.next_bar, "setColorFilter", s.barColor)
             views.setTextViewText(R.id.next_badge, s.badge)
             if (!s.sub.isNullOrBlank()) {

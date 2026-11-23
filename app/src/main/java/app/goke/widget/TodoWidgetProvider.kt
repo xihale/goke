@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
 import app.goke.DeepLinks
@@ -27,6 +28,16 @@ class TodoWidgetProvider : AppWidgetProvider() {
     ) {
         for (id in appWidgetIds) manager.updateAppWidget(id, build(context, id))
         manager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.widget_list)
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        appWidgetManager.updateAppWidget(appWidgetId, build(context, appWidgetId))
+        appWidgetManager.notifyAppWidgetViewDataChanged(intArrayOf(appWidgetId), R.id.widget_list)
     }
 
     data class Row(

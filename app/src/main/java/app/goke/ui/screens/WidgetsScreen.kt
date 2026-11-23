@@ -53,6 +53,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -582,9 +584,10 @@ private fun TodayWidgetPreview(
         if (realRows.isNotEmpty()) {
             realRows.forEach { row ->
                 if (row.colorIndex >= 0) {
-                    val bg = if (row.ongoing) scheme.primaryContainer else mintColors.bg(row.colorIndex)
-                    val fg = if (row.ongoing) scheme.onPrimaryContainer else mintColors.fg(row.colorIndex)
-                    PreviewCourseStrip(row.time, row.title, row.sub, bg, fg)
+                    val bg = if (row.finished) scheme.surfaceVariant else mintColors.bg(row.colorIndex)
+                    val fg = if (row.finished) scheme.onSurfaceVariant else mintColors.fg(row.colorIndex)
+                    val progress = if (row.ongoing) row.progress else 0f
+                    PreviewCourseStrip(row.time, row.title, row.sub, bg, fg, progress)
                 } else {
                     PreviewTaskStrip(
                         left = row.time,
@@ -598,9 +601,10 @@ private fun TodayWidgetPreview(
             PreviewCourseStrip(
                 time = "08:30",
                 title = stringResource(R.string.widgets_sample_course_1),
-                sub = "${stringResource(R.string.widgets_sample_course_1_room)} · ${stringResource(R.string.widget_ongoing)}",
-                bg = scheme.primaryContainer,
-                fg = scheme.onPrimaryContainer,
+                sub = stringResource(R.string.widgets_sample_course_1_room),
+                bg = mintColors.bg(1),
+                fg = mintColors.fg(1),
+                progress = 0.45f,
             )
             PreviewTaskStrip(
                 left = "18:00",
@@ -648,24 +652,26 @@ private fun ScheduleWidgetPreview(
         if (courses.isNotEmpty()) {
             courses.forEach { item ->
                 val o = item.occ
-                val current = !o.start.isAfter(now) && o.end.isAfter(now)
-                val bg = if (current) scheme.primaryContainer else mintColors.bg(o.course.colorIndex)
-                val fg = if (current) scheme.onPrimaryContainer else mintColors.fg(o.course.colorIndex)
+                val phase = WidgetKit.timePhase(o.start, o.end, now)
+                val progress = if (phase == WidgetKit.TimePhase.ONGOING) WidgetKit.timeProgress(o.start, o.end, now) else 0f
+                val bg = if (phase == WidgetKit.TimePhase.FINISHED) scheme.surfaceVariant else mintColors.bg(o.course.colorIndex)
+                val fg = if (phase == WidgetKit.TimePhase.FINISHED) scheme.onSurfaceVariant else mintColors.fg(o.course.colorIndex)
                 val meta =
                     listOfNotNull(
                         o.room.takeIf { it.isNotBlank() },
-                        if (current) stringResource(R.string.widget_ongoing) else o.course.teacher.takeIf { it.isNotBlank() },
+                        o.course.teacher.takeIf { it.isNotBlank() },
                     ).joinToString(" · ").ifEmpty { null }
-                PreviewScheduleCourseBlock(o.start.hm(), o.end.hm(), o.course.name, meta, bg, fg)
+                PreviewScheduleCourseBlock(o.start.hm(), o.end.hm(), o.course.name, meta, bg, fg, progress)
             }
         } else {
             PreviewScheduleCourseBlock(
                 start = "08:30",
                 end = "10:05",
                 name = stringResource(R.string.widgets_sample_course_1),
-                meta = "${stringResource(R.string.widgets_sample_course_1_room)} · ${stringResource(R.string.widget_ongoing)}",
-                bg = scheme.primaryContainer,
-                fg = scheme.onPrimaryContainer,
+                meta = stringResource(R.string.widgets_sample_course_1_room),
+                bg = mintColors.bg(1),
+                fg = mintColors.fg(1),
+                progress = 0.45f,
             )
             PreviewScheduleCourseBlock(
                 start = "10:20",
@@ -674,6 +680,7 @@ private fun ScheduleWidgetPreview(
                 meta = stringResource(R.string.widgets_sample_course_2_room),
                 bg = mintColors.bg(0),
                 fg = mintColors.fg(0),
+                progress = 0f,
             )
         }
     }
@@ -808,12 +815,31 @@ private fun NextWidgetPreview(
     val summary = remember(ctx, snap, st, now) { NextWidgetProvider.pickSummary(ctx, snap, st, now) }
     val emptyTitle = stringResource(R.string.widget_next_empty)
     val useSample = summary.title == emptyTitle
-    val badge = if (useSample) stringResource(R.string.widget_ongoing) else summary.badge
-    val sub = if (useSample) "08:30–10:05 · ${stringResource(R.string.widgets_sample_course_1_room)}" else summary.sub
+    val badge = if (useSample) "–10:05" else summary.badge
+    val sub = if (useSample) stringResource(R.string.widgets_sample_course_1_room) else summary.sub
     val title = if (useSample) stringResource(R.string.widgets_sample_course_1) else summary.title
     val barColor = if (useSample) scheme.primary else Color(summary.barColor)
+    val progress =
+        if (useSample) {
+            0.45f
+        } else if (summary.ongoing) {
+            summary.progress
+        } else {
+            0f
+        }
+    val wipeColor = scheme.onSurface.copy(alpha = 0.08f)
 
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .drawBehind {
+                if (progress > 0f) {
+                    drawRect(wipeColor, size = Size(size.width * progress.coerceIn(0.04f, 0.98f), size.height))
+                }
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Box(
             modifier =
                 Modifier
@@ -854,15 +880,22 @@ private fun PreviewCourseStrip(
     sub: String?,
     bg: Color,
     fg: Color,
+    progress: Float = 0f,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val typography = MaterialTheme.typography
+    val wipeColor = scheme.surfaceVariant.copy(alpha = 0.65f)
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
                 .background(bg)
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .drawBehind {
+                    if (progress > 0f) {
+                        drawRect(wipeColor, size = Size(size.width * progress.coerceIn(0.04f, 0.98f), size.height))
+                    }
+                }.padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(time, style = typography.labelMedium, fontWeight = FontWeight.Bold, color = fg, modifier = Modifier.width(44.dp))
@@ -883,15 +916,22 @@ private fun PreviewScheduleCourseBlock(
     meta: String?,
     bg: Color,
     fg: Color,
+    progress: Float = 0f,
 ) {
+    val scheme = MaterialTheme.colorScheme
     val typography = MaterialTheme.typography
+    val wipeColor = scheme.surfaceVariant.copy(alpha = 0.65f)
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
                 .background(bg)
-                .padding(horizontal = 10.dp, vertical = 7.dp),
+                .drawBehind {
+                    if (progress > 0f) {
+                        drawRect(wipeColor, size = Size(size.width * progress.coerceIn(0.04f, 0.98f), size.height))
+                    }
+                }.padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.width(44.dp), horizontalAlignment = Alignment.End) {

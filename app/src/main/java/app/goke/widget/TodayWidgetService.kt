@@ -9,10 +9,11 @@ import app.goke.R
 
 /** 「今日安排」统一小组件列表数据源。 */
 class TodayWidgetService : RemoteViewsService() {
-    override fun onGetViewFactory(intent: Intent): RemoteViewsFactory = Factory(applicationContext)
+    override fun onGetViewFactory(intent: Intent): RemoteViewsFactory = Factory(applicationContext, intent.data?.getBooleanQueryParameter("compact", false) == true)
 
     private class Factory(
         private val ctx: Context,
+        private val compact: Boolean,
     ) : RemoteViewsFactory {
         private var rows = emptyList<TodayWidgetProvider.Row>()
 
@@ -28,7 +29,7 @@ class TodayWidgetService : RemoteViewsService() {
 
         override fun getViewAt(position: Int): RemoteViews {
             val r = rows.getOrNull(position) ?: return RemoteViews(ctx.packageName, R.layout.widget_today_item)
-            return itemView(ctx, r)
+            return itemView(ctx, r, compact)
         }
 
         override fun getLoadingView(): RemoteViews? = null
@@ -49,26 +50,49 @@ class TodayWidgetService : RemoteViewsService() {
         internal fun itemView(
             ctx: Context,
             r: TodayWidgetProvider.Row,
+            compact: Boolean = false,
         ): RemoteViews {
             val v = RemoteViews(ctx.packageName, R.layout.widget_today_item)
             if (r.taskId != null) {
                 // 宣纸行规则：待办行无框直落宣纸底（与 App TaskRow / web .task 一致）
                 v.setInt(R.id.today_item_root, "setBackgroundResource", 0)
+                v.setViewVisibility(R.id.today_item_progress, View.GONE)
                 v.setTextColor(R.id.today_item_time, ctx.getColor(R.color.widget_muted))
                 v.setTextColor(R.id.today_item_title, ctx.getColor(if (r.code != null) R.color.widget_accent else R.color.widget_text))
                 v.setTextColor(R.id.today_item_sub, ctx.getColor(R.color.widget_muted))
             } else {
-                // 时间块穿植物色软彩底；正在进行的按设计改用薄荷容器高亮
-                v.setInt(
-                    R.id.today_item_root,
-                    "setBackgroundResource",
-                    if (r.ongoing) R.drawable.widget_row_now_bg else WidgetKit.courseBgRes(r.colorIndex),
-                )
-                val fg = ctx.getColor(if (r.ongoing) R.color.widget_now_fg else WidgetKit.courseFgRes(r.colorIndex))
+                // 课程/日程：已结束置灰；进行中按已过时长渐进置灰；未开始穿植物色软彩底
+                val fg =
+                    when {
+                        r.finished -> {
+                            v.setInt(R.id.today_item_root, "setBackgroundResource", R.drawable.widget_course_done_bg)
+                            v.setViewVisibility(R.id.today_item_progress, View.GONE)
+                            ctx.getColor(R.color.widget_course_done_fg)
+                        }
+
+                        r.ongoing -> {
+                            v.setInt(R.id.today_item_root, "setBackgroundResource", WidgetKit.courseBgRes(r.colorIndex))
+                            v.setViewVisibility(R.id.today_item_progress, View.VISIBLE)
+                            v.setProgressBar(
+                                R.id.today_item_progress,
+                                WidgetKit.PROGRESS_MAX,
+                                WidgetKit.progressPermille(r.progress),
+                                false,
+                            )
+                            WidgetKit.courseFg(ctx, r.colorIndex)
+                        }
+
+                        else -> {
+                            v.setInt(R.id.today_item_root, "setBackgroundResource", WidgetKit.courseBgRes(r.colorIndex))
+                            v.setViewVisibility(R.id.today_item_progress, View.GONE)
+                            WidgetKit.courseFg(ctx, r.colorIndex)
+                        }
+                    }
                 v.setTextColor(R.id.today_item_time, fg)
                 v.setTextColor(R.id.today_item_title, fg)
                 v.setTextColor(R.id.today_item_sub, WidgetKit.softFg(fg))
             }
+            v.setViewVisibility(R.id.today_item_time, if (compact) View.GONE else View.VISIBLE)
             v.setTextViewText(R.id.today_item_time, r.time)
             v.setViewVisibility(R.id.today_item_code, View.GONE)
             if (r.code != null) {
@@ -77,9 +101,15 @@ class TodayWidgetService : RemoteViewsService() {
                 v.setTextViewText(R.id.today_item_sub, r.title)
             } else {
                 v.setTextViewText(R.id.today_item_title, r.title)
-                if (!r.sub.isNullOrBlank()) {
+                val subText =
+                    if (compact) {
+                        listOfNotNull(r.time.takeIf { it.isNotBlank() }, r.sub?.takeIf { it.isNotBlank() }).joinToString(" · ")
+                    } else {
+                        r.sub.orEmpty()
+                    }
+                if (subText.isNotBlank()) {
                     v.setViewVisibility(R.id.today_item_sub, View.VISIBLE)
-                    v.setTextViewText(R.id.today_item_sub, r.sub)
+                    v.setTextViewText(R.id.today_item_sub, subText)
                 } else {
                     v.setViewVisibility(R.id.today_item_sub, View.GONE)
                 }

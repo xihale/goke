@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
 import app.goke.DeepLinks
@@ -22,6 +23,7 @@ import app.goke.core.todo.TaskLogic
 import app.goke.data.Settings
 import app.goke.gokeApp
 import app.goke.ui.hm
+import app.goke.ui.monthDay
 import app.goke.ui.monthDayWeekday
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -38,9 +40,28 @@ class TodayWidgetProvider : AppWidgetProvider() {
         val app = context.gokeApp
         val snap = if (app.repo.ready.value) app.repo.snapshot.value else null
         val st = app.settings.value
-        for (id in appWidgetIds) manager.updateAppWidget(id, build(context, id, snap, st))
+        for (id in appWidgetIds) {
+            val compact = WidgetKit.isCompactWidth(manager, id)
+            manager.updateAppWidget(id, build(context, id, snap, st, compact = compact))
+        }
         manager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.today_list)
         if (snap != null) scheduleTick(context, snap, st)
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        val app = context.gokeApp
+        val snap = if (app.repo.ready.value) app.repo.snapshot.value else null
+        val st = app.settings.value
+        appWidgetManager.updateAppWidget(
+            appWidgetId,
+            build(context, appWidgetId, snap, st, compact = WidgetKit.isCompactWidth(newOptions)),
+        )
+        appWidgetManager.notifyAppWidgetViewDataChanged(intArrayOf(appWidgetId), R.id.today_list)
     }
 
     override fun onReceive(
@@ -65,6 +86,8 @@ class TodayWidgetProvider : AppWidgetProvider() {
         val priority: Int,
         val overdue: Boolean,
         val ongoing: Boolean,
+        val finished: Boolean = false,
+        val progress: Float = 0f,
         val taskId: String?,
         val targetUri: String,
         val courseId: String? = null,
@@ -86,7 +109,10 @@ class TodayWidgetProvider : AppWidgetProvider() {
             val mgr = AppWidgetManager.getInstance(ctx)
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, TodayWidgetProvider::class.java))
             if (ids.isEmpty()) return
-            for (id in ids) mgr.updateAppWidget(id, build(ctx, id, snap, st))
+            for (id in ids) {
+                val compact = WidgetKit.isCompactWidth(mgr, id)
+                mgr.updateAppWidget(id, build(ctx, id, snap, st, compact = compact))
+            }
             mgr.notifyAppWidgetViewDataChanged(ids, R.id.today_list)
             scheduleTick(ctx, snap, st)
         }
@@ -97,23 +123,39 @@ class TodayWidgetProvider : AppWidgetProvider() {
             st: Settings,
             now: LocalDateTime = LocalDateTime.now(),
         ) {
+            val dayItems = Agenda.forDay(snap, now.toLocalDate(), st.defaultBlockMinutes)
+            val hasOngoing =
+                dayItems.any { item ->
+                    when (item) {
+                        is CourseItem -> WidgetKit.timePhase(item.occ.start, item.occ.end, now) == WidgetKit.TimePhase.ONGOING
+                        is EventItem -> !item.allDay && WidgetKit.timePhase(item.start, item.end, now) == WidgetKit.TimePhase.ONGOING
+                        is BlockItem -> !item.task.done && WidgetKit.timePhase(item.start, item.end, now) == WidgetKit.TimePhase.ONGOING
+                        else -> false
+                    }
+                }
             val transitions =
-                Agenda
-                    .forDay(snap, now.toLocalDate(), st.defaultBlockMinutes)
+                dayItems
                     .flatMap { item ->
                         when (item) {
                             is CourseItem -> listOf(item.occ.start, item.occ.end)
+                            is EventItem -> if (!item.allDay) listOf(item.start, item.end) else emptyList()
                             is BlockItem -> if (!item.task.done) listOf(item.start, item.end) else emptyList()
                             else -> emptyList()
                         }
                     }.filter { it.isAfter(now) }
-            val next =
+            val nextTransition =
                 transitions.minOrNull()
                     ?: now
                         .toLocalDate()
                         .plusDays(1)
                         .atStartOfDay()
                         .plusMinutes(1)
+            val next =
+                if (hasOngoing) {
+                    minOf(nextTransition, now.plusMinutes(WidgetKit.ONGOING_TICK_MINUTES))
+                } else {
+                    nextTransition
+                }
             val pi =
                 PendingIntent.getBroadcast(
                     ctx,
@@ -145,7 +187,7 @@ class TodayWidgetProvider : AppWidgetProvider() {
             val items =
                 Agenda.forDay(live, today, st.defaultBlockMinutes).filter { item ->
                     when (item) {
-                        is CourseItem -> item.occ.end.isAfter(now)
+                        is CourseItem -> true
                         is TaskItem -> !item.task.done
                         is BlockItem -> !item.task.done
                         is EventItem -> true
@@ -158,12 +200,9 @@ class TodayWidgetProvider : AppWidgetProvider() {
                 when (item) {
                     is CourseItem -> {
                         val o = item.occ
-                        val ongoing = !o.start.isAfter(now) && o.end.isAfter(now)
-                        val sub =
-                            listOfNotNull(
-                                o.room.takeIf { it.isNotBlank() },
-                                if (ongoing) ctx.getString(R.string.widget_ongoing) else null,
-                            ).joinToString(" · ").ifEmpty { "–${o.end.hm()}" }
+                        val phase = WidgetKit.timePhase(o.start, o.end, now)
+                        val progress = WidgetKit.timeProgress(o.start, o.end, now)
+                        val sub = o.room.takeIf { it.isNotBlank() } ?: "–${o.end.hm()}"
                         result +=
                             Row(
                                 key = "c_${o.course.id}_${o.start}",
@@ -174,7 +213,9 @@ class TodayWidgetProvider : AppWidgetProvider() {
                                 colorIndex = o.course.colorIndex,
                                 priority = 0,
                                 overdue = false,
-                                ongoing = ongoing,
+                                ongoing = phase == WidgetKit.TimePhase.ONGOING,
+                                finished = phase == WidgetKit.TimePhase.FINISHED,
+                                progress = progress,
                                 taskId = null,
                                 targetUri = DeepLinks.courseUri(o.course.id).toString(),
                                 courseId = o.course.id,
@@ -185,7 +226,10 @@ class TodayWidgetProvider : AppWidgetProvider() {
                     }
 
                     is EventItem -> {
-                        val ongoing = !item.allDay && !item.start.isAfter(now) && item.end.isAfter(now)
+                        val phase =
+                            if (item.allDay) WidgetKit.TimePhase.UPCOMING else WidgetKit.timePhase(item.start, item.end, now)
+                        val progress =
+                            if (item.allDay) 0f else WidgetKit.timeProgress(item.start, item.end, now)
                         result +=
                             Row(
                                 key = "e_${item.event.id}_${item.start}",
@@ -196,7 +240,9 @@ class TodayWidgetProvider : AppWidgetProvider() {
                                 colorIndex = item.event.colorIndex,
                                 priority = 0,
                                 overdue = false,
-                                ongoing = ongoing,
+                                ongoing = phase == WidgetKit.TimePhase.ONGOING,
+                                finished = phase == WidgetKit.TimePhase.FINISHED,
+                                progress = progress,
                                 taskId = null,
                                 targetUri = DeepLinks.todayUri().toString(),
                                 eventId = item.event.id,
@@ -206,25 +252,22 @@ class TodayWidgetProvider : AppWidgetProvider() {
                     is BlockItem -> {
                         val t = item.task
                         shownTaskIds += t.id
-                        val ongoing = !item.start.isAfter(now) && item.end.isAfter(now)
+                        val phase = WidgetKit.timePhase(item.start, item.end, now)
                         val code = WidgetKit.parcelCode(t)
                         val cleanTitle = if (code != null) WidgetKit.cleanTitleWithCode(ctx, t) else t.title
-                        val sub =
-                            listOfNotNull(
-                                "–${item.end.hm()}",
-                                if (ongoing) ctx.getString(R.string.widget_ongoing) else null,
-                            ).joinToString(" · ")
                         result +=
                             Row(
                                 key = "b_${t.id}",
                                 time = item.start.hm(),
                                 title = cleanTitle,
-                                sub = sub,
+                                sub = "–${item.end.hm()}",
                                 code = code,
                                 colorIndex = -1,
                                 priority = t.priority,
                                 overdue = false,
-                                ongoing = ongoing,
+                                ongoing = phase == WidgetKit.TimePhase.ONGOING,
+                                finished = phase == WidgetKit.TimePhase.FINISHED,
+                                progress = WidgetKit.timeProgress(item.start, item.end, now),
                                 taskId = t.id,
                                 targetUri = DeepLinks.taskUri(t.id).toString(),
                             )
@@ -284,12 +327,13 @@ class TodayWidgetProvider : AppWidgetProvider() {
             snap: Snapshot?,
             st: Settings,
             now: LocalDateTime = LocalDateTime.now(),
+            compact: Boolean = false,
         ): RemoteViews {
             val views = RemoteViews(ctx.packageName, R.layout.widget_today)
             val today: LocalDate = now.toLocalDate()
-            views.setTextViewText(R.id.widget_title, ctx.monthDayWeekday(today))
+            views.setTextViewText(R.id.widget_title, if (compact) ctx.monthDay(today) else ctx.monthDayWeekday(today))
             val weekBadge = WidgetKit.weekBadge(ctx, snap?.live()?.currentSemester, today)
-            if (weekBadge != null) {
+            if (!compact && weekBadge != null) {
                 views.setViewVisibility(R.id.today_week_sep, View.VISIBLE)
                 views.setViewVisibility(R.id.today_week, View.VISIBLE)
                 views.setTextViewText(R.id.today_week, weekBadge)
@@ -299,7 +343,7 @@ class TodayWidgetProvider : AppWidgetProvider() {
             }
             views.setRemoteAdapter(
                 R.id.today_list,
-                Intent(ctx, TodayWidgetService::class.java).setData(Uri.parse("goke://widget/today/$widgetId")),
+                Intent(ctx, TodayWidgetService::class.java).setData(Uri.parse("goke://widget/today/$widgetId?compact=$compact")),
             )
             views.setEmptyView(R.id.today_list, R.id.today_empty)
             views.setPendingIntentTemplate(

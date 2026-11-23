@@ -22,18 +22,14 @@
 
         <TextView
             android:id="@+id/sched_title"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="1"
             android:textColor="@color/widget_text"
             android:textSize="15sp"
             android:textStyle="bold" />
-
-        <FrameLayout
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
 
         <TextView
             android:id="@+id/sched_week"
@@ -57,419 +53,527 @@
         android:textSize="13sp"
         android:visibility="gone" />
 
-    <LinearLayout
+    <FrameLayout
         android:id="@+id/sched_row0"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:background="@drawable/widget_course_bg0"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingBottom="6dp"
-        android:paddingEnd="10dp"
-        android:paddingStart="10dp"
-        android:paddingTop="6dp"
         android:visibility="gone">
 
-        <LinearLayout
-            android:layout_width="44dp"
-            android:layout_height="wrap_content"
-            android:gravity="end"
+        <ProgressBar
+            android:id="@+id/sched_progress0"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:importantForAccessibility="no"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/sched_time0"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="@color/widget_text"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/sched_end0"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="@color/widget_muted"
-                android:textSize="10sp" />
-        </LinearLayout>
+            android:indeterminate="false"
+            android:max="1000"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_course_progress_drawable"
+            android:visibility="gone" />
 
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="9dp"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="6dp"
+            android:paddingEnd="10dp"
+            android:paddingStart="10dp"
+            android:paddingTop="6dp">
 
-            <TextView
-                android:id="@+id/sched_name0"
-                android:layout_width="match_parent"
+            <LinearLayout
+                android:id="@+id/sched_time_col0"
+                android:layout_width="44dp"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/widget_text"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:layout_marginEnd="9dp"
+                android:gravity="end"
+                android:importantForAccessibility="no"
+                android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/sched_meta0"
-                android:layout_width="match_parent"
+                <TextView
+                    android:id="@+id/sched_time0"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/sched_end0"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_muted"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/widget_muted"
-                android:textSize="11sp" />
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/sched_name0"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/sched_meta0"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_muted"
+                    android:textSize="11sp" />
+            </LinearLayout>
         </LinearLayout>
-    </LinearLayout>
+    </FrameLayout>
 
-    <LinearLayout
+    <FrameLayout
         android:id="@+id/sched_row1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:background="@drawable/widget_course_bg0"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingBottom="6dp"
-        android:paddingEnd="10dp"
-        android:paddingStart="10dp"
-        android:paddingTop="6dp"
         android:visibility="gone">
 
-        <LinearLayout
-            android:layout_width="44dp"
-            android:layout_height="wrap_content"
-            android:gravity="end"
+        <ProgressBar
+            android:id="@+id/sched_progress1"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:importantForAccessibility="no"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/sched_time1"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="@color/widget_text"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/sched_end1"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="@color/widget_muted"
-                android:textSize="10sp" />
-        </LinearLayout>
+            android:indeterminate="false"
+            android:max="1000"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_course_progress_drawable"
+            android:visibility="gone" />
 
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="9dp"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="6dp"
+            android:paddingEnd="10dp"
+            android:paddingStart="10dp"
+            android:paddingTop="6dp">
 
-            <TextView
-                android:id="@+id/sched_name1"
-                android:layout_width="match_parent"
+            <LinearLayout
+                android:id="@+id/sched_time_col1"
+                android:layout_width="44dp"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/widget_text"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:layout_marginEnd="9dp"
+                android:gravity="end"
+                android:importantForAccessibility="no"
+                android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/sched_meta1"
-                android:layout_width="match_parent"
+                <TextView
+                    android:id="@+id/sched_time1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/sched_end1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_muted"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/widget_muted"
-                android:textSize="11sp" />
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/sched_name1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/sched_meta1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_muted"
+                    android:textSize="11sp" />
+            </LinearLayout>
         </LinearLayout>
-    </LinearLayout>
+    </FrameLayout>
 
-    <LinearLayout
+    <FrameLayout
         android:id="@+id/sched_row2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:background="@drawable/widget_course_bg0"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingBottom="6dp"
-        android:paddingEnd="10dp"
-        android:paddingStart="10dp"
-        android:paddingTop="6dp"
         android:visibility="gone">
 
-        <LinearLayout
-            android:layout_width="44dp"
-            android:layout_height="wrap_content"
-            android:gravity="end"
+        <ProgressBar
+            android:id="@+id/sched_progress2"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:importantForAccessibility="no"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/sched_time2"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="@color/widget_text"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/sched_end2"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="@color/widget_muted"
-                android:textSize="10sp" />
-        </LinearLayout>
+            android:indeterminate="false"
+            android:max="1000"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_course_progress_drawable"
+            android:visibility="gone" />
 
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="9dp"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="6dp"
+            android:paddingEnd="10dp"
+            android:paddingStart="10dp"
+            android:paddingTop="6dp">
 
-            <TextView
-                android:id="@+id/sched_name2"
-                android:layout_width="match_parent"
+            <LinearLayout
+                android:id="@+id/sched_time_col2"
+                android:layout_width="44dp"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/widget_text"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:layout_marginEnd="9dp"
+                android:gravity="end"
+                android:importantForAccessibility="no"
+                android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/sched_meta2"
-                android:layout_width="match_parent"
+                <TextView
+                    android:id="@+id/sched_time2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/sched_end2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_muted"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/widget_muted"
-                android:textSize="11sp" />
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/sched_name2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/sched_meta2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_muted"
+                    android:textSize="11sp" />
+            </LinearLayout>
         </LinearLayout>
-    </LinearLayout>
+    </FrameLayout>
 
-    <LinearLayout
+    <FrameLayout
         android:id="@+id/sched_row3"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:background="@drawable/widget_course_bg0"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingBottom="6dp"
-        android:paddingEnd="10dp"
-        android:paddingStart="10dp"
-        android:paddingTop="6dp"
         android:visibility="gone">
 
-        <LinearLayout
-            android:layout_width="44dp"
-            android:layout_height="wrap_content"
-            android:gravity="end"
+        <ProgressBar
+            android:id="@+id/sched_progress3"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:importantForAccessibility="no"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/sched_time3"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="@color/widget_text"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/sched_end3"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="@color/widget_muted"
-                android:textSize="10sp" />
-        </LinearLayout>
+            android:indeterminate="false"
+            android:max="1000"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_course_progress_drawable"
+            android:visibility="gone" />
 
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="9dp"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="6dp"
+            android:paddingEnd="10dp"
+            android:paddingStart="10dp"
+            android:paddingTop="6dp">
 
-            <TextView
-                android:id="@+id/sched_name3"
-                android:layout_width="match_parent"
+            <LinearLayout
+                android:id="@+id/sched_time_col3"
+                android:layout_width="44dp"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/widget_text"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:layout_marginEnd="9dp"
+                android:gravity="end"
+                android:importantForAccessibility="no"
+                android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/sched_meta3"
-                android:layout_width="match_parent"
+                <TextView
+                    android:id="@+id/sched_time3"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/sched_end3"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_muted"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/widget_muted"
-                android:textSize="11sp" />
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/sched_name3"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/sched_meta3"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_muted"
+                    android:textSize="11sp" />
+            </LinearLayout>
         </LinearLayout>
-    </LinearLayout>
+    </FrameLayout>
 
-    <LinearLayout
+    <FrameLayout
         android:id="@+id/sched_row4"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:background="@drawable/widget_course_bg0"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingBottom="6dp"
-        android:paddingEnd="10dp"
-        android:paddingStart="10dp"
-        android:paddingTop="6dp"
         android:visibility="gone">
 
-        <LinearLayout
-            android:layout_width="44dp"
-            android:layout_height="wrap_content"
-            android:gravity="end"
+        <ProgressBar
+            android:id="@+id/sched_progress4"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:importantForAccessibility="no"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/sched_time4"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="@color/widget_text"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/sched_end4"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="@color/widget_muted"
-                android:textSize="10sp" />
-        </LinearLayout>
+            android:indeterminate="false"
+            android:max="1000"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_course_progress_drawable"
+            android:visibility="gone" />
 
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="9dp"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="6dp"
+            android:paddingEnd="10dp"
+            android:paddingStart="10dp"
+            android:paddingTop="6dp">
 
-            <TextView
-                android:id="@+id/sched_name4"
-                android:layout_width="match_parent"
+            <LinearLayout
+                android:id="@+id/sched_time_col4"
+                android:layout_width="44dp"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/widget_text"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:layout_marginEnd="9dp"
+                android:gravity="end"
+                android:importantForAccessibility="no"
+                android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/sched_meta4"
-                android:layout_width="match_parent"
+                <TextView
+                    android:id="@+id/sched_time4"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/sched_end4"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_muted"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/widget_muted"
-                android:textSize="11sp" />
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/sched_name4"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/sched_meta4"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_muted"
+                    android:textSize="11sp" />
+            </LinearLayout>
         </LinearLayout>
-    </LinearLayout>
+    </FrameLayout>
 
-    <LinearLayout
+    <FrameLayout
         android:id="@+id/sched_row5"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:background="@drawable/widget_course_bg0"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingBottom="6dp"
-        android:paddingEnd="10dp"
-        android:paddingStart="10dp"
-        android:paddingTop="6dp"
         android:visibility="gone">
 
-        <LinearLayout
-            android:layout_width="44dp"
-            android:layout_height="wrap_content"
-            android:gravity="end"
+        <ProgressBar
+            android:id="@+id/sched_progress5"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:importantForAccessibility="no"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/sched_time5"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="@color/widget_text"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/sched_end5"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFeatureSettings="tnum"
-                android:maxLines="1"
-                android:textColor="@color/widget_muted"
-                android:textSize="10sp" />
-        </LinearLayout>
+            android:indeterminate="false"
+            android:max="1000"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_course_progress_drawable"
+            android:visibility="gone" />
 
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="9dp"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="6dp"
+            android:paddingEnd="10dp"
+            android:paddingStart="10dp"
+            android:paddingTop="6dp">
 
-            <TextView
-                android:id="@+id/sched_name5"
-                android:layout_width="match_parent"
+            <LinearLayout
+                android:id="@+id/sched_time_col5"
+                android:layout_width="44dp"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/widget_text"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:layout_marginEnd="9dp"
+                android:gravity="end"
+                android:importantForAccessibility="no"
+                android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/sched_meta5"
-                android:layout_width="match_parent"
+                <TextView
+                    android:id="@+id/sched_time5"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/sched_end5"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_muted"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/widget_muted"
-                android:textSize="11sp" />
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/sched_name5"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_text"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/sched_meta5"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_muted"
+                    android:textSize="11sp" />
+            </LinearLayout>
         </LinearLayout>
-    </LinearLayout>
+    </FrameLayout>
 
     <TextView
         android:id="@+id/sched_more"

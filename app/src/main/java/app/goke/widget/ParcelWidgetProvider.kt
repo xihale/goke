@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
 import app.goke.DeepLinks
@@ -24,8 +25,24 @@ class ParcelWidgetProvider : AppWidgetProvider() {
         manager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
-        for (id in appWidgetIds) manager.updateAppWidget(id, build(context, id))
+        for (id in appWidgetIds) {
+            val compact = WidgetKit.isCompactWidth(manager, id)
+            manager.updateAppWidget(id, build(context, id, compact = compact))
+        }
         manager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.parcel_list)
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        appWidgetManager.updateAppWidget(
+            appWidgetId,
+            build(context, appWidgetId, compact = WidgetKit.isCompactWidth(newOptions)),
+        )
+        appWidgetManager.notifyAppWidgetViewDataChanged(intArrayOf(appWidgetId), R.id.parcel_list)
     }
 
     data class Row(
@@ -43,7 +60,10 @@ class ParcelWidgetProvider : AppWidgetProvider() {
             val mgr = AppWidgetManager.getInstance(ctx)
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, ParcelWidgetProvider::class.java))
             if (ids.isEmpty()) return
-            for (id in ids) mgr.updateAppWidget(id, build(ctx, id))
+            for (id in ids) {
+                val compact = WidgetKit.isCompactWidth(mgr, id)
+                mgr.updateAppWidget(id, build(ctx, id, compact = compact))
+            }
             mgr.notifyAppWidgetViewDataChanged(ids, R.id.parcel_list)
         }
 
@@ -84,8 +104,13 @@ class ParcelWidgetProvider : AppWidgetProvider() {
             ctx: Context,
             widgetId: Int,
             now: LocalDateTime = LocalDateTime.now(),
+            compact: Boolean = false,
         ): RemoteViews {
             val views = RemoteViews(ctx.packageName, R.layout.widget_parcel)
+            views.setTextViewText(
+                R.id.parcel_title,
+                ctx.getString(if (compact) R.string.widget_parcel_title else R.string.widget_parcel_name),
+            )
             val count = rows(ctx, now).size
             if (count > 0) {
                 views.setViewVisibility(R.id.parcel_count, View.VISIBLE)

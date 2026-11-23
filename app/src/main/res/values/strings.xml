@@ -688,7 +688,6 @@
     <string name="widget_next_desc">下一节课、日程或待办，点＋新建</string>
     <string name="widget_next_empty">当前空闲</string>
     <string name="widget_next_label">接下来</string>
-    <string name="widget_ongoing">进行中</string>
     <string name="widget_exam_seat_suffix">座</string>
     <!-- 系统日历双向同步 -->
     <string name="cal_sync_section">系统日历与桌面账号</string>

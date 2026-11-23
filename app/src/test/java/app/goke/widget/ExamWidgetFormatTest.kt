@@ -80,8 +80,10 @@ class ExamWidgetFormatTest {
         assertEquals("e_seat", upcoming.eventId)
 
         val ongoing = NextWidgetProvider.pickSummary(ctx, snapWithSeat, Settings(), LocalDateTime.of(2026, 6, 15, 9, 30))
-        assertEquals(ctx.getString(R.string.widget_ongoing), ongoing.badge)
-        assertEquals("09:00–11:00 · 教3-208 · 34座", ongoing.sub)
+        assertEquals("–11:00", ongoing.badge)
+        assertEquals("教3-208 · 34座", ongoing.sub)
+        assertEquals(true, ongoing.ongoing)
+        assertEquals(0.25f, ongoing.progress, 0.001f)
         assertEquals("e_seat", ongoing.eventId)
 
         val examNoSeat = examEvent(id = "e_noseat", note = "大学城")
