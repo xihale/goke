@@ -147,16 +147,21 @@ internal fun GradesContent(
             val validKeys = termGrades.mapTo(HashSet()) { it.filterKey }
             excludedKeys.intersect(validKeys)
         }
+    val supersededKeys =
+        remember(gradesState.grades) {
+            JxfwParse.supersededGradeKeys(gradesState.grades)
+        }
     val visibleGrades =
         remember(termGrades, activeExcludedCategories) {
             JxfwParse.filterGrades(termGrades, excludedCategories = activeExcludedCategories)
         }
     val summary =
-        remember(termGrades, activeExcludedKeys, activeExcludedCategories) {
+        remember(termGrades, activeExcludedKeys, activeExcludedCategories, supersededKeys) {
             JxfwParse.summarizeGrades(
                 termGrades,
                 excludedKeys = activeExcludedKeys,
                 excludedCategories = activeExcludedCategories,
+                supersededKeys = supersededKeys,
             )
         }
     val excludedCount = termGrades.size - summary.count
@@ -298,10 +303,12 @@ internal fun GradesContent(
                     key = { index, g -> "$index|${g.filterKey}" },
                 ) { _, grade ->
                     val excluded = grade.filterKey in activeExcludedKeys
+                    val superseded = grade.filterKey in supersededKeys
                     GradeRow(
                         grade = grade,
                         showTerm = activeTerm == null,
                         excluded = excluded,
+                        superseded = superseded,
                         onToggleExclude = {
                             val key = grade.filterKey
                             excludedKeys =
@@ -447,10 +454,13 @@ private fun GradeRow(
     grade: JxfwGrade,
     showTerm: Boolean,
     excluded: Boolean,
+    superseded: Boolean = false,
     onToggleExclude: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val dash = stringResource(R.string.grades_dash)
+    val isDeferred = JxfwParse.isDeferredGrade(grade)
+    val isUngraded = JxfwParse.isUngradedGrade(grade)
     val metaParts =
         remember(grade, ctx) {
             buildList {
@@ -460,20 +470,30 @@ private fun GradeRow(
                 if (grade.category.isNotBlank()) add(grade.category)
                 if (grade.studyMode.isNotBlank()) add(grade.studyMode)
                 if (grade.examType.isNotBlank()) add(grade.examType)
+                if (grade.status.isNotBlank() && grade.status != grade.examType) add(grade.status)
             }.joinToString(" · ")
         }
-    val scoreText = grade.score.ifBlank { dash }
-    val failed = grade.gpa == 0.0 || grade.score.toDoubleOrNull()?.let { it < 60.0 } == true
+    val scoreText =
+        when {
+            isDeferred -> stringResource(R.string.grades_deferred)
+            isUngraded -> dash
+            else -> grade.score.ifBlank { dash }
+        }
+    val failed =
+        !isDeferred &&
+            !isUngraded &&
+            !superseded &&
+            (grade.gpa == 0.0 || grade.score.toDoubleOrNull()?.let { it < 60.0 } == true)
     val scoreColor =
         when {
-            excluded -> MaterialTheme.colorScheme.onSurfaceVariant
+            excluded || isDeferred || isUngraded || superseded -> MaterialTheme.colorScheme.onSurfaceVariant
             failed -> MintTheme.colors.removed
             else -> MaterialTheme.colorScheme.primary
         }
 
     Surface(
         shape = MaterialTheme.shapes.medium,
-        color = if (excluded) MaterialTheme.colorScheme.surfaceContainerLow else MintTheme.card,
+        color = if (excluded || superseded) MaterialTheme.colorScheme.surfaceContainerLow else MintTheme.card,
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -485,7 +505,7 @@ private fun GradeRow(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 12.dp)
-                .alpha(if (excluded) 0.55f else 1f),
+                .alpha(if (excluded || superseded || isDeferred) 0.58f else 1f),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -523,15 +543,25 @@ private fun GradeRow(
                     style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
                     fontWeight = FontWeight.SemiBold,
                     color = scoreColor,
+                    textDecoration = if (superseded && !isDeferred && !isUngraded) TextDecoration.LineThrough else null,
                     maxLines = 1,
                 )
-                grade.gpa?.let { gpa ->
+                if (superseded) {
                     Text(
-                        stringResource(R.string.grades_gpa_value, formatCompactDecimal(gpa)),
-                        style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                        stringResource(R.string.grades_superseded_tag),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                     )
+                } else if (!isDeferred && !isUngraded) {
+                    grade.gpa?.let { gpa ->
+                        Text(
+                            stringResource(R.string.grades_gpa_value, formatCompactDecimal(gpa)),
+                            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }

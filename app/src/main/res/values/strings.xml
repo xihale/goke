@@ -913,6 +913,8 @@
     <string name="grades_filter_excluded_count">已排除 %1$d 门</string>
     <string name="grades_filter_toggle_hint">点击成绩条目可临时排除/恢复均绩计算</string>
     <string name="grades_filtered_gpa">筛选均绩 (GPA)</string>
+    <string name="grades_deferred">缓考</string>
+    <string name="grades_superseded_tag">已替代</string>
     <!-- Physical fitness test (tzcs) -->
     <string name="tzcs_title">体测成绩</string>
     <string name="tzcs_score_value">%1$s 分</string>
