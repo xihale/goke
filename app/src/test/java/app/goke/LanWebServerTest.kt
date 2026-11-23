@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 @RunWith(RobolectricTestRunner::class)
-@Config(application = SmokeTestApp::class, sdk = [34])
+@Config(application = SmokeTestApp::class, sdk = [35])
 class LanWebServerTest {
     private lateinit var app: SmokeTestApp
     private lateinit var server: LanWebServer

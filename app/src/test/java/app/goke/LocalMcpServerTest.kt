@@ -32,7 +32,7 @@ import java.net.URL
 import java.time.LocalDateTime
 
 @RunWith(RobolectricTestRunner::class)
-@Config(application = SmokeTestApp::class, sdk = [34])
+@Config(application = SmokeTestApp::class, sdk = [35])
 class LocalMcpServerTest {
     private val json = Json { ignoreUnknownKeys = true }
     private lateinit var app: SmokeTestApp
