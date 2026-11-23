@@ -17,7 +17,7 @@
     <color name="widget_course_done_bg">#262F2D</color>
     <color name="widget_course_done_fg">#7C8C87</color>
     <color name="widget_course_progress_overlay">#9918201E</color>
-    <color name="widget_next_progress_overlay">#380F1413</color>
+    <color name="widget_next_progress_overlay">#2F3D3A</color>
 
     <!-- 8 组植物课表色（深色模式：深底浅字） -->
     <color name="widget_course0_bg">#2B4350</color>

@@ -519,6 +519,7 @@ private fun WidgetItemBlock(
                     .mintClickable(pressedScale = 0.98f, role = Role.Button, onClick = onPin),
             shape = MaterialTheme.shapes.large,
             border = border,
+            contentPadding = if (spec == WidgetSpec.NEXT) PaddingValues(0.dp) else PaddingValues(16.dp),
         ) {
             when (spec) {
                 WidgetSpec.TODAY -> TodayWidgetPreview(snap, st, now)
@@ -629,10 +630,11 @@ private fun ScheduleWidgetPreview(
     val today = now.toLocalDate()
     val weekBadge = remember(ctx, snap.currentSemester, today) { WidgetKit.weekBadge(ctx, snap.currentSemester, today) }
     val courses =
-        remember(snap, st.defaultBlockMinutes, today) {
+        remember(snap, st.defaultBlockMinutes, now) {
             Agenda
                 .forDay(snap, today, st.defaultBlockMinutes)
                 .filterIsInstance<CourseItem>()
+                .filter { it.occ.end.isAfter(now) }
                 .take(3)
         }
 
@@ -816,6 +818,7 @@ private fun NextWidgetPreview(
     val emptyTitle = stringResource(R.string.widget_next_empty)
     val useSample = summary.title == emptyTitle
     val badge = if (useSample) "–10:05" else summary.badge
+    val badgeTone = if (useSample) NextWidgetProvider.BadgeTone.MUTED else summary.badgeTone
     val sub = if (useSample) stringResource(R.string.widgets_sample_course_1_room) else summary.sub
     val title = if (useSample) stringResource(R.string.widgets_sample_course_1) else summary.title
     val barColor = if (useSample) scheme.primary else Color(summary.barColor)
@@ -827,17 +830,16 @@ private fun NextWidgetPreview(
         } else {
             0f
         }
-    val wipeColor = scheme.onSurface.copy(alpha = 0.08f)
+    val wipeColor = scheme.surfaceContainerHighest
 
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
             .drawBehind {
                 if (progress > 0f) {
                     drawRect(wipeColor, size = Size(size.width * progress.coerceIn(0.04f, 0.98f), size.height))
                 }
-            },
+            }.padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -857,7 +859,30 @@ private fun NextWidgetPreview(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = true),
                 )
-                Tag(badge, scheme.primaryContainer, scheme.onPrimaryContainer)
+                when (badgeTone) {
+                    NextWidgetProvider.BadgeTone.CODE -> {
+                        Tag(badge, scheme.primaryContainer, scheme.onPrimaryContainer)
+                    }
+
+                    NextWidgetProvider.BadgeTone.OVERDUE -> {
+                        Text(
+                            badge,
+                            style = typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = scheme.error,
+                            maxLines = 1,
+                        )
+                    }
+
+                    NextWidgetProvider.BadgeTone.MUTED -> {
+                        Text(
+                            badge,
+                            style = typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                            color = scheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
             if (!sub.isNullOrBlank()) {
                 Text(

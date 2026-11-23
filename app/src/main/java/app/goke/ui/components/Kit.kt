@@ -181,9 +181,10 @@ fun MintCard(
     shape: androidx.compose.ui.graphics.Shape = MaterialTheme.shapes.large,
     onClick: (() -> Unit)? = null,
     border: BorderStroke? = null,
+    contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val inner: @Composable () -> Unit = { Column(Modifier.fillMaxWidth().padding(16.dp), content = content) }
+    val inner: @Composable () -> Unit = { Column(Modifier.fillMaxWidth().padding(contentPadding), content = content) }
     if (onClick != null) {
         val interaction = remember { MutableInteractionSource() }
         Surface(

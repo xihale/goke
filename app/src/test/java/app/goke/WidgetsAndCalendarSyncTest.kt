@@ -254,12 +254,13 @@ class WidgetsAndCalendarSyncTest {
             assertEquals(DeepLink.Course("c1"), DeepLinks.parseUri(DeepLinks.courseUri("c1")))
             assertEquals(DeepLink.Add("买牛奶", "c1"), DeepLinks.parseUri(DeepLinks.addUri("买牛奶", "c1")))
 
-            // 6. 两格窄宽（compact = true）与已结束置灰 / 进行中渐进置灰验证
-            val midDay = LocalDateTime.of(today, java.time.LocalTime.of(14, 45)) // course1 已结束，course2 进行中
+            // 6. 两格窄宽（compact = true）与已上课程直接消失 / 进行中渐进置灰验证
+            val midDay = LocalDateTime.of(today, java.time.LocalTime.of(14, 45)) // course1 已结束消失，course2 进行中
             val schedMid = renderRemoteViews("widget_schedule_progress", ScheduleWidgetProvider.build(app, snap, st, midDay), 320, 210)
-            assertEquals(View.GONE, schedMid.findViewById<ProgressBar>(R.id.sched_progress0).visibility)
-            assertEquals(View.VISIBLE, schedMid.findViewById<ProgressBar>(R.id.sched_progress1).visibility)
-            assertTrue(schedMid.findViewById<ProgressBar>(R.id.sched_progress1).progress in 40..980)
+            assertEquals("操作系统", schedMid.findViewById<TextView>(R.id.sched_name0).text.toString())
+            assertEquals(View.VISIBLE, schedMid.findViewById<ProgressBar>(R.id.sched_progress0).visibility)
+            assertTrue(schedMid.findViewById<ProgressBar>(R.id.sched_progress0).progress in 40..980)
+            assertEquals(View.GONE, schedMid.findViewById<View>(R.id.sched_row1).visibility)
 
             val schedCompact =
                 renderRemoteViews("widget_schedule_2cell", ScheduleWidgetProvider.build(app, snap, st, midDay, compact = true), 140, 210)
@@ -267,7 +268,7 @@ class WidgetsAndCalendarSyncTest {
             assertEquals(View.GONE, schedCompact.findViewById<View>(R.id.sched_time_col0).visibility)
 
             val todayMidRows = TodayWidgetProvider.buildRows(app, snap, st, midDay)
-            assertTrue(todayMidRows.any { it.title == "高等数学" && it.finished && !it.ongoing })
+            assertTrue(todayMidRows.none { it.title == "高等数学" })
             assertTrue(todayMidRows.any { it.title == "操作系统" && it.ongoing && !it.finished && it.progress > 0f })
             val todayCompact =
                 renderRemoteViews(

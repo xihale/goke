@@ -23,8 +23,8 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 
 /**
- * 「今日课表」小组件：清爽日期 + 周次表头，按时间列出今天的课；
- * 已下课置灰，正在上的课按已过时长渐进置灰，没课时显示轻松颜文字提示。
+ * 「今日课表」小组件：清爽日期 + 周次表头，按时间列出今天未结束的课；
+ * 已下课直接隐藏，正在上的课按已过时长渐进置灰，没课时显示轻松颜文字提示。
  */
 class ScheduleWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
@@ -143,7 +143,10 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
             val courses =
                 live
                     ?.let { s ->
-                        Agenda.forDay(s, today, st.defaultBlockMinutes).filterIsInstance<CourseItem>()
+                        Agenda
+                            .forDay(s, today, st.defaultBlockMinutes)
+                            .filterIsInstance<CourseItem>()
+                            .filter { it.occ.end.isAfter(now) }
                     }.orEmpty()
             val rows = intArrayOf(R.id.sched_row0, R.id.sched_row1, R.id.sched_row2, R.id.sched_row3, R.id.sched_row4, R.id.sched_row5)
             val progresses =
@@ -176,17 +179,7 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
                 views.setViewVisibility(R.id.sched_empty, View.GONE)
             }
 
-            val shown =
-                if (courses.size <= 6) {
-                    courses
-                } else {
-                    val firstActive = courses.indexOfFirst { it.occ.end.isAfter(now) }
-                    if (firstActive < 0) {
-                        courses.takeLast(6)
-                    } else {
-                        courses.drop(firstActive.coerceAtMost(courses.size - 6)).take(6)
-                    }
-                }
+            val shown = courses.take(rows.size)
             val openTimetable = WidgetKit.mainActivityIntent(ctx, 40, DeepLinks.timetableUri())
 
             for (i in rows.indices) {
@@ -246,7 +239,7 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
                 )
             }
 
-            val remaining = courses.count { it.occ.end.isAfter(now) } - shown.count { it.occ.end.isAfter(now) }
+            val remaining = (courses.size - shown.size).coerceAtLeast(0)
             if (remaining > 0) {
                 views.setViewVisibility(R.id.sched_more, View.VISIBLE)
                 views.setTextViewText(R.id.sched_more, ctx.getString(R.string.widget_schedule_more, remaining))

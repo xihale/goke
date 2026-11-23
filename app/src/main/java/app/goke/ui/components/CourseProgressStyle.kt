@@ -67,6 +67,7 @@ fun Modifier.courseProgressBackground(
     phase: TimePhase,
     progress: Float,
     axis: CourseProgressAxis,
+    showFrontier: Boolean = true,
 ): Modifier {
     val scheme = MaterialTheme.colorScheme
     val mutedBg = courseMutedBg(activeBg, scheme)
@@ -74,21 +75,21 @@ fun Modifier.courseProgressBackground(
         when (phase) {
             TimePhase.UPCOMING -> 0f
             TimePhase.FINISHED -> 1f
-            TimePhase.ONGOING -> progress.coerceIn(0.03f, 0.97f)
+            TimePhase.ONGOING -> if (showFrontier) progress.coerceIn(0.03f, 0.97f) else progress.coerceIn(0f, 1f)
         }
     val animatedProgress = animateFloatAsState(visualTarget, MintTheme.spec(), label = "course-progress")
     val finishedAlpha = animateFloatAsState(if (phase == TimePhase.FINISHED) 0.72f else 1f, MintTheme.press(), label = "course-finished-alpha")
-    val showFrontier = phase == TimePhase.ONGOING
+    val drawFrontier = showFrontier && phase == TimePhase.ONGOING
 
     return drawBehind {
         val p = animatedProgress.value.coerceIn(0f, 1f)
         val alpha = finishedAlpha.value
         when {
-            !showFrontier && p <= 0.001f -> {
+            phase == TimePhase.UPCOMING && p <= 0.001f -> {
                 drawRect(color = activeBg)
             }
 
-            !showFrontier && p >= 0.999f -> {
+            phase == TimePhase.FINISHED && p >= 0.999f -> {
                 drawRect(color = mutedBg.copy(alpha = alpha))
             }
 
@@ -121,7 +122,7 @@ fun Modifier.courseProgressBackground(
                         size = Size(splitX, railH),
                     )
                 }
-                if (showFrontier && p in 0.01f..0.99f) {
+                if (drawFrontier && p in 0.01f..0.99f) {
                     val stroke = 1.dp.toPx()
                     val x = (splitX - stroke / 2f).coerceIn(0f, (size.width - stroke).coerceAtLeast(0f))
                     drawRect(
@@ -141,27 +142,8 @@ fun Modifier.courseProgressBackground(
                         topLeft = Offset.Zero,
                         size = Size(size.width, splitY),
                     )
-                    val feather = minOf(12.dp.toPx(), splitY)
-                    if (feather > 0.5f) {
-                        drawRect(
-                            brush =
-                                Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, activeFg.copy(alpha = 0.08f)),
-                                    startY = splitY - feather,
-                                    endY = splitY,
-                                ),
-                            topLeft = Offset(0f, splitY - feather),
-                            size = Size(size.width, feather),
-                        )
-                    }
-                    val railW = 2.5.dp.toPx()
-                    drawRect(
-                        color = activeFg.copy(alpha = 0.38f),
-                        topLeft = Offset.Zero,
-                        size = Size(railW, splitY),
-                    )
                 }
-                if (showFrontier && p in 0.01f..0.99f) {
+                if (drawFrontier && p in 0.01f..0.99f) {
                     val stroke = 1.dp.toPx()
                     val y = (splitY - stroke / 2f).coerceIn(0f, (size.height - stroke).coerceAtLeast(0f))
                     drawRect(

@@ -187,7 +187,7 @@ class TodayWidgetProvider : AppWidgetProvider() {
             val items =
                 Agenda.forDay(live, today, st.defaultBlockMinutes).filter { item ->
                     when (item) {
-                        is CourseItem -> true
+                        is CourseItem -> item.occ.end.isAfter(now)
                         is TaskItem -> !item.task.done
                         is BlockItem -> !item.task.done
                         is EventItem -> true

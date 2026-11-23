@@ -65,16 +65,11 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="6dp"
-                    android:background="@drawable/widget_pill_bg"
                     android:fontFeatureSettings="tnum"
                     android:maxLines="1"
-                    android:paddingBottom="1dp"
-                    android:paddingEnd="6dp"
-                    android:paddingStart="6dp"
-                    android:paddingTop="1dp"
-                    android:textColor="@color/widget_pill_fg"
-                    android:textSize="10.5sp"
-                    android:textStyle="bold" />
+                    android:textColor="@color/widget_muted"
+                    android:textSize="11sp"
+                    android:textStyle="normal" />
             </LinearLayout>
 
             <TextView

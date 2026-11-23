@@ -6,29 +6,20 @@ import app.goke.core.model.Source
 import app.goke.core.model.Task
 import app.goke.core.parcel.ParcelInfo
 import app.goke.core.parcel.ParcelParser
-import app.goke.core.parcel.parcelWindow
 import app.goke.core.util.Ids
-import app.goke.gokeApp
-import java.time.LocalDateTime
 
 object ParcelTasks {
     fun build(
         ctx: Context,
         info: ParcelInfo,
     ): Task {
-        // 快递不占日历/课表时间块：截止保留驿站给的时刻用于提醒，顺路取件时段仅作扩展元数据存进 extra
-        val st = ctx.gokeApp.settings.value
-        val window = parcelWindow(LocalDateTime.now(), st.parcelWindowStart, st.parcelWindowEnd)
+        // 快递不占日历/课表时间块：截止保留驿站给的时刻用于提醒，列顶胶囊按截止日或当天汇总展示
         val extra =
-            buildMap {
-                put("code", info.code)
-                put("place", info.place)
-                put("company", info.company)
-                if (window != null) {
-                    put("windowStart", "%02d:%02d".format(st.parcelWindowStart / 60, st.parcelWindowStart % 60))
-                    put("windowEnd", "%02d:%02d".format(st.parcelWindowEnd / 60, st.parcelWindowEnd % 60))
-                }
-            }
+            mapOf(
+                "code" to info.code,
+                "place" to info.place,
+                "company" to info.company,
+            )
         return Task(
             id = Ids.next(),
             title = ctx.getString(R.string.parcel_task_title, info.code, info.place.ifBlank { info.company }),

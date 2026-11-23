@@ -372,10 +372,8 @@
     <string name="source_import">导入</string>
     <string name="source_parcel">快递识别</string>
     <string name="parcel_enable">识别取件通知</string>
-    <string name="parcel_enable_desc">需要授予「通知使用权」</string>
+    <string name="parcel_enable_desc">通知使用权</string>
     <string name="parcel_grant">去授权</string>
-    <string name="parcel_window_start">时段开始</string>
-    <string name="parcel_window_end">时段结束</string>
     <string name="parcel_try">试一试</string>
     <string name="parcel_sample_label">粘贴一条取件通知</string>
     <string name="parcel_recognize">识别</string>
@@ -717,9 +715,7 @@
     <string name="jxfw_card_sync_now">立即同步</string>
     <string name="jxfw_login_hint">输入广工统一身份认证账号</string>
     <string name="courses_slots_count">%1$d 个时段</string>
-    <string name="parcel_window_section">默认取件时段</string>
-    <string name="parcel_window_desc">识别出的取件待办默认排入每日此时段，并在课表顶栏展示胶囊</string>
-    <string name="parcel_rules_manage">短信识别规则</string>
+    <string name="parcel_rules_manage">识别规则</string>
     <string name="parcel_rules_enabled_count">已启用 %1$d 条规则</string>
     <string name="reliability_vendor_xiaomi">小米 / HyperOS 后台保护</string>
     <string name="reliability_vendor_xiaomi_desc">1. 应用信息 → 省电策略 → 设为「无限制」；\n2. 开启「自启动」权限；\n3. 最近任务下滑/长按卡片锁定 Goke。</string>
@@ -799,10 +795,9 @@
     <string name="timetable_empty_gesture_hint">点按空白格新建课程，长按并拖动可框选时段建待办。</string>
     <string name="parcel_notif_captured_title">已识别取件待办</string>
     <string name="parcel_notif_captured_text">%1$s · %2$s</string>
-    <string name="parcel_restricted_settings_hint">Android 13+ 侧载安装若无法开启「通知使用权」，请先到应用详情右上角菜单点「允许受限设置」。</string>
-    <string name="parcel_sms_perm">接收短信权限（Android 15+ 推荐）</string>
-    <string name="parcel_android15_sms_hint">Android 15+ 会将含取件码数字的短信通知视为敏感通知并隐藏正文，仅靠通知监听无法识别；请点击上方授予「接收短信」权限（若无法勾选，先点右下角打开应用详情 → 右上角「允许受限设置」；小米系统还需在权限中允许「通知类短信」）。</string>
-    <string name="parcel_open_app_details">打开应用详情</string>
+    <string name="parcel_restricted_settings_hint">若系统开关无法开启，可前往应用详情允许受限设置。</string>
+    <string name="parcel_sms_perm">短信权限</string>
+    <string name="parcel_open_app_details">应用详情</string>
     <string name="auto_mute_rule_name">工课上课静音</string>
     <string name="auto_mute_rule_summary">上课期间自动开启勿扰</string>
     <string name="jxfw_term_picker">选择同步学期</string>

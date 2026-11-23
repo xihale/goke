@@ -27,6 +27,7 @@ import app.goke.ui.hm
 import app.goke.ui.monthDay
 import java.time.LocalDateTime
 import java.time.ZoneId
+import kotlin.math.roundToInt
 
 /** 「下一件事」紧凑 4×1 胶囊小组件：下一节课 / 日程块 / 待取快递 / 今日待办 + 一键开启专注与新建。 */
 class NextWidgetProvider : AppWidgetProvider() {
@@ -68,8 +69,11 @@ class NextWidgetProvider : AppWidgetProvider() {
         }
     }
 
+    internal enum class BadgeTone { MUTED, CODE, OVERDUE }
+
     internal data class Summary(
         val badge: String,
+        val badgeTone: BadgeTone = BadgeTone.MUTED,
         val sub: String?,
         val title: String,
         val barColor: Int,
@@ -254,6 +258,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                 val code = WidgetKit.parcelCode(t)
                 return Summary(
                     badge = code ?: upcomingTimed.start.hm(),
+                    badgeTone = if (code != null) BadgeTone.CODE else BadgeTone.MUTED,
                     sub = if (code != null) upcomingTimed.start.hm() else null,
                     title = if (code != null) WidgetKit.cleanTitleWithCode(ctx, t) else t.title,
                     barColor = WidgetKit.priorityColor(ctx, t.priority),
@@ -278,6 +283,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                 val code = WidgetKit.parcelCode(parcel) ?: ctx.getString(R.string.widget_parcel_title)
                 return Summary(
                     badge = code,
+                    badgeTone = BadgeTone.CODE,
                     sub = ctx.getString(R.string.widget_parcel_name),
                     title = WidgetKit.cleanTitleWithCode(ctx, parcel),
                     barColor = WidgetKit.priorityColor(ctx, parcel.priority),
@@ -292,6 +298,7 @@ class NextWidgetProvider : AppWidgetProvider() {
             if (topTask != null) {
                 return Summary(
                     badge = ctx.getString(if (overdue != null) R.string.bucket_overdue else R.string.tab_todo),
+                    badgeTone = if (overdue != null) BadgeTone.OVERDUE else BadgeTone.MUTED,
                     sub = null,
                     title = topTask.title,
                     barColor = WidgetKit.priorityColor(ctx, topTask.priority, overdue != null),
@@ -345,6 +352,28 @@ class NextWidgetProvider : AppWidgetProvider() {
             views.setViewVisibility(R.id.next_add, if (compact) View.GONE else View.VISIBLE)
             views.setInt(R.id.next_bar, "setColorFilter", s.barColor)
             views.setTextViewText(R.id.next_badge, s.badge)
+            val density = ctx.resources.displayMetrics.density
+            when (s.badgeTone) {
+                BadgeTone.CODE -> {
+                    val pxH = (6f * density).roundToInt()
+                    val pxV = (1f * density).roundToInt()
+                    views.setInt(R.id.next_badge, "setBackgroundResource", R.drawable.widget_pill_bg)
+                    views.setViewPadding(R.id.next_badge, pxH, pxV, pxH, pxV)
+                    views.setTextColor(R.id.next_badge, ctx.getColor(R.color.widget_pill_fg))
+                }
+
+                BadgeTone.OVERDUE -> {
+                    views.setInt(R.id.next_badge, "setBackgroundResource", 0)
+                    views.setViewPadding(R.id.next_badge, 0, 0, 0, 0)
+                    views.setTextColor(R.id.next_badge, ctx.getColor(R.color.widget_overdue))
+                }
+
+                BadgeTone.MUTED -> {
+                    views.setInt(R.id.next_badge, "setBackgroundResource", 0)
+                    views.setViewPadding(R.id.next_badge, 0, 0, 0, 0)
+                    views.setTextColor(R.id.next_badge, ctx.getColor(R.color.widget_muted))
+                }
+            }
             if (!s.sub.isNullOrBlank()) {
                 views.setViewVisibility(R.id.next_sub, View.VISIBLE)
                 views.setTextViewText(R.id.next_sub, s.sub)

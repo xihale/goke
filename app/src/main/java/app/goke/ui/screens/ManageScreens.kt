@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -59,7 +58,6 @@ import app.goke.core.parcel.ParcelRule
 import app.goke.core.parcel.ParcelRuleEngine
 import app.goke.core.parcel.RuleTemplate
 import app.goke.core.util.Ids
-import app.goke.notify.ParcelCapture
 import app.goke.notify.ParcelTasks
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
@@ -71,7 +69,6 @@ import app.goke.ui.components.MintScreen
 import app.goke.ui.components.NavRow
 import app.goke.ui.components.ParcelCodeHeadline
 import app.goke.ui.components.SwitchRow
-import app.goke.ui.components.TimeDialSheet
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.ValueRow
 import app.goke.ui.icons.DeleteOutline
@@ -82,7 +79,6 @@ import app.goke.ui.theme.MintTheme
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDateTime
-import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import android.provider.Settings as AndroidSettings
@@ -283,7 +279,6 @@ fun ParcelScreen(onBack: () -> Unit) {
     var smsGranted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED)
     }
-    val redactedDetected by ParcelCapture.redactedDetected.collectAsState()
     val askSms =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
             smsGranted = ok
@@ -347,18 +342,11 @@ fun ParcelScreen(onBack: () -> Unit) {
                                 onClick = { if (!smsGranted) askSms.launch(Manifest.permission.RECEIVE_SMS) else openAppDetails() },
                             )
                         }
-                        val showRestrictedCard =
-                            !granted || (hasTelephony && !smsGranted && (Build.VERSION.SDK_INT >= 35 || redactedDetected))
+                        val showRestrictedCard = !granted || (hasTelephony && !smsGranted)
                         if (showRestrictedCard) {
                             MintCard {
                                 Text(
-                                    stringResource(
-                                        if (hasTelephony && !smsGranted && (Build.VERSION.SDK_INT >= 35 || redactedDetected)) {
-                                            R.string.parcel_android15_sms_hint
-                                        } else {
-                                            R.string.parcel_restricted_settings_hint
-                                        },
-                                    ),
+                                    stringResource(R.string.parcel_restricted_settings_hint),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -372,38 +360,7 @@ fun ParcelScreen(onBack: () -> Unit) {
                     }
                 }
             }
-            // 段 2：默认取件时段（常驻可见，课表顶栏胶囊同源）
-            FormSection(stringResource(R.string.parcel_window_section)) {
-                Text(
-                    stringResource(R.string.parcel_window_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
-                var pickStart by remember { mutableStateOf(false) }
-                var pickEnd by remember { mutableStateOf(false) }
-                ValueRow(
-                    stringResource(R.string.parcel_window_start),
-                    "%02d:%02d".format(st.parcelWindowStart / 60, st.parcelWindowStart % 60),
-                    onClick = { pickStart = true },
-                )
-                ValueRow(
-                    stringResource(R.string.parcel_window_end),
-                    "%02d:%02d".format(st.parcelWindowEnd / 60, st.parcelWindowEnd % 60),
-                    onClick = { pickEnd = true },
-                )
-                if (pickStart) {
-                    TimeDialSheet(LocalTime.of(st.parcelWindowStart / 60, st.parcelWindowStart % 60), onDismiss = { pickStart = false }) { time ->
-                        app.settings.update { it.copy(parcelWindowStart = time.hour * 60 + time.minute) }
-                    }
-                }
-                if (pickEnd) {
-                    TimeDialSheet(LocalTime.of(st.parcelWindowEnd / 60, st.parcelWindowEnd % 60), onDismiss = { pickEnd = false }) { time ->
-                        app.settings.update { it.copy(parcelWindowEnd = time.hour * 60 + time.minute) }
-                    }
-                }
-            }
-            // 段 3：粘贴短信试一试
+            // 段 2：粘贴短信试一试
             FormSection(stringResource(R.string.parcel_try)) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     TonalField(

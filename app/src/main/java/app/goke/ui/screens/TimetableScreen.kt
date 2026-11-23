@@ -1156,6 +1156,18 @@ private fun WeekGrid(
                         textAlign = TextAlign.Center,
                     )
                 }
+                val todayColIndex =
+                    remember(week, currentWeek, today, cal) {
+                        if (week == currentWeek) (1..7).firstOrNull { cal.dateOf(week, it) == today } else null
+                    }
+                val nowTimeY =
+                    remember(now, periods, rowH, todayColIndex) {
+                        if (todayColIndex != null && now != null) {
+                            calcTimetableNowY(periods, now.toLocalTime(), rowH)
+                        } else {
+                            null
+                        }
+                    }
                 // 课程块
                 cells.forEachIndexed { ci, cell ->
                     val slot = slotLayout.slots[ci]
@@ -1179,11 +1191,24 @@ private fun WeekGrid(
                             now != null -> CourseProgress.phase(o.start, o.end, now)
                             else -> TimePhase.UPCOMING
                         }
+                    val span = (bottom.value - top.value).takeIf { it > 0f }
                     val progress =
                         when (phase) {
-                            TimePhase.UPCOMING -> 0f
-                            TimePhase.FINISHED -> 1f
-                            TimePhase.ONGOING -> now?.let { CourseProgress.fraction(o.start, o.end, it) } ?: 0f
+                            TimePhase.UPCOMING -> {
+                                0f
+                            }
+
+                            TimePhase.FINISHED -> {
+                                1f
+                            }
+
+                            TimePhase.ONGOING -> {
+                                if (week == currentWeek && o.date == today && nowTimeY != null && span != null) {
+                                    ((nowTimeY.value - top.value) / span).coerceIn(0f, 1f)
+                                } else {
+                                    now?.let { CourseProgress.fraction(o.start, o.end, it) } ?: 0f
+                                }
+                            }
                         }
                     CourseBlock(
                         cell,
@@ -1234,19 +1259,7 @@ private fun WeekGrid(
                         onClick = { if (slot.overlap > 1) onSlotClick(slotEntries[cells.size + di].orEmpty()) else onOpenTask(t.id) },
                     )
                 }
-                // 今日列当前时间横条：仅限定在「今天」列内，兼顾课间/午休定位与零跨列视觉噪声
-                val todayColIndex =
-                    remember(week, currentWeek, today, cal) {
-                        if (week == currentWeek) (1..7).firstOrNull { cal.dateOf(week, it) == today } else null
-                    }
-                val nowTimeY =
-                    remember(now, periods, rowH, todayColIndex) {
-                        if (todayColIndex != null && now != null) {
-                            calcTimetableNowY(periods, now.toLocalTime(), rowH)
-                        } else {
-                            null
-                        }
-                    }
+                // 今日列当前时间横条：仅限定在「今天」列内，且与正在上课的块置灰前沿严丝合缝
                 if (todayColIndex != null && nowTimeY != null) {
                     val barColor = scheme.primary.copy(alpha = 0.52f)
                     Spacer(
@@ -1833,6 +1846,7 @@ private fun CourseBlock(
                 phase = phase,
                 progress = progress,
                 axis = CourseProgressAxis.VERTICAL,
+                showFrontier = false,
             )
         }
     Box(
