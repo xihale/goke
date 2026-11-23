@@ -174,6 +174,10 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_schedule_info" />
         </receiver>
+        <service
+            android:name=".widget.ScheduleWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
 
         <receiver android:name=".widget.NextWidgetProvider" android:exported="true" android:label="@string/widget_next_name">
             <intent-filter>

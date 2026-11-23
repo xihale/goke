@@ -99,7 +99,7 @@ class WebCompatTest {
         assertTrue(t.dueHasTime)
         assertEquals(90, t.estimateMinutes)
         assertEquals(Freq.DAILY, assertNotNull(t.repeat).freq)
-        assertEquals(5, t.repeat!!.count)
+        assertEquals(5, t.repeat.count)
         val child = one<Task> { it.title == "子任务" }
         assertEquals(t.id, child.parentId)
         assertEquals(2, child.sortOrder)

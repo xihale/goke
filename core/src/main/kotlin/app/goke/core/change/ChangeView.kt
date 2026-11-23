@@ -88,7 +88,7 @@ object ChangeViews {
                     FieldKey.PERIODS to "${r.startPeriod}-${r.endPeriod}",
                     FieldKey.WEEKS to WeekSets.format(r.weeks),
                     FieldKey.COLOR to r.colorIndex.toString(),
-                    FieldKey.REMIND to (r.remindMinutes?.toString() ?: ""),
+                    FieldKey.REMIND to r.effectiveRemindMinutes.joinToString(","),
                 ).filter { it.second.isNotEmpty() }
             }
 
@@ -101,7 +101,7 @@ object ChangeViews {
                     FieldKey.LOCATION to r.location,
                     FieldKey.CATEGORY to r.category,
                     FieldKey.COLOR to r.colorIndex.toString(),
-                    FieldKey.REMIND to (r.remindMinutes?.toString() ?: ""),
+                    FieldKey.REMIND to r.effectiveRemindMinutes.joinToString(","),
                     FieldKey.RECURRENCE to (r.recurrence?.let { "${it.freq}/${it.interval}" } ?: ""),
                 ).filter { it.second.isNotEmpty() }
             }
@@ -116,6 +116,7 @@ object ChangeViews {
                     FieldKey.ESTIMATE to (r.estimateMinutes?.toString() ?: ""),
                     FieldKey.DONE to r.done.toString(),
                     FieldKey.BLOCK to (r.blockStart?.toString() ?: ""),
+                    FieldKey.REMIND to r.effectiveRemindMinutes.joinToString(","),
                     FieldKey.TAGS to r.tags.joinToString(","),
                 ).filter { it.second.isNotEmpty() }
             }

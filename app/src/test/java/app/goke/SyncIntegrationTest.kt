@@ -102,7 +102,7 @@ class SyncIntegrationTest {
             val semA = a.repo.snapshot.value.currentSemester!!
             val math = course(semA.id, "高数")
             add(a.repo, math)
-            a.sync.login(server, user, pass)
+            a.sync.login(server!!, user!!, pass!!)
 
             // B 是全新的设备，只有自动创建的默认学期：登录后应丢弃它，得到 A 的学期与课程，且只有一个学期
             b.sync.login(server, user, pass)

@@ -196,7 +196,7 @@ internal fun QuickAddSheet(
     // 日期面板：日期/时间段 + 提醒 + 重复一次选好；设了就压过文本里识别出的日期
     var whenPanel by remember { mutableStateOf(false) }
     var panelWhen by remember { mutableStateOf<WhenPick?>(null) }
-    var panelRemind by remember { mutableStateOf<Int?>(null) }
+    var panelRemindList by remember { mutableStateOf<List<Int>>(emptyList()) }
     var panelPersistent by remember { mutableStateOf(false) }
     var panelFreq by remember { mutableStateOf<Freq?>(null) }
     var panelInterval by remember { mutableIntStateOf(1) }
@@ -278,10 +278,10 @@ internal fun QuickAddSheet(
                 .orEmpty()
         val msg = if (placed.size == 1) ctx.getString(R.string.task_added_toast, first.title) + where else ctx.getString(R.string.todo_batch_toast, placed.size)
         val ov =
-            if (panelWhen != null || panelRemind != null || panelFreq != null) {
+            if (panelWhen != null || panelRemindList.isNotEmpty() || panelFreq != null) {
                 QuickOverride(
                     whenPick = panelWhen,
-                    remind = panelRemind,
+                    remindList = panelRemindList,
                     persistent = panelPersistent,
                     repeat =
                         panelFreq?.let { f ->
@@ -303,7 +303,7 @@ internal fun QuickAddSheet(
     fun clearDraft() {
         text = ""
         panelWhen = null
-        panelRemind = null
+        panelRemindList = emptyList()
         panelPersistent = false
         panelFreq = null
         panelInterval = 1
@@ -319,7 +319,7 @@ internal fun QuickAddSheet(
         onDismiss()
     }
 
-    val hasDraft = text.isNotBlank() || panelWhen != null || panelRemind != null || panelFreq != null
+    val hasDraft = text.isNotBlank() || panelWhen != null || panelRemindList.isNotEmpty() || panelFreq != null
     val hasBodyText = parsed != null && !(parsed.tokens.isNotEmpty() && parsed.title == text.trim())
 
     fun requestDiscard() {
@@ -355,8 +355,9 @@ internal fun QuickAddSheet(
         val endArg = wp?.let { w -> if (w.start != null && w.minutes != null) LocalDateTime.of(w.date, w.start).plusMinutes(w.minutes.toLong()).toString() else null }
         val resolvedListId = parsed?.listName?.let { n -> snap.lists.firstOrNull { it.name == n }?.id } ?: listFilter
         val resolvedCourseId = parsed?.courseName?.let { n -> snap.courses.firstOrNull { it.deletedAt == null && it.name.contains(n, ignoreCase = true) }?.id }
-        val remindArg = panelRemind
-        val persistentArg = panelPersistent && panelRemind != null
+        val remindArg = panelRemindList.firstOrNull()
+        val remindListArg = panelRemindList.takeIf { it.isNotEmpty() }?.joinToString(",")
+        val persistentArg = panelPersistent && panelRemindList.isNotEmpty()
         val freqArg = panelFreq?.name
         val intervalArg = panelInterval.coerceAtLeast(1)
         val untilArg = if (panelFreq == null) null else panelUntil?.toString()
@@ -382,6 +383,7 @@ internal fun QuickAddSheet(
                 courseId = resolvedCourseId,
                 listId = resolvedListId,
                 remindMinutes = remindArg,
+                remindList = remindListArg,
                 remindPersistent = persistentArg,
                 repeatFreq = freqArg,
                 repeatInterval = intervalArg,
@@ -434,7 +436,7 @@ internal fun QuickAddSheet(
                         toolPanel = toolPanel,
                         onToolPanelChange = { toolPanel = it },
                         panelWhen = panelWhen,
-                        panelRemind = panelRemind,
+                        panelRemindList = panelRemindList,
                         panelFreq = panelFreq,
                         panelInterval = panelInterval,
                         panelByDays = panelByDays,
@@ -449,7 +451,7 @@ internal fun QuickAddSheet(
                         onOpenWhenPanel = { whenPanel = true },
                         onClearWhenOverrides = {
                             panelWhen = null
-                            panelRemind = null
+                            panelRemindList = emptyList()
                             panelPersistent = false
                             panelFreq = null
                             panelUntil = null
@@ -471,7 +473,7 @@ internal fun QuickAddSheet(
                 },
             defaultDate = now.toLocalDate(),
             defaultMinutes = settings.defaultBlockMinutes,
-            initialRemind = panelRemind,
+            initialRemindList = panelRemindList,
             initialPersistent = panelPersistent,
             initialFreq = panelFreq,
             initialInterval = panelInterval,
@@ -482,7 +484,7 @@ internal fun QuickAddSheet(
             onDismiss = { whenPanel = false },
             onPick = { r ->
                 panelWhen = r.whenPick
-                panelRemind = r.remindMinutes
+                panelRemindList = r.remindMinutesList
                 panelPersistent = r.remindPersistent
                 panelFreq = r.freq
                 panelInterval = r.interval
@@ -523,7 +525,7 @@ internal fun QuickAddComposer(
     toolPanel: QuickPanel?,
     onToolPanelChange: (QuickPanel?) -> Unit,
     panelWhen: WhenPick?,
-    panelRemind: Int?,
+    panelRemindList: List<Int>,
     panelFreq: Freq?,
     panelInterval: Int,
     panelByDays: Set<Int>,
@@ -579,15 +581,15 @@ internal fun QuickAddComposer(
                 freqLabel(panelFreq, null, panelInterval, panelByDays, null, withUntil = false, byMonths = panelByMonths)
             }
 
-            panelRemind != null -> {
-                remindLabel(panelRemind)
+            panelRemindList.isNotEmpty() -> {
+                remindSummaryLabel(panelRemindList)
             }
 
             else -> {
                 defaultDateLabel
             }
         }
-    val whenActive = panelWhen != null || parsed?.due != null || panelFreq != null || panelRemind != null || defaultDateLabel != null
+    val whenActive = panelWhen != null || parsed?.due != null || panelFreq != null || panelRemindList.isNotEmpty() || defaultDateLabel != null
 
     val listLabel = parsed?.listName ?: defaultListLabel ?: stringResource(R.string.bucket_inbox)
     val listActive = parsed?.listName != null || defaultListLabel != null
@@ -761,11 +763,11 @@ internal fun QuickAddComposer(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            ChipPill(stringResource(R.string.date_and_repeat), on = panelRemind != null || panelFreq != null) {
+            ChipPill(stringResource(R.string.date_and_repeat), on = panelRemindList.isNotEmpty() || panelFreq != null) {
                 onToolPanelChange(null)
                 onOpenWhenPanel()
             }
-            if (panelWhen != null || panelRemind != null || panelFreq != null) {
+            if (panelWhen != null || panelRemindList.isNotEmpty() || panelFreq != null) {
                 ChipPill(stringResource(R.string.clear_time), on = false) {
                     onClearWhenOverrides()
                     onToolPanelChange(null)
@@ -816,7 +818,7 @@ internal fun QuickAddComposer(
             if (panelFreq != null && panelWhen != null) {
                 Icon(Icons.Rounded.Repeat, null, tint = scheme.primary, modifier = Modifier.size(14.dp))
             }
-            if (panelRemind != null && (panelWhen != null || panelFreq != null)) {
+            if (panelRemindList.isNotEmpty() && (panelWhen != null || panelFreq != null)) {
                 Icon(Icons.Rounded.NotificationsNone, null, tint = scheme.primary, modifier = Modifier.size(14.dp))
             }
         }
@@ -1069,7 +1071,7 @@ internal fun matchCourse(
 /** 面板给出的覆盖值：时间/时间段 + 提醒 + 重复，只落在第一条顶层任务上。 */
 internal data class QuickOverride(
     val whenPick: WhenPick?,
-    val remind: Int?,
+    val remindList: List<Int> = emptyList(),
     val persistent: Boolean = false,
     val repeat: Recurrence?,
 )
@@ -1170,8 +1172,9 @@ internal fun buildQuickTasks(
                     source = Source.MANUAL,
                     blockStart = blockStart,
                     blockMinutes = blockMinutes,
-                    remindMinutes = ov?.remind,
-                    remindPersistent = ov?.persistent == true && ov.remind != null,
+                    remindMinutes = ov?.remindList?.firstOrNull(),
+                    remindMinutesList = ov?.remindList.orEmpty(),
+                    remindPersistent = ov?.persistent == true && ov.remindList.isNotEmpty(),
                     repeat = ov?.repeat,
                 ),
             )

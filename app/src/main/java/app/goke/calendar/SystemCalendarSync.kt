@@ -12,13 +12,17 @@ import android.os.Looper
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
 import app.goke.R
+import app.goke.core.model.Reminders
+import app.goke.core.model.Snapshot
 import app.goke.core.sync.CalendarBridge
 import app.goke.core.sync.CalendarTaskLink
 import app.goke.core.sync.CourseExportLink
 import app.goke.core.sync.SystemEvent
 import app.goke.core.sync.SystemEventDraft
+import app.goke.data.ErrorReporter
 import app.goke.data.Repository
 import app.goke.data.SettingsStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -61,6 +65,7 @@ class SystemCalendarSync(
     private val settings: SettingsStore,
     private val store: CalendarSyncStore,
     private val scope: CoroutineScope,
+    private val errors: ErrorReporter? = null,
 ) {
     private val lock = Mutex()
     private val _state = MutableStateFlow(CalendarSyncState(prefs = store.readPrefs()))
@@ -70,6 +75,9 @@ class SystemCalendarSync(
 
     @Volatile
     private var suppressObserverUntil: Long = 0L
+
+    @Volatile
+    private var lastSyncedSnap: Snapshot? = null
 
     private var observerRegistered = false
     private val contentObserver =
@@ -208,6 +216,14 @@ class SystemCalendarSync(
             id
         }
 
+    fun onLocalSnapshotChanged(snap: Snapshot) {
+        val last = lastSyncedSnap
+        if (last != null && snap.tasks == last.tasks && snap.courses == last.courses && snap.exceptions == last.exceptions) {
+            return
+        }
+        requestSync()
+    }
+
     fun requestSync(delayMs: Long = 1_500L) {
         val prefs = _state.value.prefs
         if (!prefs.enabled && store.loadCourseLinks().isEmpty()) return
@@ -242,13 +258,19 @@ class SystemCalendarSync(
 
                     val queryIds = (selectedIds + store.loadCourseLinks().map { it.calendarId }).distinct()
                     val remotes = if (queryIds.isEmpty()) emptyList() else queryEvents(queryIds, now)
+                    val prevCourseLinks = store.loadCourseLinks()
+                    val wantCourses = prefs.enabled && prefs.exportCourses && primaryId != null
 
                     var changedCount = 0
                     suppressObserverUntil = System.currentTimeMillis() + 5_000L
 
-                    // 1. 双向同步日程与待办
+                    // 1. 双向同步日程与待办（显式排除已导出的课程事件与同槽位课表指纹，彻底阻断课表回流成待办）
+                    var finalTaskLinks = store.loadTaskLinks()
                     if (prefs.enabled && selectedIds.isNotEmpty()) {
-                        val existingLinks = store.loadTaskLinks()
+                        val existingLinks = finalTaskLinks
+                        val courseRemoteKeys = prevCourseLinks.mapTo(HashSet()) { it.calendarId to it.eventId }
+                        val ignoredCourseDedup =
+                            if (wantCourses) CalendarBridge.courseExportDedupKeys(snap, primaryId, zone) else emptySet()
                         val plan =
                             CalendarBridge.planBidirectional(
                                 snapshot = snap,
@@ -259,17 +281,19 @@ class SystemCalendarSync(
                                 defaultBlockMinutes = st.defaultBlockMinutes,
                                 zone = zone,
                                 nowMillis = now,
+                                ignoredRemoteKeys = courseRemoteKeys,
+                                ignoredCourseDedupKeys = ignoredCourseDedup,
                             )
 
-                        val finalLinks = ArrayList<CalendarTaskLink>(plan.retainedAndPulledLinks)
+                        val nextLinks = ArrayList<CalendarTaskLink>(plan.retainedAndPulledLinks)
+                        val pendingUpserts = mutableListOf<Triple<String, Long, Pair<String, SystemEventDraft>>>()
                         for (del in plan.remoteDeletes) {
                             if (del.calendarId in writableIds && deleteRemoteEvent(del.eventId)) changedCount++
                         }
                         for (upd in plan.remoteUpdates) {
                             if (upd.calendarId in writableIds && updateRemoteEvent(upd.eventId, upd.draft)) {
                                 changedCount++
-                                val sim = CalendarBridge.draftToSimulatedEvent(upd.eventId, upd.draft)
-                                finalLinks += CalendarTaskLink(upd.taskId, upd.calendarId, upd.eventId, upd.taskHash, CalendarBridge.eventHash(sim, zone, st.defaultBlockMinutes), now)
+                                pendingUpserts += Triple(upd.taskId, upd.eventId, upd.taskHash to upd.draft)
                             }
                         }
                         for (ins in plan.remoteInserts) {
@@ -277,9 +301,17 @@ class SystemCalendarSync(
                                 val newId = insertRemoteEvent(ins.draft)
                                 if (newId != null) {
                                     changedCount++
-                                    val sim = CalendarBridge.draftToSimulatedEvent(newId, ins.draft)
-                                    finalLinks += CalendarTaskLink(ins.taskId, ins.draft.calendarId, newId, ins.taskHash, CalendarBridge.eventHash(sim, zone, st.defaultBlockMinutes), now)
+                                    pendingUpserts += Triple(ins.taskId, newId, ins.taskHash to ins.draft)
                                 }
+                            }
+                        }
+                        if (pendingUpserts.isNotEmpty()) {
+                            // 回读 CalendarProvider 实际规范化后的事件再计算 eventHash，避免厂商日历归一化触发回声循环
+                            val storedEvents = queryEventsByIds(pendingUpserts.map { it.second })
+                            for ((taskId, eventId, hashAndDraft) in pendingUpserts) {
+                                val (tHash, draft) = hashAndDraft
+                                val actual = storedEvents[eventId] ?: CalendarBridge.draftToSimulatedEvent(eventId, draft)
+                                nextLinks += CalendarTaskLink(taskId, draft.calendarId, eventId, tHash, CalendarBridge.eventHash(actual, zone, st.defaultBlockMinutes), now)
                             }
                         }
                         val localCs = plan.localChanges
@@ -287,13 +319,13 @@ class SystemCalendarSync(
                             repo.commit(localCs, record = false)
                             changedCount += localCs.changes.size
                         }
-                        store.saveTaskLinks(finalLinks)
+                        finalTaskLinks = nextLinks
+                        store.saveTaskLinks(finalTaskLinks)
                     }
 
                     // 2. 导出或清理学期课表
-                    val prevCourseLinks = store.loadCourseLinks()
-                    val wantCourses = prefs.enabled && prefs.exportCourses && primaryId != null
                     if (wantCourses || prevCourseLinks.isNotEmpty()) {
+                        val excludedTaskKeys = finalTaskLinks.mapTo(HashSet()) { it.calendarId to it.eventId }
                         val cPlan =
                             CalendarBridge.planCourseExport(
                                 snapshot = repo.snapshot.value,
@@ -302,6 +334,7 @@ class SystemCalendarSync(
                                 existingLinks = prevCourseLinks,
                                 remoteEvents = remotes,
                                 zone = zone,
+                                excludedRemoteKeys = excludedTaskKeys,
                             )
                         val nextCourseLinks = ArrayList<CourseExportLink>(cPlan.unchangedLinks)
                         for (del in cPlan.deletes) {
@@ -323,14 +356,21 @@ class SystemCalendarSync(
                         store.saveCourseLinks(nextCourseLinks)
                     }
 
-                    suppressObserverUntil = System.currentTimeMillis() + 3_000L
+                    lastSyncedSnap = repo.snapshot.value
+                    suppressObserverUntil = System.currentTimeMillis() + if (changedCount > 0) 8_000L else 2_000L
                     val nextPrefs = prefs.copy(lastSyncAt = System.currentTimeMillis())
                     store.writePrefs(nextPrefs)
                     _state.value = _state.value.copy(calendars = cals, prefs = nextPrefs, syncing = false, lastError = null)
                     changedCount
                 }
+            } catch (e: CancellationException) {
+                _state.value = _state.value.copy(syncing = false)
+                throw e
             } catch (e: Throwable) {
-                _state.value = _state.value.copy(syncing = false, lastError = e.message)
+                _state.value = _state.value.copy(syncing = false, lastError = e.message ?: e::class.simpleName)
+                if (e !is SecurityException) {
+                    errors?.record("CalendarSync", e)
+                }
                 0
             }
         }
@@ -390,6 +430,39 @@ class SystemCalendarSync(
                 "(${CalendarContract.Events.RRULE} IS NOT NULL OR (${CalendarContract.Events.DTSTART} >= ? AND ${CalendarContract.Events.DTSTART} <= ?))"
         val args = (calendarIds.map { it.toString() } + listOf(windowStart.toString(), windowEnd.toString())).toTypedArray()
 
+        val rawEvents = queryRawEvents(selection, args)
+        if (rawEvents.isEmpty()) return emptyList()
+
+        val remindersByEvent = queryReminders(rawEvents.map { it.eventId })
+        return rawEvents.map { ev ->
+            val list = remindersByEvent[ev.eventId].orEmpty()
+            ev.copy(remindMinutes = list.firstOrNull(), remindMinutesList = list)
+        }
+    }
+
+    private fun queryEventsByIds(eventIds: List<Long>): Map<Long, SystemEvent> {
+        if (eventIds.isEmpty()) return emptyMap()
+        val rawEvents = mutableListOf<SystemEvent>()
+        for (chunk in eventIds.distinct().chunked(200)) {
+            val ph = chunk.joinToString(",") { "?" }
+            rawEvents +=
+                queryRawEvents(
+                    "${CalendarContract.Events._ID} IN ($ph)",
+                    chunk.map { it.toString() }.toTypedArray(),
+                )
+        }
+        if (rawEvents.isEmpty()) return emptyMap()
+        val remindersByEvent = queryReminders(rawEvents.map { it.eventId })
+        return rawEvents.associate { ev ->
+            val list = remindersByEvent[ev.eventId].orEmpty()
+            ev.eventId to ev.copy(remindMinutes = list.firstOrNull(), remindMinutesList = list)
+        }
+    }
+
+    private fun queryRawEvents(
+        selection: String,
+        args: Array<String>,
+    ): List<SystemEvent> {
         val projection =
             arrayOf(
                 CalendarContract.Events._ID,
@@ -443,14 +516,11 @@ class SystemCalendarSync(
                     }
                 }
         }
-        if (rawEvents.isEmpty()) return emptyList()
-
-        val remindersByEvent = queryReminders(rawEvents.map { it.eventId })
-        return rawEvents.map { ev -> ev.copy(remindMinutes = remindersByEvent[ev.eventId]) }
+        return rawEvents
     }
 
-    private fun queryReminders(eventIds: List<Long>): Map<Long, Int> {
-        val out = HashMap<Long, Int>()
+    private fun queryReminders(eventIds: List<Long>): Map<Long, List<Int>> {
+        val grouped = HashMap<Long, MutableSet<Int>>()
         for (chunk in eventIds.chunked(200)) {
             val ph = chunk.joinToString(",") { "?" }
             runCatching {
@@ -465,12 +535,12 @@ class SystemCalendarSync(
                         while (c.moveToNext()) {
                             val eid = c.getLong(0)
                             val min = c.getInt(1)
-                            if (min >= 0 && eid !in out) out[eid] = min
+                            if (min >= 0) grouped.getOrPut(eid) { linkedSetOf() } += min
                         }
                     }
             }
         }
-        return out
+        return grouped.mapValues { (_, set) -> set.sorted() }
     }
 
     private fun draftToContentValues(draft: SystemEventDraft): ContentValues =
@@ -494,7 +564,7 @@ class SystemCalendarSync(
             } else {
                 putNull(CalendarContract.Events.RRULE)
             }
-            put(CalendarContract.Events.HAS_ALARM, if (draft.remindMinutes != null) 1 else 0)
+            put(CalendarContract.Events.HAS_ALARM, if (draft.effectiveRemindMinutes.isNotEmpty()) 1 else 0)
             put(CalendarContract.Events.CUSTOM_APP_PACKAGE, context.packageName)
             put(CalendarContract.Events.CUSTOM_APP_URI, draft.customAppUri)
         }
@@ -503,7 +573,7 @@ class SystemCalendarSync(
         runCatching {
             val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, draftToContentValues(draft)) ?: return null
             val eventId = ContentUris.parseId(uri).takeIf { it >= 0L } ?: return null
-            syncEventReminder(eventId, draft.remindMinutes)
+            syncEventReminders(eventId, draft.effectiveRemindMinutes)
             eventId
         }.getOrNull()
 
@@ -514,7 +584,7 @@ class SystemCalendarSync(
         runCatching {
             val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
             val updated = context.contentResolver.update(uri, draftToContentValues(draft), null, null)
-            syncEventReminder(eventId, draft.remindMinutes)
+            syncEventReminders(eventId, draft.effectiveRemindMinutes)
             updated >= 0
         }.getOrDefault(false)
 
@@ -524,9 +594,9 @@ class SystemCalendarSync(
             context.contentResolver.delete(uri, null, null) >= 0
         }.getOrDefault(false)
 
-    private fun syncEventReminder(
+    private fun syncEventReminders(
         eventId: Long,
-        remindMinutes: Int?,
+        reminders: List<Int>,
     ) {
         runCatching {
             context.contentResolver.delete(
@@ -534,7 +604,7 @@ class SystemCalendarSync(
                 "${CalendarContract.Reminders.EVENT_ID} = ?",
                 arrayOf(eventId.toString()),
             )
-            if (remindMinutes != null && remindMinutes >= 0) {
+            for (remindMinutes in Reminders.normalize(null, reminders)) {
                 val cv =
                     ContentValues().apply {
                         put(CalendarContract.Reminders.EVENT_ID, eventId)

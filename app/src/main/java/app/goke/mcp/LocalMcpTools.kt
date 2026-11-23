@@ -135,6 +135,7 @@ internal class LocalMcpTools(
                         "startDate" to prop("string", "开始日期 YYYY-MM-DD"),
                         "due" to prop("string", "截止日期或时刻：YYYY-MM-DD 或 YYYY-MM-DD HH:MM"),
                         "remindMinutes" to prop("integer", "提前提醒分钟数"),
+                        "remindMinutesList" to arrayProp("integer", "多个提前提醒分钟数列表"),
                         "repeat" to repeatSchema("重复规则"),
                         "parentId" to prop("string", "父待办 id（仅支持一层子任务）"),
                         "courseId" to prop("string", "关联课程 id"),
@@ -159,6 +160,7 @@ internal class LocalMcpTools(
                         "startDate" to prop("string", "开始日期 YYYY-MM-DD；传空字符串清除"),
                         "due" to prop("string", "截止 YYYY-MM-DD 或 YYYY-MM-DD HH:MM；传空字符串清除"),
                         "remindMinutes" to prop("integer", "提前提醒分钟数；传 -1 清除提醒"),
+                        "remindMinutesList" to arrayProp("integer", "多个提前提醒分钟数列表；传空数组清除"),
                         "repeat" to repeatSchema("重复规则；freq 传 NONE 清除重复"),
                         "courseId" to prop("string", "关联课程 id；传空字符串清除"),
                         "dueBeforeNextClass" to prop("boolean", "是否下节课前截止"),
@@ -424,6 +426,12 @@ internal class LocalMcpTools(
         val tags = args.strList("tags")
         val now = clock()
 
+        val reminders =
+            if ("remindMinutesList" in args) {
+                args.intList("remindMinutesList")
+            } else {
+                listOfNotNull(args.int("remindMinutes")?.takeIf { it >= 0 })
+            }
         val task =
             Task(
                 id = Ids.next(),
@@ -437,7 +445,8 @@ internal class LocalMcpTools(
                 dueHasTime = parsedDue?.second ?: false,
                 parentId = parentId,
                 repeat = repeat,
-                remindMinutes = args.int("remindMinutes")?.takeIf { it >= 0 },
+                remindMinutes = reminders.firstOrNull(),
+                remindMinutesList = reminders,
                 courseId = courseId,
                 dueBeforeNextClass = args.bool("dueBeforeNextClass") ?: false,
                 blockStart = blockStart,
@@ -485,9 +494,13 @@ internal class LocalMcpTools(
                 next = next.copy(due = dt, dueHasTime = hasTime)
             }
         }
-        if ("remindMinutes" in args) {
+        if ("remindMinutesList" in args) {
+            val list = args.intList("remindMinutesList")
+            next = next.copy(remindMinutes = list.firstOrNull(), remindMinutesList = list)
+        } else if ("remindMinutes" in args) {
             val rm = args.int("remindMinutes")
-            next = next.copy(remindMinutes = if (rm == null || rm < 0) null else rm)
+            val list = if (rm == null || rm < 0) emptyList() else listOf(rm)
+            next = next.copy(remindMinutes = list.firstOrNull(), remindMinutesList = list)
         }
         if ("repeat" in args) {
             val repObj = args["repeat"]
@@ -693,7 +706,10 @@ internal class LocalMcpTools(
                             put("endPeriod", c.endPeriod)
                             putJsonArray("weeks") { c.weeks.sorted().forEach { w -> add(JsonPrimitive(w)) } }
                             put("colorIndex", c.colorIndex)
-                            c.remindMinutes?.let { put("remindMinutes", it) }
+                            c.effectiveRemindMinutes.firstOrNull()?.let { put("remindMinutes", it) }
+                            if (c.effectiveRemindMinutes.isNotEmpty()) {
+                                putJsonArray("remindMinutesList") { c.effectiveRemindMinutes.forEach { m -> add(JsonPrimitive(m)) } }
+                            }
                             if (c.note.isNotBlank()) put("note", c.note)
                         },
                     )
@@ -972,6 +988,13 @@ internal class LocalMcpTools(
         private fun JsonObject.strList(key: String): List<String> =
             (this[key] as? JsonArray)
                 ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf(String::isNotEmpty) }
+                .orEmpty()
+
+        private fun JsonObject.intList(key: String): List<Int> =
+            (this[key] as? JsonArray)
+                ?.mapNotNull { (it as? JsonPrimitive)?.intOrNull?.takeIf { m -> m >= 0 } }
+                ?.distinct()
+                ?.sorted()
                 .orEmpty()
 
         private fun parseDateStrict(raw: String): LocalDate =

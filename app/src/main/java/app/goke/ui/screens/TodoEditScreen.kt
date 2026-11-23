@@ -148,6 +148,7 @@ fun TodoEditScreen(
     locationArg: String? = null,
     listArg: String? = null,
     remindArg: Int? = null,
+    remindListArg: String? = null,
     remindPersistentArg: Boolean = false,
     repeatFreqArg: String? = null,
     repeatIntervalArg: Int = 1,
@@ -224,8 +225,22 @@ fun TodoEditScreen(
     var attachments by remember { mutableStateOf(existing?.attachments.orEmpty()) }
     var picked by remember { mutableStateOf(initWhen) }
     var cleared by remember { mutableStateOf(false) }
-    var remind by remember { mutableStateOf(if (existing != null) existing.remindMinutes else remindArg) }
-    var persistent by remember { mutableStateOf(if (existing != null) existing.remindPersistent else (remindPersistentArg && remindArg != null)) }
+    val initRemindList =
+        remember(existing, remindArg, remindListArg) {
+            if (existing != null) {
+                existing.effectiveRemindMinutes
+            } else {
+                val parsedList =
+                    remindListArg
+                        .orEmpty()
+                        .split(',')
+                        .mapNotNull { it.trim().toIntOrNull() }
+                app.goke.core.model.Reminders
+                    .normalize(remindArg, parsedList)
+            }
+        }
+    var remindList by remember { mutableStateOf(initRemindList) }
+    var persistent by remember { mutableStateOf(if (existing != null) existing.remindPersistent else (remindPersistentArg && initRemindList.isNotEmpty())) }
     var freq by remember { mutableStateOf(if (existing != null) existing.repeat?.freq else initFreq) }
     var interval by remember { mutableIntStateOf(if (existing != null) (existing.repeat?.interval ?: 1) else repeatIntervalArg.coerceAtLeast(1)) }
     var until by remember { mutableStateOf(if (existing != null) existing.repeat?.until else initUntil) }
@@ -299,7 +314,7 @@ fun TodoEditScreen(
         text != existing?.title.orEmpty() || note != existing?.note.orEmpty() ||
             location.trim() != existing?.extra?.get("location").orEmpty() ||
             attachments != existing?.attachments.orEmpty() || listId != existing?.listId || priority != (existing?.priority ?: 0) ||
-            remind != existing?.remindMinutes || persistent != (existing?.remindPersistent == true) || freq != existing?.repeat?.freq ||
+            remindList != existing?.effectiveRemindMinutes.orEmpty() || persistent != (existing?.remindPersistent == true) || freq != existing?.repeat?.freq ||
             dueBeforeNextClass != (existing?.dueBeforeNextClass ?: false) ||
             (
                 freq != null &&
@@ -406,8 +421,9 @@ fun TodoEditScreen(
                 blockMinutes = blockMinutes,
                 due = dueAt,
                 dueHasTime = hasTime,
-                remindMinutes = remind,
-                remindPersistent = remind != null && persistent,
+                remindMinutes = remindList.firstOrNull(),
+                remindMinutesList = remindList,
+                remindPersistent = remindList.isNotEmpty() && persistent,
                 repeat =
                     freq?.let { f ->
                         (base.repeat?.takeIf { it.freq == f } ?: Recurrence(f)).copy(
@@ -564,10 +580,10 @@ fun TodoEditScreen(
                 titleFocus,
                 done = existing?.done == true,
             )
-            WhenRow(whenPick, today, remind, freq, interval, until, byDays, byMonths, onClear = {
+            WhenRow(whenPick, today, remindList, freq, interval, until, byDays, byMonths, onClear = {
                 picked = null
                 cleared = true
-                remind = null
+                remindList = emptyList()
                 persistent = false
                 freq = null
                 interval = 1
@@ -810,7 +826,7 @@ fun TodoEditScreen(
             initial = whenPick,
             defaultDate = whenPick?.date ?: argDate ?: today,
             defaultMinutes = settings.defaultBlockMinutes,
-            initialRemind = remind,
+            initialRemindList = remindList,
             initialPersistent = persistent,
             initialFreq = freq,
             initialInterval = interval,
@@ -824,7 +840,7 @@ fun TodoEditScreen(
                 if (wp == null) {
                     picked = null
                     cleared = true
-                    remind = null
+                    remindList = emptyList()
                     persistent = false
                     freq = null
                     until = null
@@ -834,7 +850,7 @@ fun TodoEditScreen(
                     picked = wp
                     cleared = false
                     if (linkedCourse != null) dueBeforeNextClass = false
-                    remind = r.remindMinutes
+                    remindList = r.remindMinutesList
                     persistent = r.remindPersistent
                     freq = r.freq
                     interval = r.interval
@@ -938,7 +954,7 @@ private class TokenPaint(
 private fun WhenRow(
     whenPick: WhenPick?,
     today: LocalDate,
-    remind: Int?,
+    remindList: List<Int>,
     freq: Freq?,
     interval: Int,
     until: LocalDate?,
@@ -973,7 +989,7 @@ private fun WhenRow(
     val extras =
         buildList {
             if (freq != null) add(freqLabel(freq, until, interval, byDays, whenPick?.date, byMonths = byMonths))
-            if (remind != null) add(remindLabel(remind))
+            if (remindList.isNotEmpty()) add(remindSummaryLabel(remindList))
         }
     val empty = dateLabel == null && extras.isEmpty()
     val primaryLine =

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,7 +30,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasImeAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -74,6 +75,7 @@ import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
 import app.goke.ui.Tab
 import app.goke.ui.components.AttachmentEditor
+import app.goke.ui.components.CuteQrCode
 import app.goke.ui.gokeDestinations
 import app.goke.ui.liveSnapshot
 import app.goke.ui.rememberNav
@@ -94,7 +96,6 @@ import app.goke.ui.screens.MorningSheet
 import app.goke.ui.screens.ParcelScreen
 import app.goke.ui.screens.PeriodsScreen
 import app.goke.ui.screens.PhysicalTestScreen
-import app.goke.ui.screens.RelayScreen
 import app.goke.ui.screens.ReliabilityScreen
 import app.goke.ui.screens.RepeatPickDialog
 import app.goke.ui.screens.RescheduleSheet
@@ -226,7 +227,6 @@ class ScreensSmokeTest {
                         composable(HOME) { content() }
                         gokeDestinations(nav) {
                             nav.pop()
-                            Unit
                         }
                     }
                 }
@@ -323,13 +323,17 @@ class ScreensSmokeTest {
                 "history" to { HistoryScreen {} },
                 "parcel" to { ParcelScreen {} },
                 "about" to { AboutScreen {} },
+                "qq_qr" to {
+                    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                        CuteQrCode("https://qm.qq.com/q/VWUh0uEhKY", "qq", Modifier.size(240.dp))
+                    }
+                },
                 "mcp" to { McpScreen {} },
                 "grades" to { GradesScreen {} },
                 "classroom" to { ClassroomScreen(onBack = {}) },
                 "classroom_grid" to { ClassroomScreen(onBack = {}, initialRoomCode = "011030101") },
                 "physical_test" to { PhysicalTestScreen {} },
                 "lan_web" to { LanWebScreen {} },
-                "relay" to { RelayScreen {} },
                 "root_shell" to { GokeRoot(app, null) {} },
             )
         val idx = mutableIntStateOf(0)
@@ -361,6 +365,7 @@ class ScreensSmokeTest {
                     "classroom_grid" to "classroom_grid_dark",
                     "physical_test" to "physical_test_dark",
                     "lan_web" to "lan_web_dark",
+                    "qq_qr" to "qq_qr_dark",
                 )
             darkTargets.forEach { (keyName, shotName) ->
                 val targetIdx = screens.indexOfFirst { it.first == keyName }

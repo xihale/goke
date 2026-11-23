@@ -2,6 +2,7 @@ package app.goke.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import app.goke.core.model.Reminders
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +22,7 @@ data class Settings(
     val defaultBlockMinutes: Int = 30,
     val remindCourse: Boolean = false,
     val courseRemindMinutes: Int = 15,
+    val courseRemindMinutesList: List<Int> = listOf(15),
     val remindTask: Boolean = true,
     val remindEvent: Boolean = true,
     /** 「今日安排」摘要通知，默认关；时间由 [digestHour]/[digestMinute] 决定。 */
@@ -56,12 +58,13 @@ data class Settings(
     val pendingUpdateApkSha256: String = "",
     /** 已在弹窗中点过「以后再说」的版本，同版本不再重复自动弹窗，仍保留在设置页提示。 */
     val dismissedUpdateVersion: String = "",
-    /** 实验功能（EXP）：课堂接力服务端地址、房间口令、默认来源标签与有效时长。 */
-    val relayServerUrl: String = "",
-    val relayRoom: String = "dorm402",
-    val relaySource: String = "微助教",
-    val relayTtlSec: Int = 90,
-)
+) {
+    val effectiveCourseRemindMinutes: List<Int>
+        get() =
+            Reminders
+                .normalize(if (courseRemindMinutesList.isEmpty()) courseRemindMinutes else null, courseRemindMinutesList)
+                .ifEmpty { listOf(courseRemindMinutes.coerceAtLeast(0)) }
+}
 
 /** 轻量设置存储（SharedPreferences + StateFlow）。同步令牌等敏感值另存于 [SecretStore]，不进此处。 */
 class SettingsStore(
@@ -74,6 +77,17 @@ class SettingsStore(
 
     private fun read(): Settings {
         val d = Settings()
+        val courseRemind = sp.getInt("courseRemindMinutes", d.courseRemindMinutes).coerceAtLeast(0)
+        val rawRemindList = sp.getString("courseRemindMinutesList", null)
+        val parsedRemindList =
+            rawRemindList
+                ?.split(',')
+                ?.mapNotNull { it.trim().toIntOrNull() }
+                ?.filter { it >= 0 }
+                ?.distinct()
+                ?.sorted()
+                ?.takeIf { it.isNotEmpty() }
+                ?: listOf(courseRemind)
         return Settings(
             themeSource = runCatching { ThemeSource.valueOf(sp.getString("themeSource", d.themeSource.name)!!) }.getOrDefault(d.themeSource),
             preset = sp.getString("preset", d.preset)!!,
@@ -82,7 +96,8 @@ class SettingsStore(
             showTeacher = sp.getBoolean("showTeacher", d.showTeacher),
             defaultBlockMinutes = sp.getInt("defaultBlockMinutes", d.defaultBlockMinutes),
             remindCourse = sp.getBoolean("remindCourse", d.remindCourse),
-            courseRemindMinutes = sp.getInt("courseRemindMinutes", d.courseRemindMinutes),
+            courseRemindMinutes = parsedRemindList.first(),
+            courseRemindMinutesList = parsedRemindList,
             remindTask = sp.getBoolean("remindTask", d.remindTask),
             remindEvent = sp.getBoolean("remindEvent", d.remindEvent),
             dailyDigest = sp.getBoolean("dailyDigest", d.dailyDigest),
@@ -107,16 +122,16 @@ class SettingsStore(
             pendingUpdateApkSize = sp.getLong("pendingUpdateApkSize", d.pendingUpdateApkSize),
             pendingUpdateApkSha256 = sp.getString("pendingUpdateApkSha256", d.pendingUpdateApkSha256)!!,
             dismissedUpdateVersion = sp.getString("dismissedUpdateVersion", d.dismissedUpdateVersion)!!,
-            relayServerUrl = sp.getString("relayServerUrl", d.relayServerUrl)!!,
-            relayRoom = sp.getString("relayRoom", d.relayRoom)!!,
-            relaySource = sp.getString("relaySource", d.relaySource)!!,
-            relayTtlSec = sp.getInt("relayTtlSec", d.relayTtlSec),
         )
     }
 
     @Synchronized
     fun update(block: (Settings) -> Settings) {
-        val n = block(_flow.value)
+        val n =
+            block(_flow.value).let { raw ->
+                val list = raw.effectiveCourseRemindMinutes
+                raw.copy(courseRemindMinutes = list.first(), courseRemindMinutesList = list)
+            }
         sp
             .edit()
             .putString("themeSource", n.themeSource.name)
@@ -127,6 +142,7 @@ class SettingsStore(
             .putInt("defaultBlockMinutes", n.defaultBlockMinutes)
             .putBoolean("remindCourse", n.remindCourse)
             .putInt("courseRemindMinutes", n.courseRemindMinutes)
+            .putString("courseRemindMinutesList", n.courseRemindMinutesList.joinToString(","))
             .putBoolean("remindTask", n.remindTask)
             .putBoolean("remindEvent", n.remindEvent)
             .putBoolean("dailyDigest", n.dailyDigest)
@@ -151,10 +167,6 @@ class SettingsStore(
             .putLong("pendingUpdateApkSize", n.pendingUpdateApkSize)
             .putString("pendingUpdateApkSha256", n.pendingUpdateApkSha256)
             .putString("dismissedUpdateVersion", n.dismissedUpdateVersion)
-            .putString("relayServerUrl", n.relayServerUrl)
-            .putString("relayRoom", n.relayRoom)
-            .putString("relaySource", n.relaySource)
-            .putInt("relayTtlSec", n.relayTtlSec)
             .apply()
         _flow.value = n
     }

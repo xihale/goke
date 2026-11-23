@@ -265,7 +265,12 @@ fun TodayScreen() {
                                     when (nextToday) {
                                         is CourseItem -> {
                                             val o = nextToday.occ
-                                            stringResource(R.string.today_next_class, o.start.hm(), o.course.name, ctx.formatRooms(o.room)).trim()
+                                            stringResource(
+                                                R.string.today_next_class,
+                                                "${o.start.hm()}–${o.end.hm()}",
+                                                o.course.name,
+                                                ctx.formatRooms(o.room),
+                                            ).trim()
                                         }
 
                                         is EventItem -> {
@@ -277,26 +282,46 @@ fun TodayScreen() {
                                                     .takeIf { it.isNotBlank() }
                                                     ?.let { " · $it" }
                                                     .orEmpty()
-                                            "${stringResource(R.string.widget_next_label)} · $kindPrefix${nextToday.start.hm()} ${e.title}$roomPart"
+                                            val timeText =
+                                                if (!nextToday.allDay && nextToday.end.isAfter(nextToday.start)) {
+                                                    "${nextToday.start.hm()}–${nextToday.end.hm()}"
+                                                } else if (nextToday.allDay) {
+                                                    stringResource(R.string.all_day)
+                                                } else {
+                                                    nextToday.start.hm()
+                                                }
+                                            "${stringResource(R.string.widget_next_label)} · $kindPrefix$timeText ${e.title}$roomPart"
                                         }
 
                                         is BlockItem -> {
                                             val t = nextToday.task
-                                            val kindPrefix = if (t.extra["kind"] == EventKind.EXAM.name) stringResource(R.string.kind_exam) + " · " else ""
+                                            val examLabel = stringResource(R.string.kind_exam)
+                                            val kindPrefix =
+                                                if (t.extra["kind"] == EventKind.EXAM.name && !t.title.contains(examLabel)) {
+                                                    "$examLabel · "
+                                                } else {
+                                                    ""
+                                                }
                                             val locPart =
                                                 t.extra["location"]
                                                     ?.let { ctx.formatRooms(it) }
                                                     ?.takeIf { it.isNotBlank() }
                                                     ?.let { " · $it" }
                                                     .orEmpty()
-                                            "${stringResource(R.string.widget_next_label)} · $kindPrefix${nextToday.start.hm()} ${t.title}$locPart"
+                                            val timeText =
+                                                if (nextToday.end.isAfter(nextToday.start)) {
+                                                    "${nextToday.start.hm()}–${nextToday.end.hm()}"
+                                                } else {
+                                                    nextToday.start.hm()
+                                                }
+                                            "${stringResource(R.string.widget_next_label)} · $kindPrefix$timeText ${t.title}$locPart"
                                         }
 
                                         else -> {
                                             nextUp?.occurrence?.let { o ->
                                                 stringResource(
                                                     R.string.today_next_class,
-                                                    ctx.dueLabel(o.start, true, today),
+                                                    "${ctx.dueLabel(o.start, true, today)}–${o.end.hm()}",
                                                     o.course.name,
                                                     ctx.formatRooms(o.room),
                                                 ).trim()

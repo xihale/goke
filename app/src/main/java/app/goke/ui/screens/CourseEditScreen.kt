@@ -78,6 +78,7 @@ import app.goke.core.change.apply
 import app.goke.core.model.Course
 import app.goke.core.model.ExceptionType
 import app.goke.core.model.PeriodTime
+import app.goke.core.model.Reminders
 import app.goke.core.model.Source
 import app.goke.core.time.WeekSets
 import app.goke.core.util.Ids
@@ -113,9 +114,13 @@ internal data class SlotDraft(
     val endPeriod: Int,
     val weeks: Set<Int>,
     val room: String,
-    val remindMinutes: Int?,
+    val remindMinutes: Int? = null,
     val teacher: String? = null,
-)
+    val remindMinutesList: List<Int> = emptyList(),
+) {
+    val effectiveRemindMinutes: List<Int>
+        get() = Reminders.normalize(remindMinutes, remindMinutesList)
+}
 
 /** 时段在课表上的真实钟点，如 `08:30–10:05`；节次越界时留空。 */
 private fun clockRange(
@@ -170,7 +175,7 @@ fun CourseEditScreen(
                 snap.courses
                     .filter { it.deletedAt == null && it.semesterId == sem.id && it.name == existing.name }
                     .sortedWith(compareBy({ it.weeks.minOrNull() ?: 99 }, { it.dayOfWeek }, { it.startPeriod }))
-                    .map { SlotDraft(it.id, it, it.dayOfWeek, it.startPeriod, it.endPeriod, it.weeks, it.room, it.remindMinutes, it.teacher) }
+                    .map { SlotDraft(it.id, it, it.dayOfWeek, it.startPeriod, it.endPeriod, it.weeks, it.room, it.remindMinutes, it.teacher, it.effectiveRemindMinutes) }
             } else {
                 val sp = (initialPeriod ?: 1).coerceIn(1, periodCount)
                 val ep = (sp + 1).coerceAtMost(periodCount).coerceAtLeast(sp)
@@ -185,6 +190,7 @@ fun CourseEditScreen(
                         room = "",
                         remindMinutes = null,
                         teacher = "",
+                        remindMinutesList = emptyList(),
                     ),
                 )
             }
@@ -239,7 +245,8 @@ fun CourseEditScreen(
                 endPeriod = s.endPeriod,
                 weeks = s.weeks,
                 colorIndex = color,
-                remindMinutes = s.remindMinutes,
+                remindMinutes = s.effectiveRemindMinutes.firstOrNull(),
+                remindMinutesList = s.effectiveRemindMinutes,
                 note = nt,
             )
         } else {
@@ -254,7 +261,8 @@ fun CourseEditScreen(
                 endPeriod = s.endPeriod,
                 weeks = s.weeks,
                 colorIndex = color,
-                remindMinutes = s.remindMinutes,
+                remindMinutes = s.effectiveRemindMinutes.firstOrNull(),
+                remindMinutesList = s.effectiveRemindMinutes,
                 note = nt,
                 source = Source.MANUAL,
             )
@@ -274,8 +282,9 @@ fun CourseEditScreen(
                 endPeriod = ep,
                 weeks = last?.weeks ?: WeekSets.all(totalWeeks),
                 room = last?.room.orEmpty(),
-                remindMinutes = last?.remindMinutes,
+                remindMinutes = last?.effectiveRemindMinutes?.firstOrNull(),
                 teacher = last?.teacher ?: teacher,
+                remindMinutesList = last?.effectiveRemindMinutes.orEmpty(),
             )
     }
 
@@ -387,7 +396,7 @@ fun CourseEditScreen(
     val defaultRemindSummary =
         stringResource(
             R.string.remind_follow_default,
-            if (settings.remindCourse) remindLabel(settings.courseRemindMinutes) else stringResource(R.string.none),
+            if (settings.remindCourse) remindSummaryLabel(settings.effectiveCourseRemindMinutes) else stringResource(R.string.none),
         )
 
     MintScreen(
@@ -510,12 +519,12 @@ fun CourseEditScreen(
                 }
             }
 
-            val remind = slots.firstOrNull()?.remindMinutes
+            val remindList = slots.firstOrNull()?.effectiveRemindMinutes.orEmpty()
             ValueRow(
                 label = stringResource(R.string.remind_courses),
-                value = if (remind == null) defaultRemindSummary else remindLabel(remind),
+                value = if (remindList.isEmpty()) defaultRemindSummary else remindSummaryLabel(remindList),
                 onClick = { remindDlg = true },
-                valueColor = if (remind != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                valueColor = if (remindList.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             // ── 第三段：课程信息与关联待办 ──
@@ -695,14 +704,14 @@ fun CourseEditScreen(
 
     if (remindDlg) {
         RemindPickDialog(
-            initial = slots.firstOrNull()?.remindMinutes,
+            initial = slots.firstOrNull()?.effectiveRemindMinutes.orEmpty(),
             hasTime = true,
             initialPersistent = false,
             onDismiss = { remindDlg = false },
             noneLabel = defaultRemindSummary,
             showPersistent = false,
-        ) { minutes, _ ->
-            slots = slots.map { it.copy(remindMinutes = minutes) }
+        ) { list, _ ->
+            slots = slots.map { it.copy(remindMinutes = list.firstOrNull(), remindMinutesList = list) }
             remindDlg = false
         }
     }
@@ -1135,7 +1144,8 @@ internal fun buildSlotChanges(
                 endPeriod = s.endPeriod,
                 weeks = s.weeks,
                 colorIndex = colorIndex,
-                remindMinutes = s.remindMinutes,
+                remindMinutes = s.effectiveRemindMinutes.firstOrNull(),
+                remindMinutesList = s.effectiveRemindMinutes,
                 note = nt,
             )
         } else {
@@ -1150,7 +1160,8 @@ internal fun buildSlotChanges(
                 endPeriod = s.endPeriod,
                 weeks = s.weeks,
                 colorIndex = colorIndex,
-                remindMinutes = s.remindMinutes,
+                remindMinutes = s.effectiveRemindMinutes.firstOrNull(),
+                remindMinutesList = s.effectiveRemindMinutes,
                 note = nt,
                 source = Source.MANUAL,
             )

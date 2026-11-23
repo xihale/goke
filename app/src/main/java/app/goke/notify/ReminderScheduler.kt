@@ -169,7 +169,7 @@ class ReminderScheduler(
     private fun stopLingering(snap: Snapshot) {
         val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
         for (t in snap.tasks) {
-            if (t.done || t.deletedAt != null || !t.remindPersistent || t.remindMinutes == null) {
+            if (t.done || t.deletedAt != null || !t.remindPersistent || t.effectiveRemindMinutes.isEmpty()) {
                 nm.cancel(persistentNotifId(t.id, false))
                 nm.cancel(persistentNotifId(t.id, true))
             }
@@ -293,8 +293,13 @@ class ReminderScheduler(
                     when (item) {
                         is CourseItem -> {
                             val c = item.occ.course
-                            val minutes = (c.remindMinutes ?: st.courseRemindMinutes).takeIf { st.remindCourse }
-                            if (minutes != null) {
+                            val minutesList =
+                                if (st.remindCourse) {
+                                    c.effectiveRemindMinutes.ifEmpty { st.effectiveCourseRemindMinutes }
+                                } else {
+                                    emptyList()
+                                }
+                            if (minutesList.isNotEmpty()) {
                                 val loc =
                                     item.occ.room
                                         .trim()
@@ -311,42 +316,51 @@ class ReminderScheduler(
                                 val timeText = "%02d:%02d".format(item.occ.start.hour, item.occ.start.minute)
                                 val detail = listOfNotNull(loc, teacher, dueText).joinToString(" · ")
                                 val text = if (detail.isNotEmpty()) ctx.getString(R.string.remind_course_text, timeText, detail) else timeText
-                                out +=
-                                    Reminder(
-                                        item.occ.start.minusMinutes(minutes.toLong()),
-                                        c.name,
-                                        text,
-                                        "c${c.id}${item.occ.start}",
-                                    )
+                                for (minutes in minutesList) {
+                                    out +=
+                                        Reminder(
+                                            item.occ.start.minusMinutes(minutes.toLong()),
+                                            c.name,
+                                            text,
+                                            "c${c.id}${item.occ.start}:$minutes",
+                                        )
+                                }
                             }
                         }
 
                         is EventItem -> {
                             val e = item.event
-                            val minutes = e.remindMinutes
-                            if (minutes != null && st.remindEvent && !(item.allDay && item.start.toLocalDate() != date)) {
+                            val minutesList = e.effectiveRemindMinutes
+                            if (minutesList.isNotEmpty() && st.remindEvent && !(item.allDay && item.start.toLocalDate() != date)) {
                                 val base = if (item.allDay) date.atTime(ALL_DAY_REMIND_AT) else item.start
                                 val text = if (item.allDay) ctx.getString(R.string.all_day) else "%02d:%02d".format(item.start.hour, item.start.minute)
-                                out += Reminder(base.minusMinutes(minutes.toLong()), e.title, text + (e.location.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""), "e${e.id}${item.start}")
+                                val fullText = text + (e.location.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
+                                for (minutes in minutesList) {
+                                    out += Reminder(base.minusMinutes(minutes.toLong()), e.title, fullText, "e${e.id}${item.start}:$minutes")
+                                }
                             }
                         }
 
                         is TaskItem -> {
                             val t = item.task
-                            val minutes = t.remindMinutes
+                            val minutesList = t.effectiveRemindMinutes
                             val enabled = st.remindTask || (t.source == Source.PARCEL && st.parcelEnabled)
-                            if (minutes != null && enabled && !t.done) {
+                            if (minutesList.isNotEmpty() && enabled && !t.done) {
                                 val base = if (item.hasTime) item.due else date.atTime(ALL_DAY_REMIND_AT)
-                                out += Reminder(base.minusMinutes(minutes.toLong()), t.title, ctx.getString(R.string.remind_task_text), "t${t.id}${item.due}", t.id, t.remindPersistent)
+                                for (minutes in minutesList) {
+                                    out += Reminder(base.minusMinutes(minutes.toLong()), t.title, ctx.getString(R.string.remind_task_text), "t${t.id}${item.due}:$minutes", t.id, t.remindPersistent)
+                                }
                             }
                         }
 
                         is BlockItem -> {
                             val t = item.task
-                            val minutes = t.remindMinutes
+                            val minutesList = t.effectiveRemindMinutes
                             val enabled = st.remindTask || (t.source == Source.PARCEL && st.parcelEnabled)
-                            if (minutes != null && enabled && !t.done) {
-                                out += Reminder(item.start.minusMinutes(minutes.toLong()), t.title, ctx.getString(R.string.remind_task_text), "b${t.id}${item.start}", t.id, t.remindPersistent)
+                            if (minutesList.isNotEmpty() && enabled && !t.done) {
+                                for (minutes in minutesList) {
+                                    out += Reminder(item.start.minusMinutes(minutes.toLong()), t.title, ctx.getString(R.string.remind_task_text), "b${t.id}${item.start}:$minutes", t.id, t.remindPersistent)
+                                }
                             }
                         }
                     }

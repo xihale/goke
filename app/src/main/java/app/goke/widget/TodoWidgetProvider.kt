@@ -26,8 +26,16 @@ class TodoWidgetProvider : AppWidgetProvider() {
         manager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
-        for (id in appWidgetIds) manager.updateAppWidget(id, build(context, id))
+        var hasMini = false
+        for (id in appWidgetIds) {
+            val size = WidgetKit.sizeClass(context, manager, id)
+            if (size.isMini) hasMini = true
+            manager.updateAppWidget(id, build(context, id, size = size))
+        }
         manager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.widget_list)
+        if (hasMini && context.gokeApp.repo.ready.value) {
+            NextWidgetProvider.scheduleTick(context, context.gokeApp.repo.snapshot.value, context.gokeApp.settings.value)
+        }
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -36,8 +44,12 @@ class TodoWidgetProvider : AppWidgetProvider() {
         appWidgetId: Int,
         newOptions: Bundle,
     ) {
-        appWidgetManager.updateAppWidget(appWidgetId, build(context, appWidgetId))
+        val size = WidgetKit.sizeClass(context, newOptions)
+        appWidgetManager.updateAppWidget(appWidgetId, build(context, appWidgetId, size = size))
         appWidgetManager.notifyAppWidgetViewDataChanged(intArrayOf(appWidgetId), R.id.widget_list)
+        if (size.isMini && context.gokeApp.repo.ready.value) {
+            NextWidgetProvider.scheduleTick(context, context.gokeApp.repo.snapshot.value, context.gokeApp.settings.value)
+        }
     }
 
     data class Row(
@@ -61,8 +73,20 @@ class TodoWidgetProvider : AppWidgetProvider() {
             val mgr = AppWidgetManager.getInstance(ctx)
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, TodoWidgetProvider::class.java))
             if (ids.isEmpty()) return
-            for (id in ids) mgr.updateAppWidget(id, build(ctx, id))
+            for (id in ids) {
+                val size = WidgetKit.sizeClass(ctx, mgr, id)
+                mgr.updateAppWidget(id, build(ctx, id, size = size))
+            }
             mgr.notifyAppWidgetViewDataChanged(ids, R.id.widget_list)
+        }
+
+        fun refreshMini(ctx: Context) {
+            val mgr = AppWidgetManager.getInstance(ctx)
+            val ids = mgr.getAppWidgetIds(ComponentName(ctx, TodoWidgetProvider::class.java))
+            for (id in ids) {
+                val size = WidgetKit.sizeClass(ctx, mgr, id)
+                if (size.isMini) mgr.updateAppWidget(id, build(ctx, id, size = size))
+            }
         }
 
         /** 当前该显示的行：先逾期、再今天（均只取未完成的顶层待办）。 */
@@ -94,11 +118,17 @@ class TodoWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        fun build(
+        internal fun build(
             ctx: Context,
             widgetId: Int,
             now: LocalDateTime = LocalDateTime.now(),
+            size: WidgetKit.SizeClass = WidgetKit.SizeClass(),
         ): RemoteViews {
+            if (size.isMini) {
+                val app = ctx.gokeApp
+                val snap = if (app.repo.ready.value) app.repo.snapshot.value else null
+                return NextWidgetProvider.build(ctx, snap, app.settings.value, now, size)
+            }
             val views = RemoteViews(ctx.packageName, R.layout.widget_todo)
             val count = rows(ctx, now).size
             views.setTextViewText(R.id.widget_title, ctx.getString(R.string.tab_todo))

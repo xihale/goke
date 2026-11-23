@@ -60,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.goke.R
 import app.goke.core.model.Freq
+import app.goke.core.model.Reminders
 import app.goke.ui.components.DatePickerDlg
 import app.goke.ui.components.MinutesDialSheet
 import app.goke.ui.components.MonthPager
@@ -99,17 +100,19 @@ internal data class WhenPick(
     val end: LocalTime? get() = start?.let { s -> minutes?.let { m -> s.plusMinutes(m.toLong()) } }
 }
 
-/** 面板结果：日期/时间段 + 提醒 + 重复一次带出；[whenPick] 为 null 表示清掉时间。 */
+/** 面板结果：日期/时间段 + 提醒（可多选）+ 重复一次带出；[whenPick] 为 null 表示清掉时间。 */
 internal data class WhenPanelResult(
     val whenPick: WhenPick?,
-    val remindMinutes: Int? = null,
+    val remindMinutesList: List<Int> = emptyList(),
     val remindPersistent: Boolean = false,
     val freq: Freq? = null,
     val interval: Int = 1,
     val until: LocalDate? = null,
     val byDays: Set<Int> = emptySet(),
     val byMonths: Set<Int> = emptySet(),
-)
+) {
+    val remindMinutes: Int? get() = remindMinutesList.firstOrNull()
+}
 
 /**
  * 「日期&持续」面板，快捷添加条和编辑页共用：
@@ -123,6 +126,7 @@ internal fun WhenPanel(
     defaultDate: LocalDate,
     defaultMinutes: Int,
     initialRemind: Int? = null,
+    initialRemindList: List<Int> = emptyList(),
     initialPersistent: Boolean = false,
     initialFreq: Freq? = null,
     initialInterval: Int = 1,
@@ -134,11 +138,12 @@ internal fun WhenPanel(
     onPick: (WhenPanelResult) -> Unit,
 ) {
     val ctx = LocalContext.current
+    val normInitialRemind = remember(initialRemind, initialRemindList) { Reminders.normalize(initialRemind, initialRemindList) }
     var date by remember { mutableStateOf(initial?.date ?: defaultDate) }
     var startMin by remember { mutableIntStateOf(initial?.start?.let { it.hour * 60 + it.minute } ?: -1) }
     var minutes by remember { mutableStateOf(initial?.minutes) }
-    var remind by remember { mutableStateOf(initialRemind) }
-    var persistent by remember { mutableStateOf(initialPersistent && initialRemind != null) }
+    var remindList by remember { mutableStateOf(normInitialRemind) }
+    var persistent by remember { mutableStateOf(initialPersistent && normInitialRemind.isNotEmpty()) }
     var freq by remember { mutableStateOf(initialFreq) }
     var interval by remember { mutableIntStateOf(initialInterval) }
     var until by remember { mutableStateOf(initialUntil) }
@@ -160,7 +165,7 @@ internal fun WhenPanel(
             if (whenPick == null) {
                 WhenPanelResult(
                     whenPick = null,
-                    remindMinutes = null,
+                    remindMinutesList = emptyList(),
                     remindPersistent = false,
                     freq = null,
                     interval = 1,
@@ -171,8 +176,8 @@ internal fun WhenPanel(
             } else {
                 WhenPanelResult(
                     whenPick = whenPick,
-                    remindMinutes = remind,
-                    remindPersistent = remind != null && persistent,
+                    remindMinutesList = remindList,
+                    remindPersistent = remindList.isNotEmpty() && persistent,
                     freq = freq,
                     interval = interval,
                     until = if (freq == null) null else until,
@@ -254,7 +259,7 @@ internal fun WhenPanel(
                         modifier = Modifier.padding(start = 32.dp, bottom = 4.dp),
                     )
                 }
-                SettingRow(Icons.Rounded.Alarm, stringResource(R.string.label_remind), remindLabel(remind), remind != null, onClear = { remind = null }) { remindDlg = true }
+                SettingRow(Icons.Rounded.Alarm, stringResource(R.string.label_remind), remindSummaryLabel(remindList), remindList.isNotEmpty(), onClear = { remindList = emptyList() }) { remindDlg = true }
                 SettingRow(
                     Icons.Rounded.Repeat,
                     stringResource(R.string.label_repeat),
@@ -278,7 +283,7 @@ internal fun WhenPanel(
                     SettingRow(Icons.Rounded.DateRange, stringResource(R.string.repeat_end), endLabel, until != null, onClear = { until = null }) { endDlg = true }
                 }
             }
-            val hasAnySet = datePicked || startMin >= 0 || minutes != null || remind != null || freq != null
+            val hasAnySet = datePicked || startMin >= 0 || minutes != null || remindList.isNotEmpty() || freq != null
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (hasAnySet) {
                     TextButton(onClick = { close(null) }) {
@@ -321,8 +326,8 @@ internal fun WhenPanel(
         }
     }
     if (remindDlg) {
-        RemindPickDialog(remind, start != null, persistent, { remindDlg = false }) { minutes, nag ->
-            remind = minutes
+        RemindPickDialog(remindList, start != null, persistent, { remindDlg = false }) { list, nag ->
+            remindList = list
             persistent = nag
             remindDlg = false
         }
@@ -466,6 +471,14 @@ internal fun remindLabel(m: Int?): String =
     }
 
 @Composable
+internal fun remindSummaryLabel(minutes: List<Int>): String {
+    val normalized = Reminders.normalize(null, minutes)
+    if (normalized.isEmpty()) return stringResource(R.string.none)
+    val sep = stringResource(R.string.list_sep)
+    return normalized.map { remindLabel(it) }.joinToString(sep)
+}
+
+@Composable
 internal fun freqLabel(
     f: Freq?,
     until: LocalDate?,
@@ -597,21 +610,21 @@ private fun freqUnit(f: Freq): String =
         },
     )
 
-/** 提醒。有时刻：提前多少。只有日期：对齐 TickTick，锚在当天 09:00。自定义另开一页填分钟。 */
+/** 提醒（支持多选）。有时刻：提前多少。只有日期：对齐 TickTick，锚在当天 09:00。自定义另开一页填分钟并添加到已选列表。 */
 @Composable
 internal fun RemindPickDialog(
-    initial: Int?,
+    initial: List<Int>,
     hasTime: Boolean,
     initialPersistent: Boolean,
     onDismiss: () -> Unit,
-    noneLabel: String = stringResource(R.string.none),
+    noneLabel: String? = stringResource(R.string.none),
+    allowEmpty: Boolean = true,
     showPersistent: Boolean = true,
-    onPick: (Int?, Boolean) -> Unit,
+    onPick: (List<Int>, Boolean) -> Unit,
 ) {
-    val presets: List<Pair<Int?, String>> =
+    val presets: List<Pair<Int, String>> =
         if (hasTime) {
             listOf(
-                null to noneLabel,
                 0 to stringResource(R.string.remind_at_due),
                 5 to stringResource(R.string.remind_5m),
                 10 to stringResource(R.string.remind_10m),
@@ -622,7 +635,6 @@ internal fun RemindPickDialog(
             )
         } else {
             listOf(
-                null to noneLabel,
                 0 to stringResource(R.string.remind_same_day),
                 1440 to stringResource(R.string.remind_before_days, 1),
                 2880 to stringResource(R.string.remind_before_days, 2),
@@ -630,14 +642,14 @@ internal fun RemindPickDialog(
                 10080 to stringResource(R.string.remind_before_week),
             )
         }
-    val customInit = initial != null && presets.none { it.first == initial }
-    var sel by remember { mutableStateOf(if (customInit) -1 else initial) }
-    var nag by remember { mutableStateOf(initialPersistent) }
-    var customText by remember { mutableStateOf(if (customInit) initial.toString() else "") }
+    val presetValues = remember(presets) { presets.map { it.first }.toSet() }
+    var selected by remember { mutableStateOf(Reminders.normalize(null, initial).toSet()) }
+    var nag by remember { mutableStateOf(initialPersistent && initial.isNotEmpty()) }
+    var customText by remember { mutableStateOf("") }
     var customPage by remember { mutableStateOf(false) }
     val customValue = customText.toIntOrNull()
     val customValid = customValue != null && customValue in 0..10080
-    val canConfirm = sel != -1 || customValid
+    val canConfirm = if (customPage) customValid else (allowEmpty || selected.isNotEmpty())
     PickerSheet(onDismiss) {
         Column(Modifier.padding(top = 6.dp, bottom = 8.dp)) {
             if (customPage) {
@@ -664,19 +676,37 @@ internal fun RemindPickDialog(
             } else {
                 Text(
                     stringResource(R.string.label_remind),
-                    Modifier.padding(start = 4.dp, end = 4.dp, bottom = 8.dp),
+                    Modifier.padding(start = 4.dp, end = 4.dp, bottom = 2.dp),
                     style = MaterialTheme.typography.titleMedium,
                 )
-                presets.forEach { (v, label) ->
-                    RemindOption(label, selected = sel == v) { sel = v }
+                Text(
+                    stringResource(R.string.remind_multi_hint),
+                    Modifier.padding(start = 4.dp, end = 4.dp, bottom = 8.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (noneLabel != null && allowEmpty) {
+                    RemindOption(noneLabel, selected = selected.isEmpty(), multi = false) {
+                        selected = emptySet()
+                    }
                 }
-                RemindOption(stringResource(R.string.detail_editor_remind_custom), selected = sel == -1, chevron = true) {
-                    sel = -1
+                presets.forEach { (v, label) ->
+                    RemindOption(label, selected = v in selected, multi = true) {
+                        selected = if (v in selected) selected - v else selected + v
+                    }
+                }
+                val customSelected = selected.filter { it !in presetValues }.sorted()
+                customSelected.forEach { v ->
+                    RemindOption(remindLabel(v), selected = true, multi = true) {
+                        selected = selected - v
+                    }
+                }
+                RemindOption(stringResource(R.string.detail_editor_remind_custom), selected = false, chevron = true) {
+                    customText = ""
                     customPage = true
                 }
             }
-            val chosen = if (sel == -1) customValue.takeIf { customValid } else sel
-            if (showPersistent) {
+            if (!customPage && showPersistent) {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -690,19 +720,29 @@ internal fun RemindPickDialog(
                         )
                     }
                     Switch(
-                        checked = nag && chosen != null,
+                        checked = nag && selected.isNotEmpty(),
                         onCheckedChange = { nag = it },
-                        enabled = chosen != null,
+                        enabled = selected.isNotEmpty(),
                     )
                 }
             }
             Row(Modifier.fillMaxWidth().padding(end = 4.dp), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) {
+                TextButton(onClick = {
+                    if (customPage) customPage = false else onDismiss()
+                }) {
                     Text(stringResource(R.string.cancel), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
                 }
-                TextButton(enabled = canConfirm, onClick = { onPick(if (sel == -1) customValue!! else sel, nag && chosen != null) }) {
+                TextButton(enabled = canConfirm, onClick = {
+                    if (customPage) {
+                        selected = selected + customValue!!
+                        customPage = false
+                    } else {
+                        val list = selected.sorted()
+                        onPick(list, nag && list.isNotEmpty())
+                    }
+                }) {
                     Text(
-                        stringResource(R.string.ok),
+                        stringResource(if (customPage) R.string.add else R.string.ok),
                         style = MaterialTheme.typography.bodyLarge,
                         color = if (canConfirm) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -717,6 +757,7 @@ private fun RemindOption(
     label: String,
     selected: Boolean,
     chevron: Boolean = false,
+    multi: Boolean = false,
     onClick: () -> Unit,
 ) {
     Row(
@@ -724,7 +765,12 @@ private fun RemindOption(
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .semantics {
-                role = if (chevron) Role.Button else Role.RadioButton
+                role =
+                    when {
+                        chevron -> Role.Button
+                        multi -> Role.Checkbox
+                        else -> Role.RadioButton
+                    }
                 this.selected = selected
             }.mintClickable(pressedScale = 0.98f, onClick = onClick)
             .padding(horizontal = 4.dp),

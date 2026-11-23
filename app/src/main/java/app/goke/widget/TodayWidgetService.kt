@@ -29,7 +29,7 @@ class TodayWidgetService : RemoteViewsService() {
 
         override fun getViewAt(position: Int): RemoteViews {
             val r = rows.getOrNull(position) ?: return RemoteViews(ctx.packageName, R.layout.widget_today_item)
-            return itemView(ctx, r, compact)
+            return itemView(ctx, r, compact = compact)
         }
 
         override fun getLoadingView(): RemoteViews? = null
@@ -58,6 +58,7 @@ class TodayWidgetService : RemoteViewsService() {
                 v.setInt(R.id.today_item_root, "setBackgroundResource", 0)
                 v.setViewVisibility(R.id.today_item_progress, View.GONE)
                 v.setTextColor(R.id.today_item_time, ctx.getColor(R.color.widget_muted))
+                v.setTextColor(R.id.today_item_end, ctx.getColor(R.color.widget_muted))
                 v.setTextColor(R.id.today_item_title, ctx.getColor(if (r.code != null) R.color.widget_accent else R.color.widget_text))
                 v.setTextColor(R.id.today_item_sub, ctx.getColor(R.color.widget_muted))
             } else {
@@ -89,11 +90,18 @@ class TodayWidgetService : RemoteViewsService() {
                         }
                     }
                 v.setTextColor(R.id.today_item_time, fg)
+                v.setTextColor(R.id.today_item_end, WidgetKit.softFg(fg))
                 v.setTextColor(R.id.today_item_title, fg)
                 v.setTextColor(R.id.today_item_sub, WidgetKit.softFg(fg))
             }
-            v.setViewVisibility(R.id.today_item_time, if (compact) View.GONE else View.VISIBLE)
+            v.setViewVisibility(R.id.today_item_time_col, if (compact) View.GONE else View.VISIBLE)
             v.setTextViewText(R.id.today_item_time, r.time)
+            if (r.endTime != null) {
+                v.setViewVisibility(R.id.today_item_end, View.VISIBLE)
+                v.setTextViewText(R.id.today_item_end, r.endTime)
+            } else {
+                v.setViewVisibility(R.id.today_item_end, View.GONE)
+            }
             v.setViewVisibility(R.id.today_item_code, View.GONE)
             if (r.code != null) {
                 v.setTextViewText(R.id.today_item_title, r.code)
@@ -101,9 +109,15 @@ class TodayWidgetService : RemoteViewsService() {
                 v.setTextViewText(R.id.today_item_sub, r.title)
             } else {
                 v.setTextViewText(R.id.today_item_title, r.title)
+                val timeSpan =
+                    if (r.endTime != null) {
+                        "${r.time}–${r.endTime}"
+                    } else {
+                        r.time
+                    }
                 val subText =
                     if (compact) {
-                        listOfNotNull(r.time.takeIf { it.isNotBlank() }, r.sub?.takeIf { it.isNotBlank() }).joinToString(" · ")
+                        listOfNotNull(timeSpan.takeIf { it.isNotBlank() }, r.sub?.takeIf { it.isNotBlank() }).joinToString(" · ")
                     } else {
                         r.sub.orEmpty()
                     }
@@ -154,7 +168,7 @@ class TodayWidgetService : RemoteViewsService() {
                 }
             v.setOnClickFillInIntent(R.id.today_item_root, open)
             v.setOnClickFillInIntent(R.id.today_item_body, open)
-            v.setOnClickFillInIntent(R.id.today_item_time, open)
+            v.setOnClickFillInIntent(R.id.today_item_time_col, open)
             return v
         }
     }

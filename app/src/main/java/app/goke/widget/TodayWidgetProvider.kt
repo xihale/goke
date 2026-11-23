@@ -41,8 +41,8 @@ class TodayWidgetProvider : AppWidgetProvider() {
         val snap = if (app.repo.ready.value) app.repo.snapshot.value else null
         val st = app.settings.value
         for (id in appWidgetIds) {
-            val compact = WidgetKit.isCompactWidth(manager, id)
-            manager.updateAppWidget(id, build(context, id, snap, st, compact = compact))
+            val size = WidgetKit.sizeClass(context, manager, id)
+            manager.updateAppWidget(id, build(context, id, snap, st, size = size))
         }
         manager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.today_list)
         if (snap != null) scheduleTick(context, snap, st)
@@ -59,7 +59,7 @@ class TodayWidgetProvider : AppWidgetProvider() {
         val st = app.settings.value
         appWidgetManager.updateAppWidget(
             appWidgetId,
-            build(context, appWidgetId, snap, st, compact = WidgetKit.isCompactWidth(newOptions)),
+            build(context, appWidgetId, snap, st, size = WidgetKit.sizeClass(context, newOptions)),
         )
         appWidgetManager.notifyAppWidgetViewDataChanged(intArrayOf(appWidgetId), R.id.today_list)
     }
@@ -78,6 +78,7 @@ class TodayWidgetProvider : AppWidgetProvider() {
     data class Row(
         val key: String,
         val time: String,
+        val endTime: String? = null,
         val title: String,
         val sub: String?,
         val code: String?,
@@ -110,8 +111,8 @@ class TodayWidgetProvider : AppWidgetProvider() {
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, TodayWidgetProvider::class.java))
             if (ids.isEmpty()) return
             for (id in ids) {
-                val compact = WidgetKit.isCompactWidth(mgr, id)
-                mgr.updateAppWidget(id, build(ctx, id, snap, st, compact = compact))
+                val size = WidgetKit.sizeClass(ctx, mgr, id)
+                mgr.updateAppWidget(id, build(ctx, id, snap, st, size = size))
             }
             mgr.notifyAppWidgetViewDataChanged(ids, R.id.today_list)
             scheduleTick(ctx, snap, st)
@@ -202,11 +203,12 @@ class TodayWidgetProvider : AppWidgetProvider() {
                         val o = item.occ
                         val phase = WidgetKit.timePhase(o.start, o.end, now)
                         val progress = WidgetKit.timeProgress(o.start, o.end, now)
-                        val sub = o.room.takeIf { it.isNotBlank() } ?: "–${o.end.hm()}"
+                        val sub = o.room.takeIf { it.isNotBlank() }
                         result +=
                             Row(
                                 key = "c_${o.course.id}_${o.start}",
                                 time = o.start.hm(),
+                                endTime = o.end.hm(),
                                 title = o.course.name,
                                 sub = sub,
                                 code = null,
@@ -234,6 +236,7 @@ class TodayWidgetProvider : AppWidgetProvider() {
                             Row(
                                 key = "e_${item.event.id}_${item.start}",
                                 time = if (item.allDay) ctx.getString(R.string.all_day) else item.start.hm(),
+                                endTime = if (!item.allDay && item.end.isAfter(item.start)) item.end.hm() else null,
                                 title = item.event.title,
                                 sub = WidgetKit.eventLocation(ctx, item.event),
                                 code = null,
@@ -259,8 +262,9 @@ class TodayWidgetProvider : AppWidgetProvider() {
                             Row(
                                 key = "b_${t.id}",
                                 time = item.start.hm(),
+                                endTime = if (item.end.isAfter(item.start)) item.end.hm() else null,
                                 title = cleanTitle,
-                                sub = "–${item.end.hm()}",
+                                sub = null,
                                 code = code,
                                 colorIndex = -1,
                                 priority = t.priority,
@@ -321,19 +325,20 @@ class TodayWidgetProvider : AppWidgetProvider() {
             return result.take(MAX_ROWS)
         }
 
-        fun build(
+        internal fun build(
             ctx: Context,
             widgetId: Int,
             snap: Snapshot?,
             st: Settings,
             now: LocalDateTime = LocalDateTime.now(),
-            compact: Boolean = false,
+            size: WidgetKit.SizeClass = WidgetKit.SizeClass(),
         ): RemoteViews {
+            if (size.isMini) return NextWidgetProvider.build(ctx, snap, st, now, size)
             val views = RemoteViews(ctx.packageName, R.layout.widget_today)
             val today: LocalDate = now.toLocalDate()
-            views.setTextViewText(R.id.widget_title, if (compact) ctx.monthDay(today) else ctx.monthDayWeekday(today))
+            views.setTextViewText(R.id.widget_title, if (size.compactWidth) ctx.monthDay(today) else ctx.monthDayWeekday(today))
             val weekBadge = WidgetKit.weekBadge(ctx, snap?.live()?.currentSemester, today)
-            if (!compact && weekBadge != null) {
+            if (!size.compactWidth && weekBadge != null) {
                 views.setViewVisibility(R.id.today_week_sep, View.VISIBLE)
                 views.setViewVisibility(R.id.today_week, View.VISIBLE)
                 views.setTextViewText(R.id.today_week, weekBadge)
@@ -343,7 +348,8 @@ class TodayWidgetProvider : AppWidgetProvider() {
             }
             views.setRemoteAdapter(
                 R.id.today_list,
-                Intent(ctx, TodayWidgetService::class.java).setData(Uri.parse("goke://widget/today/$widgetId?compact=$compact")),
+                Intent(ctx, TodayWidgetService::class.java)
+                    .setData(Uri.parse("goke://widget/today/$widgetId?compact=${size.compactWidth}")),
             )
             views.setEmptyView(R.id.today_list, R.id.today_empty)
             views.setPendingIntentTemplate(

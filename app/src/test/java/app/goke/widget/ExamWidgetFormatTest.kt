@@ -64,6 +64,8 @@ class ExamWidgetFormatTest {
         val now = LocalDateTime.of(2026, 6, 15, 8, 0)
         val rows = TodayWidgetProvider.buildRows(ctx, snap, Settings(), now)
         assertEquals("教3-208 · 34座", rows.first { it.eventId == "e_seat" }.sub)
+        assertEquals("09:00", rows.first { it.eventId == "e_seat" }.time)
+        assertEquals("11:00", rows.first { it.eventId == "e_seat" }.endTime)
         assertEquals("教4-101", rows.first { it.eventId == "e_noseat" }.sub)
         assertEquals("活动中心", rows.first { it.eventId == "e_normal" }.sub)
     }
@@ -74,13 +76,17 @@ class ExamWidgetFormatTest {
         val snapWithSeat = Snapshot(events = listOf(examWithSeat))
 
         val upcoming = NextWidgetProvider.pickSummary(ctx, snapWithSeat, Settings(), LocalDateTime.of(2026, 6, 15, 8, 30))
-        assertEquals("09:00", upcoming.badge)
+        assertEquals("09:00", upcoming.startTime)
+        assertEquals("11:00", upcoming.endTime)
+        assertEquals("", upcoming.badge)
         assertEquals("教3-208 · 34座", upcoming.sub)
         assertEquals("高等数学", upcoming.title)
         assertEquals("e_seat", upcoming.eventId)
 
         val ongoing = NextWidgetProvider.pickSummary(ctx, snapWithSeat, Settings(), LocalDateTime.of(2026, 6, 15, 9, 30))
-        assertEquals("–11:00", ongoing.badge)
+        assertEquals("09:00", ongoing.startTime)
+        assertEquals("11:00", ongoing.endTime)
+        assertEquals("", ongoing.badge)
         assertEquals("教3-208 · 34座", ongoing.sub)
         assertEquals(true, ongoing.ongoing)
         assertEquals(0.25f, ongoing.progress, 0.001f)

@@ -3,7 +3,9 @@ package app.goke.sync
 import android.os.Build
 import app.goke.core.sync.SyncCodec
 import app.goke.core.sync.SyncPlanner
+import app.goke.data.ErrorReporter
 import app.goke.data.Repository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -38,6 +40,7 @@ class SyncManager(
     private val store: SyncStore,
     private val scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val errors: ErrorReporter? = null,
 ) {
     private val mutex = Mutex()
     private var pending: Job? = null
@@ -130,7 +133,15 @@ class SyncManager(
         pending =
             scope.launch {
                 delay(delayMs)
-                runCatching { syncNow() }
+                try {
+                    syncNow()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: SyncException) {
+                    // 预期同步失败已写入状态
+                } catch (e: Throwable) {
+                    errors?.record("Sync.requestSync", e)
+                }
             }
     }
 
@@ -200,6 +211,14 @@ class SyncManager(
                         store.lastError = e.message
                     }
                     publish()
+                    throw e
+                } catch (e: CancellationException) {
+                    publish()
+                    throw e
+                } catch (e: Throwable) {
+                    store.lastError = e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName
+                    publish()
+                    errors?.record("Sync.syncNow", e)
                     throw e
                 }
             }

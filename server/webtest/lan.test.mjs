@@ -169,7 +169,6 @@ test('settingsView 在 LAN 模式下显示“手机局域网直连”并隐藏�
     assert.ok(!cloudText.includes('手机局域网直连'));
     assert.ok(cloudText.includes('修改密码'));
     assert.ok(cloudText.includes('云端 MCP'));
-    assert.ok(cloudText.includes('实验功能（EXP）'));
 
     ctx.lanMode = true;
     ctx.user = { id: 2, username: '本机 (局域网)', role: 'user', mode: 'lan' };
@@ -177,7 +176,6 @@ test('settingsView 在 LAN 模式下显示“手机局域网直连”并隐藏�
     assert.ok(lanText.includes('手机局域网直连'));
     assert.ok(!lanText.includes('修改密码'));
     assert.ok(!lanText.includes('云端 MCP'));
-    assert.ok(!lanText.includes('实验功能（EXP）'));
   } finally {
     Object.assign(ctx, prevCtx);
     restoreDom();

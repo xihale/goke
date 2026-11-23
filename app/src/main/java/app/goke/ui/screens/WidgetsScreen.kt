@@ -588,7 +588,7 @@ private fun TodayWidgetPreview(
                     val bg = if (row.finished) scheme.surfaceVariant else mintColors.bg(row.colorIndex)
                     val fg = if (row.finished) scheme.onSurfaceVariant else mintColors.fg(row.colorIndex)
                     val progress = if (row.ongoing) row.progress else 0f
-                    PreviewCourseStrip(row.time, row.title, row.sub, bg, fg, progress)
+                    PreviewCourseStrip(row.time, row.endTime, row.title, row.sub, bg, fg, progress)
                 } else {
                     PreviewTaskStrip(
                         left = row.time,
@@ -601,6 +601,7 @@ private fun TodayWidgetPreview(
         } else {
             PreviewCourseStrip(
                 time = "08:30",
+                endTime = "10:05",
                 title = stringResource(R.string.widgets_sample_course_1),
                 sub = stringResource(R.string.widgets_sample_course_1_room),
                 bg = mintColors.bg(1),
@@ -817,7 +818,9 @@ private fun NextWidgetPreview(
     val summary = remember(ctx, snap, st, now) { NextWidgetProvider.pickSummary(ctx, snap, st, now) }
     val emptyTitle = stringResource(R.string.widget_next_empty)
     val useSample = summary.title == emptyTitle
-    val badge = if (useSample) "–10:05" else summary.badge
+    val startTime = if (useSample) "08:30" else summary.startTime
+    val endTime = if (useSample) "10:05" else summary.endTime
+    val badge = if (useSample) "" else summary.badge
     val badgeTone = if (useSample) NextWidgetProvider.BadgeTone.MUTED else summary.badgeTone
     val sub = if (useSample) stringResource(R.string.widgets_sample_course_1_room) else summary.sub
     val title = if (useSample) stringResource(R.string.widgets_sample_course_1) else summary.title
@@ -849,6 +852,23 @@ private fun NextWidgetPreview(
                     .clip(CircleShape)
                     .background(barColor),
         )
+        if (startTime != null) {
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.width(44.dp), horizontalAlignment = Alignment.End) {
+                Text(
+                    startTime,
+                    style = typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                    fontWeight = FontWeight.Bold,
+                )
+                if (endTime != null) {
+                    Text(
+                        endTime,
+                        style = typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
         Column(Modifier.weight(1f).padding(horizontal = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
@@ -859,28 +879,30 @@ private fun NextWidgetPreview(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = true),
                 )
-                when (badgeTone) {
-                    NextWidgetProvider.BadgeTone.CODE -> {
-                        Tag(badge, scheme.primaryContainer, scheme.onPrimaryContainer)
-                    }
+                if (badge.isNotEmpty()) {
+                    when (badgeTone) {
+                        NextWidgetProvider.BadgeTone.CODE -> {
+                            Tag(badge, scheme.primaryContainer, scheme.onPrimaryContainer)
+                        }
 
-                    NextWidgetProvider.BadgeTone.OVERDUE -> {
-                        Text(
-                            badge,
-                            style = typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = scheme.error,
-                            maxLines = 1,
-                        )
-                    }
+                        NextWidgetProvider.BadgeTone.OVERDUE -> {
+                            Text(
+                                badge,
+                                style = typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = scheme.error,
+                                maxLines = 1,
+                            )
+                        }
 
-                    NextWidgetProvider.BadgeTone.MUTED -> {
-                        Text(
-                            badge,
-                            style = typography.labelSmall.copy(fontFeatureSettings = "tnum"),
-                            color = scheme.onSurfaceVariant,
-                            maxLines = 1,
-                        )
+                        NextWidgetProvider.BadgeTone.MUTED -> {
+                            Text(
+                                badge,
+                                style = typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                                color = scheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
                     }
                 }
             }
@@ -901,6 +923,7 @@ private fun NextWidgetPreview(
 @Composable
 private fun PreviewCourseStrip(
     time: String,
+    endTime: String?,
     title: String,
     sub: String?,
     bg: Color,
@@ -923,7 +946,12 @@ private fun PreviewCourseStrip(
                 }.padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(time, style = typography.labelMedium, fontWeight = FontWeight.Bold, color = fg, modifier = Modifier.width(44.dp))
+        Column(Modifier.width(44.dp)) {
+            Text(time, style = typography.labelMedium.copy(fontFeatureSettings = "tnum"), fontWeight = FontWeight.Bold, color = fg)
+            if (endTime != null) {
+                Text(endTime, style = typography.labelSmall.copy(fontFeatureSettings = "tnum"), color = fg.copy(alpha = 0.78f))
+            }
+        }
         Column(Modifier.weight(1f)) {
             Text(title, style = typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!sub.isNullOrBlank()) {

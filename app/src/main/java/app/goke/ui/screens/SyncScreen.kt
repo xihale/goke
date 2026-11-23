@@ -78,21 +78,18 @@ private val SYNC_STAMP: DateTimeFormatter = DateTimeFormatter.ofPattern("M月d�
 
 private fun syncStamp(ms: Long): String = LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault()).format(SYNC_STAMP)
 
-/** 「账号与同步」：系统日历（桌面与第三方账号双向互通） + 自建云端服务器同步。 */
+/** 「账号与同步」：自建云端服务器同步。 */
 @Composable
 fun SyncScreen(onBack: () -> Unit) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val cloudState by app.sync.state.collectAsState()
-    val calState by app.calendarSync.state.collectAsState()
-    val refreshing = cloudState.syncing || calState.syncing
 
     MintScreen(title = stringResource(R.string.sync_title), onBack = onBack) {
         PullToRefreshBox(
-            isRefreshing = refreshing,
+            isRefreshing = cloudState.syncing,
             onRefresh = {
                 scope.launch {
-                    runCatching { app.calendarSync.syncNow() }
                     runCatching { app.sync.syncNow() }
                 }
             },
@@ -113,6 +110,36 @@ fun SyncScreen(onBack: () -> Unit) {
                     AccountPanel(account, cloudState.syncing, cloudState.lastSyncAt, cloudState.lastError, cloudState.needsRelogin)
                     CloudMcpCard(account)
                 }
+            }
+        }
+    }
+}
+
+/** 「系统日历同步」：独立的系统日历与桌面账号双向同步设置页（可直接从设置主页进入）。 */
+@Composable
+fun CalendarSyncScreen(onBack: () -> Unit) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    val calState by app.calendarSync.state.collectAsState()
+
+    MintScreen(title = stringResource(R.string.cal_sync_title), onBack = onBack) {
+        PullToRefreshBox(
+            isRefreshing = calState.syncing,
+            onRefresh = {
+                scope.launch {
+                    runCatching { app.calendarSync.syncNow() }
+                }
+            },
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
                 SystemCalendarSection()
             }
         }

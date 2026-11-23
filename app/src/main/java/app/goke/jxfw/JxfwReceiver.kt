@@ -16,7 +16,7 @@ class JxfwReceiver : BroadcastReceiver() {
     ) {
         val app = context.gokeApp
         val pending = goAsync()
-        CoroutineScope(Dispatchers.Default).launch {
+        CoroutineScope(Dispatchers.Default + app.errors.coroutineExceptionHandler).launch {
             try {
                 if (app.repo.snapshot.value.semesters
                         .isEmpty()

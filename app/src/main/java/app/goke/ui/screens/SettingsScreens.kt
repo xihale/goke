@@ -105,12 +105,14 @@ import app.goke.ui.LocalTabVisible
 import app.goke.ui.Route
 import app.goke.ui.Tab
 import app.goke.ui.components.ChipChoice
+import app.goke.ui.components.ErrorLogListDialog
 import app.goke.ui.components.FormSection
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.MinutesDialSheet
 import app.goke.ui.components.NavListInset
 import app.goke.ui.components.NavRow
+import app.goke.ui.components.QqGroupCardDialog
 import app.goke.ui.components.SectionLabel
 import app.goke.ui.components.SegmentedPill
 import app.goke.ui.components.SwitchRow
@@ -121,12 +123,12 @@ import app.goke.ui.components.ValueRow
 import app.goke.ui.components.mintClickable
 import app.goke.ui.icons.Alarm
 import app.goke.ui.icons.BatterySaver
+import app.goke.ui.icons.CalendarMonth
 import app.goke.ui.icons.Cloud
 import app.goke.ui.icons.DeleteSweep
 import app.goke.ui.icons.FitnessCenter
 import app.goke.ui.icons.Grade
 import app.goke.ui.icons.History
-import app.goke.ui.icons.IosShare
 import app.goke.ui.icons.LaptopMac
 import app.goke.ui.icons.LocalShipping
 import app.goke.ui.icons.MeetingRoom
@@ -269,6 +271,7 @@ fun SettingsScreen() {
             }
             item(key = "sync_data_section", contentType = "form_section") {
                 FormSection(stringResource(R.string.me_hub_sync_section)) {
+                    CalendarSyncNavRow { nav.push(Route.CalendarSync) }
                     SyncNavRow { nav.push(Route.Sync) }
                     NavRow(stringResource(R.string.data_title), null, Icons.Rounded.SwapVert) { nav.push(Route.Data) }
                     TrashNavRow { nav.push(Route.Trash) }
@@ -312,19 +315,32 @@ fun SettingsScreen() {
                     exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
                 ) {
                     Column {
-                        var remindDial by remember { mutableStateOf(false) }
+                        var remindDlg by remember { mutableStateOf(false) }
+                        val courseReminders = st.effectiveCourseRemindMinutes
                         ValueRow(
                             stringResource(R.string.remind_courses),
-                            if (st.courseRemindMinutes == 0) {
-                                stringResource(R.string.settings_remind_at_start)
-                            } else {
-                                stringResource(R.string.settings_remind_early_n, st.courseRemindMinutes)
-                            },
-                            onClick = { remindDial = true },
+                            remindSummaryLabel(courseReminders),
+                            onClick = { remindDlg = true },
                         )
-                        if (remindDial) {
-                            MinutesDialSheet(st.courseRemindMinutes, onDismiss = { remindDial = false }) { v ->
-                                app.settings.update { it.copy(courseRemindMinutes = v) }
+                        if (remindDlg) {
+                            RemindPickDialog(
+                                initial = courseReminders,
+                                hasTime = true,
+                                initialPersistent = false,
+                                onDismiss = { remindDlg = false },
+                                noneLabel = null,
+                                allowEmpty = false,
+                                showPersistent = false,
+                            ) { list, _ ->
+                                if (list.isNotEmpty()) {
+                                    app.settings.update {
+                                        it.copy(
+                                            courseRemindMinutes = list.first(),
+                                            courseRemindMinutesList = list,
+                                        )
+                                    }
+                                }
+                                remindDlg = false
                             }
                         }
                     }
@@ -398,12 +414,6 @@ fun SettingsScreen() {
             item(key = "more_mcp", contentType = "nav_row") {
                 McpNavRow { nav.push(Route.Mcp) }
             }
-            item(key = "group_exp_header", contentType = "section_label") {
-                SectionLabel(stringResource(R.string.settings_group_exp), modifier = Modifier.padding(top = 24.dp))
-            }
-            item(key = "more_relay", contentType = "nav_row") {
-                RelayNavRow { nav.push(Route.Relay) }
-            }
             item(key = "group_about_header", contentType = "section_label") {
                 SectionLabel(stringResource(R.string.settings_group_about), modifier = Modifier.padding(top = 24.dp))
             }
@@ -425,6 +435,26 @@ fun SettingsScreen() {
             }
         }
     }
+}
+
+@Composable
+private fun CalendarSyncNavRow(onOpen: () -> Unit) {
+    val app = LocalApp.current
+    val calState by app.calendarSync.state.collectAsState()
+    val count = calState.prefs.selectedCalendarIds.size
+    val status =
+        when {
+            !calState.prefs.enabled -> stringResource(R.string.cal_sync_status_off)
+            count > 0 -> stringResource(R.string.cal_sync_status_count, count)
+            else -> stringResource(R.string.cal_sync_status_on)
+        }
+    NavRow(
+        stringResource(R.string.cal_sync_title),
+        null,
+        Icons.Rounded.CalendarMonth,
+        trailing = status,
+        onClick = onOpen,
+    )
 }
 
 @Composable
@@ -575,17 +605,6 @@ private fun McpNavRow(onOpen: () -> Unit) {
         null,
         Icons.Rounded.Terminal,
         trailing = stringResource(if (mcpState.running) R.string.mcp_status_on else R.string.mcp_status_off),
-        onClick = onOpen,
-    )
-}
-
-@Composable
-private fun RelayNavRow(onOpen: () -> Unit) {
-    NavRow(
-        stringResource(R.string.relay_title),
-        stringResource(R.string.relay_nav_desc),
-        Icons.Rounded.IosShare,
-        trailing = stringResource(R.string.relay_exp_badge),
         onClick = onOpen,
     )
 }
@@ -917,6 +936,9 @@ fun AppearanceScreen(onBack: () -> Unit) {
     }
 }
 
+private const val QQ_GROUP_NUMBER = "1137453860"
+private const val QQ_GROUP_URL = "https://qm.qq.com/q/VWUh0uEhKY"
+
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val app = LocalApp.current
@@ -926,7 +948,10 @@ fun AboutScreen(onBack: () -> Unit) {
     val checking by app.updateChecker.checking.collectAsState()
     var showIntervalDialog by remember { mutableStateOf(false) }
     var showLicenseDialog by remember { mutableStateOf(false) }
+    var showQqGroupDialog by remember { mutableStateOf(false) }
+    var showErrorLogsDialog by remember { mutableStateOf(false) }
     var dialogInfo by remember { mutableStateOf<ReleaseInfo?>(null) }
+    val errorReports by app.errors.reports.collectAsState()
     val pendingInfo =
         remember(
             st.pendingUpdateVersion,
@@ -1090,6 +1115,27 @@ fun AboutScreen(onBack: () -> Unit) {
                     onClick = { openExternalUrl(ctx, UpdateChecker.PROJECT_URL) },
                 )
             }
+            FormSection(title = stringResource(R.string.about_community_section)) {
+                NavRow(
+                    title = stringResource(R.string.about_qq_group_name),
+                    subtitle = stringResource(R.string.about_qq_group_entry_desc, QQ_GROUP_NUMBER),
+                    trailing = QQ_GROUP_NUMBER,
+                    onClick = { showQqGroupDialog = true },
+                )
+            }
+            FormSection(title = stringResource(R.string.error_log_section)) {
+                NavRow(
+                    title = stringResource(R.string.error_log_title),
+                    subtitle = stringResource(R.string.error_log_desc),
+                    trailing =
+                        if (errorReports.isEmpty()) {
+                            stringResource(R.string.error_log_none)
+                        } else {
+                            stringResource(R.string.error_log_count, errorReports.size)
+                        },
+                    onClick = { showErrorLogsDialog = true },
+                )
+            }
             FormSection(title = stringResource(R.string.about_license_section)) {
                 NavRow(
                     title = stringResource(R.string.about_license_title),
@@ -1120,8 +1166,24 @@ fun AboutScreen(onBack: () -> Unit) {
         }
     }
 
+    if (showQqGroupDialog) {
+        QqGroupCardDialog(
+            groupNumber = QQ_GROUP_NUMBER,
+            joinUrl = QQ_GROUP_URL,
+            onDismiss = { showQqGroupDialog = false },
+        )
+    }
+
     if (showLicenseDialog) {
         OssLicensesDialog(onDismiss = { showLicenseDialog = false })
+    }
+
+    if (showErrorLogsDialog) {
+        ErrorLogListDialog(
+            reports = errorReports,
+            onClear = { app.errors.clearHistory() },
+            onDismiss = { showErrorLogsDialog = false },
+        )
     }
 
     if (showIntervalDialog) {

@@ -7,6 +7,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
@@ -18,14 +19,16 @@ import app.goke.core.model.Snapshot
 import app.goke.data.Settings
 import app.goke.gokeApp
 import app.goke.ui.hm
+import app.goke.ui.monthDay
 import app.goke.ui.monthDayWeekday
 import java.time.LocalDateTime
 import java.time.ZoneId
 
 /**
- * 「今日课表」小组件：清爽日期 + 周次表头，按时间列出今天未结束的课；
- * 已下课直接隐藏，正在上的课按已过时长渐进置灰，没课时显示轻松颜文字提示。
+ * 「今日课表」小组件：清爽日期 + 周次表头，可滚动列出今天未结束的课；
+ * 已下课直接隐藏，正在上的课按已过时长渐进置灰，支持自由缩放到任意网格尺寸。
  */
+@Suppress("DEPRECATION")
 class ScheduleWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
         context: Context,
@@ -36,9 +39,10 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
         val snap = if (app.repo.ready.value) app.repo.snapshot.value else null
         val st = app.settings.value
         for (id in appWidgetIds) {
-            val compact = WidgetKit.isCompactWidth(manager, id)
-            manager.updateAppWidget(id, build(context, snap, st, compact = compact))
+            val size = WidgetKit.sizeClass(context, manager, id)
+            manager.updateAppWidget(id, build(context, id, snap, st, size = size))
         }
+        manager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.sched_list)
         if (snap != null) scheduleTick(context, snap, st)
     }
 
@@ -51,7 +55,9 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
         val app = context.gokeApp
         val snap = if (app.repo.ready.value) app.repo.snapshot.value else null
         val st = app.settings.value
-        appWidgetManager.updateAppWidget(appWidgetId, build(context, snap, st, compact = WidgetKit.isCompactWidth(newOptions)))
+        val size = WidgetKit.sizeClass(context, newOptions)
+        appWidgetManager.updateAppWidget(appWidgetId, build(context, appWidgetId, snap, st, size = size))
+        appWidgetManager.notifyAppWidgetViewDataChanged(intArrayOf(appWidgetId), R.id.sched_list)
     }
 
     override fun onReceive(
@@ -65,6 +71,21 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
         }
     }
 
+    internal data class Row(
+        val key: String,
+        val courseId: String,
+        val courseDate: String,
+        val startPeriod: Int,
+        val endPeriod: Int,
+        val startTime: String,
+        val endTime: String,
+        val name: String,
+        val room: String,
+        val colorIndex: Int,
+        val phase: WidgetKit.TimePhase,
+        val progress: Float,
+    )
+
     companion object {
         const val ACTION_TICK = "app.goke.widget.SCHEDULE_TICK"
 
@@ -77,9 +98,10 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, ScheduleWidgetProvider::class.java))
             if (ids.isEmpty()) return
             for (id in ids) {
-                val compact = WidgetKit.isCompactWidth(mgr, id)
-                mgr.updateAppWidget(id, build(ctx, snap, st, compact = compact))
+                val size = WidgetKit.sizeClass(ctx, mgr, id)
+                mgr.updateAppWidget(id, build(ctx, id, snap, st, size = size))
             }
+            mgr.notifyAppWidgetViewDataChanged(ids, R.id.sched_list)
             scheduleTick(ctx, snap, st)
         }
 
@@ -121,135 +143,86 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
             am.set(AlarmManager.RTC, next.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(), pi)
         }
 
-        fun build(
+        internal fun rows(
             ctx: Context,
+            now: LocalDateTime = LocalDateTime.now(),
+        ): List<Row> {
+            val app = ctx.gokeApp
+            if (!app.repo.ready.value) return emptyList()
+            return buildRows(app.repo.snapshot.value, app.settings.value, now)
+        }
+
+        internal fun buildRows(
+            snap: Snapshot,
+            st: Settings,
+            now: LocalDateTime = LocalDateTime.now(),
+        ): List<Row> {
+            val today = now.toLocalDate()
+            val live = snap.live()
+            return Agenda
+                .forDay(live, today, st.defaultBlockMinutes)
+                .filterIsInstance<CourseItem>()
+                .filter { it.occ.end.isAfter(now) }
+                .map { item ->
+                    val o = item.occ
+                    Row(
+                        key = "s_${o.course.id}_${o.start}",
+                        courseId = o.course.id,
+                        courseDate = o.date.toString(),
+                        startPeriod = o.startPeriod,
+                        endPeriod = o.endPeriod,
+                        startTime = o.start.hm(),
+                        endTime = o.end.hm(),
+                        name = o.course.name,
+                        room = o.room.trim(),
+                        colorIndex = o.course.colorIndex,
+                        phase = WidgetKit.timePhase(o.start, o.end, now),
+                        progress = WidgetKit.timeProgress(o.start, o.end, now),
+                    )
+                }
+        }
+
+        internal fun build(
+            ctx: Context,
+            widgetId: Int,
             snap: Snapshot?,
             st: Settings,
             now: LocalDateTime = LocalDateTime.now(),
-            compact: Boolean = false,
+            size: WidgetKit.SizeClass = WidgetKit.SizeClass(),
         ): RemoteViews {
+            if (size.isMini) return NextWidgetProvider.build(ctx, snap, st, now, size)
             val views = RemoteViews(ctx.packageName, R.layout.widget_schedule)
             val today = now.toLocalDate()
             val live = snap?.live()
-            views.setTextViewText(R.id.sched_title, ctx.monthDayWeekday(today))
+            views.setTextViewText(R.id.sched_title, if (size.compactWidth) ctx.monthDay(today) else ctx.monthDayWeekday(today))
             val weekBadge = WidgetKit.weekBadge(ctx, live?.currentSemester, today)
-            if (!compact && weekBadge != null) {
+            if (!size.compactWidth && weekBadge != null) {
                 views.setViewVisibility(R.id.sched_week, View.VISIBLE)
                 views.setTextViewText(R.id.sched_week, weekBadge)
             } else {
                 views.setViewVisibility(R.id.sched_week, View.GONE)
             }
 
-            val courses =
-                live
-                    ?.let { s ->
-                        Agenda
-                            .forDay(s, today, st.defaultBlockMinutes)
-                            .filterIsInstance<CourseItem>()
-                            .filter { it.occ.end.isAfter(now) }
-                    }.orEmpty()
-            val rows = intArrayOf(R.id.sched_row0, R.id.sched_row1, R.id.sched_row2, R.id.sched_row3, R.id.sched_row4, R.id.sched_row5)
-            val progresses =
-                intArrayOf(
-                    R.id.sched_progress0,
-                    R.id.sched_progress1,
-                    R.id.sched_progress2,
-                    R.id.sched_progress3,
-                    R.id.sched_progress4,
-                    R.id.sched_progress5,
-                )
-            val timeCols =
-                intArrayOf(
-                    R.id.sched_time_col0,
-                    R.id.sched_time_col1,
-                    R.id.sched_time_col2,
-                    R.id.sched_time_col3,
-                    R.id.sched_time_col4,
-                    R.id.sched_time_col5,
-                )
-            val times = intArrayOf(R.id.sched_time0, R.id.sched_time1, R.id.sched_time2, R.id.sched_time3, R.id.sched_time4, R.id.sched_time5)
-            val ends = intArrayOf(R.id.sched_end0, R.id.sched_end1, R.id.sched_end2, R.id.sched_end3, R.id.sched_end4, R.id.sched_end5)
-            val names = intArrayOf(R.id.sched_name0, R.id.sched_name1, R.id.sched_name2, R.id.sched_name3, R.id.sched_name4, R.id.sched_name5)
-            val metas = intArrayOf(R.id.sched_meta0, R.id.sched_meta1, R.id.sched_meta2, R.id.sched_meta3, R.id.sched_meta4, R.id.sched_meta5)
+            views.setTextViewText(R.id.sched_empty, if (snap == null) "" else ctx.getString(R.string.widget_schedule_empty))
+            views.setRemoteAdapter(
+                R.id.sched_list,
+                Intent(ctx, ScheduleWidgetService::class.java)
+                    .setData(Uri.parse("goke://widget/schedule/$widgetId?compact=${size.compactWidth}")),
+            )
+            views.setEmptyView(R.id.sched_list, R.id.sched_empty)
+            views.setPendingIntentTemplate(
+                R.id.sched_list,
+                PendingIntent.getActivity(
+                    ctx,
+                    400 + widgetId,
+                    Intent(ctx, WidgetActionActivity::class.java),
+                    PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                ),
+            )
 
-            if (courses.isEmpty()) {
-                views.setViewVisibility(R.id.sched_empty, View.VISIBLE)
-                views.setTextViewText(R.id.sched_empty, if (snap == null) "" else ctx.getString(R.string.widget_schedule_empty))
-            } else {
-                views.setViewVisibility(R.id.sched_empty, View.GONE)
-            }
-
-            val shown = courses.take(rows.size)
             val openTimetable = WidgetKit.mainActivityIntent(ctx, 40, DeepLinks.timetableUri())
-
-            for (i in rows.indices) {
-                val c = shown.getOrNull(i)
-                if (c == null) {
-                    views.setViewVisibility(rows[i], View.GONE)
-                    continue
-                }
-                val o = c.occ
-                val phase = WidgetKit.timePhase(o.start, o.end, now)
-                val progress = WidgetKit.timeProgress(o.start, o.end, now)
-                views.setViewVisibility(rows[i], View.VISIBLE)
-                val fg =
-                    when (phase) {
-                        WidgetKit.TimePhase.FINISHED -> {
-                            views.setInt(rows[i], "setBackgroundResource", R.drawable.widget_course_done_bg)
-                            views.setViewVisibility(progresses[i], View.GONE)
-                            ctx.getColor(R.color.widget_course_done_fg)
-                        }
-
-                        WidgetKit.TimePhase.ONGOING -> {
-                            views.setInt(rows[i], "setBackgroundResource", WidgetKit.courseBgRes(o.course.colorIndex))
-                            views.setViewVisibility(progresses[i], View.VISIBLE)
-                            views.setProgressBar(progresses[i], WidgetKit.PROGRESS_MAX, WidgetKit.progressPermille(progress), false)
-                            WidgetKit.courseFg(ctx, o.course.colorIndex)
-                        }
-
-                        WidgetKit.TimePhase.UPCOMING -> {
-                            views.setInt(rows[i], "setBackgroundResource", WidgetKit.courseBgRes(o.course.colorIndex))
-                            views.setViewVisibility(progresses[i], View.GONE)
-                            WidgetKit.courseFg(ctx, o.course.colorIndex)
-                        }
-                    }
-                views.setViewVisibility(timeCols[i], if (compact) View.GONE else View.VISIBLE)
-                views.setTextColor(times[i], fg)
-                views.setTextColor(ends[i], WidgetKit.softFg(fg))
-                views.setTextColor(names[i], fg)
-                views.setTextColor(metas[i], WidgetKit.softFg(fg))
-                views.setTextViewText(times[i], o.start.hm())
-                views.setTextViewText(ends[i], o.end.hm())
-                views.setTextViewText(names[i], o.course.name)
-                val meta =
-                    if (compact) {
-                        listOfNotNull(o.start.hm(), o.room.takeIf { it.isNotBlank() }).joinToString(" · ")
-                    } else {
-                        o.room.trim()
-                    }
-                views.setTextViewText(metas[i], meta)
-                views.setViewVisibility(metas[i], if (meta.isNotEmpty()) View.VISIBLE else View.GONE)
-                views.setOnClickPendingIntent(
-                    rows[i],
-                    WidgetKit.overlayIntent(
-                        ctx,
-                        41 + i,
-                        WidgetOverlayActivity.courseIntent(ctx, o.course.id, o.date.toString(), o.startPeriod, o.endPeriod),
-                    ),
-                )
-            }
-
-            val remaining = (courses.size - shown.size).coerceAtLeast(0)
-            if (remaining > 0) {
-                views.setViewVisibility(R.id.sched_more, View.VISIBLE)
-                views.setTextViewText(R.id.sched_more, ctx.getString(R.string.widget_schedule_more, remaining))
-            } else {
-                views.setViewVisibility(R.id.sched_more, View.GONE)
-            }
-
             views.setOnClickPendingIntent(R.id.sched_header, openTimetable)
             views.setOnClickPendingIntent(R.id.sched_empty, openTimetable)
-            views.setOnClickPendingIntent(R.id.sched_more, openTimetable)
             views.setOnClickPendingIntent(R.id.widget_root, openTimetable)
             return views
         }

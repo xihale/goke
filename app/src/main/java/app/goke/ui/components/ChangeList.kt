@@ -117,7 +117,15 @@ private fun fieldValue(
         }
 
         FieldKey.REMIND -> {
-            v.toIntOrNull()?.let { ctx.getString(R.string.remind_minutes_value, it) } ?: v
+            val sep = ctx.getString(R.string.list_sep)
+            val parts = v.split(',').mapNotNull { it.trim().toIntOrNull() }
+            if (parts.isEmpty()) {
+                v
+            } else {
+                parts.joinToString(sep) { m ->
+                    if (m == 0) ctx.getString(R.string.remind_at_due) else ctx.getString(R.string.remind_minutes_value, m)
+                }
+            }
         }
 
         FieldKey.LIST -> {

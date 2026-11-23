@@ -7,6 +7,7 @@ import app.goke.calendar.CalendarSyncStore
 import app.goke.calendar.SystemCalendarSync
 import app.goke.core.change.Unify
 import app.goke.data.AutoBackup
+import app.goke.data.ErrorReporter
 import app.goke.data.MintDb
 import app.goke.data.ParcelRuleStore
 import app.goke.data.Repository
@@ -42,7 +43,8 @@ import kotlinx.coroutines.launch
 
 /** 应用级容器：数据仓库、设置、密钥、提醒调度、本地 MCP 与高级修改预览控制器。open 仅为测试子类（SmokeTestApp）服务。 */
 open class GokeApp : Application() {
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    val errors = ErrorReporter()
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + errors.coroutineExceptionHandler)
     lateinit var repo: Repository
         private set
     lateinit var settings: SettingsStore
@@ -80,6 +82,7 @@ open class GokeApp : Application() {
     @OptIn(FlowPreview::class)
     override fun onCreate() {
         super.onCreate()
+        errors.attach(this)
         repo = Repository(MintDb(this))
         settings = SettingsStore(this)
         // 首屏仅依赖 repo 与 settings：立即在 IO 启动读库，与其余控制器构造并行
@@ -100,11 +103,11 @@ open class GokeApp : Application() {
         reminders = ReminderScheduler(this)
         advanced = AdvancedController(this)
         mcp = LocalMcpManager(repo, advanced, McpStore(this, secrets), scope)
-        sync = SyncManager(repo, SyncStore(this, secrets), scope)
-        calendarSync = SystemCalendarSync(this, repo, settings, CalendarSyncStore(this), scope)
-        jxfw = JxfwManager(this, repo, secrets)
-        tzcs = TzcsManager(this, secrets)
-        lanWeb = LanWebManager(this, repo)
+        sync = SyncManager(repo, SyncStore(this, secrets), scope, errors = errors)
+        calendarSync = SystemCalendarSync(this, repo, settings, CalendarSyncStore(this), scope, errors = errors)
+        jxfw = JxfwManager(this, repo, secrets, errors = errors)
+        tzcs = TzcsManager(this, secrets, errors = errors)
+        lanWeb = LanWebManager(this, repo, errors = errors)
         updateChecker = UpdateChecker(settings)
         scope.launch {
             loadJob.join()
@@ -153,10 +156,10 @@ open class GokeApp : Application() {
             }
             // 本地数据有变化后，稍后触发云端与系统日历对账
             launch {
-                repo.snapshot.collect {
+                repo.snapshot.collect { snap ->
                     if (uiActive.value) {
                         sync.requestSync()
-                        calendarSync.requestSync()
+                        calendarSync.onLocalSnapshotChanged(snap)
                     }
                 }
             }

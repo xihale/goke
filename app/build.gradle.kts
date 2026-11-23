@@ -80,7 +80,8 @@ val useGitVersion =
 
 val appVersion: Pair<String, Int> =
     if (!useGitVersion) {
-        "0.0.1" to 1
+        // 静态高版本号确保 debug 既命中构建缓存，又不会比历史 git-tag debug 包（如 12xxx）降级报错
+        "0.0.1" to 900_000_000
     } else {
         val describe =
             providers
@@ -232,6 +233,9 @@ android {
     }
     lint {
         abortOnError = false
+    }
+    installation {
+        installOptions.addAll(listOf("-r", "-d"))
     }
 }
 

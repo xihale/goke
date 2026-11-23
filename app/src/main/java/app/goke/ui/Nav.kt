@@ -16,6 +16,7 @@ import app.goke.GokeApp
 import app.goke.R
 import app.goke.core.change.ChangeSet
 import app.goke.ui.components.UndoPrompt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -46,8 +47,6 @@ sealed interface Route {
 
     @Serializable data object LanWeb : Route
 
-    @Serializable data object Relay : Route
-
     @Serializable data object Periods : Route
 
     @Serializable data object About : Route
@@ -55,6 +54,8 @@ sealed interface Route {
     @Serializable data object Data : Route
 
     @Serializable data object Sync : Route
+
+    @Serializable data object CalendarSync : Route
 
     @Serializable data object Jxfw : Route
 
@@ -95,6 +96,7 @@ sealed interface Route {
         val extraDates: String? = null,
         val listId: String? = null,
         val remindMinutes: Int? = null,
+        val remindList: String? = null,
         val remindPersistent: Boolean = false,
         val repeatFreq: String? = null,
         val repeatInterval: Int = 1,
@@ -171,15 +173,21 @@ class Actions(
         undoable: Boolean = true,
     ) {
         scope.launch {
-            app.repo.commit(cs)
-            // 说明条 = 4.5s 撤销入口：调用方显式给了 message 就出现（完成、改期、拖拽、批量新增都给退路）。
-            // 单条新增 / 编辑保存不适合一键撤销，调用方传 undoable=false，退化为 Toast——反馈不再被吞掉。
-            if (message != null && !cs.isEmpty) {
-                if (undoable) {
-                    undo = UndoPrompt(cs.id, System.currentTimeMillis(), message)
-                } else {
-                    toast(message)
+            try {
+                app.repo.commit(cs)
+                // 说明条 = 4.5s 撤销入口：调用方显式给了 message 就出现（完成、改期、拖拽、批量新增都给退路）。
+                // 单条新增 / 编辑保存不适合一键撤销，调用方传 undoable=false，退化为 Toast——反馈不再被吞掉。
+                if (message != null && !cs.isEmpty) {
+                    if (undoable) {
+                        undo = UndoPrompt(cs.id, System.currentTimeMillis(), message)
+                    } else {
+                        toast(message)
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                app.errors.record("ActionCommit", e)
             }
         }
     }
@@ -189,8 +197,14 @@ class Actions(
         val p = undo ?: return
         undo = null
         scope.launch {
-            val ok = app.repo.undo(p.csId)
-            toast(app.getString(if (ok) R.string.undone_toast else R.string.history_blocked_toast))
+            try {
+                val ok = app.repo.undo(p.csId)
+                toast(app.getString(if (ok) R.string.undone_toast else R.string.history_blocked_toast))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                app.errors.record("ActionUndo", e)
+            }
         }
     }
 

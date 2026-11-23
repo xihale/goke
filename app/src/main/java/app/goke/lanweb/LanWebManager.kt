@@ -1,6 +1,7 @@
 package app.goke.lanweb
 
 import android.content.Context
+import app.goke.data.ErrorReporter
 import app.goke.data.Repository
 import app.goke.notify.Notifications
 import kotlinx.coroutines.CoroutineScope
@@ -44,10 +45,21 @@ class LanWebManager internal constructor(
     private val scope: CoroutineScope,
     private val clock: () -> Long,
 ) {
-    constructor(context: Context, repo: Repository) : this(
+    constructor(
+        context: Context,
+        repo: Repository,
+        errors: ErrorReporter? = null,
+    ) : this(
         context = context.applicationContext ?: context,
         repo = repo,
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        scope =
+            CoroutineScope(
+                if (errors != null) {
+                    SupervisorJob() + Dispatchers.IO + errors.coroutineExceptionHandler
+                } else {
+                    SupervisorJob() + Dispatchers.IO
+                },
+            ),
         clock = System::currentTimeMillis,
     )
 

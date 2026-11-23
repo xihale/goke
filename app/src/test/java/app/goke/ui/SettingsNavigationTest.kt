@@ -8,7 +8,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
@@ -64,6 +64,7 @@ class SettingsNavigationTest {
                 R.string.parcel_title,
                 R.string.widgets_title,
                 R.string.appearance,
+                R.string.cal_sync_title,
                 R.string.sync_title,
                 R.string.data_title,
                 R.string.trash_title,
@@ -71,14 +72,13 @@ class SettingsNavigationTest {
                 R.string.reliability_title,
                 R.string.lan_web_title,
                 R.string.mcp_title,
-                R.string.relay_title,
                 R.string.about_title,
             )
 
         for (titleRes in subpages) {
             val label = app.getString(titleRes)
             rule.onAllNodes(hasScrollAction()).onLast().performScrollToNode(hasText(label))
-            if (titleRes == R.string.relay_title || titleRes == R.string.about_title) {
+            if (titleRes == R.string.mcp_title || titleRes == R.string.about_title) {
                 rule.onAllNodes(hasScrollAction()).onLast().performTouchInput { swipeUp() }
             }
             rule.waitForIdle()

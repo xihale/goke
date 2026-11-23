@@ -30,7 +30,7 @@ class ImportTest {
         val res = IcsImporter.toCourses(cal, sem, now = 1L, ids = SequentialIds())
         assertTrue(res.ok, res.errors.toString())
         assertTrue(res.value!!.skipped.isEmpty())
-        return res.value!!.courses
+        return res.value.courses
     }
 
     @Test fun `wakeup ics merges week segments into course rules`() {
@@ -88,7 +88,7 @@ class ImportTest {
         assertEquals(10, print3d.startPeriod)
         assertEquals(12, print3d.endPeriod)
         assertEquals(8, courses.count { it.name == "大学物理实验" })
-        assertEquals(18, res.value!!.maxWeek)
+        assertEquals(18, res.value.maxWeek)
     }
 
     @Test fun `ics and xlsx agree on shared courses`() {

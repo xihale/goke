@@ -74,6 +74,7 @@ import app.goke.GokeApp
 import app.goke.R
 import app.goke.data.ReleaseInfo
 import app.goke.data.UpdateChecker
+import app.goke.ui.components.ErrorReportDialog
 import app.goke.ui.components.FloatingNavBar
 import app.goke.ui.components.NavClearance
 import app.goke.ui.components.mintClickable
@@ -81,6 +82,7 @@ import app.goke.ui.icons.Undo
 import app.goke.ui.screens.AboutScreen
 import app.goke.ui.screens.AppearanceScreen
 import app.goke.ui.screens.CalendarScreen
+import app.goke.ui.screens.CalendarSyncScreen
 import app.goke.ui.screens.ClassroomScreen
 import app.goke.ui.screens.CourseEditScreen
 import app.goke.ui.screens.DataScreen
@@ -94,7 +96,6 @@ import app.goke.ui.screens.McpScreen
 import app.goke.ui.screens.ParcelScreen
 import app.goke.ui.screens.PeriodsScreen
 import app.goke.ui.screens.PhysicalTestScreen
-import app.goke.ui.screens.RelayScreen
 import app.goke.ui.screens.ReliabilityScreen
 import app.goke.ui.screens.SettingsScreen
 import app.goke.ui.screens.SyncScreen
@@ -325,7 +326,14 @@ fun GokeRoot(
             // 顶层模态插槽（覆盖底栏与 NavHost）
             modalContent?.invoke()
 
-            if (pendingUpdate != null) {
+            val pendingError by app.errors.pendingModal.collectAsState()
+            val activeError = pendingError
+            if (activeError != null) {
+                ErrorReportDialog(
+                    report = activeError,
+                    onDismiss = { app.errors.dismissPending() },
+                )
+            } else if (pendingUpdate != null) {
                 val context = LocalContext.current
                 UpdateAvailableDialog(
                     info = pendingUpdate,
@@ -387,11 +395,11 @@ fun NavGraphBuilder.gokeDestinations(
     composable<Route.Parcel> { e -> RouteHost(nav, e, back) { ParcelScreen(it) } }
     composable<Route.Mcp> { e -> RouteHost(nav, e, back) { McpScreen(it) } }
     composable<Route.LanWeb> { e -> RouteHost(nav, e, back) { LanWebScreen(it) } }
-    composable<Route.Relay> { e -> RouteHost(nav, e, back) { RelayScreen(it) } }
     composable<Route.Periods> { e -> RouteHost(nav, e, back) { PeriodsScreen(it) } }
     composable<Route.About> { e -> RouteHost(nav, e, back) { AboutScreen(it) } }
     composable<Route.Data> { e -> RouteHost(nav, e, back) { DataScreen(it) } }
     composable<Route.Sync> { e -> RouteHost(nav, e, back) { SyncScreen(it) } }
+    composable<Route.CalendarSync> { e -> RouteHost(nav, e, back) { CalendarSyncScreen(it) } }
     composable<Route.Jxfw> { e -> RouteHost(nav, e, back) { JxfwScreen(it) } }
     composable<Route.Grades> { e -> RouteHost(nav, e, back) { GradesScreen(it) } }
     composable<Route.PhysicalTest> { e -> RouteHost(nav, e, back) { PhysicalTestScreen(it) } }
@@ -417,6 +425,7 @@ fun NavGraphBuilder.gokeDestinations(
                 locationArg = r.location,
                 listArg = r.listId,
                 remindArg = r.remindMinutes,
+                remindListArg = r.remindList,
                 remindPersistentArg = r.remindPersistent,
                 repeatFreqArg = r.repeatFreq,
                 repeatIntervalArg = r.repeatInterval,

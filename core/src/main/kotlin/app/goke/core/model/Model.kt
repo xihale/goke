@@ -22,6 +22,14 @@ enum class EventKind { NORMAL, EXAM, COUNTDOWN }
 @Serializable
 enum class ExceptionType { CANCEL, RESCHEDULE }
 
+/** 提前提醒分钟数列表归一化：合并单值兼容字段与列表，去重并升序排列。 */
+object Reminders {
+    fun normalize(
+        primary: Int?,
+        list: List<Int>,
+    ): List<Int> = (listOfNotNull(primary) + list).filter { it >= 0 }.distinct().sorted()
+}
+
 /** 所有实体的公共基类：UUID 主键、updatedAt、软删除、可空 userId，为同步预留。 */
 @Serializable
 sealed interface Record {
@@ -82,7 +90,11 @@ data class Course(
     override val updatedAt: Long = 0,
     override val deletedAt: Long? = null,
     override val userId: String? = null,
+    val remindMinutesList: List<Int> = emptyList(),
 ) : Record {
+    val effectiveRemindMinutes: List<Int>
+        get() = Reminders.normalize(remindMinutes, remindMinutesList)
+
     override fun withMeta(
         updatedAt: Long,
         deletedAt: Long?,
@@ -150,7 +162,11 @@ data class Event(
     override val updatedAt: Long = 0,
     override val deletedAt: Long? = null,
     override val userId: String? = null,
+    val remindMinutesList: List<Int> = emptyList(),
 ) : Record {
+    val effectiveRemindMinutes: List<Int>
+        get() = Reminders.normalize(remindMinutes, remindMinutesList)
+
     override fun withMeta(
         updatedAt: Long,
         deletedAt: Long?,
@@ -225,7 +241,11 @@ data class Task(
     override val updatedAt: Long = 0,
     override val deletedAt: Long? = null,
     override val userId: String? = null,
+    val remindMinutesList: List<Int> = emptyList(),
 ) : Record {
+    val effectiveRemindMinutes: List<Int>
+        get() = Reminders.normalize(remindMinutes, remindMinutesList)
+
     override fun withMeta(
         updatedAt: Long,
         deletedAt: Long?,

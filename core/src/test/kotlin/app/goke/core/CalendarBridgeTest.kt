@@ -272,4 +272,107 @@ class CalendarBridgeTest {
         val pOff = CalendarBridge.planCourseExport(snap, enabled = false, targetCalendarId = 12L, existingLinks = links, remoteEvents = simulatedRemotes, zone = zone)
         assertEquals(2, pOff.deletes.size)
     }
+
+    @Test
+    fun `content deduplication links existing remote without duplicating across calendars`() {
+        val start = LocalDateTime.of(2026, 11, 14, 15, 0)
+        val startMs = start.atZone(zone).toInstant().toEpochMilli()
+        val endMs =
+            start
+                .plusHours(1)
+                .atZone(zone)
+                .toInstant()
+                .toEpochMilli()
+        val localTask =
+            Task(
+                id = "t_local",
+                title = "项目评审",
+                blockStart = start,
+                blockMinutes = 60,
+                due = start.plusHours(1),
+                dueHasTime = true,
+                remindMinutes = 10,
+                remindMinutesList = listOf(10, 30),
+                updatedAt = 1_000L,
+            )
+        // 日历 10 与 20 均存在同时间同标题事件（无 customAppUri，例如跨设备云日历同步或重装后）
+        val rCal10 = SystemEvent(eventId = 201L, calendarId = 10L, title = "项目评审", dtStartMillis = startMs, dtEndMillis = endMs, remindMinutes = 10, remindMinutesList = listOf(10, 30))
+        val rCal20 = SystemEvent(eventId = 202L, calendarId = 20L, title = "项目评审", dtStartMillis = startMs, dtEndMillis = endMs)
+        // 日历 10 与 20 均存在另一个仅在系统日历新增的同名活动
+        val rNew10 = SystemEvent(eventId = 301L, calendarId = 10L, title = "学术报告", dtStartMillis = startMs + 7_200_000L, dtEndMillis = endMs + 7_200_000L)
+        val rNew20 = SystemEvent(eventId = 302L, calendarId = 20L, title = "学术报告", dtStartMillis = startMs + 7_200_000L, dtEndMillis = endMs + 7_200_000L)
+
+        val snap = Snapshot(semesters = listOf(sem), tasks = listOf(localTask))
+        val p1 =
+            CalendarBridge.planBidirectional(
+                snapshot = snap,
+                remoteEvents = listOf(rCal10, rCal20, rNew10, rNew20),
+                existingLinks = emptyList(),
+                primaryCalendarId = 10L,
+                selectedCalendarIds = setOf(10L, 20L),
+                zone = zone,
+                nowMillis = 5_000L,
+            )
+        // t_local 直接与主日历 rCal10 配对，不推新事件；rNew10 与 rNew20 去重只拉 1 条「学术报告」
+        assertEquals(0, p1.remoteInserts.size)
+        val pulled = assertNotNull(p1.localChanges).changes
+        assertEquals(1, pulled.size)
+        val snap2 =
+            snap.apply(
+                pulled.let {
+                    app.goke.core.change
+                        .ChangeSet("sync", changes = it)
+                },
+                5_000L,
+            )
+
+        // 第二次同步零变更（多提醒不触发回声）
+        val p2 =
+            CalendarBridge.planBidirectional(
+                snapshot = snap2,
+                remoteEvents = listOf(rCal10, rCal20, rNew10, rNew20),
+                existingLinks = p1.retainedAndPulledLinks,
+                primaryCalendarId = 10L,
+                selectedCalendarIds = setOf(10L, 20L),
+                zone = zone,
+                nowMillis = 6_000L,
+            )
+        assertEquals(0, p2.totalMutations)
+    }
+
+    @Test
+    fun `course export adopts existing event without customAppUri and bidirectional ignores course slots`() {
+        val c = Course("c1", sem.id, "线性代数", room = "教1-101", dayOfWeek = 1, startPeriod = 1, endPeriod = 2, weeks = setOf(1), remindMinutes = 10, remindMinutesList = listOf(10, 30))
+        val snap = Snapshot(semesters = listOf(sem), courses = listOf(c))
+        val p1 = CalendarBridge.planCourseExport(snap, enabled = true, targetCalendarId = 12L, existingLinks = emptyList(), remoteEvents = emptyList(), zone = zone)
+        assertEquals(1, p1.inserts.size)
+        assertEquals(
+            listOf(10, 30),
+            p1.inserts
+                .single()
+                .draft.effectiveRemindMinutes,
+        )
+
+        // 模拟厂商日历清除了 customAppUri，且本地 course_links 丢失后重新对账
+        val strippedRemote = CalendarBridge.draftToSimulatedEvent(1001L, p1.inserts.single().draft).copy(customAppUri = null)
+        val pAdopt = CalendarBridge.planCourseExport(snap, enabled = true, targetCalendarId = 12L, existingLinks = emptyList(), remoteEvents = listOf(strippedRemote), zone = zone)
+        assertEquals(0, pAdopt.inserts.size)
+        assertEquals(0, pAdopt.updates.size)
+        assertEquals(1, pAdopt.unchangedLinks.size)
+        assertEquals(1001L, pAdopt.unchangedLinks.single().eventId)
+
+        // 双向任务同步传入 course dedup keys 后，不会把 strippedRemote 回流成待办
+        val ignoredDedup = CalendarBridge.courseExportDedupKeys(snap, 12L, zone)
+        val bi =
+            CalendarBridge.planBidirectional(
+                snapshot = snap,
+                remoteEvents = listOf(strippedRemote),
+                existingLinks = emptyList(),
+                primaryCalendarId = 12L,
+                selectedCalendarIds = setOf(12L),
+                zone = zone,
+                ignoredCourseDedupKeys = ignoredDedup,
+            )
+        assertEquals(0, bi.totalMutations)
+    }
 }

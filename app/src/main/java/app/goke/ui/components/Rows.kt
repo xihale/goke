@@ -105,6 +105,7 @@ fun AgendaRow(
             RowShell(
                 modifier = modifier,
                 time = o.start.hm(),
+                endTime = o.end.hm(),
                 bg = colors.bg(o.course.colorIndex),
                 fg = colors.fg(o.course.colorIndex),
                 title = o.course.name,
@@ -130,6 +131,7 @@ fun AgendaRow(
             RowShell(
                 modifier = modifier,
                 time = timeLabel,
+                endTime = if (!item.allDay && item.end.isAfter(item.start)) item.end.hm() else null,
                 bg = colors.bg(e.colorIndex),
                 fg = colors.fg(e.colorIndex),
                 title = e.title,
@@ -161,6 +163,7 @@ fun AgendaRow(
 @Composable
 private fun RowShell(
     time: String,
+    endTime: String? = null,
     bg: androidx.compose.ui.graphics.Color,
     fg: androidx.compose.ui.graphics.Color,
     title: String,
@@ -199,7 +202,23 @@ private fun RowShell(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // 40dp 时间槽 + 8dp 间隔：与 TaskRow 的勾选框槽（8+48+4=60）同起点，混排时标题左沿对齐
-        Text(time, color = textFg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.width(40.dp))
+        Column(Modifier.width(40.dp)) {
+            Text(
+                time,
+                color = textFg,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum"),
+                maxLines = 1,
+            )
+            if (endTime != null) {
+                Text(
+                    endTime,
+                    color = textFg.copy(alpha = 0.78f),
+                    style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                    maxLines = 1,
+                )
+            }
+        }
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text(title, color = textFg, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)

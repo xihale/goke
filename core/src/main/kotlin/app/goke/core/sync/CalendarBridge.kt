@@ -5,6 +5,7 @@ import app.goke.core.change.ChangeSet
 import app.goke.core.importer.IcsImporter
 import app.goke.core.model.Freq
 import app.goke.core.model.Recurrence
+import app.goke.core.model.Reminders
 import app.goke.core.model.Snapshot
 import app.goke.core.model.Source
 import app.goke.core.model.Task
@@ -36,7 +37,11 @@ data class SystemEvent(
     val remindMinutes: Int? = null,
     val deleted: Boolean = false,
     val customAppUri: String? = null,
-)
+    val remindMinutesList: List<Int> = emptyList(),
+) {
+    val effectiveRemindMinutes: List<Int>
+        get() = Reminders.normalize(remindMinutes, remindMinutesList)
+}
 
 /** 准备写入系统日历的事件草稿（遵循 CalendarContract 约束：重复事件用 DURATION，单次事件用 DTEND；全天事件用 UTC 零点）。 */
 data class SystemEventDraft(
@@ -51,7 +56,11 @@ data class SystemEventDraft(
     val rrule: String?,
     val remindMinutes: Int?,
     val customAppUri: String,
-)
+    val remindMinutesList: List<Int> = emptyList(),
+) {
+    val effectiveRemindMinutes: List<Int>
+        get() = Reminders.normalize(remindMinutes, remindMinutesList)
+}
 
 /** 本地任务与系统日历事件的配对记录（仅存本机，不污染云端同步与操作撤销历史）。 */
 @Serializable
@@ -157,6 +166,8 @@ object CalendarBridge {
         zone: ZoneId = ZoneId.systemDefault(),
         nowMillis: Long = System.currentTimeMillis(),
         ids: IdGenerator = Ids,
+        ignoredRemoteKeys: Set<Pair<Long, Long>> = emptySet(),
+        ignoredCourseDedupKeys: Set<String> = emptySet(),
     ): BidirectionalPlan {
         if (selectedCalendarIds.isEmpty()) {
             return BidirectionalPlan(null, emptyList(), emptyList(), emptyList(), emptyList())
@@ -164,8 +175,12 @@ object CalendarBridge {
 
         val tasksById = snapshot.tasks.associateBy { it.id }
         val activeRemote =
-            remoteEvents
-                .filter { it.calendarId in selectedCalendarIds && it.customAppUri?.startsWith(COURSE_URI_PREFIX) != true }
+            remoteEvents.filter { ev ->
+                ev.calendarId in selectedCalendarIds &&
+                    ev.customAppUri?.startsWith(COURSE_URI_PREFIX) != true &&
+                    (ev.calendarId to ev.eventId) !in ignoredRemoteKeys &&
+                    "${ev.calendarId}|${eventDedupKey(ev, zone)}" !in ignoredCourseDedupKeys
+            }
         val remoteByKey = activeRemote.associateBy { it.calendarId to it.eventId }
 
         val localChanges = mutableListOf<Change>()
@@ -210,7 +225,7 @@ object CalendarBridge {
                     val liveTask = checkNotNull(task)
                     val liveRemote = checkNotNull(remote)
                     val curTaskHash = taskHash(liveTask, defaultBlockMinutes, zone)
-                    val curEventHash = eventHash(liveRemote, zone)
+                    val curEventHash = eventHash(liveRemote, zone, defaultBlockMinutes)
                     val tChanged = curTaskHash != link.taskHash
                     val eChanged = curEventHash != link.eventHash
 
@@ -258,12 +273,58 @@ object CalendarBridge {
             }
         }
 
+        // 1.5 内容去重匹配：两端都存在同标题+同时刻但未配对的事件（例如重装、云同步多端、厂商日历清除 customAppUri），
+        // 直接建立映射而不是互推/互拉出双份重复
+        val unlinkedRemotesByDedup = HashMap<String, MutableList<SystemEvent>>()
+        val sortedUnlinkedRemotes =
+            activeRemote
+                .filter { !it.deleted && (it.calendarId to it.eventId) !in handledRemoteKeys }
+                .sortedWith(compareBy({ if (it.calendarId == primaryCalendarId) 0 else 1 }, { it.calendarId }, { it.eventId }))
+        for (remote in sortedUnlinkedRemotes) {
+            unlinkedRemotesByDedup.getOrPut(eventDedupKey(remote, zone)) { mutableListOf() } += remote
+        }
+        for (task in snapshot.tasks) {
+            if (task.id in handledTaskIds) continue
+            if (task.deletedAt != null || task.dropped || !isSyncableTask(task)) continue
+            val dKey = taskDedupKey(task, defaultBlockMinutes, zone) ?: continue
+            val candidates = unlinkedRemotesByDedup[dKey] ?: continue
+            val matched = candidates.firstOrNull { (it.calendarId to it.eventId) !in handledRemoteKeys } ?: continue
+            candidates.remove(matched)
+            handledTaskIds += task.id
+            handledRemoteKeys += (matched.calendarId to matched.eventId)
+            nextLinks +=
+                CalendarTaskLink(
+                    taskId = task.id,
+                    calendarId = matched.calendarId,
+                    eventId = matched.eventId,
+                    taskHash = taskHash(task, defaultBlockMinutes, zone),
+                    eventHash = eventHash(matched, zone, defaultBlockMinutes),
+                    syncedAt = nowMillis,
+                )
+        }
+
         // 2. 本地新增的未配对日程任务 → 推向主同步日历（已完成的历史旧任务不主动首次推送，避免刷屏）
         val targetCalId = primaryCalendarId?.takeIf { it in selectedCalendarIds } ?: selectedCalendarIds.firstOrNull()
+        val seenPushDedupKeys = HashSet<String>()
         if (targetCalId != null) {
+            for (r in activeRemote) {
+                if (!r.deleted && r.calendarId == targetCalId) {
+                    seenPushDedupKeys += eventDedupKey(r, zone)
+                }
+            }
+            for (tid in handledTaskIds) {
+                tasksById[tid]?.let { t ->
+                    taskDedupKey(t, defaultBlockMinutes, zone)?.let { seenPushDedupKeys += it }
+                }
+            }
             for (task in snapshot.tasks) {
                 if (task.id in handledTaskIds) continue
                 if (task.deletedAt != null || task.dropped || task.done || !isSyncableTask(task)) continue
+                val dKey = taskDedupKey(task, defaultBlockMinutes, zone)
+                if (dKey != null && !seenPushDedupKeys.add(dKey)) {
+                    handledTaskIds += task.id
+                    continue
+                }
                 val draft = toDraft(task, targetCalId, defaultBlockMinutes, zone) ?: continue
                 val tHash = taskHash(task, defaultBlockMinutes, zone)
                 remoteInserts += RemoteInsert(task.id, tHash, draft)
@@ -271,7 +332,16 @@ object CalendarBridge {
             }
         }
 
-        // 3. 系统日历新增的未配对事件 → 拉入 Goke
+        // 3. 系统日历新增的未配对事件 → 拉入 Goke（多账本含重复内容或本地已有同内容时只拉一份）
+        val seenPullDedupKeys = HashSet<String>()
+        for (tid in handledTaskIds) {
+            tasksById[tid]?.let { t ->
+                taskDedupKey(t, defaultBlockMinutes, zone)?.let { seenPullDedupKeys += it }
+            }
+        }
+        for ((calId, evId) in handledRemoteKeys) {
+            remoteByKey[calId to evId]?.let { seenPullDedupKeys += eventDedupKey(it, zone) }
+        }
         for (remote in activeRemote) {
             val key = remote.calendarId to remote.eventId
             if (key in handledRemoteKeys || remote.deleted) continue
@@ -281,15 +351,21 @@ object CalendarBridge {
                 remoteDeletes += RemoteDelete(remote.calendarId, remote.eventId)
                 continue
             }
+            val dKey = eventDedupKey(remote, zone)
+            if (!seenPullDedupKeys.add(dKey)) {
+                handledRemoteKeys += key
+                continue
+            }
             val created = toNewTask(remote, defaultBlockMinutes, zone, nowMillis, ids)
             localChanges += Change.Add(created)
+            handledRemoteKeys += key
             nextLinks +=
                 CalendarTaskLink(
                     taskId = created.id,
                     calendarId = remote.calendarId,
                     eventId = remote.eventId,
                     taskHash = taskHash(created, defaultBlockMinutes, zone),
-                    eventHash = eventHash(remote, zone),
+                    eventHash = eventHash(remote, zone, defaultBlockMinutes),
                     syncedAt = nowMillis,
                 )
         }
@@ -304,6 +380,33 @@ object CalendarBridge {
         return BidirectionalPlan(cs, remoteInserts, remoteUpdates, remoteDeletes, nextLinks)
     }
 
+    /** 列出已启用课程导出时应被双向任务同步忽略的内容指纹（防止厂商日历清除 customAppUri 后把课表事件回流为待办）。 */
+    fun courseExportDedupKeys(
+        snapshot: Snapshot,
+        targetCalendarId: Long?,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Set<String> {
+        if (targetCalendarId == null) return emptySet()
+        val live = snapshot.live()
+        val sem = live.currentSemester ?: return emptySet()
+        val cal =
+            app.goke.core.time
+                .SemesterCalendar(sem)
+        val occs = CourseExpander.occurrences(sem, live.courses, live.exceptions, cal.weekStart(1), cal.weekEnd(sem.totalWeeks))
+        return occs.mapTo(HashSet()) { occ ->
+            val startMs =
+                occ.start
+                    .atZone(zone)
+                    .toInstant()
+                    .toEpochMilli()
+            val titleKey =
+                occ.course.name
+                    .trim()
+                    .lowercase()
+            "$targetCalendarId|$titleKey|${startMs / 60_000L}|0"
+        }
+    }
+
     /** 将当前学期课程表（含停课与调课）差分导出到指定系统日历账本；若 enabled=false 则清理已导出的全部课程事件。 */
     fun planCourseExport(
         snapshot: Snapshot,
@@ -312,10 +415,11 @@ object CalendarBridge {
         existingLinks: List<CourseExportLink>,
         remoteEvents: List<SystemEvent>,
         zone: ZoneId = ZoneId.systemDefault(),
+        excludedRemoteKeys: Set<Pair<Long, Long>> = emptySet(),
     ): CourseExportPlan {
-        val remoteCourseKeys =
+        val allLiveRemoteByKey =
             remoteEvents
-                .filter { !it.deleted && it.customAppUri?.startsWith(COURSE_URI_PREFIX) == true }
+                .filter { !it.deleted }
                 .associateBy { it.calendarId to it.eventId }
 
         val sem = snapshot.currentSemester
@@ -356,6 +460,7 @@ object CalendarBridge {
                         ?.let { "教师：$it" },
                     occ.course.note.takeIf { it.isNotBlank() },
                 )
+            val reminders = occ.course.effectiveRemindMinutes
             desired[key] =
                 SystemEventDraft(
                     calendarId = targetCalendarId,
@@ -367,8 +472,9 @@ object CalendarBridge {
                     durationRfc2445 = null,
                     allDay = false,
                     rrule = null,
-                    remindMinutes = occ.course.remindMinutes,
+                    remindMinutes = reminders.firstOrNull(),
                     customAppUri = COURSE_URI_PREFIX + key,
+                    remindMinutesList = reminders,
                 )
         }
 
@@ -378,24 +484,57 @@ object CalendarBridge {
         val unchanged = mutableListOf<CourseExportLink>()
 
         val existingBySlot = existingLinks.associateBy { it.slotKey }
+        val claimedKeys = HashSet<Pair<Long, Long>>()
+        // 预先登记仍然有效的已有链接，避免后续内容匹配抢占已配对事件
+        for ((slotKey, _) in desired) {
+            val prev = existingBySlot[slotKey]
+            if (prev != null && prev.calendarId == targetCalendarId && (prev.calendarId to prev.eventId) in allLiveRemoteByKey) {
+                claimedKeys += (prev.calendarId to prev.eventId)
+            }
+        }
+        val targetRemotes =
+            remoteEvents.filter {
+                !it.deleted && it.calendarId == targetCalendarId &&
+                    (it.calendarId to it.eventId) !in excludedRemoteKeys &&
+                    (it.calendarId to it.eventId) !in claimedKeys
+            }
+        val adoptableByUri = targetRemotes.filter { it.customAppUri != null }.associateBy { it.customAppUri!! }
+        val adoptableByContent = HashMap<String, MutableList<SystemEvent>>()
+        for (r in targetRemotes) {
+            adoptableByContent.getOrPut(eventDedupKey(r, zone)) { mutableListOf() } += r
+        }
+
         for ((slotKey, draft) in desired) {
             val hash = draftHash(draft)
             val prev = existingBySlot[slotKey]
-            val remotePresent = prev != null && (prev.calendarId to prev.eventId) in remoteCourseKeys
+            val remotePresent = prev != null && (prev.calendarId to prev.eventId) in allLiveRemoteByKey
             when {
-                prev == null || prev.calendarId != targetCalendarId || !remotePresent -> {
-                    if (prev != null && prev.calendarId != targetCalendarId) {
-                        deletes += RemoteDelete(prev.calendarId, prev.eventId)
+                prev != null && prev.calendarId == targetCalendarId && remotePresent -> {
+                    if (prev.slotHash != hash) {
+                        updates += CourseUpdate(slotKey, prev.calendarId, prev.eventId, hash, draft)
+                    } else {
+                        unchanged += prev
                     }
-                    inserts += CourseInsert(slotKey, hash, draft)
-                }
-
-                prev.slotHash != hash -> {
-                    updates += CourseUpdate(slotKey, prev.calendarId, prev.eventId, hash, draft)
                 }
 
                 else -> {
-                    unchanged += prev
+                    if (prev != null && prev.calendarId != targetCalendarId && remotePresent) {
+                        deletes += RemoteDelete(prev.calendarId, prev.eventId)
+                    }
+                    val draftKey = "${draft.title.trim().lowercase()}|${draft.dtStartMillis / 60_000L}|0"
+                    val adopted =
+                        adoptableByUri[draft.customAppUri]?.takeIf { (it.calendarId to it.eventId) !in claimedKeys }
+                            ?: adoptableByContent[draftKey]?.firstOrNull { (it.calendarId to it.eventId) !in claimedKeys }
+                    if (adopted != null) {
+                        claimedKeys += (adopted.calendarId to adopted.eventId)
+                        if (eventMatchesCourseDraft(adopted, draft)) {
+                            unchanged += CourseExportLink(slotKey, adopted.calendarId, adopted.eventId, hash)
+                        } else {
+                            updates += CourseUpdate(slotKey, adopted.calendarId, adopted.eventId, hash, draft)
+                        }
+                    } else {
+                        inserts += CourseInsert(slotKey, hash, draft)
+                    }
                 }
             }
         }
@@ -408,6 +547,17 @@ object CalendarBridge {
 
         return CourseExportPlan(inserts, updates, deletes.distinct(), unchanged)
     }
+
+    private fun eventMatchesCourseDraft(
+        event: SystemEvent,
+        draft: SystemEventDraft,
+    ): Boolean =
+        event.title.trim() == draft.title.trim() &&
+            event.description.trimEnd() == draft.description.trimEnd() &&
+            event.location.trim() == draft.location.trim() &&
+            event.dtStartMillis / 60_000L == draft.dtStartMillis / 60_000L &&
+            (event.dtEndMillis ?: 0L) / 60_000L == (draft.dtEndMillis ?: 0L) / 60_000L &&
+            event.effectiveRemindMinutes == draft.effectiveRemindMinutes
 
     fun isSyncableTask(task: Task): Boolean = task.parentId == null && (task.blockStart != null || task.due != null)
 
@@ -486,6 +636,7 @@ object CalendarBridge {
                 }
         }
 
+        val reminders = task.effectiveRemindMinutes
         return SystemEventDraft(
             calendarId = calendarId,
             title = title,
@@ -496,8 +647,9 @@ object CalendarBridge {
             durationRfc2445 = durationStr,
             allDay = allDay,
             rrule = rrule,
-            remindMinutes = task.remindMinutes,
+            remindMinutes = reminders.firstOrNull(),
             customAppUri = TASK_URI_PREFIX + task.id,
+            remindMinutesList = reminders,
         )
     }
 
@@ -519,6 +671,7 @@ object CalendarBridge {
             remindMinutes = draft.remindMinutes,
             deleted = false,
             customAppUri = draft.customAppUri,
+            remindMinutesList = draft.effectiveRemindMinutes,
         )
 
     fun taskHash(
@@ -535,7 +688,7 @@ object CalendarBridge {
             durationMin = resolveDurationMinutes(draft.dtStartMillis, draft.dtEndMillis, draft.durationRfc2445, draft.allDay, defaultBlockMinutes),
             allDay = draft.allDay,
             rrule = draft.rrule,
-            remindMinutes = draft.remindMinutes,
+            reminders = draft.effectiveRemindMinutes,
         )
     }
 
@@ -559,7 +712,7 @@ object CalendarBridge {
             durationMin = resolveDurationMinutes(event.dtStartMillis, event.dtEndMillis, event.durationRfc2445, event.allDay, defaultBlockMinutes),
             allDay = event.allDay,
             rrule = normRRule,
-            remindMinutes = event.remindMinutes,
+            reminders = event.effectiveRemindMinutes,
         )
     }
 
@@ -570,7 +723,7 @@ object CalendarBridge {
             draft.location,
             draft.dtStartMillis.toString(),
             (draft.dtEndMillis ?: 0L).toString(),
-            (draft.remindMinutes ?: -1).toString(),
+            draft.effectiveRemindMinutes.joinToString(","),
         ).joinToString("|")
 
     private fun canonicalSignature(
@@ -581,7 +734,7 @@ object CalendarBridge {
         durationMin: Int,
         allDay: Boolean,
         rrule: String?,
-        remindMinutes: Int?,
+        reminders: List<Int>,
     ): String =
         listOf(
             title.trim(),
@@ -591,8 +744,46 @@ object CalendarBridge {
             durationMin.toString(),
             if (allDay) "1" else "0",
             rrule.orEmpty(),
-            (remindMinutes ?: -1).toString(),
+            reminders.joinToString(","),
         ).joinToString("|")
+
+    private fun taskDedupKey(
+        task: Task,
+        defaultBlockMinutes: Int,
+        zone: ZoneId,
+    ): String? {
+        val draft = toDraft(task, 0L, defaultBlockMinutes, zone) ?: return null
+        val cleanTitle =
+            task.title
+                .trim()
+                .removePrefix(DONE_PREFIX)
+                .trim()
+                .lowercase()
+        return if (draft.allDay) {
+            val dateStr = eventAllDayDate(draft.dtStartMillis).toString()
+            "$cleanTitle|$dateStr|1"
+        } else {
+            "$cleanTitle|${draft.dtStartMillis / 60_000L}|0"
+        }
+    }
+
+    private fun eventDedupKey(
+        event: SystemEvent,
+        zone: ZoneId,
+    ): String {
+        val cleanTitle =
+            event.title
+                .trim()
+                .removePrefix(DONE_PREFIX)
+                .trim()
+                .lowercase()
+        return if (event.allDay) {
+            val dateStr = eventAllDayDate(event.dtStartMillis).toString()
+            "$cleanTitle|$dateStr|1"
+        } else {
+            "$cleanTitle|${normalizeStartMillis(event, zone) / 60_000L}|0"
+        }
+    }
 
     private fun mergeLinksWithCustomUri(
         existing: List<CalendarTaskLink>,
@@ -663,6 +854,7 @@ object CalendarBridge {
             nextExtra.remove("location")
         }
 
+        val reminders = remote.effectiveRemindMinutes
         return if (remote.allDay) {
             val date = eventAllDayDate(remote.dtStartMillis)
             existing.copy(
@@ -674,7 +866,8 @@ object CalendarBridge {
                 blockMinutes = null,
                 due = date.atTime(23, 59),
                 dueHasTime = false,
-                remindMinutes = remote.remindMinutes,
+                remindMinutes = reminders.firstOrNull(),
+                remindMinutesList = reminders,
                 repeat = recurrence,
                 extra = nextExtra,
             )
@@ -688,7 +881,8 @@ object CalendarBridge {
                 blockMinutes = durMin,
                 due = startLocal.plusMinutes(durMin.toLong()),
                 dueHasTime = true,
-                remindMinutes = remote.remindMinutes,
+                remindMinutes = reminders.firstOrNull(),
+                remindMinutesList = reminders,
                 repeat = recurrence,
                 extra = nextExtra,
             )

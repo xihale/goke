@@ -4,8 +4,11 @@ import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
+import android.widget.RemoteViews
 import androidx.core.graphics.ColorUtils
 import app.goke.GokeApp
 import app.goke.MainActivity
@@ -20,19 +23,75 @@ import app.goke.core.time.SemesterCalendar
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
+import kotlin.math.roundToInt
 
-/** 小组件共用配色、周次文案、进度阶段与窄宽自适应判断。 */
+/** 小组件共用配色、周次文案、进度阶段与多尺寸自适应判断。 */
 internal object WidgetKit {
+    /** 一格超窄宽阈值（dp）：小于此值时按 1 列极限紧凑布局（收紧边距、隐藏次要操作）。 */
+    const val ULTRA_COMPACT_WIDTH_DP = 105
+
     /** 两格窄宽阈值（dp）：小于此值时启用紧凑布局（折叠周次/左侧时间列/附加按钮）。 */
     const val COMPACT_WIDTH_DP = 180
+
+    /** 单行矮高阈值（dp）：小于此值时折叠顶栏，让列表直接占满 1 行高度。 */
+    const val COMPACT_HEIGHT_DP = 100
     const val PROGRESS_MAX = 1000
     const val ONGOING_TICK_MINUTES = 5L
+
+    data class SizeClass(
+        val compactWidth: Boolean = false,
+        val ultraCompactWidth: Boolean = false,
+        val compactHeight: Boolean = false,
+    ) {
+        /** 1 列或 1 行等迷你尺寸：全部统一收敛为「下一件事」卡片。 */
+        val isMini: Boolean get() = ultraCompactWidth || compactHeight
+    }
 
     enum class TimePhase {
         UPCOMING,
         ONGOING,
         FINISHED,
     }
+
+    fun dp(
+        ctx: Context,
+        value: Int,
+    ): Int = (value * ctx.resources.displayMetrics.density).roundToInt()
+
+    fun sizeClass(
+        ctx: Context,
+        options: Bundle?,
+    ): SizeClass {
+        if (options == null) return SizeClass()
+        val isLandscape = ctx.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val minW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+        val maxW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0)
+        val minH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
+        val maxH = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0)
+        val widthDp =
+            if (isLandscape) {
+                if (maxW > 0) maxW else minW
+            } else {
+                if (minW > 0) minW else maxW
+            }
+        val heightDp =
+            if (isLandscape) {
+                if (minH > 0) minH else maxH
+            } else {
+                if (maxH > 0) maxH else minH
+            }
+        return SizeClass(
+            compactWidth = widthDp in 1 until COMPACT_WIDTH_DP,
+            ultraCompactWidth = widthDp in 1 until ULTRA_COMPACT_WIDTH_DP,
+            compactHeight = heightDp in 1 until COMPACT_HEIGHT_DP,
+        )
+    }
+
+    fun sizeClass(
+        ctx: Context,
+        manager: AppWidgetManager,
+        widgetId: Int,
+    ): SizeClass = sizeClass(ctx, manager.getAppWidgetOptions(widgetId))
 
     fun isCompactWidth(options: Bundle?): Boolean {
         val minWidth = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) ?: 0

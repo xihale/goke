@@ -7,14 +7,15 @@ import android.content.Intent
 import android.graphics.PixelFormat
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -68,7 +69,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -98,7 +98,6 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.view.WindowCompat
 import app.goke.DeepLinks
 import app.goke.GokeApp
 import app.goke.MainActivity
@@ -121,6 +120,7 @@ import app.goke.data.DarkMode
 import app.goke.gokeApp
 import app.goke.ui.components.ChipPill
 import app.goke.ui.components.ConfirmDialog
+import app.goke.ui.components.ErrorReportDialog
 import app.goke.ui.components.MintCheck
 import app.goke.ui.components.SegmentedPill
 import app.goke.ui.components.Tag
@@ -149,6 +149,7 @@ import app.goke.ui.theme.GokeTheme
 import app.goke.ui.theme.MintTheme
 import app.goke.ui.theme.priorityColor
 import app.goke.ui.weekdayShort
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -189,15 +190,9 @@ class WidgetOverlayActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        enableEdgeToEdge()
         window.setFormat(PixelFormat.TRANSLUCENT)
         window.setBackgroundDrawable(ColorDrawable(AndroidColor.TRANSPARENT))
-        window.statusBarColor = AndroidColor.TRANSPARENT
-        window.navigationBarColor = AndroidColor.TRANSPARENT
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            window.isStatusBarContrastEnforced = false
-            window.isNavigationBarContrastEnforced = false
-        }
         targetState.value = parseTarget(intent)
         val app = gokeApp
         setContent {
@@ -210,10 +205,14 @@ class WidgetOverlayActivity : ComponentActivity() {
                     DarkMode.LIGHT -> false
                     DarkMode.DARK -> true
                 }
-            SideEffect {
-                val controller = WindowCompat.getInsetsController(window, window.decorView)
-                controller.isAppearanceLightStatusBars = !dark
-                controller.isAppearanceLightNavigationBars = !dark
+            LaunchedEffect(dark) {
+                val style =
+                    if (dark) {
+                        SystemBarStyle.dark(AndroidColor.TRANSPARENT)
+                    } else {
+                        SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)
+                    }
+                enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
             GokeTheme(settings, transparentBackground = true) {
                 WidgetOverlayRoot(
@@ -400,6 +399,10 @@ internal fun WidgetOverlayRoot(
                     thenOpenUri != null -> onOpenInApp(thenOpenUri)
                     closeAfter -> onDismiss()
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                app.errors.record("WidgetOverlay", e)
             } finally {
                 closing = false
             }
@@ -594,6 +597,15 @@ internal fun WidgetOverlayRoot(
                 }
             }
         }
+
+        val pendingError by app.errors.pendingModal.collectAsState()
+        val activeError = pendingError
+        if (activeError != null) {
+            ErrorReportDialog(
+                report = activeError,
+                onDismiss = { app.errors.dismissPending() },
+            )
+        }
     }
 }
 
@@ -618,7 +630,7 @@ private fun OverlayQuickAddCard(
     var toolPanel by remember { mutableStateOf<QuickPanel?>(null) }
     var whenPanel by remember { mutableStateOf(false) }
     var panelWhen by remember { mutableStateOf<WhenPick?>(null) }
-    var panelRemind by remember { mutableStateOf<Int?>(null) }
+    var panelRemindList by remember { mutableStateOf<List<Int>>(emptyList()) }
     var panelPersistent by remember { mutableStateOf(false) }
     var panelFreq by remember { mutableStateOf<Freq?>(null) }
     var panelInterval by remember { mutableIntStateOf(1) }
@@ -641,7 +653,7 @@ private fun OverlayQuickAddCard(
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
-    val hasDraft = text.isNotBlank() || panelWhen != null || panelRemind != null || panelFreq != null
+    val hasDraft = text.isNotBlank() || panelWhen != null || panelRemindList.isNotEmpty() || panelFreq != null
     LaunchedEffect(hasDraft) {
         registerDismissHook {
             if (hasDraft) confirmDiscard = true else onDismiss()
@@ -688,10 +700,10 @@ private fun OverlayQuickAddCard(
                 ctx.getString(R.string.todo_batch_toast, items.size)
             }
         val ov =
-            if (panelWhen != null || panelRemind != null || panelFreq != null) {
+            if (panelWhen != null || panelRemindList.isNotEmpty() || panelFreq != null) {
                 QuickOverride(
                     whenPick = panelWhen,
-                    remind = panelRemind,
+                    remindList = panelRemindList,
                     persistent = panelPersistent,
                     repeat =
                         panelFreq?.let { f ->
@@ -744,7 +756,7 @@ private fun OverlayQuickAddCard(
         toolPanel = toolPanel,
         onToolPanelChange = { toolPanel = it },
         panelWhen = panelWhen,
-        panelRemind = panelRemind,
+        panelRemindList = panelRemindList,
         panelFreq = panelFreq,
         panelInterval = panelInterval,
         panelByDays = panelByDays,
@@ -758,7 +770,7 @@ private fun OverlayQuickAddCard(
         onOpenWhenPanel = { whenPanel = true },
         onClearWhenOverrides = {
             panelWhen = null
-            panelRemind = null
+            panelRemindList = emptyList()
             panelPersistent = false
             panelFreq = null
             panelUntil = null
@@ -776,7 +788,7 @@ private fun OverlayQuickAddCard(
                 },
             defaultDate = now.toLocalDate(),
             defaultMinutes = defaultBlockMinutes,
-            initialRemind = panelRemind,
+            initialRemindList = panelRemindList,
             initialPersistent = panelPersistent,
             initialFreq = panelFreq,
             initialInterval = panelInterval,
@@ -787,7 +799,7 @@ private fun OverlayQuickAddCard(
             onDismiss = { whenPanel = false },
             onPick = { r ->
                 panelWhen = r.whenPick
-                panelRemind = r.remindMinutes
+                panelRemindList = r.remindMinutesList
                 panelPersistent = r.remindPersistent
                 panelFreq = r.freq
                 panelInterval = r.interval
@@ -1102,7 +1114,7 @@ private fun OverlayParcelCard(
             initial = initPick,
             defaultDate = today,
             defaultMinutes = defaultBlockMinutes,
-            initialRemind = task.remindMinutes,
+            initialRemindList = task.effectiveRemindMinutes,
             initialPersistent = task.remindPersistent,
             initialFreq = task.repeat?.freq,
             initialInterval = task.repeat?.interval ?: 1,
@@ -1153,8 +1165,9 @@ private fun applyWhenResult(
         blockMinutes = blockMinutes,
         due = dueAt,
         dueHasTime = hasTime,
-        remindMinutes = r.remindMinutes,
-        remindPersistent = r.remindMinutes != null && r.remindPersistent,
+        remindMinutes = r.remindMinutesList.firstOrNull(),
+        remindMinutesList = r.remindMinutesList,
+        remindPersistent = r.remindMinutesList.isNotEmpty() && r.remindPersistent,
         repeat =
             r.freq?.let { f ->
                 (task.repeat?.takeIf { it.freq == f } ?: Recurrence(f)).copy(
@@ -1200,7 +1213,7 @@ private fun OverlayTaskCard(
     var listId by remember(task.id) { mutableStateOf(task.listId) }
     var done by remember(task.id, task.done) { mutableStateOf(task.done) }
     var whenPick by remember(task.id) { mutableStateOf(initWhen) }
-    var remind by remember(task.id) { mutableStateOf(task.remindMinutes) }
+    var remindList by remember(task.id) { mutableStateOf(task.effectiveRemindMinutes) }
     var persistent by remember(task.id) { mutableStateOf(task.remindPersistent) }
     var freq by remember(task.id) { mutableStateOf(task.repeat?.freq) }
     var interval by remember(task.id) { mutableIntStateOf(task.repeat?.interval ?: 1) }
@@ -1233,7 +1246,7 @@ private fun OverlayTaskCard(
             priority != task.priority ||
             listId != task.listId ||
             done != task.done ||
-            remind != task.remindMinutes ||
+            remindList != task.effectiveRemindMinutes ||
             persistent != task.remindPersistent ||
             whenChanged ||
             repeatChanged
@@ -1272,8 +1285,9 @@ private fun OverlayTaskCard(
             blockMinutes = blockMinutes,
             due = dueAt,
             dueHasTime = hasTime,
-            remindMinutes = remind,
-            remindPersistent = remind != null && persistent,
+            remindMinutes = remindList.firstOrNull(),
+            remindMinutesList = remindList,
+            remindPersistent = remindList.isNotEmpty() && persistent,
             repeat =
                 freq?.let { f ->
                     (task.repeat?.takeIf { it.freq == f } ?: Recurrence(f)).copy(
@@ -1307,7 +1321,7 @@ private fun OverlayTaskCard(
         onCommitEdit(updated, msg, closeAfter, thenOpenUri)
     }
 
-    LaunchedEffect(isDirty, title, note, priority, listId, done, whenPick, remind, persistent, freq, interval, until, byDays, byMonths) {
+    LaunchedEffect(isDirty, title, note, priority, listId, done, whenPick, remindList, persistent, freq, interval, until, byDays, byMonths) {
         registerDismissHook {
             if (isDirty && title.trim().isNotEmpty()) saveAndMaybe(closeAfter = true) else onDismiss()
         }
@@ -1611,7 +1625,7 @@ private fun OverlayTaskCard(
             initial = whenPick,
             defaultDate = today,
             defaultMinutes = defaultBlockMinutes,
-            initialRemind = remind,
+            initialRemindList = remindList,
             initialPersistent = persistent,
             initialFreq = freq,
             initialInterval = interval,
@@ -1622,7 +1636,7 @@ private fun OverlayTaskCard(
             onDismiss = { whenPanel = false },
             onPick = { r ->
                 whenPick = r.whenPick
-                remind = r.remindMinutes
+                remindList = r.remindMinutesList
                 persistent = r.remindPersistent
                 freq = r.freq
                 interval = r.interval

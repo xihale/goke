@@ -23,7 +23,6 @@ var webFS embed.FS
 type Server struct {
 	st         *store.Store
 	limiter    *loginLimiter
-	relay      *relayHub
 	trustProxy bool
 	mux        *http.ServeMux
 }
@@ -35,7 +34,7 @@ type Options struct {
 
 func New(st *store.Store, opt Options) *Server {
 	mcp.Warmup() // 工具 Schema 有错时启动即失败，而不是等第一个请求
-	s := &Server{st: st, limiter: newLoginLimiter(8, 10*time.Minute), relay: newRelayHub(), trustProxy: opt.TrustProxy, mux: http.NewServeMux()}
+	s := &Server{st: st, limiter: newLoginLimiter(8, 10*time.Minute), trustProxy: opt.TrustProxy, mux: http.NewServeMux()}
 	s.routes()
 	return s
 }
@@ -64,24 +63,10 @@ func (s *Server) routes() {
 	m.Handle("DELETE /api/v1/admin/users/{id}", s.auth(true, s.handleDeleteUser))
 	m.Handle("POST /api/v1/admin/users/{id}/signout", s.auth(true, s.handleSignOutUser))
 
-	m.HandleFunc("POST /api/v1/relay/{room}", s.handleRelayPush)
-	m.HandleFunc("GET /api/v1/relay/{room}", s.handleRelayPoll)
-	m.HandleFunc("DELETE /api/v1/relay/{room}", s.handleRelayClear)
-
 	adminFS, _ := fs.Sub(webFS, "web/admin")
 	m.Handle("GET /admin/", http.StripPrefix("/admin/", http.FileServerFS(adminFS)))
 	m.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/admin/", http.StatusMovedPermanently)
-	})
-
-	relayFS, _ := fs.Sub(webFS, "web/relay")
-	m.Handle("GET /relay/", noCache(http.StripPrefix("/relay/", http.FileServerFS(relayFS))))
-	m.HandleFunc("GET /relay", func(w http.ResponseWriter, r *http.Request) {
-		target := "/relay/"
-		if r.URL.RawQuery != "" {
-			target += "?" + r.URL.RawQuery
-		}
-		http.Redirect(w, r, target, http.StatusMovedPermanently)
 	})
 
 	// Web 端（单页应用，hash 路由，无构建步骤）：/ 返回入口页，静态资源在 /app/ 下。
