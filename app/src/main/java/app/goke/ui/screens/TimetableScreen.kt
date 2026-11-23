@@ -89,6 +89,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -178,6 +179,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 
 private val BaseTimeColW = 34.dp
@@ -217,6 +220,49 @@ private fun calcPeriodTop(
     if (periodCount > 4 && p > 4) gaps++
     if (periodCount > 8 && p > 8) gaps++
     return rowH * (p - 1) + GroupGap * gaps
+}
+
+/**
+ * 将当日时刻 [time] 映射到课表纵轴位置（单位 Dp）：
+ * 节次内线性插值；课间与午/晚休大间隙按间隔线性插值；早于第一节开始或晚于最后一节结束返回 `null`。
+ */
+internal fun calcTimetableNowY(
+    periods: List<PeriodTime>,
+    time: LocalTime,
+    rowH: Dp = BaseRowH,
+): Dp? {
+    val n = periods.size
+    if (n == 0) return null
+    val ordered =
+        if (periods.zipWithNext().all { (a, b) -> a.index <= b.index }) {
+            periods
+        } else {
+            periods.sortedBy { it.index }
+        }
+    val first = ordered.first()
+    val last = ordered.last()
+    if (time.isBefore(first.start) || time.isAfter(last.end)) return null
+    for (i in ordered.indices) {
+        val p = ordered[i]
+        val rowTop = calcPeriodTop(p.index, n, rowH)
+        if (!time.isBefore(p.start) && !time.isAfter(p.end)) {
+            val totalSec = ChronoUnit.SECONDS.between(p.start, p.end).coerceAtLeast(1L)
+            val elapsedSec = ChronoUnit.SECONDS.between(p.start, time).coerceIn(0L, totalSec)
+            return rowTop + rowH * (elapsedSec.toFloat() / totalSec.toFloat())
+        }
+        if (i + 1 < n) {
+            val next = ordered[i + 1]
+            if (time.isAfter(p.end) && time.isBefore(next.start)) {
+                val gapStart = rowTop + rowH
+                val gapEnd = calcPeriodTop(next.index, n, rowH)
+                if (gapEnd <= gapStart) return gapStart
+                val gapTotal = ChronoUnit.SECONDS.between(p.end, next.start).coerceAtLeast(1L)
+                val gapElapsed = ChronoUnit.SECONDS.between(p.end, time).coerceIn(0L, gapTotal)
+                return gapStart + (gapEnd - gapStart) * (gapElapsed.toFloat() / gapTotal.toFloat())
+            }
+        }
+    }
+    return null
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -1073,8 +1119,6 @@ private fun WeekGrid(
                         )
                     },
             ) {
-                // 不画「当前时间」的线和圆点：7 天网格里一列只有 40 来 dp，
-                // 那条线横穿在一整列色块上，多一根线只是噪声；今天靠星期头的色块指认。
                 // 左侧节次：开始 / 结束时间都给，两行 tnum 数字
                 val periodLabels =
                     remember(periods, timeStyle, labelStyle, color, variantColor) {
@@ -1188,6 +1232,60 @@ private fun WeekGrid(
                                     },
                                 ).height(tbox.bottom - tbox.top),
                         onClick = { if (slot.overlap > 1) onSlotClick(slotEntries[cells.size + di].orEmpty()) else onOpenTask(t.id) },
+                    )
+                }
+                // 今日列当前时间横条：仅限定在「今天」列内，兼顾课间/午休定位与零跨列视觉噪声
+                val todayColIndex =
+                    remember(week, currentWeek, today, cal) {
+                        if (week == currentWeek) (1..7).firstOrNull { cal.dateOf(week, it) == today } else null
+                    }
+                val nowTimeY =
+                    remember(now, periods, rowH, todayColIndex) {
+                        if (todayColIndex != null && now != null) {
+                            calcTimetableNowY(periods, now.toLocalTime(), rowH)
+                        } else {
+                            null
+                        }
+                    }
+                if (todayColIndex != null && nowTimeY != null) {
+                    val barColor = scheme.primary
+                    val haloColor = scheme.surface.copy(alpha = 0.88f)
+                    Spacer(
+                        Modifier
+                            .fillMaxSize()
+                            .drawBehind {
+                                val colLeft = (timeColW + colW * (todayColIndex - 1)).toPx()
+                                val colRight = (colLeft + colW.toPx()).coerceAtMost(size.width)
+                                val y = nowTimeY.toPx().coerceIn(0f, size.height)
+                                val dotR = 3.dp.toPx()
+                                val haloR = 4.5.dp.toPx()
+                                val dotX = (colLeft + 2.dp.toPx()).coerceAtMost(colRight)
+                                val barEndX = (colRight - 1.5.dp.toPx()).coerceAtLeast(dotX)
+                                drawLine(
+                                    color = haloColor,
+                                    start = Offset(dotX, y),
+                                    end = Offset(barEndX, y),
+                                    strokeWidth = 3.5.dp.toPx(),
+                                    cap = StrokeCap.Round,
+                                )
+                                drawCircle(
+                                    color = haloColor,
+                                    radius = haloR,
+                                    center = Offset(dotX, y),
+                                )
+                                drawLine(
+                                    color = barColor,
+                                    start = Offset(dotX, y),
+                                    end = Offset(barEndX, y),
+                                    strokeWidth = 2.dp.toPx(),
+                                    cap = StrokeCap.Round,
+                                )
+                                drawCircle(
+                                    color = barColor,
+                                    radius = dotR,
+                                    center = Offset(dotX, y),
+                                )
+                            },
                     )
                 }
                 // 框选高亮：出现带一拍淡入，不突兀
