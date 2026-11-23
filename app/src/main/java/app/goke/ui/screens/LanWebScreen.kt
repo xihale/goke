@@ -22,9 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.ExpandLess
-import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
@@ -59,6 +56,9 @@ import app.goke.ui.components.MintScreen
 import app.goke.ui.components.SwitchRow
 import app.goke.ui.components.Tag
 import app.goke.ui.components.mintClickable
+import app.goke.ui.icons.ContentCopy
+import app.goke.ui.icons.ExpandLess
+import app.goke.ui.icons.ExpandMore
 import app.goke.ui.theme.MintTheme
 import kotlinx.coroutines.delay
 

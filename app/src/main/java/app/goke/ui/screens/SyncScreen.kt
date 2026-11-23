@@ -22,7 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -68,6 +67,7 @@ import app.goke.ui.components.SwitchRow
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.ValueRow
 import app.goke.ui.components.mintClickable
+import app.goke.ui.icons.ContentCopy
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDateTime

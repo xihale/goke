@@ -25,9 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -81,6 +79,8 @@ import app.goke.ui.components.SectionLabel
 import app.goke.ui.components.Tag
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.mintClickable
+import app.goke.ui.icons.FitnessCenter
+import app.goke.ui.icons.Wifi
 import app.goke.ui.theme.MintTheme
 import kotlinx.coroutines.launch
 import java.text.DecimalFormat

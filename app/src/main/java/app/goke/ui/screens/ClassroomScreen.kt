@@ -50,9 +50,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.MeetingRoom
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.School
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -135,6 +133,8 @@ import app.goke.ui.components.mintClickable
 import app.goke.ui.components.parcelCode
 import app.goke.ui.components.rememberModalSheetState
 import app.goke.ui.hm
+import app.goke.ui.icons.MeetingRoom
+import app.goke.ui.icons.School
 import app.goke.ui.liveSnapshot
 import app.goke.ui.reduceMotion
 import app.goke.ui.rememberToday

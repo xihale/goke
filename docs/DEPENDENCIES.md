@@ -6,7 +6,7 @@
 |---|---|---|---|
 | Kotlin / `kotlinx-serialization` / `kotlinx-coroutines` | 全部 Kotlin 模块 | Apache-2.0 | 语言、JSON 序列化与协程 |
 | AndroidX（`core-ktx`、`lifecycle`、`activity-compose`） | `:app` | Apache-2.0 | Android 基础；`activity-compose` 1.13+ 提供 `PredictiveBackHandler` |
-| Jetpack Compose（BOM、`ui`、`material3`、`material-icons-extended`） | `:app` | Apache-2.0 | UI 与官方动画（`material3` 1.5.0-beta02 起含 Expressive API） |
+| Jetpack Compose（BOM、`ui`、`material3`、`material-icons-core`） | `:app` | Apache-2.0 | UI 与官方动画（`material3` 1.5.0-beta02 起含 Expressive API）；扩展图标路径按需沉淀于 `GokeIcons.kt`（Apache-2.0） |
 | `navigation-compose` | `:app` | Apache-2.0 | `@Serializable` 类型安全路由与分方向预测性返回转场 |
 | `core-splashscreen` | `:app` | Apache-2.0 | Android 12+ 规范启动画面，冷启动数据加载期间避免白屏 |
 | `work-runtime-ktx` | `:app` | Apache-2.0 | 登录后 15 分钟后台周期同步与系统日历对账 |

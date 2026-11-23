@@ -21,13 +21,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.Remove
-import androidx.compose.material.icons.rounded.SwapHoriz
-import androidx.compose.material.icons.rounded.Sync
-import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -93,6 +88,11 @@ import app.goke.ui.components.rememberNoFocusPopup
 import app.goke.ui.formatRooms
 import app.goke.ui.fullDate
 import app.goke.ui.hm
+import app.goke.ui.icons.ContentCopy
+import app.goke.ui.icons.Remove
+import app.goke.ui.icons.SwapHoriz
+import app.goke.ui.icons.Sync
+import app.goke.ui.icons.UploadFile
 import app.goke.ui.liveSnapshot
 import app.goke.ui.theme.MintTheme
 import app.goke.ui.weekdayShort

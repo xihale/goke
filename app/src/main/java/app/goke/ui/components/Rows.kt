@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -73,6 +72,7 @@ import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
 import app.goke.ui.formatRooms
 import app.goke.ui.hm
+import app.goke.ui.icons.ContentCopy
 import app.goke.ui.monthDayWeekday
 import app.goke.ui.screens.freqLabel
 import app.goke.ui.theme.MintTheme

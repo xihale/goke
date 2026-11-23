@@ -28,11 +28,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.icons.rounded.Flag
-import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -81,6 +77,10 @@ import app.goke.ui.components.EmptyState
 import app.goke.ui.components.MintFab
 import app.goke.ui.components.NavClearance
 import app.goke.ui.components.mintClickable
+import app.goke.ui.icons.Checklist
+import app.goke.ui.icons.ExpandMore
+import app.goke.ui.icons.Flag
+import app.goke.ui.icons.FolderOpen
 import app.goke.ui.liveSnapshot
 import app.goke.ui.reduceMotion
 import app.goke.ui.rememberNowGated

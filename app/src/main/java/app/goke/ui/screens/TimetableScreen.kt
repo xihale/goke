@@ -50,14 +50,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.CalendarViewWeek
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.ExpandLess
-import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.icons.rounded.GridView
-import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -165,6 +160,11 @@ import app.goke.ui.components.rememberCourseProgressFg
 import app.goke.ui.dueLabel
 import app.goke.ui.formatRooms
 import app.goke.ui.hm
+import app.goke.ui.icons.CalendarViewWeek
+import app.goke.ui.icons.ExpandLess
+import app.goke.ui.icons.ExpandMore
+import app.goke.ui.icons.GridView
+import app.goke.ui.icons.Inventory2
 import app.goke.ui.liveSnapshot
 import app.goke.ui.monthDay
 import app.goke.ui.monthDayWeekday

@@ -1,32 +1,48 @@
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.FileSystemOperations
+import org.gradle.api.provider.ValueSource
+import org.gradle.api.provider.ValueSourceParameters
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import org.gradle.process.ExecOperations
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.io.ByteArrayOutputStream
 import java.io.FileInputStream
 import java.util.Properties
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+
+// 通过 ValueSource 执行 git describe 以兼容 Gradle Configuration Cache。
+abstract class GitDescribeSource : ValueSource<String, GitDescribeSource.Parameters> {
+    interface Parameters : ValueSourceParameters {
+        val workingDir: DirectoryProperty
+    }
+
+    @get:Inject
+    abstract val execOperations: ExecOperations
+
+    override fun obtain(): String {
+        val out = ByteArrayOutputStream()
+        val err = ByteArrayOutputStream()
+        val result =
+            execOperations.exec {
+                workingDir = parameters.workingDir.asFile.get()
+                commandLine("git", "describe", "--tags", "--match", "v[0-9]*", "--long", "--dirty", "--always")
+                standardOutput = out
+                errorOutput = err
+                isIgnoreExitValue = true
+            }
+        return if (result.exitValue == 0) out.toString(Charsets.UTF_8).trim() else ""
+    }
+}
 
 // 版本号由 git tag（v*）派生，支持 SemVer 预发布后缀（如 v0.0.1-beta.1）：
 // versionName = git describe 去 v 前缀——精确打在 tag 上时为干净 semver（如 0.0.1-beta.1），
 //   tag 之后形如 0.0.1-beta.1-1-g<sha>，工作区有未提交改动再加 -dirty；
 // versionCode 严格单调递增：alpha < beta < rc < 正式版 < 下一 patch/minor/major。
-fun runGit(vararg args: String): String? =
-    runCatching {
-        val process =
-            ProcessBuilder("git", *args)
-                .directory(rootDir)
-                .start()
-        val output = String(process.inputStream.readAllBytes(), Charsets.UTF_8)
-        process.waitFor(10, TimeUnit.SECONDS)
-        output.trim().takeIf { process.exitValue() == 0 }
-    }.getOrNull()
-
 fun computeVersionCode(
     major: Int,
     minor: Int,
@@ -50,12 +66,30 @@ fun computeVersionCode(
     return base + stage * 1_000 + preNum * 10 + commitsAfter.coerceIn(0, 9)
 }
 
+// 日常 debug / 单测固定静态版本，避免每次提交或 clean/dirty 切换使 BuildConfig/Manifest/Kotlin 缓存失效；
+// release / benchmark 或传入 -PgitVersion=true 时再由 git tag 派生完整 SemVer。
+val useGitVersion =
+    providers.gradleProperty("gitVersion").orNull == "true" ||
+        gradle.startParameter.taskNames.any { name ->
+            val short = name.substringAfterLast(':')
+            name.contains("Release", ignoreCase = true) ||
+                name.contains("Benchmark", ignoreCase = true) ||
+                short == "assemble" ||
+                short == "build"
+        }
+
 val appVersion: Pair<String, Int> =
-    run {
-        val describe = runGit("describe", "--tags", "--match", "v[0-9]*", "--long", "--dirty", "--always")
+    if (!useGitVersion) {
+        "0.0.1" to 1
+    } else {
+        val describe =
+            providers
+                .of(GitDescribeSource::class) {
+                    parameters.workingDir.set(layout.projectDirectory.dir(".."))
+                }.get()
         val match =
             Regex("""^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+?))?(?:-(\d+)-g[0-9a-f]+)?(-dirty)?$""")
-                .find(describe.orEmpty())
+                .find(describe)
         if (match == null) {
             logger.info("未找到 v* SemVer git tag（describe=$describe），使用初始版本 0.0.1-beta.1")
             "0.0.1-beta.1" to computeVersionCode(0, 0, 1, "beta.1", 0)
@@ -67,7 +101,7 @@ val appVersion: Pair<String, Int> =
             val commitsAfter = match.groupValues[5].toIntOrNull() ?: 0
             // 精确在 tag 上时去掉 --long 的 -0-g<sha> 尾巴，发布产物拿到干净 semver
             val name =
-                describe!!.removePrefix("v").let {
+                describe.removePrefix("v").let {
                     if (commitsAfter == 0) it.replace(Regex("""-0-g[0-9a-f]+"""), "") else it
                 }
             name to computeVersionCode(major, minor, patch, pre, commitsAfter)
@@ -154,6 +188,20 @@ android {
             // 包名后缀区分：debug 装在 app.goke.debug，与 release 并存
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            // 默认只保留 arm64-v8a，避免 CLI debug 每次打入全部 4 套 native .so；
+            // Android Studio 注入 android.injected.build.abi 时自动让路，也可用 -PdebugAbi=x86_64 或 -PdebugAbi=all 覆盖
+            val injectedAbi = providers.gradleProperty("android.injected.build.abi").orNull
+            val debugAbi = providers.gradleProperty("debugAbi").orNull
+            if (injectedAbi.isNullOrBlank() && debugAbi != "all") {
+                val abis =
+                    (debugAbi ?: "arm64-v8a")
+                        .split(',')
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                if (abis.isNotEmpty()) {
+                    ndk { abiFilters += abis }
+                }
+            }
         }
         create("benchmark") {
             // Macrobenchmark 目标：release 的 R8 / 资源收缩（真实流畅度）+ debug 签名（可直接安装）。
@@ -188,11 +236,12 @@ android {
 }
 
 // release 变体缺少签名配置时直接失败，避免静默产出无签名或 debug 签名包
+val appProjectPath = project.path
 gradle.taskGraph.whenReady {
     if (hasReleaseSigning) return@whenReady
     val releaseTask =
         allTasks.firstOrNull { task ->
-            task.project == project &&
+            task.path.startsWith("$appProjectPath:") &&
                 task.name.contains("Release") &&
                 listOf("assemble", "bundle", "package", "sign").any { task.name.startsWith(it) }
         }
@@ -241,7 +290,7 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.navigation.compose)
-    implementation(libs.androidx.material.icons.extended)
+    implementation(libs.androidx.material.icons.core)
     implementation(libs.materialkolor)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)

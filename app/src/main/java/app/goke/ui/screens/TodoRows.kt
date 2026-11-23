@@ -19,10 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Event
-import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.icons.rounded.Flag
-import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -70,6 +66,10 @@ import app.goke.ui.components.mintClickable
 import app.goke.ui.components.parcelCode
 import app.goke.ui.components.parcelLabel
 import app.goke.ui.dueLabel
+import app.goke.ui.icons.Event
+import app.goke.ui.icons.ExpandMore
+import app.goke.ui.icons.Flag
+import app.goke.ui.icons.RadioButtonUnchecked
 import app.goke.ui.theme.MintTheme
 import app.goke.ui.theme.priorityColor
 import java.time.LocalDateTime

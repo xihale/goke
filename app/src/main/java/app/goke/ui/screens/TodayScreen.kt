@@ -26,8 +26,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -91,6 +89,8 @@ import app.goke.ui.components.parcelCode
 import app.goke.ui.dueLabel
 import app.goke.ui.formatRooms
 import app.goke.ui.hm
+import app.goke.ui.icons.ExpandMore
+import app.goke.ui.icons.WbSunny
 import app.goke.ui.liveSnapshot
 import app.goke.ui.monthDayWeekday
 import app.goke.ui.reduceMotion

@@ -24,10 +24,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Image
-import androidx.compose.material.icons.rounded.IosShare
-import androidx.compose.material.icons.rounded.Restore
-import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -79,6 +75,10 @@ import app.goke.ui.components.NavRow
 import app.goke.ui.components.SegmentedPill
 import app.goke.ui.components.SwitchRow
 import app.goke.ui.fullDate
+import app.goke.ui.icons.Image
+import app.goke.ui.icons.IosShare
+import app.goke.ui.icons.Restore
+import app.goke.ui.icons.UploadFile
 import app.goke.ui.liveSnapshot
 import app.goke.ui.settingsState
 import app.goke.ui.theme.MintTheme

@@ -313,7 +313,7 @@ Goke 追求贴近纸面的轻盈质感，靠色调层级（Tonal Surface）与�
 
 - **无位图资产**：`app/src/main/res/drawable/` 仅包含启动/通知/小组件图标与 RemoteViews 圆角底 XML。需要新插图时优先 24×24 网格 vector drawable（`tint` / `currentColor`），许可证登记至 `docs/DEPENDENCIES.md`。
 - **图标系统**：
-  - Android：使用 `material-icons-extended`，默认 **Rounded** 变体；方向性图标（`ArrowBack`、`KeyboardArrowRight/Left`、`Undo`）必须使用 `AutoMirrored`。尺寸阶梯：**24dp** 导航/工具栏 · **20dp** 行内 · **16dp** 标签与冲突卡。
+  - Android：使用 `material-icons-core` 与 [GokeIcons.kt](app/src/main/java/app/goke/ui/icons/GokeIcons.kt)（按需抽取 Material Icons 矢量路径，避免引入 84 MB 的 `material-icons-extended`），默认 **Rounded** 变体；方向性图标（`ArrowBack`、`KeyboardArrowRight/Left`、`Undo`）必须使用 `AutoMirrored`。尺寸阶梯：**24dp** 导航/工具栏 · **20dp** 行内 · **16dp** 标签与冲突卡。
   - Web：`server/internal/server/web/app/js/dom.js` 内 `ICONS` 映射（24×24 viewBox、stroke 1.8、round cap/join），经 `icon(name, size)` 渲染；新增图标先查 Material Icons 与 Web `ICONS`。
 - **Web 样式与 CSP**：无 CDN、无外链字体/图片；CSP 为 `script-src 'self'; style-src 'self'`，禁止内联样式与字符串拼 HTML。
 - **响应式**：Android 只做手机（基准 `w411dp-h891dp`，状态栏 `24dp`、底栏净空 `NavClearance`）；Web 手机优先，CSS 断点为 `700px` / `900px` / `1100px`（`app.css`）。

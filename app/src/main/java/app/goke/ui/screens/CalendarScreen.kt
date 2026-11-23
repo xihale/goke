@@ -32,7 +32,6 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -104,6 +103,7 @@ import app.goke.ui.components.SegmentedPill
 import app.goke.ui.components.mintClickable
 import app.goke.ui.components.mintPressScale
 import app.goke.ui.components.rememberModalSheetState
+import app.goke.ui.icons.ExpandMore
 import app.goke.ui.liveSnapshot
 import app.goke.ui.monthDayWeekday
 import app.goke.ui.reduceMotion

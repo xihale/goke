@@ -21,9 +21,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -70,6 +67,9 @@ import app.goke.ui.components.SwitchRow
 import app.goke.ui.components.TimeDialSheet
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.ValueRow
+import app.goke.ui.icons.DeleteOutline
+import app.goke.ui.icons.History
+import app.goke.ui.icons.Tune
 import app.goke.ui.settingsState
 import app.goke.ui.theme.MintTheme
 import kotlinx.coroutines.launch

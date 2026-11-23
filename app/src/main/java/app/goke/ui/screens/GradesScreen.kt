@@ -17,9 +17,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Grade
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.School
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
@@ -66,6 +64,8 @@ import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.SectionLabel
 import app.goke.ui.components.mintClickable
+import app.goke.ui.icons.Grade
+import app.goke.ui.icons.School
 import app.goke.ui.theme.MintTheme
 import kotlinx.coroutines.launch
 import java.text.DecimalFormat

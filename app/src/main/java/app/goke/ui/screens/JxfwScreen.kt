@@ -18,10 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.Grade
-import androidx.compose.material.icons.rounded.MeetingRoom
-import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -61,6 +57,10 @@ import app.goke.ui.components.MintScreen
 import app.goke.ui.components.NavRow
 import app.goke.ui.components.SwitchRow
 import app.goke.ui.components.TonalField
+import app.goke.ui.icons.Grade
+import app.goke.ui.icons.MeetingRoom
+import app.goke.ui.icons.OpenInNew
+import app.goke.ui.icons.Sync
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDateTime

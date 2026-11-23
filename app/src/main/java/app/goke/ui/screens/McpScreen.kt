@@ -23,10 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
@@ -61,6 +58,9 @@ import app.goke.ui.components.SwitchRow
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.ValueRow
 import app.goke.ui.components.mintClickable
+import app.goke.ui.icons.ContentCopy
+import app.goke.ui.icons.Visibility
+import app.goke.ui.icons.VisibilityOff
 import app.goke.ui.theme.MintTheme
 
 @Composable

@@ -19,7 +19,7 @@
 |---|---|---|
 | Android UI | Jetpack Compose + Material 3 Expressive + `material-kolor` | `app/src/main/java/app/goke/ui/` |
 | 导航 | `navigation-compose`（`@Serializable` 类型安全路由） | `ui/Nav.kt`、`ui/GokeRoot.kt` |
-| 图标 | `material-icons-extended`（矢量，不落地位图） | 各组件 `Icons.*` |
+| 图标 | `material-icons-core` + [GokeIcons.kt](app/src/main/java/app/goke/ui/icons/GokeIcons.kt)（矢量，不落地位图） | 各组件 `Icons.*` |
 | 构建与格式 | Gradle KTS + AGP + Kotlin + Spotless / ktlint | `build.gradle.kts`、`.editorconfig` |
 | 测试 | `:core` / `:script` JUnit 5；`:app` Robolectric + JUnit 4；`:benchmark` Macrobenchmark | `docs/testing.md` |
 | Web 端 | 原生 ES 模块，**无构建/无框架**（ADR-0006），单 CSS，`go:embed` | `server/internal/server/web/app/` |

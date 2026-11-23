@@ -33,14 +33,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Flag
-import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.Schedule
-import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -112,6 +107,11 @@ import app.goke.ui.components.rememberImageAttachmentPicker
 import app.goke.ui.components.rememberNoFocusPopup
 import app.goke.ui.dueLabel
 import app.goke.ui.hm
+import app.goke.ui.icons.Checklist
+import app.goke.ui.icons.Flag
+import app.goke.ui.icons.Image
+import app.goke.ui.icons.Schedule
+import app.goke.ui.icons.UploadFile
 import app.goke.ui.liveSnapshot
 import app.goke.ui.monthDayWeekday
 import app.goke.ui.reduceMotion

@@ -16,15 +16,24 @@ val ktlintOverrides =
 // 格式化与静态检查：`./gradlew spotlessCheck` 检查，`./gradlew spotlessApply` 自动修复。规则见 .editorconfig。
 spotless {
     kotlin {
-        target("**/*.kt")
-        targetExclude("**/build/**")
+        target(
+            "app/src/**/*.kt",
+            "core/src/**/*.kt",
+            "script/src/**/*.kt",
+            "benchmark/src/**/*.kt",
+        )
         ktlint(libs.versions.ktlint.get())
             .setEditorConfigPath("$rootDir/.editorconfig")
             .editorConfigOverride(ktlintOverrides)
     }
     kotlinGradle {
-        target("**/*.gradle.kts")
-        targetExclude("**/build/**")
+        target(
+            "*.gradle.kts",
+            "app/*.gradle.kts",
+            "core/*.gradle.kts",
+            "script/*.gradle.kts",
+            "benchmark/*.gradle.kts",
+        )
         ktlint(libs.versions.ktlint.get())
             .setEditorConfigPath("$rootDir/.editorconfig")
             .editorConfigOverride(ktlintOverrides)

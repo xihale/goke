@@ -57,13 +57,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.Event
-import androidx.compose.material.icons.rounded.Flag
-import androidx.compose.material.icons.rounded.Inbox
-import androidx.compose.material.icons.rounded.OpenInFull
-import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -136,6 +129,13 @@ import app.goke.ui.components.mintPressScale
 import app.goke.ui.dueLabel
 import app.goke.ui.formatRooms
 import app.goke.ui.hm
+import app.goke.ui.icons.ContentCopy
+import app.goke.ui.icons.DeleteOutline
+import app.goke.ui.icons.Event
+import app.goke.ui.icons.Flag
+import app.goke.ui.icons.Inbox
+import app.goke.ui.icons.OpenInFull
+import app.goke.ui.icons.Schedule
 import app.goke.ui.screens.QuickAddComposer
 import app.goke.ui.screens.QuickOverride
 import app.goke.ui.screens.QuickPanel
