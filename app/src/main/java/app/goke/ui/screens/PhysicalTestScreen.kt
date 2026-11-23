@@ -80,7 +80,6 @@ import app.goke.ui.components.Tag
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.mintClickable
 import app.goke.ui.icons.FitnessCenter
-import app.goke.ui.icons.Wifi
 import app.goke.ui.theme.MintTheme
 import kotlinx.coroutines.launch
 import java.text.DecimalFormat
@@ -311,10 +310,10 @@ private fun TzcsLoginPanel(
                     .onSuccess { bytes ->
                         captchaBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
                         if (captchaBitmap == null) {
-                            captchaError = ctx.getString(R.string.tzcs_captcha_retry)
+                            captchaError = ctx.getString(R.string.tzcs_campus_net_hint)
                         }
-                    }.onFailure { err ->
-                        captchaError = err.message ?: ctx.getString(R.string.tzcs_err_network)
+                    }.onFailure {
+                        captchaError = ctx.getString(R.string.tzcs_campus_net_hint)
                     }
                 captchaLoading = false
             }
@@ -324,7 +323,7 @@ private fun TzcsLoginPanel(
     LaunchedEffect(Unit) { reloadCaptcha() }
 
     val busy = localBusy || state.busy
-    val displayError = localError ?: state.lastError
+    val submitError = localError ?: state.lastError
 
     Column(
         Modifier
@@ -335,13 +334,6 @@ private fun TzcsLoginPanel(
             .padding(top = 4.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            stringResource(R.string.tzcs_login_hint),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 4.dp),
-        )
-        TzcsCampusNetHint()
         TonalField(
             label = stringResource(R.string.tzcs_username),
             value = user,
@@ -353,6 +345,7 @@ private fun TzcsLoginPanel(
             value = password,
             onChange = { password = it },
             secret = true,
+            placeholder = stringResource(R.string.tzcs_password_placeholder),
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -373,11 +366,18 @@ private fun TzcsLoginPanel(
                 modifier = Modifier.padding(bottom = 4.dp),
             )
         }
-        if (!displayError.isNullOrBlank()) {
+        if (!submitError.isNullOrBlank()) {
             Text(
-                displayError,
+                submitError,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+        } else if (!captchaError.isNullOrBlank()) {
+            Text(
+                captchaError!!,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 4.dp),
             )
         }
@@ -593,32 +593,11 @@ private fun TzcsSummaryCard(
 }
 
 @Composable
-private fun TzcsCampusNetHint() {
-    MintCard(color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Icon(
-                Icons.Rounded.Wifi,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                stringResource(R.string.tzcs_campus_net_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
-        }
-    }
-}
-
-@Composable
 private fun TzcsErrorBanner(
     message: String,
     isNetworkError: Boolean = false,
 ) {
+    val campusHint = stringResource(R.string.tzcs_campus_net_hint)
     MintCard(color = MintTheme.colors.conflictBg) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
@@ -626,9 +605,9 @@ private fun TzcsErrorBanner(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
-            if (isNetworkError) {
+            if (isNetworkError && message != campusHint) {
                 Text(
-                    stringResource(R.string.tzcs_campus_net_hint),
+                    campusHint,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -751,10 +730,10 @@ private fun TzcsVerifyRefreshDialog(
                     .onSuccess { bytes ->
                         captchaBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
                         if (captchaBitmap == null) {
-                            captchaError = ctx.getString(R.string.tzcs_captcha_retry)
+                            captchaError = ctx.getString(R.string.tzcs_campus_net_hint)
                         }
-                    }.onFailure { err ->
-                        captchaError = err.message ?: ctx.getString(R.string.tzcs_err_network)
+                    }.onFailure {
+                        captchaError = ctx.getString(R.string.tzcs_campus_net_hint)
                     }
                 captchaLoading = false
             }
@@ -780,6 +759,7 @@ private fun TzcsVerifyRefreshDialog(
                         value = password,
                         onChange = { password = it },
                         secret = true,
+                        placeholder = stringResource(R.string.tzcs_password_placeholder),
                     )
                 }
                 Row(
@@ -806,6 +786,12 @@ private fun TzcsVerifyRefreshDialog(
                         errorMsg!!,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
+                    )
+                } else if (!captchaError.isNullOrBlank()) {
+                    Text(
+                        captchaError!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
