@@ -55,7 +55,7 @@ fun rememberCourseProgressFg(
 /**
  * 课程进度置灰背景绘制器（需放在 `.clip(shape)` 之后）：
  * - [TimePhase.UPCOMING]：完整植物色底；
- * - [TimePhase.ONGOING]：已过部分平滑退灰、剩余部分保持植物色，交界处绘柔和过渡光晕 + 清晰进度前沿线 + 边缘细轨；
+ * - [TimePhase.ONGOING]：已过部分平滑退灰、剩余部分保持植物色，交界处做极轻柔的色调过渡；
  * - [TimePhase.FINISHED]：整块退灰并轻降透明度，将视觉焦点让位给进行中与未开始事项。
  *
  * 动画值在 draw 阶段读取，避免逐帧重组子树；系统开启「移除动画」时自动走 `snap()`。
@@ -63,11 +63,9 @@ fun rememberCourseProgressFg(
 @Composable
 fun Modifier.courseProgressBackground(
     activeBg: Color,
-    activeFg: Color,
     phase: TimePhase,
     progress: Float,
     axis: CourseProgressAxis,
-    showFrontier: Boolean = true,
 ): Modifier {
     val scheme = MaterialTheme.colorScheme
     val mutedBg = courseMutedBg(activeBg, scheme)
@@ -75,11 +73,10 @@ fun Modifier.courseProgressBackground(
         when (phase) {
             TimePhase.UPCOMING -> 0f
             TimePhase.FINISHED -> 1f
-            TimePhase.ONGOING -> if (showFrontier) progress.coerceIn(0.03f, 0.97f) else progress.coerceIn(0f, 1f)
+            TimePhase.ONGOING -> progress.coerceIn(0f, 1f)
         }
     val animatedProgress = animateFloatAsState(visualTarget, MintTheme.spec(), label = "course-progress")
     val finishedAlpha = animateFloatAsState(if (phase == TimePhase.FINISHED) 0.72f else 1f, MintTheme.press(), label = "course-finished-alpha")
-    val drawFrontier = showFrontier && phase == TimePhase.ONGOING
 
     return drawBehind {
         val p = animatedProgress.value.coerceIn(0f, 1f)
@@ -102,34 +99,19 @@ fun Modifier.courseProgressBackground(
                         topLeft = Offset.Zero,
                         size = Size(splitX, size.height),
                     )
-                    val feather = minOf(14.dp.toPx(), splitX)
-                    if (feather > 0.5f) {
+                    val blendW = minOf(8.dp.toPx(), (size.width - splitX).coerceAtLeast(0f))
+                    if (blendW > 0.5f) {
                         drawRect(
                             brush =
                                 Brush.horizontalGradient(
-                                    colors = listOf(Color.Transparent, activeFg.copy(alpha = 0.09f)),
-                                    startX = splitX - feather,
-                                    endX = splitX,
+                                    colors = listOf(mutedBg, Color.Transparent),
+                                    startX = splitX,
+                                    endX = splitX + blendW,
                                 ),
-                            topLeft = Offset(splitX - feather, 0f),
-                            size = Size(feather, size.height),
+                            topLeft = Offset(splitX, 0f),
+                            size = Size(blendW, size.height),
                         )
                     }
-                    val railH = 2.5.dp.toPx()
-                    drawRect(
-                        color = activeFg.copy(alpha = 0.38f),
-                        topLeft = Offset(0f, (size.height - railH).coerceAtLeast(0f)),
-                        size = Size(splitX, railH),
-                    )
-                }
-                if (drawFrontier && p in 0.01f..0.99f) {
-                    val stroke = 1.dp.toPx()
-                    val x = (splitX - stroke / 2f).coerceIn(0f, (size.width - stroke).coerceAtLeast(0f))
-                    drawRect(
-                        color = activeFg.copy(alpha = 0.32f),
-                        topLeft = Offset(x, 0f),
-                        size = Size(stroke, size.height),
-                    )
                 }
             }
 
@@ -141,15 +123,6 @@ fun Modifier.courseProgressBackground(
                         color = mutedBg,
                         topLeft = Offset.Zero,
                         size = Size(size.width, splitY),
-                    )
-                }
-                if (drawFrontier && p in 0.01f..0.99f) {
-                    val stroke = 1.dp.toPx()
-                    val y = (splitY - stroke / 2f).coerceIn(0f, (size.height - stroke).coerceAtLeast(0f))
-                    drawRect(
-                        color = activeFg.copy(alpha = 0.28f),
-                        topLeft = Offset(0f, y),
-                        size = Size(size.width, stroke),
                     )
                 }
             }

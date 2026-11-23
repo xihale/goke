@@ -1842,11 +1842,9 @@ private fun CourseBlock(
         } else {
             Modifier.courseProgressBackground(
                 activeBg = bg,
-                activeFg = fg,
                 phase = phase,
                 progress = progress,
                 axis = CourseProgressAxis.VERTICAL,
-                showFrontier = false,
             )
         }
     Box(

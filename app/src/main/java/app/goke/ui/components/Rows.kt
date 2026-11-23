@@ -185,7 +185,6 @@ private fun RowShell(
             .clip(MaterialTheme.shapes.medium)
             .courseProgressBackground(
                 activeBg = bg,
-                activeFg = fg,
                 phase = phase,
                 progress = progress,
                 axis = CourseProgressAxis.HORIZONTAL,
