@@ -56,6 +56,7 @@ server/internal/server/web/app/   # Web 客户端（js/views + app.css）
 | 桌面小组件 | `WidgetsScreen()` | `WidgetsScreen.kt` |
 | 账号与同步 / 教务系统 / 成绩与绩点 / 体测成绩 | `SyncScreen()` / `JxfwScreen()` / `GradesScreen()` / `PhysicalTestScreen()` | `SyncScreen.kt` / `JxfwScreen.kt` / `GradesScreen.kt` / `PhysicalTestScreen.kt` |
 | 本地 MCP / 局域网管理 | `McpScreen()` / `LanWebScreen()` | `McpScreen.kt` / `LanWebScreen.kt` |
+| 课堂接力（EXP） | `RelayScreen()` | `RelayScreen.kt` |
 | 数据与备份 / 导入文件 | `DataScreen()` / `ImportScreen(...)` | `DataScreens.kt` |
 | 快递取件 / 回收站 / 操作历史 | `ParcelScreen` / `TrashScreen` / `HistoryScreen` | `ManageScreens.kt`（短信规则表单 `RuleEditSheet` 在 `ParcelRules.kt`） |
 | 提醒自检 | `ReliabilityScreen()` | `ReliabilityScreen.kt` |

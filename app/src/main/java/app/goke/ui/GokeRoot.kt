@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -78,6 +77,7 @@ import app.goke.data.UpdateChecker
 import app.goke.ui.components.FloatingNavBar
 import app.goke.ui.components.NavClearance
 import app.goke.ui.components.mintClickable
+import app.goke.ui.icons.Undo
 import app.goke.ui.screens.AboutScreen
 import app.goke.ui.screens.AppearanceScreen
 import app.goke.ui.screens.CalendarScreen
@@ -94,6 +94,7 @@ import app.goke.ui.screens.McpScreen
 import app.goke.ui.screens.ParcelScreen
 import app.goke.ui.screens.PeriodsScreen
 import app.goke.ui.screens.PhysicalTestScreen
+import app.goke.ui.screens.RelayScreen
 import app.goke.ui.screens.ReliabilityScreen
 import app.goke.ui.screens.SettingsScreen
 import app.goke.ui.screens.SyncScreen
@@ -386,6 +387,7 @@ fun NavGraphBuilder.gokeDestinations(
     composable<Route.Parcel> { e -> RouteHost(nav, e, back) { ParcelScreen(it) } }
     composable<Route.Mcp> { e -> RouteHost(nav, e, back) { McpScreen(it) } }
     composable<Route.LanWeb> { e -> RouteHost(nav, e, back) { LanWebScreen(it) } }
+    composable<Route.Relay> { e -> RouteHost(nav, e, back) { RelayScreen(it) } }
     composable<Route.Periods> { e -> RouteHost(nav, e, back) { PeriodsScreen(it) } }
     composable<Route.About> { e -> RouteHost(nav, e, back) { AboutScreen(it) } }
     composable<Route.Data> { e -> RouteHost(nav, e, back) { DataScreen(it) } }

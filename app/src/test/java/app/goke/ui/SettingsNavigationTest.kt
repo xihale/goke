@@ -71,13 +71,14 @@ class SettingsNavigationTest {
                 R.string.reliability_title,
                 R.string.lan_web_title,
                 R.string.mcp_title,
+                R.string.relay_title,
                 R.string.about_title,
             )
 
         for (titleRes in subpages) {
             val label = app.getString(titleRes)
             rule.onAllNodes(hasScrollAction()).onLast().performScrollToNode(hasText(label))
-            if (titleRes == R.string.about_title) {
+            if (titleRes == R.string.relay_title || titleRes == R.string.about_title) {
                 rule.onAllNodes(hasScrollAction()).onLast().performTouchInput { swipeUp() }
             }
             rule.waitForIdle()

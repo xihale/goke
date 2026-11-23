@@ -94,6 +94,7 @@ import app.goke.ui.screens.MorningSheet
 import app.goke.ui.screens.ParcelScreen
 import app.goke.ui.screens.PeriodsScreen
 import app.goke.ui.screens.PhysicalTestScreen
+import app.goke.ui.screens.RelayScreen
 import app.goke.ui.screens.ReliabilityScreen
 import app.goke.ui.screens.RepeatPickDialog
 import app.goke.ui.screens.RescheduleSheet
@@ -328,6 +329,7 @@ class ScreensSmokeTest {
                 "classroom_grid" to { ClassroomScreen(onBack = {}, initialRoomCode = "011030101") },
                 "physical_test" to { PhysicalTestScreen {} },
                 "lan_web" to { LanWebScreen {} },
+                "relay" to { RelayScreen {} },
                 "root_shell" to { GokeRoot(app, null) {} },
             )
         val idx = mutableIntStateOf(0)

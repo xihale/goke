@@ -128,7 +128,12 @@ export const settingsView = {
         h('button', { type: 'button', class: 'btn tonal', onclick: () => copyText(mcpConfig, '已复制 MCP 客户端配置') }, icon('sparkle', 16), '复制客户端配置')),
       h('p', { class: 'hint' }, '支持 Claude Code、Cursor 等 Streamable HTTP 客户端。请将 <token> 替换为通过 /api/v1/login 获取的账号 Bearer 令牌。')) : null;
 
-    return h('div', { class: 'settings' }, account, cloudMcp, appearance, semester, data);
+    const exp = user && !lan ? section('实验功能（EXP）',
+      row('课堂接力', '教室传回签到链接，舍友在微信打开接力页完成预热与签到（随时可能随平台策略失效）',
+        h('a', { class: 'btn tonal small', href: '/relay/' }, icon('external', 16), '打开接力页')),
+      h('p', { class: 'hint' }, 'EXP 功能需自建公网已备案 HTTPS 域名，不在服务端保存或代签第三方登录凭证。')) : null;
+
+    return h('div', { class: 'settings' }, account, cloudMcp, exp, appearance, semester, data);
   },
 };
 

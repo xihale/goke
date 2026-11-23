@@ -44,25 +44,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Alarm
-import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Cloud
-import androidx.compose.material.icons.rounded.DeleteSweep
-import androidx.compose.material.icons.rounded.FitnessCenter
-import androidx.compose.material.icons.rounded.Grade
-import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
-import androidx.compose.material.icons.rounded.LaptopMac
-import androidx.compose.material.icons.rounded.LocalShipping
-import androidx.compose.material.icons.rounded.MeetingRoom
-import androidx.compose.material.icons.rounded.NotificationsActive
-import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.RestartAlt
-import androidx.compose.material.icons.rounded.School
-import androidx.compose.material.icons.rounded.SwapVert
-import androidx.compose.material.icons.rounded.Terminal
-import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -136,6 +119,24 @@ import app.goke.ui.components.TimeDialSheet
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.ValueRow
 import app.goke.ui.components.mintClickable
+import app.goke.ui.icons.Alarm
+import app.goke.ui.icons.BatterySaver
+import app.goke.ui.icons.Cloud
+import app.goke.ui.icons.DeleteSweep
+import app.goke.ui.icons.FitnessCenter
+import app.goke.ui.icons.Grade
+import app.goke.ui.icons.History
+import app.goke.ui.icons.IosShare
+import app.goke.ui.icons.LaptopMac
+import app.goke.ui.icons.LocalShipping
+import app.goke.ui.icons.MeetingRoom
+import app.goke.ui.icons.NotificationsActive
+import app.goke.ui.icons.Palette
+import app.goke.ui.icons.RestartAlt
+import app.goke.ui.icons.School
+import app.goke.ui.icons.SwapVert
+import app.goke.ui.icons.Terminal
+import app.goke.ui.icons.Widgets
 import app.goke.ui.liveSnapshot
 import app.goke.ui.reduceMotion
 import app.goke.ui.settingsState
@@ -397,6 +398,12 @@ fun SettingsScreen() {
             item(key = "more_mcp", contentType = "nav_row") {
                 McpNavRow { nav.push(Route.Mcp) }
             }
+            item(key = "group_exp_header", contentType = "section_label") {
+                SectionLabel(stringResource(R.string.settings_group_exp), modifier = Modifier.padding(top = 24.dp))
+            }
+            item(key = "more_relay", contentType = "nav_row") {
+                RelayNavRow { nav.push(Route.Relay) }
+            }
             item(key = "group_about_header", contentType = "section_label") {
                 SectionLabel(stringResource(R.string.settings_group_about), modifier = Modifier.padding(top = 24.dp))
             }
@@ -568,6 +575,17 @@ private fun McpNavRow(onOpen: () -> Unit) {
         null,
         Icons.Rounded.Terminal,
         trailing = stringResource(if (mcpState.running) R.string.mcp_status_on else R.string.mcp_status_off),
+        onClick = onOpen,
+    )
+}
+
+@Composable
+private fun RelayNavRow(onOpen: () -> Unit) {
+    NavRow(
+        stringResource(R.string.relay_title),
+        stringResource(R.string.relay_nav_desc),
+        Icons.Rounded.IosShare,
+        trailing = stringResource(R.string.relay_exp_badge),
         onClick = onOpen,
     )
 }

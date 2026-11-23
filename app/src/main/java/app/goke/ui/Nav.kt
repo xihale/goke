@@ -46,6 +46,8 @@ sealed interface Route {
 
     @Serializable data object LanWeb : Route
 
+    @Serializable data object Relay : Route
+
     @Serializable data object Periods : Route
 
     @Serializable data object About : Route

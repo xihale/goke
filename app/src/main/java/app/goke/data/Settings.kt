@@ -56,6 +56,11 @@ data class Settings(
     val pendingUpdateApkSha256: String = "",
     /** 已在弹窗中点过「以后再说」的版本，同版本不再重复自动弹窗，仍保留在设置页提示。 */
     val dismissedUpdateVersion: String = "",
+    /** 实验功能（EXP）：课堂接力服务端地址、房间口令、默认来源标签与有效时长。 */
+    val relayServerUrl: String = "",
+    val relayRoom: String = "dorm402",
+    val relaySource: String = "微助教",
+    val relayTtlSec: Int = 90,
 )
 
 /** 轻量设置存储（SharedPreferences + StateFlow）。同步令牌等敏感值另存于 [SecretStore]，不进此处。 */
@@ -102,6 +107,10 @@ class SettingsStore(
             pendingUpdateApkSize = sp.getLong("pendingUpdateApkSize", d.pendingUpdateApkSize),
             pendingUpdateApkSha256 = sp.getString("pendingUpdateApkSha256", d.pendingUpdateApkSha256)!!,
             dismissedUpdateVersion = sp.getString("dismissedUpdateVersion", d.dismissedUpdateVersion)!!,
+            relayServerUrl = sp.getString("relayServerUrl", d.relayServerUrl)!!,
+            relayRoom = sp.getString("relayRoom", d.relayRoom)!!,
+            relaySource = sp.getString("relaySource", d.relaySource)!!,
+            relayTtlSec = sp.getInt("relayTtlSec", d.relayTtlSec),
         )
     }
 
@@ -142,6 +151,10 @@ class SettingsStore(
             .putLong("pendingUpdateApkSize", n.pendingUpdateApkSize)
             .putString("pendingUpdateApkSha256", n.pendingUpdateApkSha256)
             .putString("dismissedUpdateVersion", n.dismissedUpdateVersion)
+            .putString("relayServerUrl", n.relayServerUrl)
+            .putString("relayRoom", n.relayRoom)
+            .putString("relaySource", n.relaySource)
+            .putInt("relayTtlSec", n.relayTtlSec)
             .apply()
         _flow.value = n
     }
