@@ -318,7 +318,7 @@
     <string name="remind_courses_desc">给所有课程统一加提醒，单门课也可单独设置</string>
     <string name="remind_tasks">待办提醒</string>
     <string name="remind_events">日程提醒</string>
-    <string name="remind_course_text">%1$s 开课 · %2$s</string>
+    <string name="remind_course_text">%1$s · %2$s</string>
     <string name="remind_task_text">待办到时间了</string>
     <string name="data_title">数据与备份</string>
     <string name="parcel_title">快递取件</string>
@@ -800,7 +800,11 @@
     <string name="parcel_notif_captured_title">已识别取件待办</string>
     <string name="parcel_notif_captured_text">%1$s · %2$s</string>
     <string name="parcel_restricted_settings_hint">Android 13+ 侧载安装若无法开启「通知使用权」，请先到应用详情右上角菜单点「允许受限设置」。</string>
+    <string name="parcel_sms_perm">接收短信权限（Android 15+ 推荐）</string>
+    <string name="parcel_android15_sms_hint">Android 15+ 会将含取件码数字的短信通知视为敏感通知并隐藏正文，仅靠通知监听无法识别；请点击上方授予「接收短信」权限（若无法勾选，先点右下角打开应用详情 → 右上角「允许受限设置」；小米系统还需在权限中允许「通知类短信」）。</string>
     <string name="parcel_open_app_details">打开应用详情</string>
+    <string name="auto_mute_rule_name">工课上课静音</string>
+    <string name="auto_mute_rule_summary">上课期间自动开启勿扰</string>
     <string name="jxfw_term_picker">选择同步学期</string>
     <string name="jxfw_term_current">当前学期</string>
     <string name="jxfw_term_first">%1$d–%2$d 学年第一学期</string>

@@ -1,0 +1,203 @@
+package app.goke.notify
+
+import android.app.AlarmManager
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import androidx.test.core.app.ApplicationProvider
+import app.goke.GokeApp
+import app.goke.SmokeTestApp
+import app.goke.core.change.Edits
+import app.goke.core.model.Course
+import app.goke.core.model.Source
+import app.goke.data.Settings
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
+import java.time.DayOfWeek
+import java.time.LocalDateTime
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35], application = SmokeTestApp::class)
+class NotifyFixesTest {
+    private val app get() = ApplicationProvider.getApplicationContext<GokeApp>()
+
+    @Before
+    fun setUp() {
+        runBlocking {
+            app.repo.load()
+        }
+        app
+            .getSharedPreferences("mute", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .commit()
+    }
+
+    @Test
+    fun cancelMutesActuallyCancelsScheduledMuteAndUnmuteAlarms() {
+        val now =
+            LocalDateTime
+                .now()
+                .withHour(8)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0)
+        val sem = app.repo.snapshot.value.currentSemester!!
+        val course =
+            Course(
+                id = "c-mute-1",
+                semesterId = sem.id,
+                name = "编译原理",
+                dayOfWeek = now.dayOfWeek.value,
+                startPeriod = 3,
+                endPeriod = 4,
+                weeks = (1..20).toSet(),
+            )
+        val monday = now.toLocalDate().with(DayOfWeek.MONDAY)
+        val sem2 = sem.copy(week1Monday = monday)
+        runBlocking {
+            app.repo.commit(Edits.saveAll(app.repo.snapshot.value, listOf(sem2, course), "seed", 1L))
+        }
+        val scheduler = ReminderScheduler(app)
+        val am = app.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+        runBlocking {
+            scheduler.reschedule(app.repo.snapshot.value, app.settings.value.copy(autoMute = true), now)
+        }
+        val piMuteBefore =
+            PendingIntent.getBroadcast(
+                app,
+                ReminderScheduler.MUTE_BASE,
+                Intent(app, MuteReceiver::class.java).setAction(MuteReceiver.ACTION_MUTE),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE,
+            )
+        val piUnmuteBefore =
+            PendingIntent.getBroadcast(
+                app,
+                ReminderScheduler.MUTE_BASE + 1,
+                Intent(app, MuteReceiver::class.java).setAction(MuteReceiver.ACTION_UNMUTE),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE,
+            )
+        assertNotNull(piMuteBefore)
+        assertNotNull(piUnmuteBefore)
+        assertTrue(shadowOf(am).scheduledAlarms.isNotEmpty())
+
+        // 关闭 autoMute 后再次排期：必须真正取消之前的 MUTE 与 UNMUTE PendingIntent
+        runBlocking {
+            scheduler.reschedule(app.repo.snapshot.value, app.settings.value.copy(autoMute = false), now)
+        }
+        val piMuteAfter =
+            PendingIntent.getBroadcast(
+                app,
+                ReminderScheduler.MUTE_BASE,
+                Intent(app, MuteReceiver::class.java).setAction(MuteReceiver.ACTION_MUTE),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE,
+            )
+        val piUnmuteAfter =
+            PendingIntent.getBroadcast(
+                app,
+                ReminderScheduler.MUTE_BASE + 1,
+                Intent(app, MuteReceiver::class.java).setAction(MuteReceiver.ACTION_UNMUTE),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE,
+            )
+        assertNull(piMuteAfter)
+        assertNull(piUnmuteAfter)
+    }
+
+    @Test
+    fun muteReceiverUsesAutomaticZenRuleOnApi29PlusAndUnmutesUnconditionally() {
+        val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        shadowOf(nm).setNotificationPolicyAccessGranted(true)
+
+        val receiver = MuteReceiver()
+        receiver.onReceive(app, Intent(MuteReceiver.ACTION_MUTE))
+
+        val ruleId = app.getSharedPreferences("mute", Context.MODE_PRIVATE).getString("zen_rule_id", null)
+        assertNotNull(ruleId)
+        assertEquals(1, nm.automaticZenRules.size)
+        val rule = nm.getAutomaticZenRule(ruleId!!)
+        assertNotNull(rule)
+        assertEquals(NotificationManager.INTERRUPTION_FILTER_NONE, rule!!.interruptionFilter)
+
+        // 即使当前处于 PRIORITY 或用户手动取消了全局勿扰，下课广播也必须无条件执行而不卡死
+        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+        receiver.onReceive(app, Intent(MuteReceiver.ACTION_UNMUTE))
+        // 若不崩溃且能继续响应下一节课 MUTE 即通过（ShadowNotificationManager 对规则状态追踪有限）
+        receiver.onReceive(app, Intent(MuteReceiver.ACTION_MUTE))
+        assertEquals(ruleId, app.getSharedPreferences("mute", Context.MODE_PRIVATE).getString("zen_rule_id", null))
+    }
+
+    @Test
+    fun parcelCaptureDeduplicatesAndDetectsRedactedNotification() {
+        app.settings.update { it.copy(parcelEnabled = true) }
+
+        assertTrue(ParcelCapture.isRedactedText("敏感通知内容已隐藏"))
+        assertTrue(ParcelCapture.isRedactedText("Sensitive notification content hidden"))
+        assertFalse(ParcelCapture.isRedactedText("【菜鸟驿站】取件码4-2-1086，请到东门菜鸟驿站领取"))
+
+        val sample = "【菜鸟驿站】您的快递已到东门菜鸟驿站，凭取件码 4-2-1086 领取。"
+        val added1 = runBlocking { ParcelCapture.ingest(app, sample) }
+        val added2 = runBlocking { ParcelCapture.ingest(app, sample) }
+        assertTrue(added1)
+        assertFalse(added2)
+
+        val parcelTasks =
+            app.repo.snapshot.value.tasks
+                .filter { it.source == Source.PARCEL && it.extra["code"] == "4-2-1086" }
+        assertEquals(1, parcelTasks.size)
+    }
+
+    @Test
+    fun courseNotificationOmitsKaikeAndFollowsShowTeacherDefault() {
+        assertTrue(Settings().showTeacher)
+
+        val now =
+            LocalDateTime
+                .now()
+                .withHour(8)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0)
+        val sem = app.repo.snapshot.value.currentSemester!!
+        val monday = now.toLocalDate().with(DayOfWeek.MONDAY)
+        val sem2 = sem.copy(week1Monday = monday)
+        val course =
+            Course(
+                id = "c-notif-1",
+                semesterId = sem.id,
+                name = "操作系统",
+                teacher = "张老师",
+                room = "实4-407A",
+                dayOfWeek = now.dayOfWeek.value,
+                startPeriod = 5,
+                endPeriod = 6,
+                weeks = (1..20).toSet(),
+            )
+        runBlocking {
+            app.repo.commit(Edits.saveAll(app.repo.snapshot.value, listOf(sem2, course), "seed", 1L))
+        }
+
+        val snap = app.repo.snapshot.value
+        val withTeacher = ReminderScheduler.compute(app, snap, app.settings.value.copy(remindCourse = true, showTeacher = true), now)
+        val r1 = withTeacher.first { it.title == "操作系统" }
+        assertFalse(r1.text.contains("开课"))
+        assertTrue(r1.text.endsWith("· 实4-407A · 张老师"))
+
+        val withoutTeacher = ReminderScheduler.compute(app, snap, app.settings.value.copy(remindCourse = true, showTeacher = false), now)
+        val r2 = withoutTeacher.first { it.title == "操作系统" }
+        assertFalse(r2.text.contains("开课"))
+        assertFalse(r2.text.contains("张老师"))
+        assertTrue(r2.text.endsWith("· 实4-407A"))
+    }
+}

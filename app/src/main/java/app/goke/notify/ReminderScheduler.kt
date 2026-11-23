@@ -110,7 +110,7 @@ class ReminderScheduler(
             val endPi = mutePi(ACTION_PREFIX_MUTE + i, MuteReceiver.ACTION_UNMUTE, MUTE_BASE + 2 * i + 1)
             runCatching {
                 if (start.isAfter(now)) setAlarm(start, zone, canExact, startPi)
-                setAlarm(end, zone, canExact, endPi)
+                if (end.isAfter(now)) setAlarm(end, zone, canExact, endPi)
             }
         }
     }
@@ -137,15 +137,17 @@ class ReminderScheduler(
         return out
     }
 
+    private fun muteIntent(action: String): Intent = Intent(ctx, MuteReceiver::class.java).setAction(action)
+
     private fun mutePi(
+        key: String,
         action: String,
-        nested: String,
         requestCode: Int,
     ): PendingIntent =
         PendingIntent.getBroadcast(
             ctx,
             requestCode,
-            Intent(ctx, MuteReceiver::class.java).setAction(nested).putExtra(EXTRA_MUTE_KEY, action),
+            muteIntent(action).putExtra(EXTRA_MUTE_KEY, key),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
@@ -175,18 +177,26 @@ class ReminderScheduler(
     }
 
     private fun cancelMutes() {
-        for (i in 0 until MAX_MUTE_PAIRS * 2) {
-            val pi =
-                PendingIntent.getBroadcast(
-                    ctx,
-                    MUTE_BASE + i,
-                    Intent(ctx, MuteReceiver::class.java),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE,
-                )
-            if (pi != null) {
-                am.cancel(pi)
-                pi.cancel()
-            }
+        for (i in 0 until MAX_MUTE_PAIRS) {
+            cancelMuteSlot(MUTE_BASE + 2 * i, MuteReceiver.ACTION_MUTE)
+            cancelMuteSlot(MUTE_BASE + 2 * i + 1, MuteReceiver.ACTION_UNMUTE)
+        }
+    }
+
+    private fun cancelMuteSlot(
+        requestCode: Int,
+        action: String,
+    ) {
+        val pi =
+            PendingIntent.getBroadcast(
+                ctx,
+                requestCode,
+                muteIntent(action),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE,
+            )
+        if (pi != null) {
+            am.cancel(pi)
+            pi.cancel()
         }
     }
 
@@ -285,7 +295,11 @@ class ReminderScheduler(
                             val c = item.occ.course
                             val minutes = (c.remindMinutes ?: st.courseRemindMinutes).takeIf { st.remindCourse }
                             if (minutes != null) {
-                                val loc = item.occ.room.ifBlank { null }
+                                val loc =
+                                    item.occ.room
+                                        .trim()
+                                        .takeIf { it.isNotEmpty() }
+                                val teacher = c.teacher.trim().takeIf { st.showTeacher && it.isNotEmpty() }
                                 // 「课前要交」的待办一并写进提醒：上课前最后一次想起来
                                 val due =
                                     snap.tasks
@@ -293,12 +307,15 @@ class ReminderScheduler(
                                             t.deletedAt == null && t.parentId == null && !t.done && t.dueBeforeNextClass && t.courseId != null &&
                                                 (t.courseId == c.id || snap.courses.firstOrNull { x -> x.id == t.courseId }?.name == c.name)
                                         }.map { it.title }
-                                val extra = if (due.isEmpty()) "" else " · " + ctx.getString(R.string.remind_course_tasks, due.take(3).joinToString("、"))
+                                val dueText = if (due.isEmpty()) null else ctx.getString(R.string.remind_course_tasks, due.take(3).joinToString("、"))
+                                val timeText = "%02d:%02d".format(item.occ.start.hour, item.occ.start.minute)
+                                val detail = listOfNotNull(loc, teacher, dueText).joinToString(" · ")
+                                val text = if (detail.isNotEmpty()) ctx.getString(R.string.remind_course_text, timeText, detail) else timeText
                                 out +=
                                     Reminder(
                                         item.occ.start.minusMinutes(minutes.toLong()),
                                         c.name,
-                                        ctx.getString(R.string.remind_course_text, "%02d:%02d".format(item.occ.start.hour, item.occ.start.minute), loc ?: ctx.getString(R.string.none)) + extra,
+                                        text,
                                         "c${c.id}${item.occ.start}",
                                     )
                             }

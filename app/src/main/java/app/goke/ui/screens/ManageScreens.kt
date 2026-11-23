@@ -1,9 +1,14 @@
 package app.goke.ui.screens
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -38,6 +43,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import app.goke.R
@@ -53,6 +59,7 @@ import app.goke.core.parcel.ParcelRule
 import app.goke.core.parcel.ParcelRuleEngine
 import app.goke.core.parcel.RuleTemplate
 import app.goke.core.util.Ids
+import app.goke.notify.ParcelCapture
 import app.goke.notify.ParcelTasks
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
@@ -272,10 +279,20 @@ fun ParcelScreen(onBack: () -> Unit) {
     var sampleDraft by remember { mutableStateOf<RuleDraft?>(null) }
     var showRules by rememberSaveable { mutableStateOf(false) }
     var granted by remember { mutableStateOf(listenerEnabled(ctx)) }
+    val hasTelephony = remember { ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY) }
+    var smsGranted by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED)
+    }
+    val redactedDetected by ParcelCapture.redactedDetected.collectAsState()
+    val askSms =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+            smsGranted = ok
+        }
     val enabledCount = rulesCfg.user.count { it.enabled } + ParcelRuleEngine.BUILTIN.count { it.id !in rulesCfg.disabledBuiltins }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         granted = listenerEnabled(ctx)
+        smsGranted = ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
     }
 
     fun openListenerSettings() {
@@ -304,7 +321,7 @@ fun ParcelScreen(onBack: () -> Unit) {
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // 段 1：自动识别开关 + 通知使用权状态（无框直落纸底）
+            // 段 1：自动识别开关 + 通知使用权 / 短信直读状态（无框直落纸底）
             FormSection {
                 SwitchRow(stringResource(R.string.parcel_enable), null, st.parcelEnabled) { v ->
                     app.settings.update { it.copy(parcelEnabled = v) }
@@ -322,10 +339,26 @@ fun ParcelScreen(onBack: () -> Unit) {
                             valueColor = if (granted) MintTheme.colors.success else MaterialTheme.colorScheme.primary,
                             onClick = { if (!granted) openListenerSettings() },
                         )
-                        if (!granted) {
+                        if (hasTelephony) {
+                            ValueRow(
+                                stringResource(R.string.parcel_sms_perm),
+                                stringResource(if (smsGranted) R.string.settings_perm_allowed else R.string.parcel_grant),
+                                valueColor = if (smsGranted) MintTheme.colors.success else MaterialTheme.colorScheme.primary,
+                                onClick = { if (!smsGranted) askSms.launch(Manifest.permission.RECEIVE_SMS) else openAppDetails() },
+                            )
+                        }
+                        val showRestrictedCard =
+                            !granted || (hasTelephony && !smsGranted && (Build.VERSION.SDK_INT >= 35 || redactedDetected))
+                        if (showRestrictedCard) {
                             MintCard {
                                 Text(
-                                    stringResource(R.string.parcel_restricted_settings_hint),
+                                    stringResource(
+                                        if (hasTelephony && !smsGranted && (Build.VERSION.SDK_INT >= 35 || redactedDetected)) {
+                                            R.string.parcel_android15_sms_hint
+                                        } else {
+                                            R.string.parcel_restricted_settings_hint
+                                        },
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
