@@ -1248,8 +1248,7 @@ private fun WeekGrid(
                         }
                     }
                 if (todayColIndex != null && nowTimeY != null) {
-                    val barColor = scheme.primary
-                    val haloColor = scheme.surface.copy(alpha = 0.88f)
+                    val barColor = scheme.primary.copy(alpha = 0.52f)
                     Spacer(
                         Modifier
                             .fillMaxSize()
@@ -1257,33 +1256,14 @@ private fun WeekGrid(
                                 val colLeft = (timeColW + colW * (todayColIndex - 1)).toPx()
                                 val colRight = (colLeft + colW.toPx()).coerceAtMost(size.width)
                                 val y = nowTimeY.toPx().coerceIn(0f, size.height)
-                                val dotR = 3.dp.toPx()
-                                val haloR = 4.5.dp.toPx()
-                                val dotX = (colLeft + 2.dp.toPx()).coerceAtMost(colRight)
-                                val barEndX = (colRight - 1.5.dp.toPx()).coerceAtLeast(dotX)
-                                drawLine(
-                                    color = haloColor,
-                                    start = Offset(dotX, y),
-                                    end = Offset(barEndX, y),
-                                    strokeWidth = 3.5.dp.toPx(),
-                                    cap = StrokeCap.Round,
-                                )
-                                drawCircle(
-                                    color = haloColor,
-                                    radius = haloR,
-                                    center = Offset(dotX, y),
-                                )
+                                val barStartX = (colLeft + 3.dp.toPx()).coerceAtMost(colRight)
+                                val barEndX = (colRight - 3.dp.toPx()).coerceAtLeast(barStartX)
                                 drawLine(
                                     color = barColor,
-                                    start = Offset(dotX, y),
+                                    start = Offset(barStartX, y),
                                     end = Offset(barEndX, y),
-                                    strokeWidth = 2.dp.toPx(),
+                                    strokeWidth = 1.25.dp.toPx(),
                                     cap = StrokeCap.Round,
-                                )
-                                drawCircle(
-                                    color = barColor,
-                                    radius = dotR,
-                                    center = Offset(dotX, y),
                                 )
                             },
                     )
