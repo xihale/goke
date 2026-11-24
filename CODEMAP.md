@@ -1,6 +1,6 @@
 # Goke（`app.goke`）Codemap
 
-> **Token Guard**: Discovery first (`csearch` MCP `search_code` or `rg -n`), then targeted `read_file` slices (`<= 120-180` lines around hit lines). Android strings: two-step `rg -l "<text>" app/src/main/res` -> `rg -n "<key>"` (do not query Chinese UI copy in `csearch`; `strings.xml` & `DESIGN.md` are excluded from `.csearch`).
+> **Token Guard**: Discovery first (`agy-fast` `batch_search` with explicit `cwd`, or `csearch` `search_code` for semantic lookup). For unfamiliar or `>200`-line `.kt`/`.kts` files, run `agy-fast` `read_slices({cwd, outlines:[...]})` **before** targeted `read_file` slices (`<= 120-180` lines; never page sequentially). Android strings: two-step `rg -l "<text>" app/src/main/res` -> `batch_search` / `rg -n "<key>"` (never query Chinese UI copy in `csearch`; `strings.xml` & `DESIGN.md` are excluded from `.csearch`).
 
 ## 1. Module & Directory Index
 
