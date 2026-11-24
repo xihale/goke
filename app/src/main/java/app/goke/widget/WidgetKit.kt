@@ -212,6 +212,22 @@ internal object WidgetKit {
             event.location.trim().takeIf { it.isNotEmpty() }
         }
 
+    fun taskLocation(
+        ctx: Context,
+        task: Task,
+    ): String? {
+        val loc = task.extra["location"]?.trim().orEmpty()
+        return if (task.extra["kind"] == EventKind.EXAM.name) {
+            JxfwSync.formatExamLocation(
+                loc,
+                task.note,
+                ctx.getString(R.string.widget_exam_seat_suffix),
+            )
+        } else {
+            loc.takeIf { it.isNotEmpty() }
+        }
+    }
+
     fun isParcel(task: Task): Boolean = task.source == Source.PARCEL || parcelCode(task) != null
 
     fun parcelCode(task: Task): String? = (task.extra["code"] ?: task.extra["pickupCode"])?.trim()?.takeIf { it.isNotEmpty() }

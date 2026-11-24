@@ -344,6 +344,7 @@ fun CalendarScreen() {
                     gridCache.getDayItems(date) ?: Agenda.forDay(snap, date, settings.defaultBlockMinutes)
                 }
             val marks = remember(entries) { CalendarMarks.from(entries) }
+            val sheetListColors = remember(snap) { snap.lists.associate { it.id to it.colorIndex } }
 
             val sheetState = rememberModalSheetState()
             ModalBottomSheet(
@@ -385,6 +386,7 @@ fun CalendarScreen() {
                                     nav.openTask(it)
                                 },
                                 onToggleTask = { task, done -> toggle(actions, snap, task, done, now, resources.getString(R.string.done_toast, task.title)) },
+                                listColors = sheetListColors,
                             )
                         }
                     }
@@ -440,6 +442,7 @@ private fun DayAgendaSection(
             gridCache.getDayItems(selected) ?: Agenda.forDay(snap, selected, defaultBlockMinutes)
         }
     val marks = remember(dayItems) { CalendarMarks.from(dayItems) }
+    val listColors = remember(snap) { snap.lists.associate { it.id to it.colorIndex } }
     val dateTitle = remember(selected) { ctx.monthDayWeekday(selected) }
     val onOpenCourse = remember(nav) { { id: String -> nav.push(Route.CourseEdit(id)) } }
     val onOpenTask = remember(nav) { { id: String -> nav.openTask(id) } }
@@ -520,6 +523,7 @@ private fun DayAgendaSection(
                         onOpenEvent = onOpenEvent,
                         onOpenTask = onOpenTask,
                         onToggleTask = onToggleTask,
+                        listColors = listColors,
                     )
                 }
             }

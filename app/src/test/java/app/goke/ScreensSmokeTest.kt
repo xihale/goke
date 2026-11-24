@@ -22,14 +22,19 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasImeAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -47,6 +52,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
+import app.goke.core.agenda.BlockItem
+import app.goke.core.agenda.TaskItem
 import app.goke.core.change.Change
 import app.goke.core.change.ChangeSet
 import app.goke.core.change.Edits
@@ -62,6 +69,7 @@ import app.goke.core.model.Task
 import app.goke.core.model.TaskList
 import app.goke.core.parcel.ParcelInfo
 import app.goke.core.time.SemesterCalendar
+import app.goke.core.time.TimePhase
 import app.goke.core.util.Ids
 import app.goke.data.Attachments
 import app.goke.data.DarkMode
@@ -74,6 +82,7 @@ import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
 import app.goke.ui.Tab
+import app.goke.ui.components.AgendaRow
 import app.goke.ui.components.AttachmentEditor
 import app.goke.ui.components.CuteQrCode
 import app.goke.ui.gokeDestinations
@@ -103,6 +112,7 @@ import app.goke.ui.screens.SettingsScreen
 import app.goke.ui.screens.SlotDraft
 import app.goke.ui.screens.SlotEditorSheet
 import app.goke.ui.screens.SyncScreen
+import app.goke.ui.screens.TaskBlock
 import app.goke.ui.screens.TimetableScreen
 import app.goke.ui.screens.TodayScreen
 import app.goke.ui.screens.TodoEditScreen
@@ -111,6 +121,7 @@ import app.goke.ui.screens.TrashScreen
 import app.goke.ui.screens.WhenPanel
 import app.goke.ui.screens.WidgetsScreen
 import app.goke.ui.theme.GokeTheme
+import app.goke.ui.theme.MintTheme
 import app.goke.widget.OverlayTarget
 import app.goke.widget.WidgetKit
 import app.goke.widget.WidgetOverlayRoot
@@ -651,5 +662,128 @@ class ScreensSmokeTest {
         } finally {
             app.settings.update { it.copy(darkMode = DarkMode.SYSTEM) }
         }
+    }
+
+    @Test
+    fun scheduledBlockMatchesCourseInAgendaRowAndTimetableProgress() {
+        val now = java.time.LocalDateTime.of(2026, 9, 14, 10, 30)
+        val today = now.toLocalDate()
+        val ongoingTask =
+            Task(
+                id = "b_ongoing",
+                title = "摄影社例会",
+                blockStart = today.atTime(10, 0),
+                blockMinutes = 60,
+                due = today.atTime(11, 0),
+                dueHasTime = true,
+                extra = mapOf("location" to "艺术楼 210"),
+            )
+        val finishedTask =
+            Task(
+                id = "b_finished",
+                title = "早晨晨会",
+                blockStart = today.atTime(8, 30),
+                blockMinutes = 45,
+                due = today.atTime(9, 15),
+                dueHasTime = true,
+            )
+        val todoTask =
+            Task(
+                id = "t_plain",
+                title = "交实验报告",
+                due = today.atTime(18, 0),
+                dueHasTime = true,
+            )
+        rule.setContent {
+            Host {
+                Column {
+                    AgendaRow(
+                        item = BlockItem(ongoingTask, today.atTime(10, 0), today.atTime(11, 0)),
+                        now = now,
+                        showTeacher = true,
+                        onOpenCourse = {},
+                        onOpenEvent = {},
+                        onOpenTask = {},
+                        onToggleTask = { _, _ -> },
+                        listColors = mapOf("l1" to 2),
+                    )
+                    AgendaRow(
+                        item = BlockItem(finishedTask, today.atTime(8, 30), today.atTime(9, 15)),
+                        now = now,
+                        showTeacher = true,
+                        onOpenCourse = {},
+                        onOpenEvent = {},
+                        onOpenTask = {},
+                        onToggleTask = { _, _ -> },
+                    )
+                    AgendaRow(
+                        item = TaskItem(todoTask, today.atTime(18, 0), hasTime = true),
+                        now = now,
+                        showTeacher = true,
+                        onOpenCourse = {},
+                        onOpenEvent = {},
+                        onOpenTask = {},
+                        onToggleTask = { _, _ -> },
+                    )
+                    TaskBlock(
+                        task = ongoingTask,
+                        colorIndex = 2,
+                        start = today.atTime(10, 0),
+                        minutes = 60,
+                        overlap = 1,
+                        phase = TimePhase.ONGOING,
+                        progress = 0.4f,
+                        colors = MintTheme.colors,
+                        titleStyle = MaterialTheme.typography.labelSmall,
+                        timeStyle = MaterialTheme.typography.labelSmall,
+                        onCommit = { _, _ -> },
+                        modifier = Modifier.size(width = 80.dp, height = 64.dp),
+                        onClick = {},
+                    )
+                    TaskBlock(
+                        task = finishedTask,
+                        colorIndex = 1,
+                        start = today.atTime(8, 30),
+                        minutes = 45,
+                        overlap = 1,
+                        phase = TimePhase.FINISHED,
+                        progress = 1f,
+                        colors = MintTheme.colors,
+                        titleStyle = MaterialTheme.typography.labelSmall,
+                        timeStyle = MaterialTheme.typography.labelSmall,
+                        onCommit = { _, _ -> },
+                        modifier = Modifier.size(width = 80.dp, height = 64.dp),
+                        onClick = {},
+                    )
+                }
+            }
+        }
+        rule.waitForIdle()
+        // 仅普通待办行渲染勾选框，日程时间块无勾选框
+        rule.onAllNodes(isToggleable()).assertCountEquals(1)
+        rule.onAllNodes(hasText("10:00")).assertCountEquals(2)
+        rule.onNodeWithText("11:00").assertIsDisplayed()
+        rule.onNodeWithText("艺术楼 210").assertIsDisplayed()
+        rule
+            .onNode(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.StateDescription,
+                    app.getString(R.string.course_progress_ongoing, 50),
+                ),
+            ).assertIsDisplayed()
+        rule
+            .onNode(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.StateDescription,
+                    app.getString(R.string.course_progress_ongoing, 40),
+                ),
+            ).assertIsDisplayed()
+        rule
+            .onAllNodes(
+                SemanticsMatcher.expectValue(
+                    SemanticsProperties.StateDescription,
+                    app.getString(R.string.course_progress_finished),
+                ),
+            ).assertCountEquals(2)
     }
 }

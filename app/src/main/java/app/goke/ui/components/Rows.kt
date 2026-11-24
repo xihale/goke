@@ -92,6 +92,7 @@ fun AgendaRow(
     onOpenTask: (String) -> Unit,
     onToggleTask: (Task, Boolean) -> Unit,
     day: LocalDate? = null,
+    listColors: Map<String, Int> = emptyMap(),
     modifier: Modifier = Modifier,
 ) {
     val ctx = LocalContext.current
@@ -148,14 +149,45 @@ fun AgendaRow(
         }
 
         is BlockItem -> {
-            // 排入日历的待办也用无底框呼吸待办行，时间段放副标题
-            TaskRow(
-                item.task,
-                onToggleTask,
-                onOpenTask,
-                subtitle = stringResource(R.string.block_subtitle_short, item.start.hm(), item.end.hm()),
-                modifier = modifier,
-            )
+            val t = item.task
+            if (t.parcelCode() != null) {
+                TaskRow(
+                    t,
+                    onToggleTask,
+                    onOpenTask,
+                    subtitle = stringResource(R.string.block_subtitle_short, item.start.hm(), item.end.hm()),
+                    modifier = modifier,
+                )
+            } else {
+                val colorIndex = listColors[t.listId] ?: 1
+                val phase = if (t.done) TimePhase.FINISHED else CourseProgress.phase(item.start, item.end, now)
+                val progress = if (t.done) 1f else CourseProgress.fraction(item.start, item.end, now)
+                val kindTag =
+                    when (t.extra["kind"]) {
+                        EventKind.EXAM.name -> stringResource(R.string.kind_exam)
+                        EventKind.COUNTDOWN.name -> stringResource(R.string.kind_countdown)
+                        else -> null
+                    }
+                val location =
+                    t.extra["location"]
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?.let { ctx.formatRooms(it) }
+                        .orEmpty()
+                RowShell(
+                    modifier = modifier,
+                    time = item.start.hm(),
+                    endTime = if (item.end.isAfter(item.start)) item.end.hm() else null,
+                    bg = colors.bg(colorIndex),
+                    fg = colors.fg(colorIndex),
+                    title = t.title,
+                    subtitle = location,
+                    phase = phase,
+                    progress = progress,
+                    onClick = { onOpenTask(t.id) },
+                    tag = kindTag,
+                )
+            }
         }
     }
 }

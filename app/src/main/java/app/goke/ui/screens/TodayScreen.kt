@@ -109,6 +109,7 @@ fun TodayScreen() {
     val now = rememberNowGated()
     val today = now.toLocalDate()
     val items = remember(snap, today, settings.defaultBlockMinutes) { Agenda.forDay(snap, today, settings.defaultBlockMinutes) }
+    val listColors = remember(snap) { snap.lists.associate { it.id to it.colorIndex } }
     val overdue = remember(snap, now) { TaskLogic.filter(snap.tasks, SmartList.OVERDUE, now) }
     // 待取快递：未完成、不带父任务，靠来源或取件码认出来（与桌面小组件同一判定）
     val parcels =
@@ -126,7 +127,7 @@ fun TodayScreen() {
                 // 逾期区、待取快递区已经列过的那条（有没有排时间块都一样）不再出现在时间线里
                 when (it) {
                     is TaskItem -> it.task.id in overdueIds || it.task.id in parcelIds
-                    is BlockItem -> it.task.id in overdueIds || it.task.id in parcelIds
+                    is BlockItem -> it.task.id in parcelIds
                     else -> false
                 }
             }
@@ -180,7 +181,13 @@ fun TodayScreen() {
     val taskTotal = (todayTaskIds + overdueIds).size
     val taskDone = doneTaskIds.size
     val taskProgress = if (taskTotal == 0) 0f else taskDone.toFloat() / taskTotal
-    val doneCount = items.count { (it is CourseItem && it.occ.end.isBefore(now)) || (it is EventItem && !it.allDay && it.end.isBefore(now)) || (it is TaskItem && it.task.done) || (it is BlockItem && it.task.done) }
+    val doneCount =
+        items.count {
+            (it is CourseItem && it.occ.end.isBefore(now)) ||
+                (it is EventItem && !it.allDay && it.end.isBefore(now)) ||
+                (it is TaskItem && it.task.done) ||
+                (it is BlockItem && (it.task.done || it.end.isBefore(now)))
+        }
     val nextUp = remember(snap, now) { NextUps.find(snap, now) }
     val nextToday =
         remember(items, now) {
@@ -448,6 +455,7 @@ fun TodayScreen() {
                     onOpenEvent = { selectedEventId = it },
                     onOpenTask = { nav.openTask(it) },
                     onToggleTask = { task, done -> toggle(actions, snap, task, done, now, ctx.getString(R.string.done_toast, task.title)) },
+                    listColors = listColors,
                     modifier = Modifier.animateItem(fadeInSpec = MintTheme.spec(), placementSpec = MintTheme.spec(), fadeOutSpec = MintTheme.spec()),
                 )
             }

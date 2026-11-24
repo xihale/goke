@@ -46,7 +46,7 @@ object TaskLogic {
         t: Task,
         now: LocalDateTime,
     ): Boolean {
-        if (t.done) return false
+        if (t.done || t.blockStart != null) return false
         val d = t.due ?: return false
         return if (t.dueHasTime) d.isBefore(now) else d.toLocalDate().isBefore(now.toLocalDate())
     }

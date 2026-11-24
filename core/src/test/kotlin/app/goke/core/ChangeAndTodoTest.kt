@@ -291,6 +291,17 @@ class ChangeAndTodoTest {
         assertEquals(listOf("t3"), TaskLogic.filter(tasks, SmartList.PLANNED, now).map { it.id })
         assertEquals(listOf("t6", "t4"), TaskLogic.filter(tasks, SmartList.DONE, now).map { it.id })
         assertEquals(listOf("t2"), TaskLogic.filter(tasks, SmartList.OVERDUE, now).map { it.id })
+        val scheduledPast =
+            Task(
+                "b1",
+                "已结束日程",
+                blockStart = now.minusHours(2),
+                blockMinutes = 60,
+                due = now.minusHours(1),
+                dueHasTime = true,
+            )
+        assertFalse(TaskLogic.isOverdue(scheduledPast, now))
+        assertEquals(listOf("t2"), TaskLogic.filter(tasks + scheduledPast, SmartList.OVERDUE, now).map { it.id })
         val rec = Task("r", "每周日报", due = LocalDateTime.of(2026, 10, 23, 18, 0), dueHasTime = true, repeat = Recurrence(Freq.WEEKLY))
         val (done, next) = TaskLogic.complete(rec, 1L, now, SequentialIds())
         assertTrue(done.done)

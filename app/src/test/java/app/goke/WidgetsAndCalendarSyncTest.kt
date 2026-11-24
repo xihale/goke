@@ -19,8 +19,10 @@ import app.goke.core.change.Change
 import app.goke.core.change.ChangeSet
 import app.goke.core.change.Edits
 import app.goke.core.model.Course
+import app.goke.core.model.Snapshot
 import app.goke.core.model.Source
 import app.goke.core.model.Task
+import app.goke.core.model.TaskList
 import app.goke.core.parcel.ParcelInfo
 import app.goke.core.sync.CalendarTaskLink
 import app.goke.core.sync.CourseExportLink
@@ -655,6 +657,117 @@ class WidgetsAndCalendarSyncTest {
                 ),
                 taskReminders.map { it.triggerAt }.sorted(),
             )
+        }
+
+    @Test
+    fun scheduledBlockRendersAsCourseCapsuleAndGraysOutAcrossPhases(): Unit =
+        runBlocking {
+            app.repo.load()
+            val today = LocalDate.of(2026, 9, 14)
+            val ts = System.currentTimeMillis()
+            val list = TaskList(id = Ids.next(), name = "社团", colorIndex = 2, sort = 1)
+            val block =
+                Task(
+                    id = Ids.next(),
+                    title = "摄影社例会",
+                    listId = list.id,
+                    blockStart = today.atTime(10, 0),
+                    blockMinutes = 60,
+                    due = today.atTime(11, 0),
+                    dueHasTime = true,
+                    extra = mapOf("location" to "艺术楼 210"),
+                )
+            val todo =
+                Task(
+                    id = Ids.next(),
+                    title = "交实验报告",
+                    due = today.atTime(18, 0),
+                    dueHasTime = true,
+                )
+            app.repo.commit(Edits.saveAll(app.repo.snapshot.value, listOf(list, block, todo), "seed-block-widget", ts))
+            val snap = app.repo.snapshot.value
+            val st = app.settings.value
+
+            // 1. 未开始：彩色胶囊 + 无勾选框 + 地点副文；普通待办仍无彩底带勾选框
+            val upcomingNow = today.atTime(9, 30)
+            val upRows = TodayWidgetProvider.buildRows(app, snap, st, upcomingNow)
+            val upBlock = upRows.first { it.key == "b_${block.id}" }
+            val upTodo = upRows.first { it.key == "t_${todo.id}" }
+            assertEquals(2, upBlock.colorIndex)
+            assertEquals("艺术楼 210", upBlock.sub)
+            assertTrue(!upBlock.ongoing && !upBlock.finished)
+            assertEquals(-1, upTodo.colorIndex)
+
+            val upRv =
+                renderRemoteViews(
+                    name = "widget_today_block_upcoming",
+                    rv = TodayWidgetProvider.build(app, 31, snap, st, upcomingNow),
+                    widthDp = 320,
+                    heightDp = 240,
+                    listViewId = R.id.today_list,
+                    emptyViewId = R.id.today_empty,
+                    items = upRows.map { TodayWidgetService.itemView(app, it) },
+                )
+            val upList = upRv.findViewById<ListView>(R.id.today_list)
+            val upBlockView = upList.getChildAt(upRows.indexOf(upBlock))
+            val upTodoView = upList.getChildAt(upRows.indexOf(upTodo))
+            assertEquals(View.GONE, upBlockView.findViewById<View>(R.id.today_item_check).visibility)
+            assertEquals(View.GONE, upBlockView.findViewById<View>(R.id.today_item_progress).visibility)
+            assertEquals(WidgetKit.courseFg(app, 2), upBlockView.findViewById<TextView>(R.id.today_item_title).currentTextColor)
+            assertEquals(View.VISIBLE, upTodoView.findViewById<View>(R.id.today_item_check).visibility)
+            assertEquals(null, upTodoView.background)
+
+            val nextUpcoming = NextWidgetProvider.pickSummary(app, snap, st, upcomingNow)
+            assertEquals(block.id, nextUpcoming.taskId)
+            assertEquals("艺术楼 210", nextUpcoming.sub)
+            assertEquals(WidgetKit.courseFg(app, 2), nextUpcoming.barColor)
+
+            // 2. 进行中：胶囊渐进置灰进度条可见
+            val ongoingNow = today.atTime(10, 30)
+            val onRows = TodayWidgetProvider.buildRows(app, snap, st, ongoingNow)
+            val onBlock = onRows.first { it.key == "b_${block.id}" }
+            assertTrue(onBlock.ongoing && !onBlock.finished)
+            val onRv =
+                renderRemoteViews(
+                    name = "widget_today_block_ongoing",
+                    rv = TodayWidgetProvider.build(app, 32, snap, st, ongoingNow),
+                    widthDp = 320,
+                    heightDp = 240,
+                    listViewId = R.id.today_list,
+                    emptyViewId = R.id.today_empty,
+                    items = onRows.map { TodayWidgetService.itemView(app, it) },
+                )
+            val onBlockView = onRv.findViewById<ListView>(R.id.today_list).getChildAt(onRows.indexOf(onBlock))
+            assertEquals(View.GONE, onBlockView.findViewById<View>(R.id.today_item_check).visibility)
+            assertEquals(View.VISIBLE, onBlockView.findViewById<ProgressBar>(R.id.today_item_progress).visibility)
+            assertTrue(onBlockView.findViewById<ProgressBar>(R.id.today_item_progress).progress in 450..550)
+
+            // 3. 已结束：保持灰色胶囊且不触发逾期待办徽章
+            val finishedNow = today.atTime(11, 30)
+            val finRows = TodayWidgetProvider.buildRows(app, snap, st, finishedNow)
+            val finBlock = finRows.first { it.key == "b_${block.id}" }
+            assertTrue(finBlock.finished && !finBlock.ongoing)
+            val finRv =
+                renderRemoteViews(
+                    name = "widget_today_block_finished",
+                    rv = TodayWidgetProvider.build(app, 33, snap, st, finishedNow),
+                    widthDp = 320,
+                    heightDp = 240,
+                    listViewId = R.id.today_list,
+                    emptyViewId = R.id.today_empty,
+                    items = finRows.map { TodayWidgetService.itemView(app, it) },
+                )
+            val finBlockView = finRv.findViewById<ListView>(R.id.today_list).getChildAt(finRows.indexOf(finBlock))
+            assertEquals(View.GONE, finBlockView.findViewById<View>(R.id.today_item_check).visibility)
+            assertEquals(View.GONE, finBlockView.findViewById<View>(R.id.today_item_progress).visibility)
+            assertEquals(
+                app.getColor(R.color.widget_course_done_fg),
+                finBlockView.findViewById<TextView>(R.id.today_item_title).currentTextColor,
+            )
+
+            val cleanSnap = Snapshot(lists = listOf(list), tasks = listOf(block, todo))
+            val nextAfterEnd = NextWidgetProvider.pickSummary(app, cleanSnap, st, finishedNow)
+            assertEquals(todo.id, nextAfterEnd.taskId)
         }
 }
 

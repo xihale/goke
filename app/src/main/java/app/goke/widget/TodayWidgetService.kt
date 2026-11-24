@@ -53,7 +53,7 @@ class TodayWidgetService : RemoteViewsService() {
             compact: Boolean = false,
         ): RemoteViews {
             val v = RemoteViews(ctx.packageName, R.layout.widget_today_item)
-            if (r.taskId != null) {
+            if (r.colorIndex < 0) {
                 // 宣纸行规则：待办行无框直落宣纸底（与 App TaskRow / web .task 一致）
                 v.setInt(R.id.today_item_root, "setBackgroundResource", 0)
                 v.setViewVisibility(R.id.today_item_progress, View.GONE)
@@ -129,7 +129,7 @@ class TodayWidgetService : RemoteViewsService() {
                 }
             }
 
-            if (r.taskId != null) {
+            if (r.colorIndex < 0) {
                 v.setViewVisibility(R.id.today_item_check, View.VISIBLE)
                 v.setInt(R.id.today_item_check, "setColorFilter", WidgetKit.priorityColor(ctx, r.priority, r.overdue))
                 v.setOnClickFillInIntent(

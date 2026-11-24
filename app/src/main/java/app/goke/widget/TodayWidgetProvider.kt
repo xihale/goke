@@ -194,6 +194,7 @@ class TodayWidgetProvider : AppWidgetProvider() {
                         is EventItem -> true
                     }
                 }
+            val listColor = live.lists.associate { it.id to it.colorIndex }
             val shownTaskIds = HashSet<String>()
             val result = mutableListOf<Row>()
 
@@ -255,8 +256,11 @@ class TodayWidgetProvider : AppWidgetProvider() {
                     is BlockItem -> {
                         val t = item.task
                         shownTaskIds += t.id
-                        val phase = WidgetKit.timePhase(item.start, item.end, now)
                         val code = WidgetKit.parcelCode(t)
+                        val isCourseStyle = code == null
+                        val phase = WidgetKit.timePhase(item.start, item.end, now)
+                        val finished = t.done || phase == WidgetKit.TimePhase.FINISHED
+                        val ongoing = !finished && phase == WidgetKit.TimePhase.ONGOING
                         val cleanTitle = if (code != null) WidgetKit.cleanTitleWithCode(ctx, t) else t.title
                         result +=
                             Row(
@@ -264,14 +268,14 @@ class TodayWidgetProvider : AppWidgetProvider() {
                                 time = item.start.hm(),
                                 endTime = if (item.end.isAfter(item.start)) item.end.hm() else null,
                                 title = cleanTitle,
-                                sub = null,
+                                sub = if (isCourseStyle) WidgetKit.taskLocation(ctx, t) else null,
                                 code = code,
-                                colorIndex = -1,
+                                colorIndex = if (isCourseStyle) (listColor[t.listId] ?: 1) else -1,
                                 priority = t.priority,
                                 overdue = false,
-                                ongoing = phase == WidgetKit.TimePhase.ONGOING,
-                                finished = phase == WidgetKit.TimePhase.FINISHED,
-                                progress = WidgetKit.timeProgress(item.start, item.end, now),
+                                ongoing = ongoing,
+                                finished = finished,
+                                progress = if (finished) 1f else WidgetKit.timeProgress(item.start, item.end, now),
                                 taskId = t.id,
                                 targetUri = DeepLinks.taskUri(t.id).toString(),
                             )

@@ -180,6 +180,7 @@ class NextWidgetProvider : AppWidgetProvider() {
             item: AgendaItem,
             now: LocalDateTime,
             ongoing: Boolean,
+            listColor: Map<String, Int> = emptyMap(),
         ): Summary? =
             when (item) {
                 is CourseItem -> {
@@ -203,13 +204,15 @@ class NextWidgetProvider : AppWidgetProvider() {
                 is BlockItem -> {
                     val t = item.task
                     val code = WidgetKit.parcelCode(t)
+                    val colorIdx = listColor[t.listId] ?: 1
                     Summary(
                         badge = code.orEmpty(),
                         badgeTone = if (code != null) BadgeTone.CODE else BadgeTone.MUTED,
                         startTime = item.start.hm(),
                         endTime = if (item.end.isAfter(item.start)) item.end.hm() else null,
+                        sub = if (code != null) null else WidgetKit.taskLocation(ctx, t),
                         title = if (code != null) WidgetKit.cleanTitleWithCode(ctx, t) else t.title,
-                        barColor = WidgetKit.priorityColor(ctx, t.priority),
+                        barColor = if (code != null) WidgetKit.priorityColor(ctx, t.priority) else WidgetKit.courseFg(ctx, colorIdx),
                         uri = DeepLinks.taskUri(t.id),
                         ongoing = ongoing,
                         progress = if (ongoing) WidgetKit.timeProgress(item.start, item.end, now) else 0f,
@@ -263,6 +266,7 @@ class NextWidgetProvider : AppWidgetProvider() {
             }
             val live = snap.live()
             val today = now.toLocalDate()
+            val listColor = live.lists.associate { it.id to it.colorIndex }
             val dayItems = Agenda.forDay(live, today, st.defaultBlockMinutes)
             val result = mutableListOf<Summary>()
             val seenTaskIds = HashSet<String>()
@@ -287,7 +291,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                         is EventItem -> !item.allDay && WidgetKit.timePhase(item.start, item.end, now) == WidgetKit.TimePhase.ONGOING
                         else -> false
                     }
-                }.forEach { item -> summaryForTimed(ctx, item, now, ongoing = true)?.let(::addUnique) }
+                }.forEach { item -> summaryForTimed(ctx, item, now, ongoing = true, listColor = listColor)?.let(::addUnique) }
 
             // 2. 今天接下来即将开始的课程、日程或时间块
             if (result.size < limit) {
@@ -296,7 +300,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                         (it is CourseItem && it.occ.start.isAfter(now)) ||
                             (it is BlockItem && !it.task.done && it.start.isAfter(now)) ||
                             (it is EventItem && !it.allDay && it.start.isAfter(now))
-                    }.forEach { item -> summaryForTimed(ctx, item, now, ongoing = false)?.let(::addUnique) }
+                    }.forEach { item -> summaryForTimed(ctx, item, now, ongoing = false, listColor = listColor)?.let(::addUnique) }
             }
 
             // 3. 待取快递
@@ -320,10 +324,10 @@ class NextWidgetProvider : AppWidgetProvider() {
                 }
             }
 
-            // 4. 逾期或今日未完成待办
+            // 4. 逾期或今日未完成待办（有时间块的日程仅在步骤 1–2 按起止时间展示，已结束不回流为待办）
             if (result.size < limit) {
-                val overdue = TaskLogic.filter(live.tasks, SmartList.OVERDUE, now).filter { !it.done }
-                val todayTasks = TaskLogic.filter(live.tasks, SmartList.TODAY, now).filter { !it.done && it !in overdue }
+                val overdue = TaskLogic.filter(live.tasks, SmartList.OVERDUE, now).filter { !it.done && it.blockStart == null }
+                val todayTasks = TaskLogic.filter(live.tasks, SmartList.TODAY, now).filter { !it.done && it.blockStart == null && it !in overdue }
                 for (task in overdue + todayTasks) {
                     if (result.size >= limit) break
                     if (task.id !in seenTaskIds) {

@@ -1334,12 +1334,42 @@ private fun WeekGrid(
                     val s = b.start
                     val (offsetX, blockW) = slotBlockSpan(colW, slot)
                     val minutes = b.minutes
+                    val blockEnd = s.plusMinutes(minutes.toLong())
+                    val blockPhase =
+                        when {
+                            t.done -> TimePhase.FINISHED
+                            week < currentWeek -> TimePhase.FINISHED
+                            week > currentWeek -> TimePhase.UPCOMING
+                            now != null -> CourseProgress.phase(s, blockEnd, now)
+                            else -> TimePhase.UPCOMING
+                        }
+                    val blockSpan = (tbox.bottom.value - tbox.top.value).takeIf { it > 0f }
+                    val blockProgress =
+                        when (blockPhase) {
+                            TimePhase.UPCOMING -> {
+                                0f
+                            }
+
+                            TimePhase.FINISHED -> {
+                                1f
+                            }
+
+                            TimePhase.ONGOING -> {
+                                if (week == currentWeek && s.toLocalDate() == today && nowTimeY != null && blockSpan != null) {
+                                    ((nowTimeY.value - tbox.top.value) / blockSpan).coerceIn(0f, 1f)
+                                } else {
+                                    now?.let { CourseProgress.fraction(s, blockEnd, it) } ?: 0f
+                                }
+                            }
+                        }
                     TaskBlock(
                         t,
                         b.color,
                         s,
                         minutes,
                         slot.overlap,
+                        blockPhase,
+                        blockProgress,
                         mintColors,
                         courseTitleStyle,
                         timeStyle,
@@ -1677,13 +1707,15 @@ private fun SlotSheet(
 }
 
 @Composable
-private fun TaskBlock(
+internal fun TaskBlock(
     task: Task,
     colorIndex: Int,
     start: LocalDateTime,
     minutes: Int,
     /** 同时段块数；>1 时底栏写「N 项」，点开由正面卡列出全部。 */
     overlap: Int,
+    phase: TimePhase,
+    progress: Float,
     colors: MintColors,
     titleStyle: TextStyle,
     timeStyle: TextStyle,
@@ -1691,7 +1723,7 @@ private fun TaskBlock(
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
-    // 与 CourseBlock 同款:圆角填色块、同字号,无勾选圈;点击进编辑
+    // 与 CourseBlock 同款:圆角填色块、渐进/已结束退灰、同字号,无勾选圈;点击进编辑
     val bg = colors.bg(colorIndex)
     val fg = colors.fg(colorIndex)
     val haptics = LocalHapticFeedback.current
@@ -1736,12 +1768,23 @@ private fun TaskBlock(
             Modifier
         }
 
+    val effectivePhase = if (active) TimePhase.UPCOMING else phase
+    val effectiveProgress = if (active) 0f else progress
+    val textFg = rememberCourseProgressFg(fg, effectivePhase)
+    val stateDesc =
+        when (effectivePhase) {
+            TimePhase.ONGOING -> stringResource(R.string.course_progress_ongoing, (effectiveProgress * 100f).toInt().coerceIn(0, 100))
+            TimePhase.FINISHED -> stringResource(R.string.course_progress_finished)
+            TimePhase.UPCOMING -> null
+        }
+
     Box(
         modifier
             .zIndex(if (active) 3f else 0f)
             .onSizeChanged { hPx = it.height.toFloat() }
             .then(layer)
             .mintPressable(pressedScale = if (active) 1f else 0.97f) { onClick() }
+            .then(if (stateDesc != null) Modifier.semantics { stateDescription = stateDesc } else Modifier)
             .pointerInput(dur, hPx) {
                 if (hPx <= 0f) return@pointerInput
                 val pxPerMinute = hPx / dur.toFloat()
@@ -1817,16 +1860,19 @@ private fun TaskBlock(
             Modifier
                 .fillMaxSize()
                 .clip(TaskBlockShape)
-                .background(if (task.done) bg.copy(alpha = 0.5f) else bg)
-                .then(if (active) Modifier.border(2.dp, dragBorder, TaskBlockShape) else Modifier)
+                .courseProgressBackground(
+                    activeBg = bg,
+                    phase = effectivePhase,
+                    progress = effectiveProgress,
+                    axis = CourseProgressAxis.VERTICAL,
+                ).then(if (active) Modifier.border(2.dp, dragBorder, TaskBlockShape) else Modifier)
                 .padding(horizontal = 5.dp, vertical = 5.dp),
         ) {
-            // 失效态语法与「已调课」一致：底色降饱和；完成的不再画删除线，退灰就够
             Text(
                 task.title,
                 // 时间那行必须留得下：标题吃掉剩余空间，短块里自动收成省略号
                 modifier = Modifier.weight(1f, fill = false),
-                color = if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else fg,
+                color = textFg,
                 style = titleStyle,
                 fontWeight = FontWeight.Bold,
                 maxLines = 4,
@@ -1837,7 +1883,7 @@ private fun TaskBlock(
             if (overlap > 1 && !active) {
                 OverlapBadge(
                     overlap = overlap,
-                    fg = if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else fg,
+                    fg = textFg,
                 )
             } else {
                 val label =
@@ -1848,12 +1894,7 @@ private fun TaskBlock(
                     }
                 Text(
                     label,
-                    color =
-                        when {
-                            active -> MaterialTheme.colorScheme.primary
-                            task.done -> MaterialTheme.colorScheme.onSurfaceVariant
-                            else -> fg.copy(alpha = 0.85f)
-                        },
+                    color = if (active) MaterialTheme.colorScheme.primary else textFg.copy(alpha = 0.85f),
                     style = timeStyle,
                     fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                     maxLines = 1,
