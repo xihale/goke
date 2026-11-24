@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="demo_data_title">演示数据</string>
+    <string name="demo_data_replace">替换为演示数据</string>
+    <string name="demo_data_confirm_title">用演示数据替换现有内容？</string>
+    <string name="demo_data_confirm_text">现有的 %1$d 条课程、日程与待办会进回收站（保留 30 天），然后写入一批演示数据。整批算一次操作，可以在操作记录里一步撤销。</string>
+    <string name="demo_data_confirm_ok">替换</string>
+    <string name="demo_data_running">正在写入…</string>
+    <string name="demo_data_done">已写入 %1$d 条演示数据，可在操作记录里撤销</string>
+
+    <string name="debug_mock_section_title">调试与 Mock</string>
+    <string name="debug_mock_switch_title">启用全功能 Mock 模式</string>
+    <string name="debug_mock_switch_subtitle_on">已接管教务、体测、空教室与选课请求</string>
+    <string name="debug_mock_switch_subtitle_off">关闭时全部网络请求直连学校服务器</string>
+    <string name="debug_mock_quick_setup">一键演示环境（演示课表 + Mock 登录）</string>
+    <string name="debug_mock_quick_setup_running">正在初始化 Mock 环境…</string>
+    <string name="debug_mock_quick_setup_done">已开启 Mock、登录教务并写入 %1$d 条演示数据</string>
+    <string name="debug_mock_quick_setup_login_only">已开启 Mock 并完成教务登录</string>
+    <string name="debug_mock_quick_setup_fail">Mock 登录失败：%1$s</string>
+    <string name="debug_mock_open_console">Mock 控制台</string>
+    <string name="debug_mock_status_on">已开启</string>
+    <string name="debug_mock_status_off">未开启</string>
+    <string name="debug_mock_console_title">Debug Mock 控制台</string>
+    <string name="debug_mock_console_subtitle">仅 debug 构建可见 · 实时生效</string>
+    <string name="debug_mock_close">关闭</string>
+
+    <string name="debug_mock_jxfw_section">教务登录模拟</string>
+    <string name="debug_mock_login_fault_label">登录异常</string>
+    <string name="debug_mock_fault_none">正常</string>
+    <string name="debug_mock_login_fault_credentials">账密错误</string>
+    <string name="debug_mock_login_fault_captcha">图形验证码</string>
+    <string name="debug_mock_login_fault_sms">短信验证</string>
+    <string name="debug_mock_login_fault_network">网络异常</string>
+
+    <string name="debug_mock_xk_section">选课模拟</string>
+    <string name="debug_mock_xk_window_open">选课窗口开放</string>
+    <string name="debug_mock_xk_window_open_sub">关闭后将展示未开放提示与开选计划</string>
+    <string name="debug_mock_xk_can_drop">允许退选</string>
+    <string name="debug_mock_xk_can_drop_sub">关闭后已选课程退选按钮禁用</string>
+    <string name="debug_mock_xk_wallet">学分钱包限制</string>
+    <string name="debug_mock_xk_wallet_sub">当前上限 %1$.1f 学分</string>
+    <string name="debug_mock_xk_limit_label">学分上限</string>
+    <string name="debug_mock_xk_limit_chip">%1$.0f 学分</string>
+    <string name="debug_mock_xk_action_fault_label">下次选/退课异常（一次性）</string>
+    <string name="debug_mock_xk_fault_full">名额已满</string>
+    <string name="debug_mock_xk_fault_conflict">时间冲突</string>
+    <string name="debug_mock_xk_fault_credit">学分超限</string>
+    <string name="debug_mock_xk_fault_not_droppable">不可退选</string>
+    <string name="debug_mock_xk_fault_session">会话过期</string>
+    <string name="debug_mock_xk_reset">重置选课数据与异常</string>
+    <string name="debug_mock_xk_reset_done">已恢复初始选课状态与余量</string>
+
+    <string name="debug_mock_tzcs_section">体测平台模拟</string>
+    <string name="debug_mock_tzcs_fault_label">体测异常</string>
+    <string name="debug_mock_tzcs_fault_captcha">验证码错误</string>
+    <string name="debug_mock_tzcs_fault_credentials">账密错误</string>
+    <string name="debug_mock_tzcs_fault_session">会话过期</string>
+    <string name="debug_mock_tzcs_captcha_hint">当前 Mock 验证码：%1$s（输入该值或任意 4 位数字可通过）</string>
+
+    <string name="debug_mock_jxfw_banner_title_on">Mock 教务已开启</string>
+    <string name="debug_mock_jxfw_banner_title_off">Mock 教务未开启</string>
+    <string name="debug_mock_jxfw_banner_desc_on">可用任意学号与密码登录，支持课表/成绩/空教室/选课全流程</string>
+    <string name="debug_mock_jxfw_banner_desc_off">开启后无需真实学校账号即可体验教务全部功能</string>
+    <string name="debug_mock_banner_enable_login">开启并 Mock 登录</string>
+    <string name="debug_mock_banner_disable">关闭 Mock</string>
+
+    <string name="debug_mock_xk_banner_title">选课 Mock 控制条</string>
+    <string name="debug_mock_xk_banner_enable_auto">开启 Mock 并自动登录</string>
+    <string name="debug_mock_xk_chip_window_open">窗口：开放</string>
+    <string name="debug_mock_xk_chip_window_closed">窗口：关闭</string>
+    <string name="debug_mock_xk_chip_drop_on">退选：允许</string>
+    <string name="debug_mock_xk_chip_drop_off">退选：禁止</string>
+    <string name="debug_mock_xk_chip_wallet_on">钱包：%1$.0f 分</string>
+    <string name="debug_mock_xk_chip_wallet_off">钱包：关闭</string>
+    <string name="debug_mock_xk_chip_fault">异常：%1$s</string>
+    <string name="debug_mock_xk_chip_reset">重置课程</string>
+</resources>

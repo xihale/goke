@@ -237,6 +237,11 @@ android {
     installation {
         installOptions.addAll(listOf("-r", "-d"))
     }
+    sourceSets {
+        getByName("benchmark") {
+            kotlin.directories.add("src/release/java")
+        }
+    }
 }
 
 // release 变体缺少签名配置时直接失败，避免静默产出无签名或 debug 签名包

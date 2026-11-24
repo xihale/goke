@@ -42,6 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.goke.R
+import app.goke.debug.DebugHooks
 import app.goke.jxfw.JxfwClient
 import app.goke.jxfw.JxfwException
 import app.goke.jxfw.JxfwState
@@ -57,6 +58,7 @@ import app.goke.ui.components.MintScreen
 import app.goke.ui.components.NavRow
 import app.goke.ui.components.SwitchRow
 import app.goke.ui.components.TonalField
+import app.goke.ui.icons.Checklist
 import app.goke.ui.icons.Grade
 import app.goke.ui.icons.MeetingRoom
 import app.goke.ui.icons.OpenInNew
@@ -86,6 +88,7 @@ fun JxfwScreen(onBack: () -> Unit) {
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            DebugHooks.JxfwDebugBanner()
             if (state.loggedIn) AccountPanel(state) else LoginPanel(state)
         }
     }
@@ -297,6 +300,12 @@ private fun AccountPanel(state: JxfwState) {
             subtitle = stringResource(R.string.classroom_jxfw_entry_desc),
             icon = Icons.Rounded.MeetingRoom,
             onClick = { nav.push(Route.Classroom) },
+        )
+        NavRow(
+            title = stringResource(R.string.xk_title),
+            subtitle = stringResource(R.string.xk_jxfw_entry_desc),
+            icon = Icons.Rounded.Checklist,
+            onClick = { nav.push(Route.CourseSelection) },
         )
     }
 

@@ -14,6 +14,7 @@ import app.goke.data.Repository
 import app.goke.data.SecretStore
 import app.goke.data.SettingsStore
 import app.goke.data.UpdateChecker
+import app.goke.debug.DebugHooks
 import app.goke.jxfw.JxfwManager
 import app.goke.jxfw.TzcsManager
 import app.goke.lanweb.LanWebManager
@@ -82,6 +83,7 @@ open class GokeApp : Application() {
     @OptIn(FlowPreview::class)
     override fun onCreate() {
         super.onCreate()
+        DebugHooks.init(this)
         errors.attach(this)
         repo = Repository(MintDb(this))
         settings = SettingsStore(this)
@@ -105,8 +107,16 @@ open class GokeApp : Application() {
         mcp = LocalMcpManager(repo, advanced, McpStore(this, secrets), scope)
         sync = SyncManager(repo, SyncStore(this, secrets), scope, errors = errors)
         calendarSync = SystemCalendarSync(this, repo, settings, CalendarSyncStore(this), scope, errors = errors)
-        jxfw = JxfwManager(this, repo, secrets, errors = errors)
-        tzcs = TzcsManager(this, secrets, errors = errors)
+        jxfw =
+            JxfwManager(
+                this,
+                repo,
+                secrets,
+                newClient = { DebugHooks.newJxfwClient() },
+                newJwcwxClient = { DebugHooks.newJwcwxClient() },
+                errors = errors,
+            )
+        tzcs = TzcsManager(this, secrets, newClient = { DebugHooks.newTzcsClient() }, errors = errors)
         lanWeb = LanWebManager(this, repo, errors = errors)
         updateChecker = UpdateChecker(settings)
         scope.launch {

@@ -85,6 +85,7 @@ import app.goke.ui.screens.CalendarScreen
 import app.goke.ui.screens.CalendarSyncScreen
 import app.goke.ui.screens.ClassroomScreen
 import app.goke.ui.screens.CourseEditScreen
+import app.goke.ui.screens.CourseSelectionScreen
 import app.goke.ui.screens.DataScreen
 import app.goke.ui.screens.EditTimetableScreen
 import app.goke.ui.screens.GradesScreen
@@ -404,6 +405,7 @@ fun NavGraphBuilder.gokeDestinations(
     composable<Route.Grades> { e -> RouteHost(nav, e, back) { GradesScreen(it) } }
     composable<Route.PhysicalTest> { e -> RouteHost(nav, e, back) { PhysicalTestScreen(it) } }
     composable<Route.Classroom> { e -> RouteHost(nav, e, back) { ClassroomScreen(it) } }
+    composable<Route.CourseSelection> { e -> RouteHost(nav, e, back) { CourseSelectionScreen(it) } }
     composable<Route.Reliability> { e -> RouteHost(nav, e, back) { ReliabilityScreen(it) } }
     composable<Route.Import> { e -> RouteHost(nav, e, back) { ImportScreen(e.toRoute<Route.Import>().uri, it) } }
     composable<Route.CourseEdit> { e ->

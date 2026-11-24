@@ -98,6 +98,7 @@ import app.goke.data.UpdateCheckResult
 import app.goke.data.UpdateChecker
 import app.goke.data.UpdateDownloadState
 import app.goke.data.UpdateInterval
+import app.goke.debug.DebugHooks
 import app.goke.notify.Notifications
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
@@ -124,6 +125,7 @@ import app.goke.ui.components.mintClickable
 import app.goke.ui.icons.Alarm
 import app.goke.ui.icons.BatterySaver
 import app.goke.ui.icons.CalendarMonth
+import app.goke.ui.icons.Checklist
 import app.goke.ui.icons.Cloud
 import app.goke.ui.icons.DeleteSweep
 import app.goke.ui.icons.FitnessCenter
@@ -249,6 +251,11 @@ fun SettingsScreen() {
                         null,
                         Icons.Rounded.MeetingRoom,
                     ) { nav.push(Route.Classroom) }
+                    NavRow(
+                        stringResource(R.string.xk_title),
+                        null,
+                        Icons.Rounded.Checklist,
+                    ) { nav.push(Route.CourseSelection) }
                     NavRow(
                         stringResource(R.string.parcel_title),
                         null,
@@ -482,6 +489,9 @@ fun SettingsScreen() {
                             null
                         },
                 ) { nav.push(Route.About) }
+            }
+            item(key = "debug_mock_section") {
+                DebugHooks.SettingsDebugSection()
             }
         }
     }

@@ -58,7 +58,7 @@ import app.goke.core.importer.ImportPlanner
 import app.goke.core.importer.XlsxTimetableImporter
 import app.goke.core.model.Semester
 import app.goke.core.time.SemesterCalendar
-import app.goke.data.DemoData
+import app.goke.debug.DebugHooks
 import app.goke.share.Sharing
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
@@ -202,7 +202,7 @@ fun DataScreen(onBack: () -> Unit) {
                 }
             }
             item(key = "demo_data") {
-                DemoDataSection()
+                DebugHooks.DataScreenExtra()
             }
         }
     }
@@ -219,60 +219,6 @@ fun DataScreen(onBack: () -> Unit) {
             },
             { restoreBundle = null },
             danger = true,
-        )
-    }
-}
-
-/** 填入一批真实含量的演示数据：整批一次提交，可在操作记录里一步撤销。 */
-@Composable
-private fun DemoDataSection() {
-    val ctx = LocalContext.current
-    val app = LocalApp.current
-    val actions = LocalActions.current
-    val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    var confirm by remember { mutableStateOf(false) }
-    val snap =
-        app.repo.snapshot
-            .collectAsState()
-            .value
-    val semester = snap.currentSemester
-    val existing = snap.allRecords().count { it !is Semester && it.deletedAt == null }
-
-    fun fill() {
-        val sem = semester ?: return
-        busy = true
-        // 先删后建在同一次提交里：结果只剩演示数据，撤销一步就全部回来
-        val all = snap.allRecords()
-        scope.launch {
-            val cs = DemoData.build(LocalDateTime.now(), sem.id, replace = true, existing = all)
-            app.repo.commit(cs)
-            busy = false
-            actions.toast(ctx.getString(R.string.demo_data_done, cs.changes.count { it is Change.Add }))
-        }
-    }
-
-    FormSection(stringResource(R.string.demo_data_title)) {
-        FilledTonalButton(
-            enabled = !busy && semester != null,
-            onClick = { if (existing > 0) confirm = true else fill() },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(if (busy) R.string.demo_data_running else R.string.demo_data_replace))
-        }
-    }
-    if (confirm) {
-        AlertDialog(
-            onDismissRequest = { confirm = false },
-            title = { Text(stringResource(R.string.demo_data_confirm_title)) },
-            text = { Text(stringResource(R.string.demo_data_confirm_text, existing)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirm = false
-                    fill()
-                }) { Text(stringResource(R.string.demo_data_confirm_ok)) }
-            },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }

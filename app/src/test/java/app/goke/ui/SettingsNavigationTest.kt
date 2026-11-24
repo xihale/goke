@@ -61,6 +61,7 @@ class SettingsNavigationTest {
                 R.string.grades_title,
                 R.string.tzcs_title,
                 R.string.classroom_title,
+                R.string.xk_title,
                 R.string.parcel_title,
                 R.string.widgets_title,
                 R.string.appearance,
@@ -78,7 +79,7 @@ class SettingsNavigationTest {
         for (titleRes in subpages) {
             val label = app.getString(titleRes)
             rule.onAllNodes(hasScrollAction()).onLast().performScrollToNode(hasText(label))
-            if (titleRes == R.string.mcp_title || titleRes == R.string.about_title) {
+            if (titleRes == R.string.reliability_title || titleRes == R.string.lan_web_title || titleRes == R.string.mcp_title || titleRes == R.string.about_title) {
                 rule.onAllNodes(hasScrollAction()).onLast().performTouchInput { swipeUp() }
             }
             rule.waitForIdle()

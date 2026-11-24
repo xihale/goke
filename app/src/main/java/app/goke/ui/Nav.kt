@@ -65,6 +65,8 @@ sealed interface Route {
 
     @Serializable data object Classroom : Route
 
+    @Serializable data object CourseSelection : Route
+
     @Serializable data object Reliability : Route
 
     /** uri 为空表示先让用户选择文件。 */
