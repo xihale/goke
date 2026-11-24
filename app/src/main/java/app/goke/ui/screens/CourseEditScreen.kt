@@ -44,7 +44,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -90,13 +89,13 @@ import app.goke.ui.Route
 import app.goke.ui.components.ChipChoice
 import app.goke.ui.components.ConfirmDialog
 import app.goke.ui.components.ConflictCard
+import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.SectionLabel
 import app.goke.ui.components.SegmentedPill
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.ValueRow
 import app.goke.ui.components.mintClickable
-import app.goke.ui.components.rememberModalSheetState
 import app.goke.ui.components.rememberNoFocusPopup
 import app.goke.ui.formatRooms
 import app.goke.ui.hm
@@ -392,25 +391,42 @@ fun CourseEditScreen(
 
     fun requestBack() {
         when {
-            committed -> onBack()
+            committed -> {
+                onBack()
+            }
 
-            name.isBlank() && dirty -> confirmDiscard = true
+            name.isBlank() && dirty -> {
+                confirmDiscard = true
+            }
 
-            name.isBlank() -> onBack()
+            name.isBlank() -> {
+                onBack()
+            }
 
             // 新建课程：返回不落库，改过内容先确认放弃；修改照旧自动保存
-            origin == null && dirty -> confirmDiscard = true
+            origin == null && dirty -> {
+                confirmDiscard = true
+            }
 
-            origin == null -> onBack()
+            origin == null -> {
+                onBack()
+            }
 
-            !valid -> actions.toast(ctx.getString(R.string.weeks_invalid))
+            !dirty -> {
+                onBack()
+            }
 
-            dirty -> persist(leave = true)
+            !valid -> {
+                actions.toast(ctx.getString(R.string.weeks_invalid))
+                confirmDiscard = true
+            }
 
-            else -> onBack()
+            else -> {
+                persist(leave = true)
+            }
         }
     }
-    BackHandler { requestBack() }
+    BackHandler(enabled = !committed) { requestBack() }
 
     val defaultRemindSummary =
         stringResource(
@@ -911,12 +927,7 @@ internal fun SlotEditorSheet(
     val clock = clockRange(periods, draft.startPeriod, draft.endPeriod)
     var rangeAnchor by remember(slot) { mutableStateOf<Int?>(null) }
 
-    val sheetState = rememberModalSheetState()
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-    ) {
+    MintBottomSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier
                 .fillMaxWidth()

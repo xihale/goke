@@ -22,10 +22,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -431,7 +429,6 @@ fun ParcelCodeCopyButton(
  * 日程详情底部抽屉：展示标题、考试/倒数日徽标、时间（或全天）、地点、重复规则与备注；
  * 支持「转为待办编辑」（统一迁移至待办）与「删除」（带撤销）。
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EventDetailSheet(
     event: Event?,
@@ -470,11 +467,7 @@ fun EventDetailSheet(
             EventKind.NORMAL -> null
         }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalSheetState(),
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-    ) {
+    MintBottomSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier
                 .fillMaxWidth()

@@ -57,7 +57,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -125,13 +124,13 @@ import app.goke.ui.LocalNav
 import app.goke.ui.Route
 import app.goke.ui.components.ChipPill
 import app.goke.ui.components.EmptyState
+import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.Tag
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.mintClickable
 import app.goke.ui.components.parcelCode
-import app.goke.ui.components.rememberModalSheetState
 import app.goke.ui.hm
 import app.goke.ui.icons.MeetingRoom
 import app.goke.ui.icons.School
@@ -1137,11 +1136,7 @@ private fun ClassroomBuildingPickerSheet(
         }
     val rows = remember(filtered) { filtered.chunked(2) }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalSheetState(),
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-    ) {
+    MintBottomSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier
                 .fillMaxWidth()

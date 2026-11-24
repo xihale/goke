@@ -671,6 +671,10 @@ fun ConfirmDialog(
     )
 }
 
+/**
+ * 日期选择弹窗：用 M3 [DatePickerDialog] 包裹精简 [MonthPager]，提供「今天/明天」单手直达且展示农历/周次标记；
+ * 不用 M3 内置 DatePicker——其高度固定偏大、切换年份冗余且无法内嵌教学周徽标。
+ */
 @Composable
 fun DatePickerDlg(
     initial: LocalDate?,

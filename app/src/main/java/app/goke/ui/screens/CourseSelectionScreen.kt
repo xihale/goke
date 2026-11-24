@@ -38,7 +38,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -82,12 +81,12 @@ import app.goke.ui.components.ChipChoice
 import app.goke.ui.components.ChipPill
 import app.goke.ui.components.ConfirmDialog
 import app.goke.ui.components.EmptyState
+import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.SectionLabel
 import app.goke.ui.components.SegmentedPill
 import app.goke.ui.components.TonalField
-import app.goke.ui.components.rememberModalSheetState
 import app.goke.ui.icons.Checklist
 import app.goke.ui.icons.Schedule
 import app.goke.ui.icons.School
@@ -959,7 +958,6 @@ private fun XkCourseDetailSheet(
 ) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
-    val sheetState = rememberModalSheetState()
     var loading by remember(item.kcrwdm) { mutableStateOf(true) }
     var detail by remember(item.kcrwdm) { mutableStateOf<XkCourseDetail?>(null) }
 
@@ -969,10 +967,7 @@ private fun XkCourseDetailSheet(
         loading = false
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
+    MintBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier =
                 Modifier

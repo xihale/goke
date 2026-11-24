@@ -34,7 +34,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -96,13 +95,13 @@ import app.goke.ui.components.AgendaRow
 import app.goke.ui.components.DatePickerDlg
 import app.goke.ui.components.EmptyState
 import app.goke.ui.components.EventDetailSheet
+import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.MintFab
 import app.goke.ui.components.NavClearance
 import app.goke.ui.components.NavListInset
 import app.goke.ui.components.SegmentedPill
 import app.goke.ui.components.mintClickable
 import app.goke.ui.components.mintPressScale
-import app.goke.ui.components.rememberModalSheetState
 import app.goke.ui.icons.ExpandMore
 import app.goke.ui.liveSnapshot
 import app.goke.ui.monthDayWeekday
@@ -346,11 +345,7 @@ fun CalendarScreen() {
             val marks = remember(entries) { CalendarMarks.from(entries) }
             val sheetListColors = remember(snap) { snap.lists.associate { it.id to it.colorIndex } }
 
-            val sheetState = rememberModalSheetState()
-            ModalBottomSheet(
-                onDismissRequest = { previewDate = null },
-                sheetState = sheetState,
-            ) {
+            MintBottomSheet(onDismissRequest = { previewDate = null }) {
                 Column(
                     Modifier
                         .fillMaxWidth()

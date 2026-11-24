@@ -11,7 +11,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,8 +35,8 @@ import app.goke.data.ParcelRuleStore
 import app.goke.ui.components.ChipChoice
 import app.goke.ui.components.FieldText
 import app.goke.ui.components.FormSection
+import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.mintClickable
-import app.goke.ui.components.rememberModalSheetState
 
 /** 正在编辑的规则：originBuiltinId 非空 = 编辑的是内置种子，保存时 fork 成用户规则并停用原条目。 */
 data class RuleDraft(
@@ -147,11 +146,7 @@ fun RuleEditSheet(
             ?.takeIf { it.isNotBlank() }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalSheetState(),
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-    ) {
+    MintBottomSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -260,11 +255,7 @@ private fun NoiseWordsSheet(
     onDismiss: () -> Unit,
 ) {
     var text by remember { mutableStateOf(current.joinToString("，")) }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalSheetState(),
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-    ) {
+    MintBottomSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier
                 .fillMaxWidth()

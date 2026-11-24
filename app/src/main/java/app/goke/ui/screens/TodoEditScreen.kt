@@ -18,11 +18,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -30,7 +28,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
@@ -100,6 +97,7 @@ import app.goke.ui.components.ChipPill
 import app.goke.ui.components.ConfirmDialog
 import app.goke.ui.components.ConflictCard
 import app.goke.ui.components.MintCheck
+import app.goke.ui.components.MintScreen
 import app.goke.ui.components.SegmentedPill
 import app.goke.ui.components.mintClickable
 import app.goke.ui.components.rememberFileAttachmentPicker
@@ -507,316 +505,302 @@ fun TodoEditScreen(
             else -> confirmDiscard = true
         }
     }
-    BackHandler { requestBack() }
+    BackHandler(enabled = !committed) { requestBack() }
 
     var pageMenu by remember { mutableStateOf(false) }
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
-            .imePadding(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Row(
-                Modifier
-                    .widthIn(max = 680.dp)
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = { requestBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
-                Spacer(Modifier.weight(1f))
-                if (existing != null) {
-                    MintCheck(
-                        checked = existing.done,
-                        onChange = { d -> toggle(actions, snap, existing, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, existing.title)) },
-                        modifier =
-                            Modifier.semantics {
-                                contentDescription = ctx.getString(if (existing.done) R.string.a11y_mark_undone else R.string.a11y_mark_done)
-                            },
-                        size = 18.dp,
-                    )
-                    Box {
-                        IconButton(onClick = { pageMenu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
-                        DropdownMenu(pageMenu, { pageMenu = false }, properties = noFocusPopup) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.delete)) },
-                                leadingIcon = { Icon(Icons.Rounded.Delete, null) },
-                                onClick = {
-                                    pageMenu = false
-                                    if (committed) return@DropdownMenuItem
-                                    committed = true
-                                    // 删除不做二次确认：落库后出撤回浮钮（4.5s），回收站也能恢复
-                                    actions.commit(
-                                        Edits.delete(snap, existing, ctx.getString(R.string.delete_desc, existing.title), System.currentTimeMillis()),
-                                        ctx.getString(R.string.delete_desc, existing.title),
-                                    )
-                                    onBack()
-                                },
-                            )
-                        }
-                    }
-                } else {
-                    // 新建：明确一个「确定」键，返回就是丢弃
-                    TextButton(enabled = !committed && title.isNotEmpty(), onClick = { commit() }) { Text(stringResource(R.string.confirm)) }
-                }
-            }
-        }
-        Column(
-            Modifier
-                .weight(1f)
-                .widthIn(max = 680.dp)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-        ) {
-            SmartTitle(
-                field,
-                { field = it },
-                ranges,
-                titleFocus,
-                done = existing?.done == true,
-            )
-            WhenRow(whenPick, today, remindList, freq, interval, until, byDays, byMonths, onClear = {
-                picked = null
-                cleared = true
-                remindList = emptyList()
-                persistent = false
-                freq = null
-                interval = 1
-                until = null
-                byDays = emptySet()
-                byMonths = emptySet()
-            }) { timeSheet = true }
-            if (linkedCourse != null) {
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ChipPill(
-                        label = stringResource(R.string.detail_editor_before_class, linkedCourse.name),
-                        on = dueBeforeNextClass,
-                        modifier = Modifier.heightIn(min = 48.dp),
-                        role = Role.Checkbox,
-                    ) {
-                        dueBeforeNextClass = !dueBeforeNextClass
-                    }
-                }
-            }
-            if (extraDays.isNotEmpty()) {
-                // 周历框选带进来的其它日期：明说会建几条，不再静默生成
-                Text(
-                    stringResource(R.string.detail_editor_extra_dates, extraDays.size + 1),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
+    MintScreen(
+        title = "",
+        onBack = { requestBack() },
+        actions = {
+            if (existing != null) {
+                MintCheck(
+                    checked = existing.done,
+                    onChange = { d -> toggle(actions, snap, existing, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, existing.title)) },
+                    modifier =
+                        Modifier.semantics {
+                            contentDescription = ctx.getString(if (existing.done) R.string.a11y_mark_undone else R.string.a11y_mark_done)
+                        },
+                    size = 18.dp,
                 )
-            }
-            AnimatedVisibility(
-                visible = clashes.isNotEmpty(),
-                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-            ) {
-                ConflictCard(title = stringResource(R.string.conflict_title), modifier = Modifier.padding(top = 4.dp)) {
-                    clashes.forEach { c ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .mintClickable(pressedScale = 0.98f) {
-                                    if (existing == null && hasChanges) {
-                                        // 新建草稿尚未落库：走确认提示，不静默丢弃草稿
-                                        confirmDiscard = true
-                                    } else {
-                                        nav.focusDate = c.at.toLocalDate()
-                                        nav.tab = Tab.TIMETABLE
-                                        if (existing != null && title.isNotEmpty()) commit()
-                                        nav.clearToRoot()
-                                    }
-                                }.padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                stringResource(
-                                    if (c.course) R.string.clash_row_course else R.string.clash_row_task,
-                                    c.title,
-                                    c.at.hm(),
-                                ),
-                                Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
-                            )
-                            Text(
-                                ctx.monthDayWeekday(c.at.toLocalDate()),
-                                style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Icon(
-                                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            FlatField(location, stringResource(R.string.field_location), onChange = { location = it }, singleLine = true)
-            FlatField(note, stringResource(R.string.label_note), onChange = { note = it }, singleLine = false)
-            if (attachments.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                AttachmentEditor(attachments, onChange = { attachments = it })
-            }
-            Spacer(Modifier.height(24.dp))
-        }
-        if (existing != null) {
-            val subs = TaskLogic.subtasks(snap.tasks, existing.id)
-            AnimatedVisibility(
-                visible = subsOpen,
-                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-            ) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 280.dp)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp),
-                ) {
-                    subs.forEach { s ->
-                        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                            MintCheck(s.done, { d -> toggle(actions, snap, s, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, s.title)) })
-                            Text(
-                                s.title,
-                                Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyLarge,
-                                textDecoration = if (s.done) TextDecoration.LineThrough else null,
-                                color = if (s.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                            )
-                            IconButton(onClick = {
+                Box {
+                    IconButton(onClick = { pageMenu = true }) { Icon(Icons.Rounded.MoreVert, stringResource(R.string.more_options)) }
+                    DropdownMenu(pageMenu, { pageMenu = false }, properties = noFocusPopup) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.delete)) },
+                            leadingIcon = { Icon(Icons.Rounded.Delete, null) },
+                            onClick = {
+                                pageMenu = false
+                                if (committed) return@DropdownMenuItem
+                                committed = true
+                                // 删除不做二次确认：落库后出撤回浮钮（4.5s），回收站也能恢复
                                 actions.commit(
-                                    Edits.delete(snap, s, ctx.getString(R.string.delete_desc, s.title), System.currentTimeMillis()),
-                                    ctx.getString(R.string.delete_desc, s.title),
+                                    Edits.delete(snap, existing, ctx.getString(R.string.delete_desc, existing.title), System.currentTimeMillis()),
+                                    ctx.getString(R.string.delete_desc, existing.title),
                                 )
-                            }) { Icon(Icons.Rounded.Close, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp)) }
-                        }
-                    }
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.width(48.dp), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                        }
-                        FlatField(newSub, stringResource(R.string.add_subtask), onChange = { newSub = it }, reset = subReset, modifier = Modifier.weight(1f))
-                        if (newSub.isNotBlank()) {
-                            TextButton(
-                                onClick = {
-                                    val sub = Task(Ids.next(), newSub.trim(), parentId = existing.id, sortOrder = (subs.maxOfOrNull { it.sortOrder } ?: 0) + 1, listId = listId)
-                                    val subDesc = ctx.getString(R.string.add_task_desc, sub.title)
-                                    actions.commit(Edits.save(snap, sub, subDesc, System.currentTimeMillis()), subDesc, undoable = true)
-                                    newSub = ""
-                                    subReset++
-                                },
-                            ) { Text(stringResource(R.string.add)) }
-                        }
-                    }
-                }
-            }
-        }
-        // 底部快捷操作条直接落在纸面底色上，不再抬高一层白
-        // 清单 / 优先级在栏上方就地展开（与子任务同一套展开方式），不弹浮层
-        AnimatedVisibility(
-            visible = barPanel == BarPanel.PRIORITY,
-            enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-            exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-        ) {
-            SegmentedPill(
-                options =
-                    listOf(3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1, 0 to R.string.priority_0)
-                        .map { it.first to stringResource(it.second) },
-                selected = priority,
-                onSelect = {
-                    priority = it
-                    barPanel = null
-                },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-        }
-        AnimatedVisibility(
-            visible = barPanel == BarPanel.LIST,
-            enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-            exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-        ) {
-            FlowRow(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 132.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ChipPill(stringResource(R.string.bucket_inbox), on = listId == null) {
-                    listId = null
-                    barPanel = null
-                }
-                snap.lists.sortedBy { it.sort }.forEach { l ->
-                    ChipPill(l.name, on = listId == l.id) {
-                        listId = l.id
-                        barPanel = null
-                    }
-                }
-            }
-        }
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.background,
-        ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(start = 8.dp, end = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val currentList = snap.lists.firstOrNull { it.id == listId }
-                val listTint = currentList?.let { MintTheme.colors.fg(it.colorIndex) } ?: MaterialTheme.colorScheme.outline
-                Row(
-                    Modifier
-                        .widthIn(max = 180.dp)
-                        .heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .mintClickable(pressedScale = 0.95f, role = Role.Button) {
-                            barPanel = if (barPanel == BarPanel.LIST) null else BarPanel.LIST
-                        }.padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(listTint))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        currentList?.name ?: stringResource(R.string.bucket_inbox),
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-                if (existing != null) {
-                    IconButton(onClick = { subsOpen = !subsOpen }) {
-                        Icon(
-                            Icons.Rounded.Checklist,
-                            stringResource(R.string.add_subtask),
-                            tint = if (subsOpen) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                onBack()
+                            },
                         )
                     }
                 }
-                IconButton(onClick = { barPanel = if (barPanel == BarPanel.PRIORITY) null else BarPanel.PRIORITY }) {
-                    Icon(Icons.Rounded.Flag, stringResource(R.string.label_priority), tint = priorityColor(priority))
+            } else {
+                // 新建：明确一个「确定」键，返回就是丢弃
+                TextButton(enabled = !committed && title.isNotEmpty(), onClick = { commit() }) { Text(stringResource(R.string.confirm)) }
+            }
+        },
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+            ) {
+                SmartTitle(
+                    field,
+                    { field = it },
+                    ranges,
+                    titleFocus,
+                    done = existing?.done == true,
+                )
+                WhenRow(whenPick, today, remindList, freq, interval, until, byDays, byMonths, onClear = {
+                    picked = null
+                    cleared = true
+                    remindList = emptyList()
+                    persistent = false
+                    freq = null
+                    interval = 1
+                    until = null
+                    byDays = emptySet()
+                    byMonths = emptySet()
+                }) { timeSheet = true }
+                if (linkedCourse != null) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ChipPill(
+                            label = stringResource(R.string.detail_editor_before_class, linkedCourse.name),
+                            on = dueBeforeNextClass,
+                            modifier = Modifier.heightIn(min = 48.dp),
+                            role = Role.Checkbox,
+                        ) {
+                            dueBeforeNextClass = !dueBeforeNextClass
+                        }
+                    }
                 }
-                IconButton(onClick = pickImage) { Icon(Icons.Rounded.Image, stringResource(R.string.attach_image)) }
-                IconButton(onClick = pickFile) { Icon(Icons.Rounded.UploadFile, stringResource(R.string.attach_file)) }
+                if (extraDays.isNotEmpty()) {
+                    // 周历框选带进来的其它日期：明说会建几条，不再静默生成
+                    Text(
+                        stringResource(R.string.detail_editor_extra_dates, extraDays.size + 1),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                AnimatedVisibility(
+                    visible = clashes.isNotEmpty(),
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    ConflictCard(title = stringResource(R.string.conflict_title), modifier = Modifier.padding(top = 4.dp)) {
+                        clashes.forEach { c ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .mintClickable(pressedScale = 0.98f) {
+                                        if (existing == null && hasChanges) {
+                                            // 新建草稿尚未落库：走确认提示，不静默丢弃草稿
+                                            confirmDiscard = true
+                                        } else {
+                                            nav.focusDate = c.at.toLocalDate()
+                                            nav.tab = Tab.TIMETABLE
+                                            if (existing != null && title.isNotEmpty()) commit()
+                                            nav.clearToRoot()
+                                        }
+                                    }.padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    stringResource(
+                                        if (c.course) R.string.clash_row_course else R.string.clash_row_task,
+                                        c.title,
+                                        c.at.hm(),
+                                    ),
+                                    Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                                )
+                                Text(
+                                    ctx.monthDayWeekday(c.at.toLocalDate()),
+                                    style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Icon(
+                                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                    null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                FlatField(location, stringResource(R.string.field_location), onChange = { location = it }, singleLine = true)
+                FlatField(note, stringResource(R.string.label_note), onChange = { note = it }, singleLine = false)
+                if (attachments.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    AttachmentEditor(attachments, onChange = { attachments = it })
+                }
+                Spacer(Modifier.height(24.dp))
+            }
+            if (existing != null) {
+                val subs = TaskLogic.subtasks(snap.tasks, existing.id)
+                AnimatedVisibility(
+                    visible = subsOpen,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 280.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp),
+                    ) {
+                        subs.forEach { s ->
+                            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                                MintCheck(s.done, { d -> toggle(actions, snap, s, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, s.title)) })
+                                Text(
+                                    s.title,
+                                    Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    textDecoration = if (s.done) TextDecoration.LineThrough else null,
+                                    color = if (s.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                                )
+                                IconButton(onClick = {
+                                    actions.commit(
+                                        Edits.delete(snap, s, ctx.getString(R.string.delete_desc, s.title), System.currentTimeMillis()),
+                                        ctx.getString(R.string.delete_desc, s.title),
+                                    )
+                                }) { Icon(Icons.Rounded.Close, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp)) }
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(48.dp), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                            }
+                            FlatField(newSub, stringResource(R.string.add_subtask), onChange = { newSub = it }, reset = subReset, modifier = Modifier.weight(1f))
+                            if (newSub.isNotBlank()) {
+                                TextButton(
+                                    onClick = {
+                                        val sub = Task(Ids.next(), newSub.trim(), parentId = existing.id, sortOrder = (subs.maxOfOrNull { it.sortOrder } ?: 0) + 1, listId = listId)
+                                        val subDesc = ctx.getString(R.string.add_task_desc, sub.title)
+                                        actions.commit(Edits.save(snap, sub, subDesc, System.currentTimeMillis()), subDesc, undoable = true)
+                                        newSub = ""
+                                        subReset++
+                                    },
+                                ) { Text(stringResource(R.string.add)) }
+                            }
+                        }
+                    }
+                }
+            }
+            // 底部快捷操作条直接落在纸面底色上，不再抬高一层白
+            // 清单 / 优先级在栏上方就地展开（与子任务同一套展开方式），不弹浮层
+            AnimatedVisibility(
+                visible = barPanel == BarPanel.PRIORITY,
+                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+            ) {
+                SegmentedPill(
+                    options =
+                        listOf(3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1, 0 to R.string.priority_0)
+                            .map { it.first to stringResource(it.second) },
+                    selected = priority,
+                    onSelect = {
+                        priority = it
+                        barPanel = null
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+            AnimatedVisibility(
+                visible = barPanel == BarPanel.LIST,
+                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+            ) {
+                FlowRow(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 132.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ChipPill(stringResource(R.string.bucket_inbox), on = listId == null) {
+                        listId = null
+                        barPanel = null
+                    }
+                    snap.lists.sortedBy { it.sort }.forEach { l ->
+                        ChipPill(l.name, on = listId == l.id) {
+                            listId = l.id
+                            barPanel = null
+                        }
+                    }
+                }
+            }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.background,
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(start = 8.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val currentList = snap.lists.firstOrNull { it.id == listId }
+                    val listTint = currentList?.let { MintTheme.colors.fg(it.colorIndex) } ?: MaterialTheme.colorScheme.outline
+                    Row(
+                        Modifier
+                            .widthIn(max = 180.dp)
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .mintClickable(pressedScale = 0.95f, role = Role.Button) {
+                                barPanel = if (barPanel == BarPanel.LIST) null else BarPanel.LIST
+                            }.padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(listTint))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            currentList?.name ?: stringResource(R.string.bucket_inbox),
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    if (existing != null) {
+                        IconButton(onClick = { subsOpen = !subsOpen }) {
+                            Icon(
+                                Icons.Rounded.Checklist,
+                                stringResource(R.string.add_subtask),
+                                tint = if (subsOpen) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                            )
+                        }
+                    }
+                    IconButton(onClick = { barPanel = if (barPanel == BarPanel.PRIORITY) null else BarPanel.PRIORITY }) {
+                        Icon(Icons.Rounded.Flag, stringResource(R.string.label_priority), tint = priorityColor(priority))
+                    }
+                    IconButton(onClick = pickImage) { Icon(Icons.Rounded.Image, stringResource(R.string.attach_image)) }
+                    IconButton(onClick = pickFile) { Icon(Icons.Rounded.UploadFile, stringResource(R.string.attach_file)) }
+                }
             }
         }
     }

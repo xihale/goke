@@ -60,7 +60,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.navigation.compose.currentBackStackEntryAsState
 import app.goke.R
 import app.goke.core.change.Edits
 import app.goke.core.model.Task
@@ -68,9 +67,9 @@ import app.goke.core.model.TaskList
 import app.goke.core.todo.Bucket
 import app.goke.core.todo.TaskLogic
 import app.goke.core.todo.TodoSearch
-import app.goke.ui.HOME
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalNav
+import app.goke.ui.LocalTabVisible
 import app.goke.ui.Tab
 import app.goke.ui.components.ChipPill
 import app.goke.ui.components.EmptyState
@@ -358,8 +357,7 @@ fun TodoScreen() {
         }
 
     val quickAddVisible = quickAddOpen && !selecting && !searching
-    val backStack by nav.controller.currentBackStackEntryAsState()
-    BackHandler(enabled = nav.tab == Tab.TODO && backStack?.destination?.route == HOME && !quickAddVisible && (quickAddOpen || selecting || searching || listMenu || priorityMenu)) {
+    BackHandler(enabled = LocalTabVisible.current.value && !quickAddVisible && (quickAddOpen || selecting || searching || listMenu || priorityMenu)) {
         when {
             quickAddOpen -> {
                 quickAddOpen = false

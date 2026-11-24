@@ -48,8 +48,6 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
 import app.goke.core.agenda.BlockItem
@@ -77,15 +75,14 @@ import app.goke.data.ThemeSource
 import app.goke.notify.ParcelTasks
 import app.goke.ui.Actions
 import app.goke.ui.GokeRoot
-import app.goke.ui.HOME
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
+import app.goke.ui.RouteStackHost
 import app.goke.ui.Tab
 import app.goke.ui.components.AgendaRow
 import app.goke.ui.components.AttachmentEditor
 import app.goke.ui.components.CuteQrCode
-import app.goke.ui.gokeDestinations
 import app.goke.ui.liveSnapshot
 import app.goke.ui.rememberNav
 import app.goke.ui.screens.AboutScreen
@@ -234,12 +231,10 @@ class ScreensSmokeTest {
         GokeTheme(st) {
             CompositionLocalProvider(LocalApp provides app, LocalActions provides actions, LocalNav provides nav) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                    NavHost(nav.controller, startDestination = HOME, modifier = Modifier.fillMaxSize()) {
-                        composable(HOME) { content() }
-                        gokeDestinations(nav) {
-                            nav.pop()
-                        }
+                    if (!nav.onRoute) {
+                        content()
                     }
+                    RouteStackHost(nav = nav, modifier = Modifier.fillMaxSize())
                 }
             }
         }
@@ -606,15 +601,19 @@ class ScreensSmokeTest {
                 .done
         }
 
-        // 5. 待办悬浮卡片：行内修改标题与优先级并保存，随后可一键完成
+        // 5. 待办悬浮卡片：行内修改标题、地点、多行备注与优先级并保存，随后可一键完成
         rule.runOnIdle { target.value = OverlayTarget.TaskDetail(todo.id) }
         rule.waitForIdle()
         shot("overlay_todo")
         val updatedTitle = "${todo.title} 已改"
+        val updatedLocation = "教3-204"
+        val updatedNote = "第一行备注\n第二行\n第三行\n第四行\n第五行完整显示"
         val nextPriority = if (todo.priority == 2) 3 else 2
         val nextPriorityLabel =
             app.getString(if (nextPriority == 3) R.string.priority_3 else R.string.priority_2)
         rule.onNodeWithText(todo.title).performTextReplacement(updatedTitle)
+        rule.onNodeWithContentDescription(app.getString(R.string.field_location)).performTextReplacement(updatedLocation)
+        rule.onNodeWithContentDescription(app.getString(R.string.label_note)).performTextReplacement(updatedNote)
         rule.waitForIdle()
         val oldPrioLabel =
             when (todo.priority) {
@@ -633,7 +632,12 @@ class ScreensSmokeTest {
             dismissed &&
                 app.repo.snapshot.value.tasks
                     .first { it.id == todo.id }
-                    .let { it.title == updatedTitle && it.priority == nextPriority }
+                    .let {
+                        it.title == updatedTitle &&
+                            it.extra["location"] == updatedLocation &&
+                            it.note == updatedNote &&
+                            it.priority == nextPriority
+                    }
         }
 
         // 重新打开后未做新修改，主按钮恢复为「完成」可一键勾选完成

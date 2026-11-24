@@ -26,7 +26,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,6 +53,7 @@ import app.goke.core.model.Snapshot
 import app.goke.core.model.Task
 import app.goke.ui.LocalActions
 import app.goke.ui.components.DatePickerDlg
+import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.mintClickable
 import app.goke.ui.components.rememberModalSheetState
 import app.goke.ui.components.rememberNoFocusPopup
@@ -124,10 +124,9 @@ internal fun RescheduleSheet(
         )
     }
 
-    ModalBottomSheet(
+    MintBottomSheet(
         onDismissRequest = { if (!submitting) onDismiss() },
         sheetState = sheet,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
             Column(Modifier.padding(horizontal = 8.dp).padding(bottom = 8.dp)) {
@@ -274,10 +273,9 @@ internal fun MorningSheet(
         )
     }
 
-    ModalBottomSheet(
+    MintBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheet,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
             Text(

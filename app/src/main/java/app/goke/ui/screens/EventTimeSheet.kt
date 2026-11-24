@@ -33,7 +33,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,11 +61,11 @@ import app.goke.R
 import app.goke.core.model.Freq
 import app.goke.core.model.Reminders
 import app.goke.ui.components.DatePickerDlg
+import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.MinutesDialSheet
 import app.goke.ui.components.MonthPager
 import app.goke.ui.components.TimeDialSheet
 import app.goke.ui.components.mintClickable
-import app.goke.ui.components.rememberModalSheetState
 import app.goke.ui.hm
 import app.goke.ui.icons.Alarm
 import app.goke.ui.icons.Bedtime
@@ -196,11 +195,7 @@ internal fun WhenPanel(
             else -> stringResource(R.string.minutes_n, m)
         }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalSheetState(),
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-    ) {
+    MintBottomSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier
                 .fillMaxHeight(0.92f)
@@ -382,17 +377,13 @@ private fun QuickChip(
     }
 }
 
-/** 应用统一的弹层：M3 ModalBottomSheet、28dp 顶角、拖拽把手、导航栏避让，与改期/晨间整理一致。 */
+/** 应用统一的弹层：复用 [MintBottomSheet] 并附上统一内边距。 */
 @Composable
 private fun PickerSheet(
     onDismiss: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalSheetState(),
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-    ) {
+    MintBottomSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier.navigationBarsPadding().padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 8.dp),
             content = content,

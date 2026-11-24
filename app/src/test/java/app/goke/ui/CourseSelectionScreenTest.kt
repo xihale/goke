@@ -13,7 +13,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.navigation.compose.rememberNavController
 import androidx.test.core.app.ApplicationProvider
 import app.goke.GokeApp
 import app.goke.R
@@ -50,8 +49,7 @@ class CourseSelectionScreenTest {
     private fun TestHost(content: @Composable () -> Unit) {
         val st by app.settings.flow.collectAsState()
         val scope = rememberCoroutineScope()
-        val navController = rememberNavController()
-        val nav = remember(navController) { Nav(navController) }
+        val nav = rememberNav()
         val actions = remember { Actions(app, scope, nav) }
         GokeTheme(st) {
             CompositionLocalProvider(

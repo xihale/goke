@@ -7,11 +7,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.rememberNavController
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import app.goke.GokeApp
 import app.goke.R
 import app.goke.core.change.ChangeSet
@@ -23,8 +23,12 @@ import kotlinx.serialization.Serializable
 
 enum class Tab { TODAY, TIMETABLE, CALENDAR, TODO, ME }
 
-/** Tab 层目的地（五个 Tab 共用的常驻容器），不参与压栈转场。 */
-const val HOME = "home"
+/** 返回栈单条记录：唯一 [id] 供转场 key、SaveableStateHolder 隔离与防重入 pop 使用；[depth] 决定入栈/出栈方向。 */
+data class BackEntry(
+    val id: Long,
+    val route: Route,
+    val depth: Int,
+)
 
 @Serializable
 sealed interface Route {
@@ -109,14 +113,25 @@ sealed interface Route {
 }
 
 /**
- * 导航门面：转场与返回栈交给标准 navigation-compose（推入/返回各有转场，
- * 预测性返回手势由库驱动逐帧 seek）。Tab 状态仍在此处（Tab 层常驻组合，切换零重组）。
+ * 导航门面：由状态驱动的返回栈（Nav3 风格）替代 NavHostController，避免上游
+ * NavHost 内置 PredictiveBackHandler 导致二级页返回锁死。
+ * Tab 状态仍在此处（Tab 层常驻组合，切换零重组）。
  */
 class Nav(
-    val controller: NavHostController,
     initialTab: Tab = Tab.TIMETABLE,
 ) {
+    private var nextId = 1L
+
     var tab by mutableStateOf(initialTab)
+
+    /** 压栈中的二级页返回栈（空表示当前位于底层常驻 Tabs）。 */
+    val stack: SnapshotStateList<BackEntry> = mutableStateListOf()
+
+    val topEntry: BackEntry?
+        get() = stack.lastOrNull()
+
+    val onRoute: Boolean
+        get() = stack.isNotEmpty()
 
     /** 外部分享来的多行文字，待办页的快速添加接手并给出批量预览。 */
     var pendingAddText by mutableStateOf<String?>(null)
@@ -142,22 +157,38 @@ class Nav(
     }
 
     fun push(r: Route) {
-        controller.navigate(r) { launchSingleTop = true }
+        if (stack.lastOrNull()?.route == r) return
+        stack.add(BackEntry(id = nextId++, route = r, depth = stack.size + 1))
     }
 
-    fun pop(): Boolean = controller.popBackStack()
+    fun pop(): Boolean {
+        if (stack.isEmpty()) return false
+        stack.removeAt(stack.lastIndex)
+        return true
+    }
+
+    /** 按 entryId 安全弹栈：防止退出动画期间双击或重复触发误弹下层页面。 */
+    fun pop(entryId: Long): Boolean {
+        val idx = stack.indexOfLast { it.id == entryId }
+        if (idx < 0) return false
+        while (stack.size > idx) {
+            stack.removeAt(stack.lastIndex)
+        }
+        return true
+    }
 
     /** 关闭全部压栈页，回到 Tab 层（如「预览到课表」）。 */
-    fun clearToRoot(): Boolean = controller.popBackStack(HOME, inclusive = false)
+    fun clearToRoot(): Boolean {
+        if (stack.isEmpty()) return false
+        stack.clear()
+        return true
+    }
 
     fun back(): Boolean = pop() || (tab != Tab.TIMETABLE).also { if (it) tab = Tab.TIMETABLE }
 }
 
 @Composable
-fun rememberNav(initialTab: Tab = Tab.TIMETABLE): Nav {
-    val controller = rememberNavController()
-    return remember { Nav(controller, initialTab) }
-}
+fun rememberNav(initialTab: Tab = Tab.TIMETABLE): Nav = remember { Nav(initialTab) }
 
 /** 页面里发起的写操作:统一走变更集。可撤销的操作留一条说明，直到下一次操作或用户关掉；不能撤销的提示走系统 Toast。 */
 class Actions(

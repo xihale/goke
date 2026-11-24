@@ -16,8 +16,8 @@
 app/src/main/java/app/goke/
 ├── GokeApp.kt / MainActivity.kt / DeepLink.kt / BenchSeed.kt
 ├── ui/
-│   ├── GokeRoot.kt      # Tabs（5 个常驻 Tab）+ gokeDestinations 路由表 + 撤销浮钮
-│   ├── Nav.kt              # Route sealed interface、Nav 门面、Actions（变更集）
+│   ├── GokeRoot.kt      # Tabs（5 个常驻 Tab）+ RouteStackHost（状态驱动返回栈）+ 撤销浮钮
+│   ├── Nav.kt              # Route sealed interface、BackEntry / Nav 返回栈、Actions（变更集）
 │   ├── Common.kt           # LocalTabVisible / gated / liveSnapshot / rememberNow
 │   ├── Format.kt
 │   ├── theme/Theme.kt      # ★ 全部设计 Token（详见 DESIGN.md）
@@ -35,8 +35,29 @@ server/internal/server/web/app/   # Web 客户端（js/views + app.css）
 
 - **无 ViewModel**：状态经 `LocalApp` / `LocalActions` / `LocalNav` CompositionLocal 与参数下传，屏幕保持纯函数。
 - **写操作统一走变更集**：页面通过 `LocalActions.current.commit(cs, message, undoable)` 提交 `ChangeSet`，可撤销操作通过左下角撤销浮钮回滚，不可撤销操作退化为系统 Toast。
-- **路由表**：`Route` 为 `@Serializable sealed interface`（`ui/Nav.kt`），压栈页统一注册在 `ui/GokeRoot.kt` 的 `NavGraphBuilder.gokeDestinations`。
-- **Tab 层常驻**：`HOME` 目的地承载 `Tab.TODAY` / `Tab.TIMETABLE` / `Tab.CALENDAR` / `Tab.TODO` / `Tab.ME` 五个常驻 Tab，切换零重组，不参与压栈转场。
+- **路由表与返回栈**：`Route` 为 `@Serializable sealed interface`（`ui/Nav.kt`），`Nav.stack`（`SnapshotStateList<BackEntry>`）作为唯一返回栈真源；压栈页统一经 `ui/GokeRoot.kt` 的 `RouteStackHost`（`AnimatedContent` + `rememberSaveableStateHolder` + 穷尽 `when (route)`）渲染，新增路由缺漏即编译期报错。
+- **Tab 层常驻**：底层 `Tabs` 常驻承载 `Tab.TODAY` / `Tab.TIMETABLE` / `Tab.CALENDAR` / `Tab.TODO` / `Tab.ME` 五个 Tab，切换零重组，不参与压栈转场；压栈页覆盖其上，弹栈后底层 Tab 状态零重建。
+- **返回导航规范（Back-Navigation Best Practices）**：
+  1. **单一真源**：所有二级页必须通过 `Route` + `RouteStackHost` 进出栈，禁止再引入 `NavHost`、`ModalHost` 或额外的根级 `BackHandler`；窗口内抽屉须挂载在所属 Tab/Route 子树内。
+  2. **结构性分发隔离**：`Tabs` 的每个 Tab 与 `RouteHost` 均使用 `rememberNavigationEventDispatcherOwner(enabled = isActive, parent = rootOwner)` 隔离返回分发，隐藏态 Tab 与退场/被覆盖的二级页在架构上无法截获系统返回。
+  3. **子页 `BackHandler` 约束**：仅用于页内瞬态（如抽屉、筛选、搜索、未保存编辑确认），必须显式绑定 `enabled = <状态条件>`；编辑页校验失败时仍须提供「放弃修改」退出路径，严禁仅弹 Toast 导致用户被困。
+  4. **防重入弹栈与测试守卫**：顶栏与系统返回统一走 `nav.pop(entry.id)` 防退出期误弹下层页；新增 `Route` 须同步加入 `AllRoutesNavigationTest`（反射校验 1:1 覆盖全部 sealed 子类）。
+
+## 标准组件与自定义例外规范（Ponytail 原则）
+
+**默认原则**：优先使用 Material 3 / AndroidX 官方标准组件及项目统一薄封装，禁止在各页面复制脚手架或发明重复容器；确实需要自定义组件时，**必须**在组件 KDoc 与下表写明为何不用官方默认方案：
+
+- **统一容器（必须复用）**：
+  - 二级页骨架：`MintScreen`（状态栏/IME 避让 + 64dp 顶栏 + 680dp 平板居中）。
+  - 底部抽屉：`MintBottomSheet`（`FormKit.kt`，统一 28dp 顶角与跳过半展开态）。
+  - 确认弹窗：`ConfirmDialog` / M3 `AlertDialog`。
+- **经审计保留的自定义组件与明确理由**：
+  - `RouteStackHost` / `Nav`（`GokeRoot.kt` / `Nav.kt`）：替代 `NavHost`，避免 `navigation-compose` 内置 `PredictiveBackHandler` 与多 Tab/手势撤销组合导致返回锁死，且本工程无 ViewModel / SavedStateHandle。
+  - `InWindowSheet`（`TimetableScreen.kt`）：课表快速预览不直接用 `MintBottomSheet`/`ModalBottomSheet`，因新建独立 `DialogWindow` 会触发 14 次同步 Binder IPC 与窗口重排，导致课表点击延迟。
+  - `QuickAddSheet`（`QuickAddBar.kt`）：不直接用 `ModalBottomSheet`，因其独立 Window 会抢走或关闭软键盘焦点，无法与键盘顶部的内联筛选面板和 `rememberNoFocusPopup` 联动。
+  - `DatePickerDlg` + `MonthPager`（`Kit.kt` / `MonthPager.kt`）：复用 M3 `DatePickerDialog`，仅替换内容为 `MonthPager` 以保留「今天/明天」直达及农历/教学周标记（官方 `DatePicker` 高度过大且不支持教学周）。
+  - `TimePickerDlg` + `TimeWheels` / `DialDialog`（`Kit.kt` / `DialPickers.kt`）：分别用双列滚轮与 24h 双环表盘替代 M3 时钟，优化手机单手选分钟与快速时长输入手感。
+  - `MintCheck` & `mintClickable` / `mintPressable` & `FloatingNavBar`（`Kit.kt`）：基于 `Modifier.Node` / `Canvas` 自绘，保证 48dp 最小命中区、点击零振动、静止零协程及列表/底栏滑动零多余重组。
 
 ## 屏幕 ↔ 文件映射
 
