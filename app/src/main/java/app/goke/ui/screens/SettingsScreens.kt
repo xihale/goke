@@ -346,6 +346,56 @@ fun SettingsScreen() {
                     }
                 }
             }
+            item(key = "remind_exams", contentType = "switch_row") {
+                SwitchRow(stringResource(R.string.remind_exams), stringResource(R.string.remind_exams_desc), st.remindExam) { v ->
+                    if (v) ensureNotifPermission()
+                    app.settings.update { it.copy(remindExam = v) }
+                }
+            }
+            item(key = "remind_exams_minutes", contentType = "expandable_value_row") {
+                AnimatedVisibility(
+                    visible = st.remindExam,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    Column {
+                        var examRemindDlg by remember { mutableStateOf(false) }
+                        val examReminders = st.effectiveExamRemindMinutes
+                        val summary =
+                            if (st.examRemindPersistent) {
+                                "${remindSummaryLabel(examReminders)} · ${stringResource(R.string.remind_persistent)}"
+                            } else {
+                                remindSummaryLabel(examReminders)
+                            }
+                        ValueRow(
+                            stringResource(R.string.remind_exams),
+                            summary,
+                            onClick = { examRemindDlg = true },
+                        )
+                        if (examRemindDlg) {
+                            RemindPickDialog(
+                                initial = examReminders,
+                                hasTime = true,
+                                initialPersistent = st.examRemindPersistent,
+                                onDismiss = { examRemindDlg = false },
+                                noneLabel = null,
+                                allowEmpty = false,
+                                showPersistent = true,
+                            ) { list, persistent ->
+                                if (list.isNotEmpty()) {
+                                    app.settings.update {
+                                        it.copy(
+                                            examRemindMinutesList = list,
+                                            examRemindPersistent = persistent,
+                                        )
+                                    }
+                                }
+                                examRemindDlg = false
+                            }
+                        }
+                    }
+                }
+            }
             item(key = "remind_tasks", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.remind_tasks), null, st.remindTask) { v ->
                     if (v) ensureNotifPermission()

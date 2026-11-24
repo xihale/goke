@@ -1,16 +1,22 @@
 package app.goke.notify
 
 import android.app.AlarmManager
+import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
+import androidx.core.app.NotificationCompat
 import androidx.test.core.app.ApplicationProvider
 import app.goke.GokeApp
 import app.goke.SmokeTestApp
+import app.goke.core.agenda.Agenda
 import app.goke.core.change.Edits
 import app.goke.core.model.Course
+import app.goke.core.model.EventKind
 import app.goke.core.model.Source
+import app.goke.core.model.Task
 import app.goke.data.Settings
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -199,5 +205,171 @@ class NotifyFixesTest {
         assertFalse(r2.text.contains("开课"))
         assertFalse(r2.text.contains("张老师"))
         assertTrue(r2.text.endsWith("· 实4-407A"))
+    }
+
+    @Test
+    fun examCourseGeneratesImportantPersistentRemindersEvenWhenNormalCourseRemindOff() {
+        val now =
+            LocalDateTime
+                .now()
+                .withHour(8)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0)
+        val sem = app.repo.snapshot.value.currentSemester!!
+        val monday = now.toLocalDate().with(DayOfWeek.MONDAY)
+        val sem2 = sem.copy(week1Monday = monday)
+        val examCourse =
+            Course(
+                id = "c-exam-1",
+                semesterId = sem.id,
+                name = "大学物理实验",
+                teacher = "牟中飞",
+                room = "实4-403",
+                dayOfWeek = now.dayOfWeek.value,
+                startPeriod = 5,
+                endPeriod = 7,
+                weeks = setOf(1),
+                note = "第1周：实验十一、期末实验考核",
+                kind = EventKind.EXAM,
+                remindPersistent = true,
+            )
+        val examTask =
+            Task(
+                id = "jxfw-exam/202601/E99",
+                title = "考试：高等数学",
+                note = "闭卷 · 教1-201 · 座位号 12",
+                tags = listOf("考试"),
+                priority = 3,
+                startDate = now.toLocalDate().plusDays(1),
+                due = now.toLocalDate().plusDays(1).atTime(11, 0),
+                dueHasTime = true,
+                blockStart = now.toLocalDate().plusDays(1).atTime(9, 0),
+                blockMinutes = 120,
+                remindPersistent = true,
+                source = Source.IMPORT,
+                extra = mapOf("kind" to EventKind.EXAM.name, "checkable" to "false", "location" to "教1-201"),
+            )
+        runBlocking {
+            app.repo.commit(Edits.saveAll(app.repo.snapshot.value, listOf(sem2, examCourse, examTask), "seed", 1L))
+        }
+
+        val snap = app.repo.snapshot.value
+        val st = app.settings.value.copy(remindCourse = false, remindExam = true, examRemindMinutesList = listOf(30, 1440), examRemindPersistent = true)
+        val reminders = ReminderScheduler.compute(app, snap, st, now)
+
+        val courseReminders = reminders.filter { it.courseId == examCourse.id }
+        assertTrue(courseReminders.isNotEmpty())
+        assertTrue(courseReminders.all { it.important })
+        assertTrue(courseReminders.all { it.title.contains("考试") })
+        assertTrue(courseReminders.any { it.text.contains("实验十一、期末实验考核") })
+        assertTrue(courseReminders.any { it.persistent })
+
+        val taskReminders = reminders.filter { it.taskId == examTask.id }
+        assertTrue(taskReminders.isNotEmpty())
+        assertTrue(taskReminders.all { it.important })
+        assertTrue(taskReminders.any { it.text.contains("教1-201") })
+
+        val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val receiver = ReminderReceiver()
+        val first = courseReminders.first { it.persistent }
+        receiver.onReceive(
+            app,
+            Intent(app, ReminderReceiver::class.java)
+                .putExtra(ReminderReceiver.EXTRA_TITLE, first.title)
+                .putExtra(ReminderReceiver.EXTRA_TEXT, first.text)
+                .putExtra(ReminderReceiver.EXTRA_ID, 777)
+                .putExtra(ReminderReceiver.EXTRA_COURSE_ID, first.courseId)
+                .putExtra(ReminderReceiver.EXTRA_PERSISTENT, first.persistent)
+                .putExtra(ReminderReceiver.EXTRA_IMPORTANT, first.important),
+        )
+        val posted = shadowOf(nm).getNotification(777)
+        assertNotNull(posted)
+        assertEquals(Notifications.CHANNEL_EXAM, posted!!.channelId)
+        assertEquals(NotificationCompat.CATEGORY_ALARM, posted.category)
+        assertTrue((posted.flags and Notification.FLAG_INSISTENT) != 0)
+    }
+
+    @Test
+    fun normalCourseMutesToVibrateWhileExamMutesToSilentWithoutVibration() {
+        val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val am = app.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        shadowOf(nm).setNotificationPolicyAccessGranted(true)
+        am.ringerMode = AudioManager.RINGER_MODE_NORMAL
+
+        val receiver = MuteReceiver()
+        // 普通课程：静音但保持震动
+        receiver.onReceive(
+            app,
+            Intent(MuteReceiver.ACTION_MUTE).putExtra(MuteReceiver.EXTRA_MODE, MuteReceiver.MODE_VIBRATE),
+        )
+        assertEquals(AudioManager.RINGER_MODE_VIBRATE, am.ringerMode)
+
+        // 下课恢复正常响铃
+        receiver.onReceive(app, Intent(MuteReceiver.ACTION_UNMUTE))
+        assertEquals(AudioManager.RINGER_MODE_NORMAL, am.ringerMode)
+
+        // 考试：完全静音（连震动都关闭）并启用 ZenRule
+        receiver.onReceive(
+            app,
+            Intent(MuteReceiver.ACTION_MUTE).putExtra(MuteReceiver.EXTRA_MODE, MuteReceiver.MODE_SILENT),
+        )
+        assertEquals(AudioManager.RINGER_MODE_SILENT, am.ringerMode)
+        val ruleId = app.getSharedPreferences("mute", Context.MODE_PRIVATE).getString("zen_rule_id", null)
+        assertNotNull(ruleId)
+        assertEquals(NotificationManager.INTERRUPTION_FILTER_NONE, nm.getAutomaticZenRule(ruleId!!)?.interruptionFilter)
+
+        // 考试结束恢复原响铃模式
+        receiver.onReceive(app, Intent(MuteReceiver.ACTION_UNMUTE))
+        assertEquals(AudioManager.RINGER_MODE_NORMAL, am.ringerMode)
+    }
+
+    @Test
+    fun computeMuteSlotsDistinguishesCourseVibrateAndExamSilentAndPrioritizesExamOnOverlap() {
+        val now =
+            LocalDateTime
+                .now()
+                .withHour(8)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0)
+        val sem = app.repo.snapshot.value.currentSemester!!
+        val monday = now.toLocalDate().with(DayOfWeek.MONDAY)
+        val sem2 = sem.copy(week1Monday = monday)
+        val normalCourse =
+            Course(
+                id = "c-normal-mute",
+                semesterId = sem.id,
+                name = "大学物理",
+                dayOfWeek = now.dayOfWeek.value,
+                startPeriod = 1,
+                endPeriod = 4,
+                weeks = setOf(1),
+                kind = EventKind.NORMAL,
+            )
+        val examBlock =
+            Task(
+                id = "jxfw-exam/202601/E55",
+                title = "考试：大学物理",
+                tags = listOf("考试"),
+                startDate = now.toLocalDate(),
+                due = now.toLocalDate().atTime(11, 0),
+                dueHasTime = true,
+                blockStart = now.toLocalDate().atTime(9, 0),
+                blockMinutes = 120,
+                source = Source.IMPORT,
+                extra = mapOf("kind" to EventKind.EXAM.name, "checkable" to "false"),
+            )
+        runBlocking {
+            app.repo.commit(Edits.saveAll(app.repo.snapshot.value, listOf(sem2, normalCourse, examBlock), "seed", 1L))
+        }
+        val snap = app.repo.snapshot.value
+        val days = Agenda.range(snap, now.toLocalDate(), now.toLocalDate().plusDays(1), 30, includeDoneTasks = false)
+        val slots = ReminderScheduler.computeMuteSlots(days, app.settings.value.copy(autoMute = true), now)
+
+        assertEquals(3, slots.size)
+        assertEquals(ReminderScheduler.MuteSlot(now.toLocalDate().atTime(8, 30), now.toLocalDate().atTime(9, 0), silent = false), slots[0])
+        assertEquals(ReminderScheduler.MuteSlot(now.toLocalDate().atTime(9, 0), now.toLocalDate().atTime(11, 0), silent = true), slots[1])
+        assertEquals(ReminderScheduler.MuteSlot(now.toLocalDate().atTime(11, 0), now.toLocalDate().atTime(12, 0), silent = false), slots[2])
     }
 }

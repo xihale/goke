@@ -45,6 +45,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -84,6 +87,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -103,6 +107,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -122,8 +127,11 @@ import app.goke.core.change.ChangeSet
 import app.goke.core.change.Edits
 import app.goke.core.change.apply
 import app.goke.core.change.repeatInstances
+import app.goke.core.jxfw.JxfwSync
 import app.goke.core.model.Course
 import app.goke.core.model.CourseException
+import app.goke.core.model.CourseNotes
+import app.goke.core.model.EventKind
 import app.goke.core.model.ExceptionType
 import app.goke.core.model.PeriodTime
 import app.goke.core.model.Semester
@@ -149,6 +157,7 @@ import app.goke.ui.components.EmptyState
 import app.goke.ui.components.FieldText
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.NavListInset
+import app.goke.ui.components.Tag
 import app.goke.ui.components.TaskRow
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.ValueRow
@@ -580,7 +589,10 @@ fun TimetableScreen() {
                                         }
                                     days
                                         .filter { d -> !d.isBefore(weekStart) && !d.isAfter(weekEnd) }
-                                        .map { d -> BlockRow(t, listColor[t.listId] ?: 1, LocalDateTime.of(d, at.toLocalTime()), t.blockStart != null) }
+                                        .map { d ->
+                                            val colorIdx = if (t.listId == null && t.isExam) 2 else listColor[t.listId] ?: 1
+                                            BlockRow(t, colorIdx, LocalDateTime.of(d, at.toLocalTime()), t.blockStart != null)
+                                        }
                                 }
                         }
                     }
@@ -985,9 +997,10 @@ private fun WeekGrid(
                                 )
                             } else {
                                 val b = geoms.second[i - courseCount].first
+                                val kindName = ctx.getString(if (b.task.isExam) R.string.kind_exam else R.string.entity_task)
                                 SlotEntry(
                                     b.task.title,
-                                    "${b.start.hm()}–${b.start.plusMinutes(b.minutes.toLong()).hm()} · ${ctx.getString(R.string.entity_task)}",
+                                    "${b.start.hm()}–${b.start.plusMinutes(b.minutes.toLong()).hm()} · $kindName",
                                     b.color,
                                     b.start,
                                     null,
@@ -1878,6 +1891,15 @@ internal fun TaskBlock(
                 maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (task.isExam && overlap <= 1 && !active) {
+                Text(
+                    stringResource(R.string.kind_exam),
+                    color = textFg,
+                    style = timeStyle,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+            }
             // 一格只有 40 来 dp 宽，放不下「10:15–11:15」；拖动时只报正在变的那一头。
             // 同时段还有别的安排时，这行改成「N 项」——冲突比几点更要紧，点开就能看全部。
             if (overlap > 1 && !active) {
@@ -2068,6 +2090,15 @@ private fun CourseBlock(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            if (o.course.isExam) {
+                Text(
+                    stringResource(R.string.kind_exam),
+                    color = textFg,
+                    style = roomStyle,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+            }
             if (o.rescheduled) {
                 Text(
                     stringResource(R.string.rescheduled),
@@ -2180,13 +2211,14 @@ private fun CourseSheet(
         val actions = LocalActions.current
         val o = activeOcc
         val c = o.course
+        val liveCourse = snap.courses.firstOrNull { it.id == c.id && it.deletedAt == null } ?: c
         val fadeSpec = MintTheme.spec<Float>()
 
         fun openEdit() {
             if (!visible || submitted) return
             submitted = true
             onDismiss()
-            nav.push(Route.CourseEdit(c.id))
+            nav.push(Route.CourseEdit(liveCourse.id))
         }
 
         AnimatedContent(
@@ -2195,8 +2227,62 @@ private fun CourseSheet(
             label = "course-sheet-mode",
         ) { editing ->
             if (!editing && activeCell != null) {
+                val parsedNote =
+                    remember(liveCourse.note, o.originalWeek, o.week) {
+                        val byOrig = CourseNotes.parse(liveCourse.note, o.originalWeek)
+                        if (byOrig.currentWeekNotes.isNotEmpty() || o.week == o.originalWeek) {
+                            byOrig
+                        } else {
+                            CourseNotes.parse(liveCourse.note, o.week)
+                        }
+                    }
+                var showAllNotes by remember(liveCourse.id, o.week) { mutableStateOf(false) }
+                var quickNote by remember(liveCourse.id, o.week) { mutableStateOf("") }
+
+                fun commitQuickNote() {
+                    val trimmed = quickNote.trim()
+                    if (trimmed.isEmpty() || !canAct) return
+                    val targets =
+                        snap.courses
+                            .filter { it.deletedAt == null && it.semesterId == sem.id && it.name == liveCourse.name }
+                            .ifEmpty { listOf(liveCourse) }
+                    var upgraded = false
+                    val mods =
+                        targets.mapNotNull { target ->
+                            val nextNote = CourseNotes.appendUserNote(target.note, trimmed)
+                            val shouldUpgrade = !target.isExam && JxfwSync.shouldClassifyCourseAsExam(target.name, nextNote)
+                            if (shouldUpgrade) upgraded = true
+                            val updated =
+                                target.copy(
+                                    note = nextNote,
+                                    kind = if (shouldUpgrade) EventKind.EXAM else target.kind,
+                                    remindPersistent = if (shouldUpgrade) true else target.remindPersistent,
+                                )
+                            if (updated != target) Change.Modify(target, updated) else null
+                        }
+                    if (mods.isNotEmpty()) {
+                        val toast =
+                            ctx.getString(
+                                if (upgraded) R.string.course_upgraded_exam_toast else R.string.course_quick_note_saved,
+                            )
+                        actions.commit(
+                            ChangeSet(
+                                Ids.next(),
+                                ctx.getString(R.string.edit_course_desc, liveCourse.name),
+                                Source.MANUAL,
+                                System.currentTimeMillis(),
+                                mods,
+                            ),
+                            toast,
+                        )
+                    }
+                    quickNote = ""
+                }
+
                 Column(
                     Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 20.dp)
                         .padding(bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -2207,10 +2293,23 @@ private fun CourseSheet(
                                 .width(4.dp)
                                 .height(22.dp)
                                 .clip(CircleShape)
-                                .background(MintTheme.colors.fg(c.colorIndex)),
+                                .background(MintTheme.colors.fg(liveCourse.colorIndex)),
                         )
                         Spacer(Modifier.width(10.dp))
-                        Text(c.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            liveCourse.name,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (liveCourse.isExam) {
+                            Spacer(Modifier.width(8.dp))
+                            Tag(
+                                stringResource(R.string.kind_exam),
+                                MaterialTheme.colorScheme.tertiaryContainer,
+                                MaterialTheme.colorScheme.onTertiaryContainer,
+                            )
+                        }
                     }
                     Text(
                         "${ctx.weekdayShort(o.date.dayOfWeek.value).let { stringResource(R.string.weekday_prefix, it) }} ${cal.startTime(o.startPeriod)?.hm().orEmpty()}–${cal.endTime(o.endPeriod)?.hm().orEmpty()} · ${stringResource(R.string.periods_range, o.startPeriod, o.endPeriod)}",
@@ -2219,12 +2318,12 @@ private fun CourseSheet(
                         modifier = Modifier.padding(start = 14.dp, bottom = if (o.rescheduled) 2.dp else 8.dp),
                     )
                     if (o.rescheduled) {
-                        val origDow = ctx.getString(R.string.weekday_prefix, ctx.weekdayShort(c.dayOfWeek))
+                        val origDow = ctx.getString(R.string.weekday_prefix, ctx.weekdayShort(liveCourse.dayOfWeek))
                         val origHint =
-                            if (c.startPeriod == c.endPeriod) {
-                                stringResource(R.string.reschedule_from_hint_single, o.originalWeek, origDow, c.startPeriod)
+                            if (liveCourse.startPeriod == liveCourse.endPeriod) {
+                                stringResource(R.string.reschedule_from_hint_single, o.originalWeek, origDow, liveCourse.startPeriod)
                             } else {
-                                stringResource(R.string.reschedule_from_hint, o.originalWeek, origDow, c.startPeriod, c.endPeriod)
+                                stringResource(R.string.reschedule_from_hint, o.originalWeek, origDow, liveCourse.startPeriod, liveCourse.endPeriod)
                             }
                         Text(
                             origHint,
@@ -2244,27 +2343,116 @@ private fun CourseSheet(
                             }
                         ValueRow(stringResource(R.string.label_room), fullRoom, onClick = ::openEdit)
                     }
-                    if (c.teacher.isNotBlank()) {
-                        ValueRow(stringResource(R.string.label_teacher), c.teacher, onClick = ::openEdit)
+                    if (liveCourse.teacher.isNotBlank()) {
+                        ValueRow(stringResource(R.string.label_teacher), liveCourse.teacher, onClick = ::openEdit)
                     }
-                    ValueRow(stringResource(R.string.week_label), WeekSets.format(c.weeks), onClick = ::openEdit)
-                    if (c.note.isNotBlank()) {
+                    ValueRow(stringResource(R.string.week_label), WeekSets.format(liveCourse.weeks), onClick = ::openEdit)
+                    if (liveCourse.note.isNotBlank()) {
+                        val displayNote =
+                            if (showAllNotes) {
+                                liveCourse.note.trim()
+                            } else {
+                                parsedNote.focusedNotes.joinToString("\n").ifBlank { liveCourse.note.trim() }
+                            }
                         Text(
-                            c.note,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            displayNote,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 4.dp)
+                                    .padding(top = 6.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f))
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
                         )
+                        if (parsedNote.hasOtherWeeks) {
+                            val arrowRot by animateFloatAsState(
+                                targetValue = if (showAllNotes) 90f else 0f,
+                                animationSpec = MintTheme.press(),
+                                label = "course-notes-arrow",
+                            )
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 48.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .mintClickable(pressedScale = 0.98f, role = Role.Button) {
+                                            showAllNotes = !showAllNotes
+                                        }.padding(horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.End,
+                            ) {
+                                Text(
+                                    stringResource(if (showAllNotes) R.string.course_notes_collapse else R.string.course_notes_all),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.width(2.dp))
+                                Icon(
+                                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = arrowRot },
+                                )
+                            }
+                        }
                     }
                     if (activeCell.kind == CellKind.NORMAL) {
+                        val quickHint = stringResource(R.string.course_quick_note_hint)
+                        Row(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 6.dp)
+                                    .heightIn(min = 48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f))
+                                    .padding(start = 14.dp, end = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            BasicTextField(
+                                value = quickNote,
+                                onValueChange = { quickNote = it },
+                                modifier =
+                                    Modifier
+                                        .weight(1f)
+                                        .padding(vertical = 10.dp)
+                                        .semantics { contentDescription = quickHint },
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                keyboardActions = KeyboardActions(onDone = { commitQuickNote() }),
+                                decorationBox = { inner ->
+                                    Box {
+                                        if (quickNote.isEmpty()) {
+                                            Text(
+                                                quickHint,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                            )
+                                        }
+                                        inner()
+                                    }
+                                },
+                            )
+                            if (quickNote.isNotBlank()) {
+                                IconButton(
+                                    enabled = canAct,
+                                    onClick = ::commitQuickNote,
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Check,
+                                        contentDescription = stringResource(R.string.course_quick_note_save),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                        }
                         Spacer(Modifier.height(10.dp))
-                        // 小屏放不下三个按钮就换行，主次不变：编辑 > 停课 > 调课
+                        // 小屏放不下多个按钮就换行，主次不变：编辑 > 停课 > 调课 > 设为考试
                         val secondaryColors =
                             ButtonDefaults.filledTonalButtonColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -2285,10 +2473,10 @@ private fun CourseSheet(
                                     if (!visible || submitted) return@FilledTonalButton
                                     submitted = true
                                     val origW = o.originalWeek
-                                    val ex = CourseException(Ids.next(), c.id, origW, ExceptionType.CANCEL)
-                                    val old = snap.exceptions.firstOrNull { it.deletedAt == null && it.courseId == c.id && it.week == origW }
-                                    val cs = Edits.save(snap, if (old != null) ex.copy(id = old.id) else ex, ctx.getString(R.string.cancel_class_desc, c.name), System.currentTimeMillis())
-                                    actions.commit(cs, ctx.getString(R.string.cancel_class_toast, c.name))
+                                    val ex = CourseException(Ids.next(), liveCourse.id, origW, ExceptionType.CANCEL)
+                                    val old = snap.exceptions.firstOrNull { it.deletedAt == null && it.courseId == liveCourse.id && it.week == origW }
+                                    val cs = Edits.save(snap, if (old != null) ex.copy(id = old.id) else ex, ctx.getString(R.string.cancel_class_desc, liveCourse.name), System.currentTimeMillis())
+                                    actions.commit(cs, ctx.getString(R.string.cancel_class_toast, liveCourse.name))
                                     onDismiss()
                                 },
                                 modifier = Modifier.heightIn(min = 48.dp),
@@ -2300,6 +2488,50 @@ private fun CourseSheet(
                                 modifier = Modifier.heightIn(min = 48.dp),
                                 colors = secondaryColors,
                             ) { Text(stringResource(R.string.reschedule)) }
+                            FilledTonalButton(
+                                enabled = canAct,
+                                onClick = {
+                                    if (!canAct) return@FilledTonalButton
+                                    val nextKind = if (liveCourse.isExam) EventKind.NORMAL else EventKind.EXAM
+                                    val targets =
+                                        snap.courses
+                                            .filter { it.deletedAt == null && it.semesterId == sem.id && it.name == liveCourse.name }
+                                            .ifEmpty { listOf(liveCourse) }
+                                    val mods =
+                                        targets.mapNotNull { target ->
+                                            val updated =
+                                                target.copy(
+                                                    kind = nextKind,
+                                                    remindPersistent = nextKind == EventKind.EXAM,
+                                                )
+                                            if (updated != target) Change.Modify(target, updated) else null
+                                        }
+                                    if (mods.isNotEmpty()) {
+                                        actions.commit(
+                                            ChangeSet(
+                                                Ids.next(),
+                                                ctx.getString(R.string.edit_course_desc, liveCourse.name),
+                                                Source.MANUAL,
+                                                System.currentTimeMillis(),
+                                                mods,
+                                            ),
+                                            ctx.getString(R.string.edit_course_desc, liveCourse.name),
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.heightIn(min = 48.dp),
+                                colors =
+                                    if (liveCourse.isExam) {
+                                        ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        )
+                                    } else {
+                                        secondaryColors
+                                    },
+                            ) {
+                                Text(stringResource(if (liveCourse.isExam) R.string.course_exam_toggle_off else R.string.course_exam_toggle_on))
+                            }
                         }
                         if (o.rescheduled) {
                             TextButton(
@@ -2310,13 +2542,13 @@ private fun CourseSheet(
                                     val origW = o.originalWeek
                                     val changes =
                                         snap.exceptions
-                                            .filter { it.deletedAt == null && it.courseId == c.id && it.week == origW }
+                                            .filter { it.deletedAt == null && it.courseId == liveCourse.id && it.week == origW }
                                             .map { Change.Remove(it) }
                                     if (changes.isNotEmpty()) {
                                         actions.commit(
                                             ChangeSet(
                                                 Ids.next(),
-                                                ctx.getString(R.string.restore_class_desc, c.name),
+                                                ctx.getString(R.string.restore_class_desc, liveCourse.name),
                                                 Source.MANUAL,
                                                 System.currentTimeMillis(),
                                                 changes,

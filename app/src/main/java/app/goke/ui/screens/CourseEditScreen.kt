@@ -75,7 +75,9 @@ import app.goke.core.change.Change
 import app.goke.core.change.ChangeSet
 import app.goke.core.change.Conflicts
 import app.goke.core.change.apply
+import app.goke.core.jxfw.JxfwSync
 import app.goke.core.model.Course
+import app.goke.core.model.EventKind
 import app.goke.core.model.ExceptionType
 import app.goke.core.model.PeriodTime
 import app.goke.core.model.Reminders
@@ -90,6 +92,7 @@ import app.goke.ui.components.ConfirmDialog
 import app.goke.ui.components.ConflictCard
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.SectionLabel
+import app.goke.ui.components.SegmentedPill
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.ValueRow
 import app.goke.ui.components.mintClickable
@@ -167,6 +170,19 @@ fun CourseEditScreen(
     var name by remember { mutableStateOf(existing?.name.orEmpty()) }
     var color by remember { mutableIntStateOf(existing?.colorIndex ?: (snap.courses.size % 8)) }
     var note by remember { mutableStateOf(existing?.note.orEmpty()) }
+    var kind by remember(id) { mutableStateOf(existing?.kind ?: EventKind.NORMAL) }
+    var manualKindOverride by remember(id) { mutableStateOf(false) }
+    var remindPersistent by remember(id) { mutableStateOf(existing?.remindPersistent ?: false) }
+
+    fun applySmartExamCheck(
+        nextName: String,
+        nextNote: String,
+    ) {
+        if (!manualKindOverride && kind == EventKind.NORMAL && JxfwSync.shouldClassifyCourseAsExam(nextName, nextNote)) {
+            kind = EventKind.EXAM
+            remindPersistent = true
+        }
+    }
 
     // ── 时段：同名记录即同一门课（与「另一天」的历史约定一致） ──
     val initialSlots =
@@ -293,10 +309,11 @@ fun CourseEditScreen(
             slots.all { it.weeks.isNotEmpty() && it.endPeriod >= it.startPeriod }
     val fieldDirty =
         if (origin == null) {
-            name.isNotBlank() || teacher.isNotBlank() || note.isNotBlank()
+            name.isNotBlank() || teacher.isNotBlank() || note.isNotBlank() || kind != EventKind.NORMAL || remindPersistent
         } else {
             name.trim() != origin.name || teacher.trim() != initialTeacher ||
-                color != origin.colorIndex || note.trim() != origin.note
+                color != origin.colorIndex || note.trim() != origin.note ||
+                kind != origin.kind || remindPersistent != origin.remindPersistent
         }
     val dirty = fieldDirty || slots != initialSlots
 
@@ -358,6 +375,8 @@ fun CourseEditScreen(
                 initialSlots = initialSlots,
                 slots = slots,
                 liveExceptions = snap.exceptions,
+                kind = kind,
+                remindPersistent = remindPersistent,
             )
         if (changes.isEmpty()) {
             if (leave) onBack()
@@ -435,7 +454,10 @@ fun CourseEditScreen(
             val nameHint = stringResource(R.string.course_name_placeholder)
             BasicTextField(
                 value = name,
-                onValueChange = { name = it },
+                onValueChange = {
+                    name = it
+                    applySmartExamCheck(it, note)
+                },
                 modifier =
                     Modifier
                         .fillMaxWidth()
@@ -464,6 +486,34 @@ fun CourseEditScreen(
                 },
             )
             ColorPicker(color) { color = it }
+            Spacer(Modifier.height(10.dp))
+            SegmentedPill(
+                options =
+                    listOf(
+                        EventKind.NORMAL to stringResource(R.string.course_kind_normal),
+                        EventKind.EXAM to stringResource(R.string.course_kind_exam),
+                    ),
+                selected = kind,
+                onSelect = { next ->
+                    manualKindOverride = true
+                    kind = next
+                    if (next == EventKind.EXAM) {
+                        remindPersistent = true
+                    }
+                },
+            )
+            AnimatedVisibility(
+                visible = kind == EventKind.EXAM,
+                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+            ) {
+                Text(
+                    stringResource(R.string.course_exam_remind_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.padding(top = 6.dp, start = 4.dp),
+                )
+            }
 
             // ── 第二段：上课时段与提醒 ──
             SectionLabel(
@@ -520,11 +570,18 @@ fun CourseEditScreen(
             }
 
             val remindList = slots.firstOrNull()?.effectiveRemindMinutes.orEmpty()
+            val remindBase = if (remindList.isEmpty()) defaultRemindSummary else remindSummaryLabel(remindList)
+            val remindValue =
+                if (remindPersistent) {
+                    "$remindBase · ${stringResource(R.string.remind_persistent)}"
+                } else {
+                    remindBase
+                }
             ValueRow(
-                label = stringResource(R.string.remind_courses),
-                value = if (remindList.isEmpty()) defaultRemindSummary else remindSummaryLabel(remindList),
+                label = stringResource(if (kind == EventKind.EXAM) R.string.remind_exams else R.string.remind_courses),
+                value = remindValue,
                 onClick = { remindDlg = true },
-                valueColor = if (remindList.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                valueColor = if (remindList.isNotEmpty() || remindPersistent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             // ── 第三段：课程信息与关联待办 ──
@@ -542,7 +599,10 @@ fun CourseEditScreen(
             TonalField(
                 label = stringResource(R.string.label_note),
                 value = note,
-                onChange = { note = it },
+                onChange = {
+                    note = it
+                    applySmartExamCheck(name, it)
+                },
                 singleLine = false,
                 minLines = 2,
                 placeholder = stringResource(R.string.course_note_placeholder),
@@ -706,12 +766,13 @@ fun CourseEditScreen(
         RemindPickDialog(
             initial = slots.firstOrNull()?.effectiveRemindMinutes.orEmpty(),
             hasTime = true,
-            initialPersistent = false,
+            initialPersistent = remindPersistent,
             onDismiss = { remindDlg = false },
             noneLabel = defaultRemindSummary,
-            showPersistent = false,
-        ) { list, _ ->
+            showPersistent = true,
+        ) { list, persistent ->
             slots = slots.map { it.copy(remindMinutes = list.firstOrNull(), remindMinutesList = list) }
+            remindPersistent = persistent
             remindDlg = false
         }
     }
@@ -1122,6 +1183,8 @@ internal fun buildSlotChanges(
     initialSlots: List<SlotDraft>,
     slots: List<SlotDraft>,
     liveExceptions: List<app.goke.core.model.CourseException>,
+    kind: EventKind = EventKind.NORMAL,
+    remindPersistent: Boolean = false,
 ): List<Change> {
     val n = name.trim()
     val t = teacher.trim()
@@ -1147,6 +1210,8 @@ internal fun buildSlotChanges(
                 remindMinutes = s.effectiveRemindMinutes.firstOrNull(),
                 remindMinutesList = s.effectiveRemindMinutes,
                 note = nt,
+                kind = kind,
+                remindPersistent = remindPersistent,
             )
         } else {
             Course(
@@ -1164,6 +1229,8 @@ internal fun buildSlotChanges(
                 remindMinutesList = s.effectiveRemindMinutes,
                 note = nt,
                 source = Source.MANUAL,
+                kind = kind,
+                remindPersistent = remindPersistent,
             )
         }
     }

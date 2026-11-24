@@ -272,12 +272,14 @@ fun TodayScreen() {
                                     when (nextToday) {
                                         is CourseItem -> {
                                             val o = nextToday.occ
-                                            stringResource(
-                                                R.string.today_next_class,
-                                                "${o.start.hm()}–${o.end.hm()}",
-                                                o.course.name,
-                                                ctx.formatRooms(o.room),
-                                            ).trim()
+                                            val kindPrefix = if (o.course.isExam) stringResource(R.string.kind_exam) + " · " else ""
+                                            kindPrefix +
+                                                stringResource(
+                                                    R.string.today_next_class,
+                                                    "${o.start.hm()}–${o.end.hm()}",
+                                                    o.course.name,
+                                                    ctx.formatRooms(o.room),
+                                                ).trim()
                                         }
 
                                         is EventItem -> {
@@ -326,12 +328,14 @@ fun TodayScreen() {
 
                                         else -> {
                                             nextUp?.occurrence?.let { o ->
-                                                stringResource(
-                                                    R.string.today_next_class,
-                                                    "${ctx.dueLabel(o.start, true, today)}–${o.end.hm()}",
-                                                    o.course.name,
-                                                    ctx.formatRooms(o.room),
-                                                ).trim()
+                                                val kindPrefix = if (o.course.isExam) stringResource(R.string.kind_exam) + " · " else ""
+                                                kindPrefix +
+                                                    stringResource(
+                                                        R.string.today_next_class,
+                                                        "${ctx.dueLabel(o.start, true, today)}–${o.end.hm()}",
+                                                        o.course.name,
+                                                        ctx.formatRooms(o.room),
+                                                    ).trim()
                                             }
                                         }
                                     }

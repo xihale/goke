@@ -23,6 +23,9 @@ data class Settings(
     val remindCourse: Boolean = false,
     val courseRemindMinutes: Int = 15,
     val courseRemindMinutesList: List<Int> = listOf(15),
+    val remindExam: Boolean = true,
+    val examRemindMinutesList: List<Int> = listOf(30, 1440),
+    val examRemindPersistent: Boolean = true,
     val remindTask: Boolean = true,
     val remindEvent: Boolean = true,
     /** 「今日安排」摘要通知，默认关；时间由 [digestHour]/[digestMinute] 决定。 */
@@ -64,6 +67,12 @@ data class Settings(
             Reminders
                 .normalize(if (courseRemindMinutesList.isEmpty()) courseRemindMinutes else null, courseRemindMinutesList)
                 .ifEmpty { listOf(courseRemindMinutes.coerceAtLeast(0)) }
+
+    val effectiveExamRemindMinutes: List<Int>
+        get() =
+            Reminders
+                .normalize(null, examRemindMinutesList)
+                .ifEmpty { listOf(30, 1440) }
 }
 
 /** 轻量设置存储（SharedPreferences + StateFlow）。同步令牌等敏感值另存于 [SecretStore]，不进此处。 */
@@ -88,6 +97,16 @@ class SettingsStore(
                 ?.sorted()
                 ?.takeIf { it.isNotEmpty() }
                 ?: listOf(courseRemind)
+        val rawExamRemindList = sp.getString("examRemindMinutesList", null)
+        val parsedExamRemindList =
+            rawExamRemindList
+                ?.split(',')
+                ?.mapNotNull { it.trim().toIntOrNull() }
+                ?.filter { it >= 0 }
+                ?.distinct()
+                ?.sorted()
+                ?.takeIf { it.isNotEmpty() }
+                ?: d.examRemindMinutesList
         return Settings(
             themeSource = runCatching { ThemeSource.valueOf(sp.getString("themeSource", d.themeSource.name)!!) }.getOrDefault(d.themeSource),
             preset = sp.getString("preset", d.preset)!!,
@@ -98,6 +117,9 @@ class SettingsStore(
             remindCourse = sp.getBoolean("remindCourse", d.remindCourse),
             courseRemindMinutes = parsedRemindList.first(),
             courseRemindMinutesList = parsedRemindList,
+            remindExam = sp.getBoolean("remindExam", d.remindExam),
+            examRemindMinutesList = parsedExamRemindList,
+            examRemindPersistent = sp.getBoolean("examRemindPersistent", d.examRemindPersistent),
             remindTask = sp.getBoolean("remindTask", d.remindTask),
             remindEvent = sp.getBoolean("remindEvent", d.remindEvent),
             dailyDigest = sp.getBoolean("dailyDigest", d.dailyDigest),
@@ -130,7 +152,12 @@ class SettingsStore(
         val n =
             block(_flow.value).let { raw ->
                 val list = raw.effectiveCourseRemindMinutes
-                raw.copy(courseRemindMinutes = list.first(), courseRemindMinutesList = list)
+                val examList = raw.effectiveExamRemindMinutes
+                raw.copy(
+                    courseRemindMinutes = list.first(),
+                    courseRemindMinutesList = list,
+                    examRemindMinutesList = examList,
+                )
             }
         sp
             .edit()
@@ -143,6 +170,9 @@ class SettingsStore(
             .putBoolean("remindCourse", n.remindCourse)
             .putInt("courseRemindMinutes", n.courseRemindMinutes)
             .putString("courseRemindMinutesList", n.courseRemindMinutesList.joinToString(","))
+            .putBoolean("remindExam", n.remindExam)
+            .putString("examRemindMinutesList", n.examRemindMinutesList.joinToString(","))
+            .putBoolean("examRemindPersistent", n.examRemindPersistent)
             .putBoolean("remindTask", n.remindTask)
             .putBoolean("remindEvent", n.remindEvent)
             .putBoolean("dailyDigest", n.dailyDigest)

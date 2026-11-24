@@ -14,6 +14,8 @@
     <string name="process_text_label">加到 Goke 待办</string>
     <string name="widget_empty">(〃\'▽\'〃) 今天没有安排啦</string>
     <string name="channel_reminder">课程与待办提醒</string>
+    <string name="channel_exam">重要考试提醒</string>
+    <string name="channel_exam_desc">考试与重要考核提前强提醒</string>
     <string name="channel_parcel">快递取件</string>
     <string name="back">返回</string>
     <string name="cancel">取消</string>
@@ -316,6 +318,9 @@
     <string name="default_block_minutes">待办时间块默认时长</string>
     <string name="remind_courses">上课提醒</string>
     <string name="remind_courses_desc">给所有课程统一加提醒，单门课也可单独设置</string>
+    <string name="remind_exams">考试提醒</string>
+    <string name="remind_exams_desc">考试类课程与教务考试自动使用重要提醒通道</string>
+    <string name="remind_exam_title">考试 · %1$s</string>
     <string name="remind_tasks">待办提醒</string>
     <string name="remind_events">日程提醒</string>
     <string name="remind_course_text">%1$s · %2$s</string>
@@ -580,7 +585,7 @@
     <string name="quick_notif_text">点按新建一条待办</string>
     <string name="channel_quick">快速添加入口</string>
     <string name="auto_mute">上课自动静音</string>
-    <string name="auto_mute_desc">上课期间切入勿扰，下课恢复；首次开启需授予勿扰权限</string>
+    <string name="auto_mute_desc">普通课程自动震动，考试期间完全静音（无震动），结束后恢复；首次开启需授予勿扰权限</string>
     <string name="section_backup">自动备份</string>
     <string name="auto_backup">每天备份一次</string>
     <string name="auto_backup_desc">数据变化时自动导出完整备份（JSON）到应用目录 backup/，保留最近 %1$d 份</string>
@@ -1135,4 +1140,15 @@
     <string name="error_log_count">%1$d 条</string>
     <string name="error_log_empty">暂无异常记录</string>
     <string name="error_log_clear">清空记录</string>
+    <string name="course_kind_normal">普通课程</string>
+    <string name="course_kind_exam">考试</string>
+    <string name="course_exam_remind_hint">考试类型将使用重要提醒通道并默认开启强提醒</string>
+    <string name="course_exam_toggle_on">设为考试</string>
+    <string name="course_exam_toggle_off">取消考试</string>
+    <string name="course_upgraded_exam_toast">已保存备注并识别为考试类型</string>
+    <string name="course_quick_note_hint">快速记一条…</string>
+    <string name="course_quick_note_save">保存备注</string>
+    <string name="course_quick_note_saved">已保存课程备注</string>
+    <string name="course_notes_all">查看全部备注</string>
+    <string name="course_notes_collapse">收起全部备注</string>
 </resources>

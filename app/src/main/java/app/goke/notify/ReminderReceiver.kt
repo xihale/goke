@@ -12,15 +12,18 @@ class ReminderReceiver : BroadcastReceiver() {
         val title = intent.getStringExtra(EXTRA_TITLE) ?: return
         val text = intent.getStringExtra(EXTRA_TEXT).orEmpty()
         val id = intent.getIntExtra(EXTRA_ID, title.hashCode())
+        val important = intent.getBooleanExtra(EXTRA_IMPORTANT, false)
         Notifications.ensureChannels(context)
         Notifications.post(
-            context,
-            id,
-            Notifications.CHANNEL_REMINDER,
-            title,
-            text,
-            intent.getStringExtra(EXTRA_TASK_ID),
-            intent.getBooleanExtra(EXTRA_PERSISTENT, false),
+            ctx = context,
+            id = id,
+            channel = if (important) Notifications.CHANNEL_EXAM else Notifications.CHANNEL_REMINDER,
+            title = title,
+            text = text,
+            taskId = intent.getStringExtra(EXTRA_TASK_ID),
+            insistent = intent.getBooleanExtra(EXTRA_PERSISTENT, false),
+            important = important,
+            courseId = intent.getStringExtra(EXTRA_COURSE_ID),
         )
     }
 
@@ -29,6 +32,8 @@ class ReminderReceiver : BroadcastReceiver() {
         const val EXTRA_TEXT = "text"
         const val EXTRA_ID = "id"
         const val EXTRA_TASK_ID = "task_id"
+        const val EXTRA_COURSE_ID = "course_id"
         const val EXTRA_PERSISTENT = "persistent"
+        const val EXTRA_IMPORTANT = "important"
     }
 }

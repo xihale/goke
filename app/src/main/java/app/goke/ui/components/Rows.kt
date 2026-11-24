@@ -103,6 +103,13 @@ fun AgendaRow(
             val phase = CourseProgress.phase(o.start, o.end, now)
             val progress = CourseProgress.fraction(o.start, o.end, now)
             val roomText = ctx.formatRooms(o.room)
+            val tag =
+                when {
+                    o.course.isExam && o.rescheduled -> "${stringResource(R.string.kind_exam)} · ${stringResource(R.string.rescheduled)}"
+                    o.course.isExam -> stringResource(R.string.kind_exam)
+                    o.rescheduled -> stringResource(R.string.rescheduled)
+                    else -> null
+                }
             RowShell(
                 modifier = modifier,
                 time = o.start.hm(),
@@ -114,7 +121,7 @@ fun AgendaRow(
                 phase = phase,
                 progress = progress,
                 onClick = { onOpenCourse(o.course.id) },
-                tag = if (o.rescheduled) stringResource(R.string.rescheduled) else null,
+                tag = tag,
             )
         }
 

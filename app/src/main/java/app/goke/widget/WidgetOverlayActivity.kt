@@ -106,6 +106,7 @@ import app.goke.core.change.Change
 import app.goke.core.change.ChangeSet
 import app.goke.core.change.Edits
 import app.goke.core.model.Course
+import app.goke.core.model.CourseNotes
 import app.goke.core.model.Event
 import app.goke.core.model.Freq
 import app.goke.core.model.Recurrence
@@ -870,6 +871,14 @@ private fun OverlayCourseCard(
             snap.tasks.filter { !it.done && it.parentId == null && it.courseId == course.id }
         }
 
+    val week =
+        remember(cal, date) {
+            val targetDate = date ?: LocalDate.now()
+            cal?.weekOf(targetDate)?.takeIf { it > 0 }
+        }
+    val parsedNote = remember(course.note, week) { CourseNotes.parse(course.note, week) }
+    var showAllNotes by remember(course.id, week) { mutableStateOf(false) }
+
     Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier
@@ -886,6 +895,14 @@ private fun OverlayCourseCard(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+        if (course.isExam) {
+            Spacer(Modifier.width(8.dp))
+            Tag(
+                stringResource(R.string.kind_exam),
+                scheme.tertiaryContainer,
+                scheme.onTertiaryContainer,
+            )
+        }
     }
 
     Column(Modifier.padding(start = 20.dp, top = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -902,12 +919,37 @@ private fun OverlayCourseCard(
             )
         }
         if (course.note.isNotBlank()) {
+            val noteText =
+                if (showAllNotes) {
+                    course.note.trim()
+                } else {
+                    parsedNote.focusedNotes.joinToString("\n").ifBlank { course.note.trim() }
+                }
             Text(
-                course.note,
+                noteText,
                 style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
+                color = scheme.onSurface,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(scheme.surfaceContainerHighest.copy(alpha = 0.6f))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
             )
+            if (parsedNote.hasOtherWeeks) {
+                Text(
+                    stringResource(if (showAllNotes) R.string.course_notes_collapse else R.string.course_notes_all),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.primary,
+                    modifier =
+                        Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .mintClickable(pressedScale = 0.96f, role = Role.Button) {
+                                showAllNotes = !showAllNotes
+                            }.padding(horizontal = 4.dp, vertical = 8.dp),
+                )
+            }
         }
     }
 

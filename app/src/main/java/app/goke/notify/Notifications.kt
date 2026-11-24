@@ -20,6 +20,7 @@ import app.goke.R
 /** 通知渠道与发送。 */
 object Notifications {
     const val CHANNEL_REMINDER = "reminder"
+    const val CHANNEL_EXAM = "exam_reminder"
     const val CHANNEL_PARCEL = "parcel"
     const val CHANNEL_QUICK = "quickadd"
     const val CHANNEL_LAN_WEB = "lan_web"
@@ -31,6 +32,15 @@ object Notifications {
         val nm = ctx.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_REMINDER, ctx.getString(R.string.channel_reminder), NotificationManager.IMPORTANCE_HIGH),
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_EXAM, ctx.getString(R.string.channel_exam), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = ctx.getString(R.string.channel_exam_desc)
+                enableVibration(true)
+                enableLights(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setBypassDnd(true)
+            },
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_PARCEL, ctx.getString(R.string.channel_parcel), NotificationManager.IMPORTANCE_DEFAULT),
@@ -171,6 +181,8 @@ object Notifications {
         text: String,
         taskId: String? = null,
         insistent: Boolean = false,
+        important: Boolean = false,
+        courseId: String? = null,
     ) {
         if (!canPost(ctx)) return
         val open =
@@ -178,10 +190,10 @@ object Notifications {
                 ctx,
                 id,
                 (
-                    if (taskId != null) {
-                        Intent(Intent.ACTION_VIEW, DeepLinks.taskUri(taskId), ctx, MainActivity::class.java)
-                    } else {
-                        Intent(ctx, MainActivity::class.java)
+                    when {
+                        taskId != null -> Intent(Intent.ACTION_VIEW, DeepLinks.taskUri(taskId), ctx, MainActivity::class.java)
+                        courseId != null -> Intent(Intent.ACTION_VIEW, DeepLinks.courseUri(courseId), ctx, MainActivity::class.java)
+                        else -> Intent(ctx, MainActivity::class.java)
                     }
                 ).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
@@ -195,7 +207,13 @@ object Notifications {
                 .setStyle(NotificationCompat.BigTextStyle().bigText(text))
                 .setContentIntent(open)
                 .setAutoCancel(true)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setPriority(if (important) NotificationCompat.PRIORITY_MAX else NotificationCompat.PRIORITY_HIGH)
+                .apply {
+                    if (important) {
+                        setCategory(NotificationCompat.CATEGORY_ALARM)
+                        setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                    }
+                }
         if (taskId != null) {
             fun action(
                 op: String,
@@ -210,6 +228,7 @@ object Notifications {
                         .putExtra(ReminderReceiver.EXTRA_TITLE, title)
                         .putExtra(ReminderReceiver.EXTRA_TEXT, text)
                         .putExtra(ReminderReceiver.EXTRA_PERSISTENT, insistent)
+                        .putExtra(ReminderReceiver.EXTRA_IMPORTANT, important)
                 val pi = PendingIntent.getBroadcast(ctx, id, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
                 return NotificationCompat.Action.Builder(0, ctx.getString(label), pi).build()
             }

@@ -91,9 +91,14 @@ data class Course(
     override val deletedAt: Long? = null,
     override val userId: String? = null,
     val remindMinutesList: List<Int> = emptyList(),
+    val kind: EventKind = EventKind.NORMAL,
+    val remindPersistent: Boolean = false,
 ) : Record {
     val effectiveRemindMinutes: List<Int>
         get() = Reminders.normalize(remindMinutes, remindMinutesList)
+
+    val isExam: Boolean
+        get() = kind == EventKind.EXAM
 
     override fun withMeta(
         updatedAt: Long,
@@ -245,6 +250,9 @@ data class Task(
 ) : Record {
     val effectiveRemindMinutes: List<Int>
         get() = Reminders.normalize(remindMinutes, remindMinutesList)
+
+    val isExam: Boolean
+        get() = extra["kind"] == EventKind.EXAM.name || id.startsWith("jxfw-exam/") || id.startsWith("jxfw-course-exam/")
 
     override fun withMeta(
         updatedAt: Long,
