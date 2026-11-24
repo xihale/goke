@@ -182,6 +182,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 private val BaseTimeColW = 34.dp
 private val BaseRowH = 60.dp
@@ -195,9 +196,12 @@ private val MinLaneW = 30.dp
 private val PeekW = 4.dp
 private val PeekGap = 1.5.dp
 
+private val BlockCornerRadius = 12.dp
+private val BlockOuterInset = 1.5.dp
+private val NowBarOuterInset = 3.dp
 private val HeaderDayShape = RoundedCornerShape(14.dp)
-private val CourseBlockShape = RoundedCornerShape(12.dp)
-private val TaskBlockShape = RoundedCornerShape(12.dp)
+private val CourseBlockShape = RoundedCornerShape(BlockCornerRadius)
+private val TaskBlockShape = RoundedCornerShape(BlockCornerRadius)
 private val SheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 private val RoomSplitRegex = Regex("[,，/、;；\\s]+")
 
@@ -263,6 +267,58 @@ internal fun calcTimetableNowY(
         }
     }
     return null
+}
+
+internal data class NowBarBlock(
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float,
+    val cornerRadius: Float,
+    val stackedFront: Boolean = false,
+)
+
+/**
+ * 计算今日当前时间横条在纵坐标 [y] 处的起止横坐标：
+ * 空白区域维持列内默认起止 [defaultStartX]..[defaultEndX]；
+ * 若横条落入卡片上下圆角带内，则沿内缩 [edgeInset] 的同心圆角收窄端点，避免横条穿出圆角。
+ */
+internal fun calcTimetableNowBarSpan(
+    defaultStartX: Float,
+    defaultEndX: Float,
+    y: Float,
+    edgeInset: Float,
+    blocks: List<NowBarBlock>,
+): Pair<Float, Float> {
+    var leftBound: Float? = null
+    var rightBound: Float? = null
+    for (b in blocks) {
+        if (y < b.top || y > b.bottom) continue
+        val w = b.right - b.left
+        val h = b.bottom - b.top
+        if (w <= 0f || h <= 0f) continue
+        val r = minOf(b.cornerRadius, w * 0.5f, h * 0.5f)
+        val inset = edgeInset.coerceAtMost(r)
+        val rInner = (r - inset).coerceAtLeast(0f)
+        val dy =
+            when {
+                y < b.top + r -> b.top + r - y
+                y > b.bottom - r -> y - (b.bottom - r)
+                else -> 0f
+            }
+        val dxInner = if (dy < rInner) sqrt(rInner * rInner - dy * dy) else 0f
+        val innerLeft = b.left + r - dxInner
+        val innerRight = b.right - r + dxInner
+        if (b.left <= defaultStartX) {
+            leftBound = if (leftBound == null) innerLeft else minOf(leftBound, innerLeft)
+        }
+        if (b.right >= defaultEndX || b.stackedFront) {
+            rightBound = if (rightBound == null) innerRight else maxOf(rightBound, innerRight)
+        }
+    }
+    val startX = (leftBound?.let { maxOf(defaultStartX, it) } ?: defaultStartX).coerceAtMost(defaultEndX)
+    val endX = (rightBound?.let { minOf(defaultEndX, it) } ?: defaultEndX).coerceIn(startX, defaultEndX)
+    return startX to endX
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -816,7 +872,8 @@ private fun WeekGrid(
     onEmptySlotClick: (dow: Int, period: Int) -> Unit,
 ) {
     val ctx = LocalContext.current
-    val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.35f)
+    val gridDensity = LocalDensity.current
+    val fontScale = gridDensity.fontScale.coerceIn(1f, 1.35f)
     val rowH = BaseRowH * fontScale
     val timeColW = BaseTimeColW * fontScale
     val colW = (gridWidth - timeColW) / 7
@@ -1029,9 +1086,9 @@ private fun WeekGrid(
                             )
                         }
                         if (slotLayout.peeks.isNotEmpty()) {
-                            val peekCorner = CornerRadius(12.dp.toPx())
-                            val blockInsetPx = 1.5.dp.toPx()
-                            val cardW = (colW - 3.dp).toPx()
+                            val peekCorner = CornerRadius(BlockCornerRadius.toPx())
+                            val blockInsetPx = BlockOuterInset.toPx()
+                            val cardW = (colW - BlockOuterInset * 2).toPx()
                             val backOverlapOffset = 10.dp.toPx().coerceAtMost(cardW * 0.4f)
                             slotLayout.peeks.forEach { p ->
                                 val colLeft = (timeColW + colW * (p.day - 1)).toPx() + blockInsetPx
@@ -1168,6 +1225,54 @@ private fun WeekGrid(
                             null
                         }
                     }
+                val todayNowBlocks =
+                    remember(geoms, slotLayout, todayColIndex, timeColW, colW, gridDensity) {
+                        if (todayColIndex == null) {
+                            emptyList()
+                        } else {
+                            with(gridDensity) {
+                                val colLeftDp = timeColW + colW * (todayColIndex - 1)
+                                val cardW = colW - BlockOuterInset * 2
+                                val backOverlapOffset = 10.dp.coerceAtMost(cardW * 0.4f)
+                                val cornerPx = BlockCornerRadius.toPx()
+                                buildList {
+                                    val allBoxes = geoms.first + geoms.second.map { it.second }
+                                    allBoxes.forEachIndexed { idx, box ->
+                                        val slot = slotLayout.slots[idx]
+                                        if (box.day == todayColIndex && !slot.hidden) {
+                                            val (offsetX, blockW) = slotBlockSpan(colW, slot)
+                                            val left = colLeftDp + offsetX
+                                            add(
+                                                NowBarBlock(
+                                                    left = left.toPx(),
+                                                    top = box.top.toPx(),
+                                                    right = (left + blockW).toPx(),
+                                                    bottom = box.bottom.toPx(),
+                                                    cornerRadius = cornerPx,
+                                                    stackedFront = slot.stacked,
+                                                ),
+                                            )
+                                        }
+                                    }
+                                    slotLayout.peeks.forEach { p ->
+                                        if (p.day == todayColIndex) {
+                                            val left = colLeftDp + BlockOuterInset + backOverlapOffset
+                                            val w = (cardW - backOverlapOffset).coerceAtLeast(PeekW)
+                                            add(
+                                                NowBarBlock(
+                                                    left = left.toPx(),
+                                                    top = p.top.toPx(),
+                                                    right = (left + w).toPx(),
+                                                    bottom = p.bottom.toPx(),
+                                                    cornerRadius = cornerPx,
+                                                ),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 // 课程块
                 cells.forEachIndexed { ci, cell ->
                     val slot = slotLayout.slots[ci]
@@ -1175,14 +1280,7 @@ private fun WeekGrid(
                     val o = cell.occ
                     val top = periodTop(o.startPeriod.coerceAtMost(n), n) + 2.dp
                     val bottom = periodTop(o.endPeriod.coerceIn(o.startPeriod, n), n) + rowH - 2.dp
-                    val laneW = (colW - 3.dp) / slot.lanes
-                    // 块宽在这里算一次：传给 Modifier.width 和 CourseBlock 的 wide 判定（省掉每块一个子组合）
-                    val blockW =
-                        when {
-                            slot.lanes > 1 -> laneW - 2.dp
-                            slot.stacked -> laneW - PeekW - PeekGap
-                            else -> laneW
-                        }
+                    val (offsetX, blockW) = slotBlockSpan(colW, slot)
                     val isWide = blockW >= 64.dp
                     val phase =
                         when {
@@ -1221,7 +1319,7 @@ private fun WeekGrid(
                         courseTitleStyle,
                         if (isWide) courseRoomStyleWide else courseRoomStyleNarrow,
                         Modifier
-                            .absoluteOffset(timeColW + colW * (o.date.dayOfWeek.value - 1) + 1.5.dp + laneW * slot.lane, top)
+                            .absoluteOffset(timeColW + colW * (o.date.dayOfWeek.value - 1) + offsetX, top)
                             .width(blockW)
                             .height(bottom - top),
                         onClick = { if (slot.overlap > 1) onSlotClick(slotEntries[ci].orEmpty()) else onClick(cell) },
@@ -1234,7 +1332,7 @@ private fun WeekGrid(
                     if (slot.hidden) return@forEachIndexed
                     val t = b.task
                     val s = b.start
-                    val laneW = (colW - 3.dp) / slot.lanes
+                    val (offsetX, blockW) = slotBlockSpan(colW, slot)
                     val minutes = b.minutes
                     TaskBlock(
                         t,
@@ -1248,14 +1346,9 @@ private fun WeekGrid(
                         onCommit = { ns, nm -> onMoveTask(t, ns, nm) },
                         modifier =
                             Modifier
-                                .absoluteOffset(timeColW + colW * (s.dayOfWeek.value - 1) + 1.5.dp + laneW * slot.lane, tbox.top)
-                                .width(
-                                    when {
-                                        slot.lanes > 1 -> laneW - 2.dp
-                                        slot.stacked -> laneW - PeekW - PeekGap
-                                        else -> laneW
-                                    },
-                                ).height(tbox.bottom - tbox.top),
+                                .absoluteOffset(timeColW + colW * (s.dayOfWeek.value - 1) + offsetX, tbox.top)
+                                .width(blockW)
+                                .height(tbox.bottom - tbox.top),
                         onClick = { if (slot.overlap > 1) onSlotClick(slotEntries[cells.size + di].orEmpty()) else onOpenTask(t.id) },
                     )
                 }
@@ -1269,8 +1362,18 @@ private fun WeekGrid(
                                 val colLeft = (timeColW + colW * (todayColIndex - 1)).toPx()
                                 val colRight = (colLeft + colW.toPx()).coerceAtMost(size.width)
                                 val y = nowTimeY.toPx().coerceIn(0f, size.height)
-                                val barStartX = (colLeft + 3.dp.toPx()).coerceAtMost(colRight)
-                                val barEndX = (colRight - 3.dp.toPx()).coerceAtLeast(barStartX)
+                                val outerInset = NowBarOuterInset.toPx()
+                                val defaultStartX = (colLeft + outerInset).coerceAtMost(colRight)
+                                val defaultEndX = (colRight - outerInset).coerceAtLeast(defaultStartX)
+                                val edgeInsetPx = (NowBarOuterInset - BlockOuterInset).toPx()
+                                val (barStartX, barEndX) =
+                                    calcTimetableNowBarSpan(
+                                        defaultStartX = defaultStartX,
+                                        defaultEndX = defaultEndX,
+                                        y = y,
+                                        edgeInset = edgeInsetPx,
+                                        blocks = todayNowBlocks,
+                                    )
                                 drawLine(
                                     color = barColor,
                                     start = Offset(barStartX, y),
@@ -1353,6 +1456,21 @@ private class SlotLayout(
     /** 冲突簇的成员下标（只有 ≥2 条重叠的才收进来）。 */
     val groups: List<List<Int>>,
 )
+
+private fun slotBlockSpan(
+    colW: Dp,
+    slot: Slot,
+): Pair<Dp, Dp> {
+    val laneW = (colW - BlockOuterInset * 2) / slot.lanes
+    val offsetX = BlockOuterInset + laneW * slot.lane
+    val blockW =
+        when {
+            slot.lanes > 1 -> laneW - 2.dp
+            slot.stacked -> laneW - PeekW - PeekGap
+            else -> laneW
+        }
+    return offsetX to blockW
+}
 
 /**
  * 冲突摆放：按天把重叠的块聚成一簇。每道宽度够（≥ [MinLaneW]）就并排各占一道；
