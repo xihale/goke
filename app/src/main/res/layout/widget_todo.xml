@@ -66,12 +66,12 @@
         <ListView
             android:id="@+id/widget_list"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="10dp"
+            android:layout_marginStart="10dp"
             android:clipToPadding="false"
             android:divider="@null"
-            android:dividerHeight="4dp"
-            android:paddingEnd="10dp"
-            android:paddingStart="10dp" />
+            android:dividerHeight="4dp" />
 
         <TextView
             android:id="@+id/widget_empty"

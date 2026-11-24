@@ -45,6 +45,7 @@ import app.goke.widget.TodayWidgetService
 import app.goke.widget.TodoWidgetProvider
 import app.goke.widget.TodoWidgetService
 import app.goke.widget.WidgetKit
+import app.goke.widget.WidgetOverlayActivity
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -769,6 +770,67 @@ class WidgetsAndCalendarSyncTest {
             val nextAfterEnd = NextWidgetProvider.pickSummary(app, cleanSnap, st, finishedNow)
             assertEquals(todo.id, nextAfterEnd.taskId)
         }
+
+    @Test
+    fun widgetBlankAreasOpenCorrespondingTabAndListViewsWrapContent() {
+        val today = LocalDate.of(2026, 9, 14)
+        val now = today.atTime(9, 0)
+        val sem = TestUtilCompat.defaultSem()
+        val task =
+            Task(
+                id = Ids.next(),
+                title = "复习线性代数",
+                due = today.atTime(14, 0),
+                dueHasTime = true,
+            )
+        val snap = Snapshot(semesters = listOf(sem), tasks = listOf(task))
+        val st = Settings()
+
+        val listWidgets =
+            listOf(
+                Triple(TodayWidgetProvider.build(app, 41, snap, st, now), R.id.today_list, DeepLinks.todayUri()),
+                Triple(ScheduleWidgetProvider.build(app, 42, snap, st, now), R.id.sched_list, DeepLinks.timetableUri()),
+                Triple(TodoWidgetProvider.build(app, 43, now), R.id.widget_list, DeepLinks.todoUri()),
+                Triple(ParcelWidgetProvider.build(app, 44, now), R.id.parcel_list, DeepLinks.parcelUri()),
+            )
+        val shadowApp = org.robolectric.Shadows.shadowOf(app)
+        listWidgets.forEach { (rv, listId, expectedUri) ->
+            val host = FrameLayout(app)
+            val root = rv.apply(app, host)
+            val lv = root.findViewById<ListView>(listId)
+            assertEquals(ViewGroup.LayoutParams.WRAP_CONTENT, lv.layoutParams.height)
+            assertTrue(root.findViewById<View>(R.id.widget_root).performClick())
+            val started = shadowApp.nextStartedActivity
+            assertEquals(expectedUri, started?.data)
+        }
+
+        // Next widget: blank root opens Timetable, item body/time opens overlay
+        val nextHost = FrameLayout(app)
+        val nextRoot = NextWidgetProvider.build(app, snap, st, now).apply(app, nextHost)
+        assertTrue(nextRoot.findViewById<View>(R.id.widget_root).performClick())
+        assertEquals(DeepLinks.timetableUri(), shadowApp.nextStartedActivity?.data)
+
+        assertTrue(nextRoot.findViewById<View>(R.id.next_body).performClick())
+        assertEquals(
+            WidgetOverlayActivity::class.java.name,
+            shadowApp.nextStartedActivity?.component?.className,
+        )
+
+        // Next mini stack: blank root opens Timetable, card0 opens overlay
+        val miniHost = FrameLayout(app)
+        val miniRoot =
+            NextWidgetProvider
+                .build(app, snap, st, now, WidgetKit.SizeClass(ultraCompactWidth = true, compactHeight = false))
+                .apply(app, miniHost)
+        assertTrue(miniRoot.findViewById<View>(R.id.widget_root).performClick())
+        assertEquals(DeepLinks.timetableUri(), shadowApp.nextStartedActivity?.data)
+
+        assertTrue(miniRoot.findViewById<View>(R.id.next_card0).performClick())
+        assertEquals(
+            WidgetOverlayActivity::class.java.name,
+            shadowApp.nextStartedActivity?.component?.className,
+        )
+    }
 }
 
 private object TestUtilCompat {

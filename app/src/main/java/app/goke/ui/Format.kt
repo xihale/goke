@@ -62,3 +62,12 @@ fun Context.formatRooms(
         else -> getString(R.string.fmt_rooms_folded, parts.first(), parts.size)
     }
 }
+
+/** 详情卡完整地点展示：不折叠多教室，保留全部地点。 */
+fun formatAllRooms(room: String): String =
+    room
+        .split(ROOM_SPLIT_RE)
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .joinToString(" / ")
+        .ifEmpty { room.trim() }

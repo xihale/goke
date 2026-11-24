@@ -66,12 +66,12 @@
         <ListView
             android:id="@+id/parcel_list"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="10dp"
+            android:layout_marginStart="10dp"
             android:clipToPadding="false"
             android:divider="@null"
-            android:dividerHeight="5dp"
-            android:paddingEnd="10dp"
-            android:paddingStart="10dp" />
+            android:dividerHeight="5dp" />
 
         <TextView
             android:id="@+id/parcel_empty"

@@ -58,6 +58,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -108,6 +109,7 @@ import app.goke.core.change.Edits
 import app.goke.core.model.Course
 import app.goke.core.model.CourseNotes
 import app.goke.core.model.Event
+import app.goke.core.model.EventKind
 import app.goke.core.model.Freq
 import app.goke.core.model.Recurrence
 import app.goke.core.model.Snapshot
@@ -128,14 +130,15 @@ import app.goke.ui.components.Tag
 import app.goke.ui.components.mintClickable
 import app.goke.ui.components.mintPressScale
 import app.goke.ui.dueLabel
-import app.goke.ui.formatRooms
+import app.goke.ui.formatAllRooms
 import app.goke.ui.hm
 import app.goke.ui.icons.ContentCopy
 import app.goke.ui.icons.DeleteOutline
-import app.goke.ui.icons.Event
 import app.goke.ui.icons.Flag
 import app.goke.ui.icons.Inbox
+import app.goke.ui.icons.Notes
 import app.goke.ui.icons.OpenInFull
+import app.goke.ui.icons.Repeat
 import app.goke.ui.icons.Schedule
 import app.goke.ui.screens.QuickAddComposer
 import app.goke.ui.screens.QuickOverride
@@ -145,6 +148,7 @@ import app.goke.ui.screens.WhenPanel
 import app.goke.ui.screens.WhenPick
 import app.goke.ui.screens.buildQuickTasks
 import app.goke.ui.screens.freqLabel
+import app.goke.ui.screens.remindSummaryLabel
 import app.goke.ui.screens.tokenRanges
 import app.goke.ui.theme.GokeTheme
 import app.goke.ui.theme.MintTheme
@@ -862,7 +866,7 @@ private fun OverlayCourseCard(
         }
     val metaLine =
         listOfNotNull(
-            course.room.takeIf { it.isNotBlank() }?.let { ctx.formatRooms(it, maxInline = 4) },
+            course.room.takeIf { it.isNotBlank() }?.let(::formatAllRooms),
             course.teacher.takeIf { it.isNotBlank() },
             WeekSets.format(course.weeks).takeIf { it.isNotBlank() },
         ).joinToString(" · ")
@@ -1085,15 +1089,22 @@ private fun OverlayParcelCard(
         )
     }
 
+    val extraLocation = task.extra["location"]?.trim().orEmpty()
     Text(
         place,
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.Medium,
         color = scheme.onSurface,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
         modifier = Modifier.padding(top = 2.dp),
     )
+    if (extraLocation.isNotEmpty() && !place.contains(extraLocation)) {
+        Text(
+            extraLocation,
+            style = MaterialTheme.typography.bodySmall,
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
     if (due != null) {
         Text(
             due,
@@ -1104,11 +1115,9 @@ private fun OverlayParcelCard(
     }
     if (showNote) {
         Text(
-            task.note,
+            task.note.trim(),
             style = MaterialTheme.typography.bodySmall,
             color = scheme.onSurfaceVariant,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 8.dp),
         )
     }
@@ -1250,6 +1259,7 @@ private fun OverlayTaskCard(
                 ?: task.due?.let { WhenPick(it.toLocalDate(), if (task.dueHasTime) it.toLocalTime() else null) }
         }
     var title by remember(task.id) { mutableStateOf(task.title) }
+    var location by remember(task.id) { mutableStateOf(task.extra["location"].orEmpty()) }
     var note by remember(task.id) { mutableStateOf(task.note) }
     var priority by remember(task.id) { mutableIntStateOf(task.priority) }
     var listId by remember(task.id) { mutableStateOf(task.listId) }
@@ -1284,6 +1294,7 @@ private fun OverlayTaskCard(
             )
     val isDirty =
         title.trim() != task.title ||
+            location.trim() != task.extra["location"].orEmpty() ||
             note != task.note ||
             priority != task.priority ||
             listId != task.listId ||
@@ -1315,9 +1326,15 @@ private fun OverlayTaskCard(
                 dueAt = w.date.atTime(23, 59)
             }
         }
+        val nextExtra =
+            task.extra.toMutableMap().apply {
+                val loc = location.trim()
+                if (loc.isNotEmpty()) put("location", loc) else remove("location")
+            }
         return task.copy(
             title = title.trim(),
             note = note,
+            extra = nextExtra,
             priority = priority,
             listId = listId,
             done = done,
@@ -1363,14 +1380,30 @@ private fun OverlayTaskCard(
         onCommitEdit(updated, msg, closeAfter, thenOpenUri)
     }
 
-    LaunchedEffect(isDirty, title, note, priority, listId, done, whenPick, remindList, persistent, freq, interval, until, byDays, byMonths) {
+    LaunchedEffect(
+        isDirty,
+        title,
+        location,
+        note,
+        priority,
+        listId,
+        done,
+        whenPick,
+        remindList,
+        persistent,
+        freq,
+        interval,
+        until,
+        byDays,
+        byMonths,
+    ) {
         registerDismissHook {
             if (isDirty && title.trim().isNotEmpty()) saveAndMaybe(closeAfter = true) else onDismiss()
         }
     }
 
     val whenText =
-        remember(whenPick, freq, interval, until, byDays, byMonths, today) {
+        remember(whenPick, today) {
             val w = whenPick
             when {
                 w == null -> {
@@ -1398,8 +1431,14 @@ private fun OverlayTaskCard(
         } else {
             null
         }
-    val whenChipText =
-        listOfNotNull(whenText, freqShort).joinToString(" · ").ifEmpty { stringResource(R.string.detail_editor_pick_date) }
+    val extrasText =
+        listOfNotNull(
+            freqShort,
+            remindList.takeIf { it.isNotEmpty() }?.let { remindSummaryLabel(it) },
+        ).joinToString(" · ").takeIf { it.isNotEmpty() }
+    val whenPrimary = whenText ?: extrasText ?: stringResource(R.string.detail_editor_pick_date)
+    val whenSecondary = if (whenText != null) extrasText else null
+    val hasWhenInfo = whenText != null || extrasText != null
     val overdue =
         whenPick?.let { w ->
             !done &&
@@ -1416,7 +1455,8 @@ private fun OverlayTaskCard(
             1 -> stringResource(R.string.priority_1)
             else -> stringResource(R.string.label_priority)
         }
-    val prioFg = colors.priorityColor(priority) ?: scheme.onSurfaceVariant
+    val prioFlagTint = colors.priorityColor(priority)?.copy(alpha = 0.85f) ?: scheme.onSurfaceVariant.copy(alpha = 0.7f)
+    val prioTextColor = if (priority > 0) scheme.onSurface else scheme.onSurfaceVariant
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         MintCheck(
@@ -1461,74 +1501,207 @@ private fun OverlayTaskCard(
                 )
             }
         }
+        if (task.isExam) {
+            Spacer(Modifier.width(8.dp))
+            Tag(
+                stringResource(R.string.kind_exam),
+                scheme.tertiaryContainer,
+                scheme.onTertiaryContainer,
+            )
+        }
     }
 
-    Box(
+    Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(start = 48.dp, top = 2.dp),
+                .heightIn(min = 42.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .mintClickable(pressedScale = 0.98f, role = Role.Button) { whenPanel = true }
+                .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        BasicTextField(
-            value = note,
-            onValueChange = { note = it },
-            modifier = Modifier.fillMaxWidth(),
-            textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurfaceVariant),
-            cursorBrush = SolidColor(scheme.primary),
-            maxLines = 4,
-        )
-        if (note.isEmpty()) {
-            Text(
-                stringResource(R.string.label_note),
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
-                modifier = Modifier.clearAndSetSemantics {},
+        Box(modifier = Modifier.width(48.dp), contentAlignment = Alignment.Center) {
+            Icon(
+                Icons.Rounded.Schedule,
+                contentDescription = null,
+                tint =
+                    when {
+                        overdue -> scheme.error
+                        hasWhenInfo -> scheme.primary
+                        else -> scheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    },
+                modifier = Modifier.size(18.dp),
             )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                whenPrimary,
+                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                fontWeight = if (hasWhenInfo) FontWeight.Medium else FontWeight.Normal,
+                color =
+                    when {
+                        overdue -> scheme.error
+                        hasWhenInfo -> scheme.primary
+                        else -> scheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    },
+            )
+            if (whenSecondary != null) {
+                Text(
+                    whenSecondary,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                    color = scheme.onSurfaceVariant,
+                )
+            }
         }
     }
 
-    Spacer(Modifier.height(12.dp))
-
-    FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(start = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        OverlayActionChip(
-            icon = Icons.Rounded.Event,
-            label = whenChipText,
-            bg =
-                when {
-                    overdue -> scheme.errorContainer
-                    whenText != null || freq != null -> scheme.primaryContainer
-                    else -> scheme.surfaceContainerHighest
-                },
-            fg =
-                when {
-                    overdue -> scheme.error
-                    whenText != null || freq != null -> scheme.onPrimaryContainer
-                    else -> scheme.onSurfaceVariant
-                },
-            onClick = { whenPanel = true },
-        )
-        OverlayActionChip(
-            icon = Icons.Rounded.Flag,
-            label = prioText,
-            bg = scheme.surfaceContainerHighest,
-            fg = prioFg,
-            onClick = { toolPanel = if (toolPanel == OverlayQuickPanel.PRIORITY) null else OverlayQuickPanel.PRIORITY },
-        )
-        if (snap.lists.isNotEmpty()) {
-            OverlayActionChip(
-                icon = Icons.Rounded.Inbox,
-                label = listName?.let { "#$it" } ?: stringResource(R.string.label_list),
-                bg = if (listName != null) scheme.primaryContainer else scheme.surfaceContainerHighest,
-                fg = if (listName != null) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
-                onClick = { toolPanel = if (toolPanel == OverlayQuickPanel.LIST) null else OverlayQuickPanel.LIST },
+        Box(
+            modifier = Modifier.width(48.dp).padding(top = 2.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Rounded.Place,
+                contentDescription = null,
+                tint = if (location.isNotBlank()) scheme.onSurfaceVariant else scheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.size(18.dp),
             )
         }
+        val locationHint = stringResource(R.string.field_location)
+        Box(modifier = Modifier.weight(1f)) {
+            BasicTextField(
+                value = location,
+                onValueChange = { location = it },
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = locationHint },
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurface),
+                cursorBrush = SolidColor(scheme.primary),
+            )
+            if (location.isEmpty()) {
+                Text(
+                    locationHint,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.clearAndSetSemantics {},
+                )
+            }
+        }
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier.width(48.dp).padding(top = 2.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Rounded.Notes,
+                contentDescription = null,
+                tint = if (note.isNotBlank()) scheme.onSurfaceVariant else scheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        val noteHint = stringResource(R.string.label_note)
+        Box(modifier = Modifier.weight(1f)) {
+            BasicTextField(
+                value = note,
+                onValueChange = { note = it },
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = noteHint },
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurfaceVariant),
+                cursorBrush = SolidColor(scheme.primary),
+            )
+            if (note.isEmpty()) {
+                Text(
+                    noteHint,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.clearAndSetSemantics {},
+                )
+            }
+        }
+    }
+
+    Spacer(Modifier.height(6.dp))
+
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(start = 40.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (toolPanel == OverlayQuickPanel.PRIORITY) scheme.surfaceContainerHigh else Color.Transparent)
+                    .mintClickable(pressedScale = 0.96f, role = Role.Button) {
+                        toolPanel = if (toolPanel == OverlayQuickPanel.PRIORITY) null else OverlayQuickPanel.PRIORITY
+                    }.padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Icon(Icons.Rounded.Flag, null, modifier = Modifier.size(15.dp), tint = prioFlagTint)
+            Text(
+                prioText,
+                style = MaterialTheme.typography.labelMedium,
+                color = prioTextColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (snap.lists.isNotEmpty()) {
+            Row(
+                modifier =
+                    Modifier
+                        .heightIn(min = 36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .mintClickable(pressedScale = 0.96f, role = Role.Button) {
+                            toolPanel = if (toolPanel == OverlayQuickPanel.LIST) null else OverlayQuickPanel.LIST
+                        }.padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Icon(
+                    Icons.Rounded.Inbox,
+                    null,
+                    modifier = Modifier.size(16.dp),
+                    tint = if (listName != null) scheme.primary else scheme.onSurfaceVariant,
+                )
+                Text(
+                    listName?.let { "#$it" } ?: stringResource(R.string.label_list),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (listName != null) scheme.primary else scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         if (course != null) {
-            Tag(course.name, colors.bg(course.colorIndex), colors.fg(course.colorIndex))
+            Row(
+                modifier = Modifier.heightIn(min = 36.dp).padding(horizontal = 6.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(colors.fg(course.colorIndex)),
+                )
+                Text(
+                    course.name,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 
@@ -1712,36 +1885,6 @@ private fun OverlayIconBtn(
 }
 
 @Composable
-private fun OverlayActionChip(
-    icon: ImageVector,
-    label: String,
-    bg: Color,
-    fg: Color,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .heightIn(min = 36.dp)
-                .clip(CircleShape)
-                .background(bg)
-                .mintClickable(pressedScale = 0.96f, role = Role.Button, onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        Icon(icon, null, modifier = Modifier.size(15.dp), tint = fg)
-        Text(
-            label,
-            style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
-            color = fg,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
 private fun OverlayEventCard(
     event: Event,
     onOpenInApp: () -> Unit,
@@ -1750,17 +1893,28 @@ private fun OverlayEventCard(
     val scheme = MaterialTheme.colorScheme
     val colors = MintTheme.colors
     val today = remember { LocalDate.now() }
+    val startDay = event.start.toLocalDate()
     val timeText =
         if (event.allDay) {
             stringResource(R.string.all_day)
         } else {
             "${ctx.dueLabel(event.start, true, today)}–${event.end.hm()}"
         }
-    val metaLine =
-        listOfNotNull(
-            timeText,
-            event.location.takeIf { it.isNotBlank() }?.let { ctx.formatRooms(it, maxInline = 4) },
-        ).joinToString(" · ")
+    val locationText =
+        event.location
+            .takeIf { it.isNotBlank() }
+            ?.let(::formatAllRooms)
+            .orEmpty()
+    val repeatText =
+        event.recurrence?.let { r ->
+            freqLabel(r.freq, r.until, r.interval, r.byDays, startDay, byMonths = r.byMonths)
+        }
+    val kindLabel =
+        when (event.kind) {
+            EventKind.EXAM -> stringResource(R.string.kind_exam)
+            EventKind.COUNTDOWN -> stringResource(R.string.kind_countdown)
+            EventKind.NORMAL -> null
+        }
 
     Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
@@ -1776,20 +1930,63 @@ private fun OverlayEventCard(
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f),
         )
+        if (kindLabel != null) {
+            Spacer(Modifier.width(8.dp))
+            Tag(kindLabel, colors.bg(event.colorIndex), colors.fg(event.colorIndex))
+        }
     }
-    Text(
-        metaLine,
-        style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
-        color = scheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 20.dp, top = 4.dp),
-    )
-    if (event.note.isNotBlank()) {
-        Text(
-            event.note,
-            style = MaterialTheme.typography.bodySmall,
-            color = scheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 20.dp, top = 8.dp),
-        )
+    Column(
+        modifier = Modifier.padding(start = 20.dp, top = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Rounded.Schedule, null, modifier = Modifier.size(15.dp), tint = scheme.onSurfaceVariant)
+            Text(
+                timeText,
+                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                color = scheme.onSurfaceVariant,
+            )
+        }
+        if (locationText.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(
+                    Icons.Rounded.Place,
+                    null,
+                    modifier = Modifier.padding(top = 2.dp).size(15.dp),
+                    tint = scheme.onSurfaceVariant,
+                )
+                Text(
+                    locationText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = scheme.onSurface,
+                )
+            }
+        }
+        if (repeatText != null) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Rounded.Repeat, null, modifier = Modifier.size(15.dp), tint = scheme.onSurfaceVariant)
+                Text(
+                    repeatText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (event.note.isNotBlank()) {
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(
+                    Icons.Rounded.Notes,
+                    null,
+                    modifier = Modifier.padding(top = 2.dp).size(15.dp),
+                    tint = scheme.onSurfaceVariant,
+                )
+                Text(
+                    event.note.trim(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
     }
     Spacer(Modifier.height(16.dp))
     val openInteraction = remember { MutableInteractionSource() }

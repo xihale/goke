@@ -336,6 +336,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                             Summary(
                                 badge = ctx.getString(if (isOverdue) R.string.bucket_overdue else R.string.tab_todo),
                                 badgeTone = if (isOverdue) BadgeTone.OVERDUE else BadgeTone.MUTED,
+                                sub = WidgetKit.taskLocation(ctx, task),
                                 title = task.title,
                                 barColor = WidgetKit.priorityColor(ctx, task.priority, isOverdue),
                                 uri = DeepLinks.taskUri(task.id),
@@ -481,6 +482,10 @@ class NextWidgetProvider : AppWidgetProvider() {
             } else {
                 views.setViewVisibility(R.id.next_card1, View.GONE)
             }
+            views.setOnClickPendingIntent(
+                R.id.widget_root,
+                WidgetKit.mainActivityIntent(ctx, 53, DeepLinks.timetableUri()),
+            )
             return views
         }
 
@@ -572,7 +577,11 @@ class NextWidgetProvider : AppWidgetProvider() {
 
             val bodyPending = pendingIntentFor(ctx, s, 50)
             views.setOnClickPendingIntent(R.id.next_body, bodyPending)
-            views.setOnClickPendingIntent(R.id.widget_root, bodyPending)
+            views.setOnClickPendingIntent(R.id.next_time_col, bodyPending)
+            views.setOnClickPendingIntent(
+                R.id.widget_root,
+                WidgetKit.mainActivityIntent(ctx, 53, DeepLinks.timetableUri()),
+            )
             views.setOnClickPendingIntent(R.id.next_add, WidgetKit.overlayIntent(ctx, 52, WidgetOverlayActivity.addIntent(ctx)))
             return views
         }

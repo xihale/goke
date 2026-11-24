@@ -2253,3 +2253,35 @@ private val wifiIcon by gokeIcon("Rounded.Wifi") {
 
 val Icons.Rounded.Wifi: ImageVector
     get() = wifiIcon
+
+private val notesIcon by gokeIcon("Rounded.Notes") {
+    solidPath {
+        moveTo(4.0f, 8.0f)
+        horizontalLineTo(20.0f)
+        curveToRelative(0.55f, 0.0f, 1.0f, -0.45f, 1.0f, -1.0f)
+        reflectiveCurveToRelative(-0.45f, -1.0f, -1.0f, -1.0f)
+        horizontalLineTo(4.0f)
+        curveToRelative(-0.55f, 0.0f, -1.0f, 0.45f, -1.0f, 1.0f)
+        reflectiveCurveToRelative(0.45f, 1.0f, 1.0f, 1.0f)
+        close()
+        moveTo(4.0f, 13.0f)
+        horizontalLineTo(20.0f)
+        curveToRelative(0.55f, 0.0f, 1.0f, -0.45f, 1.0f, -1.0f)
+        reflectiveCurveToRelative(-0.45f, -1.0f, -1.0f, -1.0f)
+        horizontalLineTo(4.0f)
+        curveToRelative(-0.55f, 0.0f, -1.0f, 0.45f, -1.0f, 1.0f)
+        reflectiveCurveToRelative(0.45f, 1.0f, 1.0f, 1.0f)
+        close()
+        moveTo(4.0f, 18.0f)
+        horizontalLineTo(14.0f)
+        curveToRelative(0.55f, 0.0f, 1.0f, -0.45f, 1.0f, -1.0f)
+        reflectiveCurveToRelative(-0.45f, -1.0f, -1.0f, -1.0f)
+        horizontalLineTo(4.0f)
+        curveToRelative(-0.55f, 0.0f, -1.0f, 0.45f, -1.0f, 1.0f)
+        reflectiveCurveToRelative(0.45f, 1.0f, 1.0f, 1.0f)
+        close()
+    }
+}
+
+val Icons.Rounded.Notes: ImageVector
+    get() = notesIcon

@@ -292,7 +292,7 @@ class TodayWidgetProvider : AppWidgetProvider() {
                                 key = "t_${t.id}",
                                 time = if (item.hasTime) item.due.hm() else ctx.getString(R.string.tab_todo),
                                 title = cleanTitle,
-                                sub = null,
+                                sub = if (code != null) null else WidgetKit.taskLocation(ctx, t),
                                 code = code,
                                 colorIndex = -1,
                                 priority = t.priority,
