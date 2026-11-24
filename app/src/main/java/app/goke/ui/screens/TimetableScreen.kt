@@ -45,12 +45,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
@@ -75,6 +71,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -87,7 +84,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -107,7 +103,6 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -127,11 +122,9 @@ import app.goke.core.change.ChangeSet
 import app.goke.core.change.Edits
 import app.goke.core.change.apply
 import app.goke.core.change.repeatInstances
-import app.goke.core.jxfw.JxfwSync
 import app.goke.core.model.Course
 import app.goke.core.model.CourseException
 import app.goke.core.model.CourseNotes
-import app.goke.core.model.EventKind
 import app.goke.core.model.ExceptionType
 import app.goke.core.model.PeriodTime
 import app.goke.core.model.Semester
@@ -170,8 +163,6 @@ import app.goke.ui.dueLabel
 import app.goke.ui.formatRooms
 import app.goke.ui.hm
 import app.goke.ui.icons.CalendarViewWeek
-import app.goke.ui.icons.ExpandLess
-import app.goke.ui.icons.ExpandMore
 import app.goke.ui.icons.GridView
 import app.goke.ui.icons.Inventory2
 import app.goke.ui.liveSnapshot
@@ -597,6 +588,19 @@ fun TimetableScreen() {
                         }
                     }
                 // clipToBounds:视差 translationX 会把相邻页的内容拖进本页边缘(右侧露出邻页节次列),按页裁掉
+                val pickRescheduleTarget: (CourseOccurrence, Int, Int, Int?) -> Unit = { picking, dow, startPeriod, endPeriod ->
+                    val maxP = periods.size.coerceAtLeast(1)
+                    val sp = startPeriod.coerceIn(1, maxP)
+                    val ep =
+                        if (endPeriod != null) {
+                            endPeriod.coerceIn(sp, maxP)
+                        } else {
+                            val span = (picking.endPeriod - picking.startPeriod).coerceAtLeast(0)
+                            (sp + span).coerceAtMost(maxP)
+                        }
+                    reschedulePrefill = ReschedulePrefill(picking, week, dow.coerceIn(1, 7), sp, ep, picking.room)
+                    pickingRescheduleFor = null
+                }
                 Box(Modifier.clipToBounds()) {
                     WeekGrid(
                         sem,
@@ -618,20 +622,25 @@ fun TimetableScreen() {
                                 translationX = off * 12.dp.toPx()
                             },
                         periods = periods,
+                        reschedulePicking = pickingRescheduleFor != null,
                         onClick = { cell ->
                             val picking = pickingRescheduleFor
                             if (picking != null) {
-                                val span = (picking.endPeriod - picking.startPeriod).coerceAtLeast(0)
-                                val sp = cell.occ.startPeriod.coerceIn(1, periods.size)
-                                val ep = (sp + span).coerceAtMost(periods.size)
-                                reschedulePrefill = ReschedulePrefill(picking, week, cell.occ.date.dayOfWeek.value, sp, ep, picking.room)
-                                pickingRescheduleFor = null
+                                pickRescheduleTarget(picking, cell.occ.date.dayOfWeek.value, cell.occ.startPeriod, null)
                             } else {
                                 selected = cell
                             }
                         },
                         onOpenTask = { nav.openTask(it) },
-                        onSlotClick = { slotPick = it },
+                        onSlotClick = { entries ->
+                            val picking = pickingRescheduleFor
+                            val firstCell = entries.firstOrNull()?.cell
+                            if (picking != null && firstCell != null) {
+                                pickRescheduleTarget(picking, firstCell.occ.date.dayOfWeek.value, firstCell.occ.startPeriod, null)
+                            } else {
+                                slotPick = entries
+                            }
+                        },
                         onParcelClick = { d, list -> parcelSheet = d to list },
                         onMoveTask = { task, s, m ->
                             val end = s.plusMinutes(m.toLong())
@@ -646,28 +655,29 @@ fun TimetableScreen() {
                             )
                         },
                         onBoxSelect = { days, s, e ->
-                            val startP = periods.firstOrNull { it.index == s } ?: return@WeekGrid
-                            val endP = periods.firstOrNull { it.index == e } ?: return@WeekGrid
-                            val dates = days.map { cal.dateOf(week, it) }
-                            val first = dates.first()
-                            nav.push(
-                                Route.TodoEdit(
-                                    id = null,
-                                    date = first.toString(),
-                                    start = first.atTime(startP.start).toString(),
-                                    end = first.atTime(endP.end).toString(),
-                                    extraDates = dates.drop(1).joinToString(",") { it.toString() },
-                                ),
-                            )
+                            val picking = pickingRescheduleFor
+                            if (picking != null) {
+                                pickRescheduleTarget(picking, days.last, s, e)
+                            } else {
+                                val startP = periods.firstOrNull { it.index == s } ?: return@WeekGrid
+                                val endP = periods.firstOrNull { it.index == e } ?: return@WeekGrid
+                                val dates = days.map { cal.dateOf(week, it) }
+                                val first = dates.first()
+                                nav.push(
+                                    Route.TodoEdit(
+                                        id = null,
+                                        date = first.toString(),
+                                        start = first.atTime(startP.start).toString(),
+                                        end = first.atTime(endP.end).toString(),
+                                        extraDates = dates.drop(1).joinToString(",") { it.toString() },
+                                    ),
+                                )
+                            }
                         },
                         onEmptySlotClick = { dow, period ->
                             val picking = pickingRescheduleFor
                             if (picking != null) {
-                                val span = (picking.endPeriod - picking.startPeriod).coerceAtLeast(0)
-                                val sp = period.coerceIn(1, periods.size)
-                                val ep = (sp + span).coerceAtMost(periods.size)
-                                reschedulePrefill = ReschedulePrefill(picking, week, dow, sp, ep, picking.room)
-                                pickingRescheduleFor = null
+                                pickRescheduleTarget(picking, dow, period, null)
                             } else {
                                 nav.push(Route.CourseEdit(id = null, initialDow = dow, initialPeriod = period))
                             }
@@ -874,6 +884,7 @@ private fun WeekGrid(
     scroll: androidx.compose.foundation.ScrollState,
     modifier: Modifier = Modifier,
     periods: List<PeriodTime> = remember(sem) { sem.periods.sortedBy { it.index } },
+    reschedulePicking: Boolean = false,
     onClick: (TimetableCell) -> Unit,
     onOpenTask: (String) -> Unit,
     /** 叠放的正面卡被点开：同一时段的全部安排，由调用方列出让用户挑。 */
@@ -905,6 +916,8 @@ private fun WeekGrid(
     val color = scheme.onSurface
     val variantColor = scheme.onSurfaceVariant
     val typography = MaterialTheme.typography
+    val gridHaptics = LocalHapticFeedback.current
+    val currentReschedulePicking by rememberUpdatedState(reschedulePicking)
     val labelStyle = typography.labelMedium
     val bodySmall = typography.bodySmall
     val labelSmall = typography.labelSmall
@@ -1171,6 +1184,7 @@ private fun WeekGrid(
                                 if (off.x >= timeColPx) {
                                     anchorDay = colOf(off.x)
                                     anchorSlot = slotOf(off.y)
+                                    gridHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                     box = BoxSel(anchorDay, anchorDay, anchorSlot, anchorSlot)
                                 }
                             },
@@ -1179,7 +1193,14 @@ private fun WeekGrid(
                                 change.consume()
                                 val d = colOf(change.position.x)
                                 val e = slotOf(change.position.y).coerceIn(1, n)
-                                box = b.copy(day2 = d, first = minOf(anchorSlot, e), last = maxOf(anchorSlot, e))
+                                val first = minOf(anchorSlot, e)
+                                val last = maxOf(anchorSlot, e)
+                                box =
+                                    if (currentReschedulePicking) {
+                                        b.copy(day1 = d, day2 = d, first = first, last = last)
+                                    } else {
+                                        b.copy(day2 = d, first = first, last = last)
+                                    }
                             },
                             onDragEnd = {
                                 box?.let { b -> onBoxSelect(minOf(b.day1, b.day2)..maxOf(b.day1, b.day2), b.first, b.last) }
@@ -1335,7 +1356,7 @@ private fun WeekGrid(
                             .absoluteOffset(timeColW + colW * (o.date.dayOfWeek.value - 1) + offsetX, top)
                             .width(blockW)
                             .height(bottom - top),
-                        onClick = { if (slot.overlap > 1) onSlotClick(slotEntries[ci].orEmpty()) else onClick(cell) },
+                        onClick = { if (reschedulePicking || slot.overlap <= 1) onClick(cell) else onSlotClick(slotEntries[ci].orEmpty()) },
                     )
                 }
                 // 待办时间块:排入日历的按时长,普通待办画在截止时刻所在的节次;与课程或其它待办重叠时按上面的规则并排或叠放
@@ -1387,12 +1408,22 @@ private fun WeekGrid(
                         courseTitleStyle,
                         timeStyle,
                         onCommit = { ns, nm -> onMoveTask(t, ns, nm) },
+                        allowDrag = !reschedulePicking,
                         modifier =
                             Modifier
                                 .absoluteOffset(timeColW + colW * (s.dayOfWeek.value - 1) + offsetX, tbox.top)
                                 .width(blockW)
                                 .height(tbox.bottom - tbox.top),
-                        onClick = { if (slot.overlap > 1) onSlotClick(slotEntries[cells.size + di].orEmpty()) else onOpenTask(t.id) },
+                        onClick = {
+                            if (reschedulePicking) {
+                                val firstPeriod = Agenda.blockRows(periods, s.toLocalTime(), blockEnd.toLocalTime())?.first ?: 1
+                                onEmptySlotClick(s.dayOfWeek.value, firstPeriod)
+                            } else if (slot.overlap > 1) {
+                                onSlotClick(slotEntries[cells.size + di].orEmpty())
+                            } else {
+                                onOpenTask(t.id)
+                            }
+                        },
                     )
                 }
                 // 今日列当前时间横条：仅限定在「今天」列内，且与正在上课的块置灰前沿严丝合缝
@@ -1733,6 +1764,7 @@ internal fun TaskBlock(
     titleStyle: TextStyle,
     timeStyle: TextStyle,
     onCommit: (LocalDateTime, Int) -> Unit,
+    allowDrag: Boolean = true,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
@@ -1798,8 +1830,8 @@ internal fun TaskBlock(
             .then(layer)
             .mintPressable(pressedScale = if (active) 1f else 0.97f) { onClick() }
             .then(if (stateDesc != null) Modifier.semantics { stateDescription = stateDesc } else Modifier)
-            .pointerInput(dur, hPx) {
-                if (hPx <= 0f) return@pointerInput
+            .pointerInput(dur, hPx, allowDrag) {
+                if (!allowDrag || hPx <= 0f) return@pointerInput
                 val pxPerMinute = hPx / dur.toFloat()
                 val minResizePx = 48.dp.toPx()
                 val edgePx = minOf(16.dp.toPx(), hPx * 0.25f)
@@ -2188,11 +2220,9 @@ private fun CourseSheet(
     val activeCell = cell ?: if (activePrefill == null) lastCell else null
     val activeOcc = activePrefill?.occ ?: activeCell?.occ
 
-    var inReschedule by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
     LaunchedEffect(cell, prefill) {
         if (cell != null || prefill != null) {
-            inReschedule = prefill != null
             submitted = false
         }
     }
@@ -2202,9 +2232,6 @@ private fun CourseSheet(
         visible = visible,
         onDismiss = onDismiss,
     ) {
-        BackHandler(enabled = visible && LocalTabVisible.current.value && inReschedule && prefill == null) {
-            inReschedule = false
-        }
         if (activeOcc == null) return@InWindowSheet
         val ctx = LocalContext.current
         val nav = LocalNav.current
@@ -2222,7 +2249,7 @@ private fun CourseSheet(
         }
 
         AnimatedContent(
-            targetState = inReschedule,
+            targetState = activePrefill != null,
             transitionSpec = { fadeIn(fadeSpec) togetherWith fadeOut(fadeSpec) },
             label = "course-sheet-mode",
         ) { editing ->
@@ -2237,47 +2264,6 @@ private fun CourseSheet(
                         }
                     }
                 var showAllNotes by remember(liveCourse.id, o.week) { mutableStateOf(false) }
-                var quickNote by remember(liveCourse.id, o.week) { mutableStateOf("") }
-
-                fun commitQuickNote() {
-                    val trimmed = quickNote.trim()
-                    if (trimmed.isEmpty() || !canAct) return
-                    val targets =
-                        snap.courses
-                            .filter { it.deletedAt == null && it.semesterId == sem.id && it.name == liveCourse.name }
-                            .ifEmpty { listOf(liveCourse) }
-                    var upgraded = false
-                    val mods =
-                        targets.mapNotNull { target ->
-                            val nextNote = CourseNotes.appendUserNote(target.note, trimmed)
-                            val shouldUpgrade = !target.isExam && JxfwSync.shouldClassifyCourseAsExam(target.name, nextNote)
-                            if (shouldUpgrade) upgraded = true
-                            val updated =
-                                target.copy(
-                                    note = nextNote,
-                                    kind = if (shouldUpgrade) EventKind.EXAM else target.kind,
-                                    remindPersistent = if (shouldUpgrade) true else target.remindPersistent,
-                                )
-                            if (updated != target) Change.Modify(target, updated) else null
-                        }
-                    if (mods.isNotEmpty()) {
-                        val toast =
-                            ctx.getString(
-                                if (upgraded) R.string.course_upgraded_exam_toast else R.string.course_quick_note_saved,
-                            )
-                        actions.commit(
-                            ChangeSet(
-                                Ids.next(),
-                                ctx.getString(R.string.edit_course_desc, liveCourse.name),
-                                Source.MANUAL,
-                                System.currentTimeMillis(),
-                                mods,
-                            ),
-                            toast,
-                        )
-                    }
-                    quickNote = ""
-                }
 
                 Column(
                     Modifier
@@ -2400,59 +2386,8 @@ private fun CourseSheet(
                         }
                     }
                     if (activeCell.kind == CellKind.NORMAL) {
-                        val quickHint = stringResource(R.string.course_quick_note_hint)
-                        Row(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 6.dp)
-                                    .heightIn(min = 48.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f))
-                                    .padding(start = 14.dp, end = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            BasicTextField(
-                                value = quickNote,
-                                onValueChange = { quickNote = it },
-                                modifier =
-                                    Modifier
-                                        .weight(1f)
-                                        .padding(vertical = 10.dp)
-                                        .semantics { contentDescription = quickHint },
-                                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-                                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                                keyboardActions = KeyboardActions(onDone = { commitQuickNote() }),
-                                decorationBox = { inner ->
-                                    Box {
-                                        if (quickNote.isEmpty()) {
-                                            Text(
-                                                quickHint,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                            )
-                                        }
-                                        inner()
-                                    }
-                                },
-                            )
-                            if (quickNote.isNotBlank()) {
-                                IconButton(
-                                    enabled = canAct,
-                                    onClick = ::commitQuickNote,
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Check,
-                                        contentDescription = stringResource(R.string.course_quick_note_save),
-                                        tint = MaterialTheme.colorScheme.primary,
-                                    )
-                                }
-                            }
-                        }
                         Spacer(Modifier.height(10.dp))
-                        // 小屏放不下多个按钮就换行，主次不变：编辑 > 停课 > 调课 > 设为考试
+                        // 小屏放不下多个按钮就换行，主次不变：编辑 > 停课 > 调课
                         val secondaryColors =
                             ButtonDefaults.filledTonalButtonColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -2484,54 +2419,14 @@ private fun CourseSheet(
                             ) { Text(stringResource(R.string.cancel_class_this_week)) }
                             FilledTonalButton(
                                 enabled = canAct,
-                                onClick = { if (visible && !submitted) inReschedule = true },
+                                onClick = {
+                                    if (!visible || submitted) return@FilledTonalButton
+                                    submitted = true
+                                    onPickOnGrid(o)
+                                },
                                 modifier = Modifier.heightIn(min = 48.dp),
                                 colors = secondaryColors,
                             ) { Text(stringResource(R.string.reschedule)) }
-                            FilledTonalButton(
-                                enabled = canAct,
-                                onClick = {
-                                    if (!canAct) return@FilledTonalButton
-                                    val nextKind = if (liveCourse.isExam) EventKind.NORMAL else EventKind.EXAM
-                                    val targets =
-                                        snap.courses
-                                            .filter { it.deletedAt == null && it.semesterId == sem.id && it.name == liveCourse.name }
-                                            .ifEmpty { listOf(liveCourse) }
-                                    val mods =
-                                        targets.mapNotNull { target ->
-                                            val updated =
-                                                target.copy(
-                                                    kind = nextKind,
-                                                    remindPersistent = nextKind == EventKind.EXAM,
-                                                )
-                                            if (updated != target) Change.Modify(target, updated) else null
-                                        }
-                                    if (mods.isNotEmpty()) {
-                                        actions.commit(
-                                            ChangeSet(
-                                                Ids.next(),
-                                                ctx.getString(R.string.edit_course_desc, liveCourse.name),
-                                                Source.MANUAL,
-                                                System.currentTimeMillis(),
-                                                mods,
-                                            ),
-                                            ctx.getString(R.string.edit_course_desc, liveCourse.name),
-                                        )
-                                    }
-                                },
-                                modifier = Modifier.heightIn(min = 48.dp),
-                                colors =
-                                    if (liveCourse.isExam) {
-                                        ButtonDefaults.filledTonalButtonColors(
-                                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                                        )
-                                    } else {
-                                        secondaryColors
-                                    },
-                            ) {
-                                Text(stringResource(if (liveCourse.isExam) R.string.course_exam_toggle_off else R.string.course_exam_toggle_on))
-                            }
                         }
                         if (o.rescheduled) {
                             TextButton(
@@ -2563,9 +2458,8 @@ private fun CourseSheet(
                         }
                     }
                 }
-            } else {
+            } else if (activePrefill != null) {
                 ReschedulePanel(
-                    occ = o,
                     prefill = activePrefill,
                     sem = sem,
                     snap = snap,
@@ -2577,15 +2471,6 @@ private fun CourseSheet(
                         } else {
                             submitted = true
                             true
-                        }
-                    },
-                    onBack = {
-                        if (!visible || submitted) return@ReschedulePanel
-                        if (activePrefill != null) {
-                            submitted = true
-                            onDismiss()
-                        } else {
-                            inReschedule = false
                         }
                     },
                     onPickOnGrid = {
@@ -2605,39 +2490,28 @@ private fun CourseSheet(
 
 @Composable
 private fun ReschedulePanel(
-    occ: CourseOccurrence,
-    prefill: ReschedulePrefill?,
+    prefill: ReschedulePrefill,
     sem: Semester,
     snap: Snapshot,
     cal: SemesterCalendar,
     canAct: Boolean,
     trySubmit: () -> Boolean,
-    onBack: () -> Unit,
     onPickOnGrid: () -> Unit,
     onCommitted: (Int) -> Unit,
 ) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
     val scheme = MaterialTheme.colorScheme
+    val occ = prefill.occ
     val c = occ.course
     val origW = occ.originalWeek
     val periodCount = cal.periods.size.coerceAtLeast(1)
 
-    val seedKey = prefill ?: occ
-    var newWeek by remember(seedKey) { mutableIntStateOf((prefill?.week ?: occ.week).coerceIn(1, cal.totalWeeks)) }
-    var dow by remember(seedKey) { mutableIntStateOf((prefill?.dow ?: occ.date.dayOfWeek.value).coerceIn(1, 7)) }
-    var start by remember(seedKey) { mutableIntStateOf((prefill?.startPeriod ?: occ.startPeriod).coerceIn(1, periodCount)) }
-    var end by remember(seedKey) { mutableIntStateOf((prefill?.endPeriod ?: occ.endPeriod).coerceIn(start, periodCount)) }
-    var room by remember(seedKey) { mutableStateOf(prefill?.room ?: occ.room) }
-    var rangeAnchor by remember(seedKey) { mutableStateOf<Int?>(null) }
-
-    val nextOrPrevWeek =
-        when {
-            origW < cal.totalWeeks -> origW + 1
-            origW > 1 -> origW - 1
-            else -> origW
-        }
-    var weekPickerOpen by remember(seedKey) { mutableStateOf(newWeek != origW && newWeek != nextOrPrevWeek) }
+    val newWeek = prefill.week.coerceIn(1, cal.totalWeeks)
+    val dow = prefill.dow.coerceIn(1, 7)
+    val start = prefill.startPeriod.coerceIn(1, periodCount)
+    val end = prefill.endPeriod.coerceIn(start, periodCount)
+    var room by remember(prefill) { mutableStateOf(prefill.room) }
 
     val targetDate = remember(cal, newWeek, dow) { cal.dateOf(newWeek, dow) }
     val clockText =
@@ -2653,6 +2527,7 @@ private fun ReschedulePanel(
             stringResource(R.string.periods_range, start, end)
         }
     val periodSummary = listOfNotNull(periodSpanText, clockText.takeIf { it.isNotEmpty() }).joinToString(" · ")
+    val sameSlotAsOriginal = newWeek == origW && dow == c.dayOfWeek && start == c.startPeriod && end == c.endPeriod
     val clashes =
         remember(snap, sem, newWeek, dow, start, end, c.id, origW) {
             CourseExpander
@@ -2673,10 +2548,6 @@ private fun ReschedulePanel(
             .padding(bottom = 24.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back))
-            }
-            Spacer(Modifier.width(4.dp))
             Text(
                 stringResource(R.string.reschedule_title, c.name),
                 style = MaterialTheme.typography.titleMedium,
@@ -2692,228 +2563,44 @@ private fun ReschedulePanel(
             }
         }
 
-        Text(
-            stringResource(R.string.reschedule_summary_line, newWeek, ctx.weekdayFull(dow), ctx.monthDay(targetDate)),
-            style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
-            color = scheme.primary,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(start = 6.dp, top = 2.dp, bottom = 10.dp),
-        )
-
-        // 周次：原周 / 邻周快捷选择 + 展开 5 列周次网格
-        Text(
-            stringResource(R.string.week_label),
-            style = MaterialTheme.typography.labelMedium,
-            color = scheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 2.dp, bottom = 6.dp),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            RescheduleWeekChip(
-                label = stringResource(R.string.reschedule_orig_week_chip, origW),
-                selected = newWeek == origW && !weekPickerOpen,
-                onClick = {
-                    newWeek = origW
-                    weekPickerOpen = false
-                },
-                modifier = Modifier.weight(1f),
-            )
-            if (nextOrPrevWeek != origW) {
-                val adjLabel =
-                    if (nextOrPrevWeek > origW) {
-                        stringResource(R.string.reschedule_next_week_chip, nextOrPrevWeek)
-                    } else {
-                        stringResource(R.string.reschedule_prev_week_chip, nextOrPrevWeek)
-                    }
-                RescheduleWeekChip(
-                    label = adjLabel,
-                    selected = newWeek == nextOrPrevWeek && !weekPickerOpen,
-                    onClick = {
-                        newWeek = nextOrPrevWeek
-                        weekPickerOpen = false
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            val customSelected = weekPickerOpen || (newWeek != origW && newWeek != nextOrPrevWeek)
-            Row(
-                Modifier
-                    .height(40.dp)
-                    .clip(CircleShape)
-                    .background(if (customSelected) scheme.primaryContainer else scheme.surfaceContainerHighest)
-                    .mintClickable(pressedScale = 0.96f, role = Role.Button, selected = customSelected) {
-                        weekPickerOpen = !weekPickerOpen
-                    }.padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(
-                    if (newWeek != origW && newWeek != nextOrPrevWeek) {
-                        stringResource(R.string.week_n, newWeek)
-                    } else {
-                        stringResource(R.string.reschedule_other_week)
-                    },
-                    style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
-                    color = if (customSelected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
-                    fontWeight = if (customSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 1,
-                )
-                Icon(
-                    if (weekPickerOpen) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                    contentDescription = null,
-                    tint = if (customSelected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-        }
-        AnimatedVisibility(
-            visible = weekPickerOpen,
-            enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-            exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(scheme.surfaceContainerLow)
+                .mintClickable(pressedScale = 0.99f, role = Role.Button, onClick = onPickOnGrid)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            val cols = 5
-            val rows = (cal.totalWeeks + cols - 1) / cols
-            Column(
-                Modifier.padding(top = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                for (r in 0 until rows) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (col in 0 until cols) {
-                            val w = r * cols + col + 1
-                            if (w <= cal.totalWeeks) {
-                                val on = w == newWeek
-                                Box(
-                                    Modifier
-                                        .weight(1f)
-                                        .height(38.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (on) scheme.primary else scheme.surfaceContainerHighest)
-                                        .mintClickable(pressedScale = 0.96f, role = Role.RadioButton, selected = on) {
-                                            newWeek = w
-                                        },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        "$w",
-                                        style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
-                                        color = if (on) scheme.onPrimary else scheme.onSurfaceVariant,
-                                        fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                                    )
-                                }
-                            } else {
-                                Spacer(Modifier.weight(1f))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 星期
-        Text(
-            stringResource(R.string.weekday_label),
-            style = MaterialTheme.typography.labelMedium,
-            color = scheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 2.dp, top = 12.dp, bottom = 6.dp),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (d in 1..7) {
-                val on = dow == d
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .height(40.dp)
-                        .clip(CircleShape)
-                        .background(if (on) scheme.primaryContainer else scheme.surfaceContainerHighest)
-                        .mintClickable(pressedScale = 0.96f, role = Role.RadioButton, selected = on) {
-                            dow = d
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        ctx.weekdayShort(d),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (on) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
-                        fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                    )
-                }
-            }
-        }
-
-        // 节次区间（与 SlotEditorSheet 同款交互：第 1 下定起点，第 2 下拉成区间）
-        Row(Modifier.padding(top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                stringResource(R.string.field_periods),
-                style = MaterialTheme.typography.labelMedium,
-                color = scheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f).padding(start = 2.dp),
-            )
-            Text(
-                if (rangeAnchor != null) stringResource(R.string.course_period_range_hint) else periodSummary,
-                style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                stringResource(R.string.reschedule_summary_line, newWeek, ctx.weekdayFull(dow), ctx.monthDay(targetDate)),
+                style = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum"),
                 color = scheme.primary,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(end = 2.dp),
+                fontWeight = FontWeight.SemiBold,
             )
-        }
-        val pCols = 6
-        val pRows = (periodCount + pCols - 1) / pCols
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (r in 0 until pRows) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (col in 0 until pCols) {
-                        val p = r * pCols + col + 1
-                        if (p <= periodCount) {
-                            val inRange = p in start..end
-                            val isEndpoint = p == start || p == end
-                            val bg =
-                                when {
-                                    isEndpoint -> scheme.primary
-                                    inRange -> scheme.primaryContainer
-                                    else -> scheme.surfaceContainerHighest
-                                }
-                            val fg =
-                                when {
-                                    isEndpoint -> scheme.onPrimary
-                                    inRange -> scheme.onPrimaryContainer
-                                    else -> scheme.onSurfaceVariant
-                                }
-                            Box(
-                                Modifier
-                                    .weight(1f)
-                                    .height(40.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(bg)
-                                    .mintClickable(pressedScale = 0.96f, role = Role.Button, selected = inRange) {
-                                        val anchor = rangeAnchor
-                                        if (anchor == null) {
-                                            rangeAnchor = p
-                                            start = p
-                                            end = p
-                                        } else {
-                                            rangeAnchor = null
-                                            start = minOf(anchor, p)
-                                            end = maxOf(anchor, p)
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    "$p",
-                                    style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
-                                    color = fg,
-                                    fontWeight = if (inRange) FontWeight.SemiBold else FontWeight.Normal,
-                                )
-                            }
-                        } else {
-                            Spacer(Modifier.weight(1f))
-                        }
+            Text(
+                periodSummary,
+                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                color = scheme.onSurface,
+            )
+            if (!sameSlotAsOriginal) {
+                val origDow = ctx.getString(R.string.weekday_prefix, ctx.weekdayShort(c.dayOfWeek))
+                val origHint =
+                    if (c.startPeriod == c.endPeriod) {
+                        stringResource(R.string.reschedule_from_hint_single, origW, origDow, c.startPeriod)
+                    } else {
+                        stringResource(R.string.reschedule_from_hint, origW, origDow, c.startPeriod, c.endPeriod)
                     }
-                }
+                Text(
+                    origHint,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
         TonalField(
             label = stringResource(R.string.label_room),
             value = room,
@@ -2948,12 +2635,7 @@ private fun ReschedulePanel(
                 if (!trySubmit()) return@Button
                 val trimmedRoom = room.trim()
                 val old = snap.exceptions.firstOrNull { it.deletedAt == null && it.courseId == c.id && it.week == origW }
-                val sameAsOriginal =
-                    newWeek == origW &&
-                        dow == c.dayOfWeek &&
-                        start == c.startPeriod &&
-                        end == c.endPeriod &&
-                        trimmedRoom == c.room
+                val sameAsOriginal = sameSlotAsOriginal && trimmedRoom == c.room
                 if (sameAsOriginal) {
                     if (old != null) {
                         actions.commit(
@@ -2995,34 +2677,6 @@ private fun ReschedulePanel(
         ) {
             Text(stringResource(R.string.reschedule_confirm))
         }
-    }
-}
-
-@Composable
-private fun RescheduleWeekChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Box(
-        modifier
-            .height(40.dp)
-            .clip(CircleShape)
-            .background(if (selected) scheme.primaryContainer else scheme.surfaceContainerHighest)
-            .mintClickable(pressedScale = 0.96f, role = Role.RadioButton, selected = selected, onClick = onClick)
-            .padding(horizontal = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
-            color = if (selected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 

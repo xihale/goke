@@ -1035,12 +1035,8 @@
     <string name="me_hub_bound_id">学号 %1$s</string>
     <string name="lan_web_usb_toggle">校园网隔离？使用 USB 连接电脑</string>
     <!-- Deep Flow UX Polish: Reschedule & Course Exceptions -->
-    <string name="reschedule_pick_on_grid">课表选位</string>
-    <string name="reschedule_pick_banner">正在为「%1$s」选新时段，翻周并点击课表格子</string>
-    <string name="reschedule_orig_week_chip">原周（第%1$d周）</string>
-    <string name="reschedule_next_week_chip">下周（第%1$d周）</string>
-    <string name="reschedule_prev_week_chip">上周（第%1$d周）</string>
-    <string name="reschedule_other_week">选周次</string>
+    <string name="reschedule_pick_on_grid">重选时段</string>
+    <string name="reschedule_pick_banner">点按或长按拖动格子，为「%1$s」选新时段</string>
     <string name="reschedule_summary_line">第 %1$d 周 %2$s · %3$s</string>
     <string name="reschedule_from_hint">原第 %1$d 周 %2$s 第 %3$d–%4$d 节调至此处</string>
     <string name="reschedule_from_hint_single">原第 %1$d 周 %2$s 第 %3$d 节调至此处</string>
@@ -1221,12 +1217,6 @@
     <string name="course_kind_normal">普通课程</string>
     <string name="course_kind_exam">考试</string>
     <string name="course_exam_remind_hint">考试类型将使用重要提醒通道并默认开启强提醒</string>
-    <string name="course_exam_toggle_on">设为考试</string>
-    <string name="course_exam_toggle_off">取消考试</string>
-    <string name="course_upgraded_exam_toast">已保存备注并识别为考试类型</string>
-    <string name="course_quick_note_hint">快速记一条…</string>
-    <string name="course_quick_note_save">保存备注</string>
-    <string name="course_quick_note_saved">已保存课程备注</string>
     <string name="course_notes_all">查看全部备注</string>
     <string name="course_notes_collapse">收起全部备注</string>
 </resources>

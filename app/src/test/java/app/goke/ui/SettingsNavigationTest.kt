@@ -22,6 +22,14 @@ import androidx.test.core.app.ApplicationProvider
 import app.goke.GokeApp
 import app.goke.R
 import app.goke.SmokeTestApp
+import app.goke.core.change.Change
+import app.goke.core.change.ChangeSet
+import app.goke.core.model.Course
+import app.goke.core.model.ExceptionType
+import app.goke.core.model.Source
+import app.goke.core.time.SemesterCalendar
+import app.goke.core.time.WeekSets
+import app.goke.core.util.Ids
 import app.goke.ui.theme.GokeTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -31,6 +39,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.LocalDate
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi", application = SmokeTestApp::class)
@@ -248,6 +257,151 @@ class SettingsNavigationTest {
         }
         rule.waitForIdle()
         assertEquals(0, rule.onAllNodesWithContentDescription(app.getString(R.string.back)).fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithText(app.getString(R.string.parcel_enable)).fetchSemanticsNodes().size)
         rule.onNodeWithText(app.getString(R.string.parcel_title)).assertIsDisplayed()
+    }
+
+    @Test
+    fun courseSheetOmitsQuickNoteAndExamToggleAndCourseEditExitsAfterCancelledBack() {
+        val sem = app.repo.snapshot.value.currentSemester!!
+        val today = LocalDate.now()
+        val week = SemesterCalendar(sem).weekOf(today).coerceIn(1, sem.totalWeeks)
+        val course =
+            Course(
+                id = Ids.next(),
+                semesterId = sem.id,
+                name = "软件工程导论",
+                teacher = "张老师",
+                room = "教1-202",
+                dayOfWeek = today.dayOfWeek.value,
+                startPeriod = 1,
+                endPeriod = 2,
+                weeks = WeekSets.all(sem.totalWeeks) + week,
+                source = Source.MANUAL,
+            )
+        runBlocking {
+            app.repo.commit(ChangeSet(Ids.next(), "seed-course", Source.MANUAL, System.currentTimeMillis(), listOf(Change.Add(course))))
+        }
+
+        rule.setContent {
+            val st by app.settings.flow.collectAsState()
+            GokeTheme(st) {
+                GokeRoot(app, null, initialTab = Tab.TIMETABLE) {}
+            }
+        }
+        rule.waitForIdle()
+
+        rule.onAllNodesWithText(course.name)[0].performClick()
+        rule.waitForIdle()
+
+        // 快捷预览抽屉不再包含「快速记一条…」与「设为考试」按钮
+        rule.onNodeWithText(app.getString(R.string.edit)).assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithText("设为考试").fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithText("快速记一条…").fetchSemanticsNodes().size)
+
+        // 进入课程编辑页
+        rule.onNodeWithText(app.getString(R.string.edit)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription(app.getString(R.string.back)).assertIsDisplayed()
+
+        // 先取消一次预测性返回，再正常返回，必须顺利退出回到课表
+        rule.runOnUiThread {
+            val d = rule.activity.onBackPressedDispatcher
+            d.dispatchOnBackStarted(BackEventCompat(0f, 100f, 0.0f, BackEventCompat.EDGE_LEFT))
+            d.dispatchOnBackProgressed(BackEventCompat(60f, 100f, 0.3f, BackEventCompat.EDGE_LEFT))
+            d.dispatchOnBackCancelled()
+        }
+        rule.waitForIdle()
+
+        rule.runOnUiThread {
+            val d = rule.activity.onBackPressedDispatcher
+            d.dispatchOnBackStarted(BackEventCompat(0f, 100f, 0.0f, BackEventCompat.EDGE_LEFT))
+            d.dispatchOnBackProgressed(BackEventCompat(120f, 100f, 0.7f, BackEventCompat.EDGE_LEFT))
+            d.onBackPressed()
+        }
+        rule.waitForIdle()
+        assertEquals(0, rule.onAllNodesWithContentDescription(app.getString(R.string.back)).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun rescheduleEntersGridPickDirectlyAndCommitsTargetSlot() {
+        val sem = app.repo.snapshot.value.currentSemester!!
+        val today = LocalDate.now()
+        val week = SemesterCalendar(sem).weekOf(today).coerceIn(1, sem.totalWeeks)
+        val sourceDow = if (today.dayOfWeek.value <= 5) today.dayOfWeek.value else 1
+        val targetDow = if (sourceDow < 5) sourceDow + 1 else 2
+        val courseA =
+            Course(
+                id = Ids.next(),
+                semesterId = sem.id,
+                name = "线性代数",
+                room = "教2-101",
+                dayOfWeek = sourceDow,
+                startPeriod = 1,
+                endPeriod = 2,
+                weeks = setOf(week),
+                source = Source.MANUAL,
+            )
+        val courseB =
+            Course(
+                id = Ids.next(),
+                semesterId = sem.id,
+                name = "大学物理",
+                room = "教3-301",
+                dayOfWeek = targetDow,
+                startPeriod = 3,
+                endPeriod = 4,
+                weeks = setOf(week),
+                source = Source.MANUAL,
+            )
+        runBlocking {
+            app.repo.commit(
+                ChangeSet(
+                    Ids.next(),
+                    "seed-reschedule-courses",
+                    Source.MANUAL,
+                    System.currentTimeMillis(),
+                    listOf(Change.Add(courseA), Change.Add(courseB)),
+                ),
+            )
+        }
+
+        rule.setContent {
+            val st by app.settings.flow.collectAsState()
+            GokeTheme(st) {
+                GokeRoot(app, null, initialTab = Tab.TIMETABLE) {}
+            }
+        }
+        rule.waitForIdle()
+
+        // 1. 打开课程详情并点「调课」：应直接进入课表选位横幅模式，而非弹繁琐周/节网格弹窗
+        rule.onAllNodesWithText(courseA.name)[0].performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(R.string.reschedule)).performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithText(app.getString(R.string.reschedule_pick_banner, courseA.name)).assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithText(app.getString(R.string.reschedule_confirm)).fetchSemanticsNodes().size)
+
+        // 2. 直接在课表网格上点选目标时段所在的格子（此处用同周另一个课程格子模拟选定目标位置）
+        rule.onAllNodesWithText(courseB.name)[0].performClick()
+        rule.waitForIdle()
+
+        // 3. 弹出精简确认框，含重选入口、冲突提示与确认调课按钮
+        assertEquals(0, rule.onAllNodesWithText(app.getString(R.string.reschedule_pick_banner, courseA.name)).fetchSemanticsNodes().size)
+        rule.onNodeWithText(app.getString(R.string.reschedule_title, courseA.name)).assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.reschedule_pick_on_grid)).assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.conflict_title)).assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.reschedule_confirm)).performClick()
+        rule.waitForIdle()
+
+        val saved =
+            app.repo.snapshot.value.exceptions
+                .firstOrNull { it.deletedAt == null && it.courseId == courseA.id }
+        assertEquals(ExceptionType.RESCHEDULE, saved?.type)
+        assertEquals(week, saved?.newWeek)
+        assertEquals(targetDow, saved?.newDayOfWeek)
+        assertEquals(3, saved?.newStartPeriod)
+        assertEquals(4, saved?.newEndPeriod)
     }
 }
