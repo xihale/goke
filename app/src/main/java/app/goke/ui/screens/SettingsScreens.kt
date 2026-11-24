@@ -1199,7 +1199,8 @@ fun AboutScreen(onBack: () -> Unit) {
             FormSection(title = stringResource(R.string.about_license_section)) {
                 NavRow(
                     title = stringResource(R.string.about_license_title),
-                    trailing = "AGPL-3.0",
+                    subtitle = stringResource(R.string.about_license_desc),
+                    trailing = "Goke-NC-SA-1.0",
                     onClick = { showLicenseDialog = true },
                 )
             }
@@ -1337,9 +1338,9 @@ private val OSS_LICENSES =
     listOf(
         OssLicenseEntry(
             nameRes = R.string.lic_app_name,
-            license = "AGPL-3.0",
+            license = "Goke-NC-SA-1.0",
             url = "github.com/xihale/goke",
-            textRes = R.raw.license_agpl_3,
+            textRes = R.raw.license_goke_nc_sa_1,
         ),
         OssLicenseEntry(
             nameRes = R.string.lic_jetpack_name,

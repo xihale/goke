@@ -1,0 +1,195 @@
+Goke Noncommercial Share-Alike License 1.0 (Goke-NC-SA-1.0)
+Adapted from PolyForm Noncommercial License 1.0.0
+
+Copyright (c) 2025-2026 xihale (https://github.com/xihale/goke)
+Required Notice: Copyright (c) xihale — Goke (https://github.com/xihale/goke)
+
+Notice on Adaptation:
+This license is adapted from the PolyForm Noncommercial License 1.0.0
+(https://polyformproject.org/licenses/noncommercial/1.0.0), extended with
+explicit prohibitions on commercial activities for both the software itself
+and derivative suites, as well as Share-Alike and Source-Availability
+obligations. Because this document modifies and adds terms beyond the
+standard PolyForm text, it is not an unmodified PolyForm license and is not
+an OSI-approved Open Source license.
+
+================================================================================
+
+1. Acceptance
+
+In order to get any license under these terms, you must agree to them as both
+strict obligations and conditions to all your licenses.
+
+2. Copyright License
+
+The licensor grants you a copyright license to use the software for any
+permitted purpose.
+
+3. Distribution License and Network Use
+
+The licensor grants you an additional copyright license to distribute copies
+of the software and to make the software accessible to others over a computer
+network, strictly for a permitted purpose, provided that you comply with all
+conditions of Sections 4, 5, and 6.
+
+4. Changes, Derivative Suites, and Share-Alike Source Availability
+
+The licensor grants you an additional copyright license to make changes and
+new works based on the software—including derivative suites, forks, modified
+builds, plugins, wrappers, companion tools, and bundled distributions—strictly
+for a permitted purpose, and conditioned upon all of the following:
+
+  a) Share-Alike: Any modified version, new work, or derivative suite that you
+     distribute or make publicly accessible (including over a network) must be
+     licensed as a whole under this exact same License (Goke-NC-SA-1.0). You
+     may not add commercial permissions or remove, weaken, or bypass any
+     noncommercial or source-availability restriction.
+
+  b) Corresponding Source Availability: If you distribute any binary, build,
+     package, container image, or derivative suite, or make any modified or
+     unmodified version accessible to external users over a network, you must
+     simultaneously make the complete corresponding source code (including all
+     modifications, build instructions, and configuration scripts) publicly and
+     freely available to every recipient and network user without charge.
+
+  c) Modification Notices: You must retain all original attribution and
+     clearly state in modified files and documentation that you changed the
+     software and the date of your changes.
+
+5. Strict Prohibition of Commercial Activities (Software and Derivative Suites)
+
+No license is granted under these terms for any commercial activity using
+either the software itself or any modified version, fork, plugin, bundle,
+service, or derivative suite based on the software. Without limitation, the
+following activities are strictly prohibited unless you obtain a separate
+written commercial license signed by the licensor:
+
+  a) Commercial Distribution and Bundling: Selling, charging fees for,
+     monetizing downloads of, offering paid app-store or package listings for,
+     selling pre-installed hardware/images containing, or bundling the
+     software or any derivative suite with any commercial product or service.
+
+  b) Commercial Consulting and Paid Services: Providing paid consulting, paid
+     deployment, paid installation, paid customization, paid integration, paid
+     technical support, or paid training services based on or centered around
+     the software or any derivative suite.
+
+  c) Advertising and Monetization: Injecting, displaying, or operating any
+     advertisements, ad networks, sponsored placements, affiliate or referral
+     links, paywalls, paid memberships, paid feature unlocks, or user-data /
+     traffic monetization in or alongside the software, its clients, servers,
+     web interfaces, landing pages, distribution channels, or any derivative
+     suite.
+
+  d) Commercial Hosting and Business Operations: Operating the software or any
+     derivative suite as a paid or commercial SaaS/hosted service, or using it
+     for commercial enterprise operations or revenue-generating activities.
+
+6. Notices
+
+You must ensure that anyone who gets a copy of any part of the software or any
+derivative suite from you also gets a copy of these terms, together with the
+full text of all lines above starting with "Required Notice:" and all original
+copyright notices. You may not imply endorsement by or official affiliation
+with the licensor without prior written consent.
+
+7. Patent License and Patent Defense
+
+The licensor grants you a patent license to the software, covering patent
+claims the licensor can license, or becomes able to license, that you would
+infringe by using the software, strictly for a permitted purpose.
+
+If you make any written claim that the software infringes or contributes to
+infringement of any patent, your patent license for the software granted under
+these terms ends immediately. If your company makes such a claim, your patent
+license ends immediately for work on behalf of your company.
+
+8. Fair Use and No Other Rights
+
+You may have "fair use" or equivalent statutory rights for the software under
+applicable law. These terms do not limit them. These terms do not grant any
+trademark rights or any other rights not expressly stated.
+
+9. Violations
+
+Any intentional commercial activity prohibited by Section 5, or any intentional
+breach of Section 4 (Share-Alike and Source Availability), terminates all your
+licenses immediately and permanently without notice.
+
+For any other first-time inadvertent violation, the first time you are notified
+in writing that you have violated any of these terms, or done anything with
+the software not covered by your licenses, your licenses can nonetheless
+continue if you come into full compliance with these terms, and take practical
+steps to correct past violations, within 32 days of receiving notice. Otherwise,
+all your licenses end immediately.
+
+10. No Liability
+
+***As far as the law allows, the software comes as is, without any warranty or
+condition, and the licensor will not be liable to you for any damages arising
+out of these terms or the use or nature of the software, under any kind of
+legal claim.***
+
+11. Definitions
+
+"Licensor" means xihale and the respective copyright holders offering these
+terms.
+
+"Software" means the Goke (工课) software—including its Android client, core
+modules, scripting engine, sync server, embedded web client, landing page, and
+documentation—made available by the licensor under these terms.
+
+"Derivative Suites" means any modified version, fork, repackaged build,
+plugin, extension, companion app, wrapper service, container bundle, or
+combined software suite based on, incorporating, or derived from any
+copyrightable portion of the software.
+
+"Permitted Purpose" means strictly noncommercial personal use, personal study,
+private entertainment, hobbyist use, academic or public-interest research,
+experimentation, and testing for public knowledge, or strictly noncommercial
+use by noncommercial educational or charitable organizations without any direct
+or indirect financial gain, monetary compensation, or commercial advantage.
+
+"Commercial Activity" means any activity intended for or directed toward
+commercial advantage, monetary compensation, advertising revenue, paid service
+delivery, or business monetization, whether direct or indirect.
+
+"You" means the individual or entity agreeing to these terms.
+
+"Your company" means any legal entity, sole proprietorship, or other kind of
+organization that you work for, plus all organizations that have control over,
+are under the control of, or are under common control with that organization.
+
+"Control" means ownership of substantially all the assets of an entity, or the
+power to direct its management and policies by vote, contract, or otherwise.
+Control can be direct or indirect.
+
+"Your licenses" means all the licenses granted to you for the software under
+these terms.
+
+"Use" means anything you do with the software requiring one of your licenses.
+
+================================================================================
+
+12. 中文说明（非正式参考译文，如有歧义以英文正文为准）
+
+本协议为《Goke 非商业共享协议 1.0》（Goke-NC-SA-1.0），基于 PolyForm
+Noncommercial License 1.0.0 修订并补充商业禁止与传染性开源（Share-Alike）条款：
+
+1. 仅限非商业用途：仅允许用于个人学习、日常自用、兴趣研究、非营利学术实验等
+   无任何直接或间接商业利益的用途。
+2. 严禁本体及衍生套件的一切商业活动：无论是本软件本体，还是基于本软件制作的
+   衍生版本、二次打包应用、插件、封装服务或配套套件，均禁止用于任何商业活动，
+   包括但不限于：
+   - 付费分发、应用商店收费上架、商业捆绑或预装；
+   - 商业咨询、付费部署、付费定制开发、付费运维支持或付费培训；
+   - 广告投放、广告植入、商业推广、导流返佣、付费墙或用户数据变现；
+   - 商业 SaaS 托管或企业商业运营。
+   如需商业授权，须另行获得著作权人（xihale）书面签署的商业许可。
+3. 衍生作品须同协议开源（Share-Alike）：基于本软件修改、二次开发、制作衍生套件
+   或向外部用户提供网络服务时，即使是非商业用途，也必须继续完整采用本协议
+   （Goke-NC-SA-1.0）发布，并向所有接收方与网络用户免费公开全部对应的源代码、
+   保留原作者版权与声明。
+4. 违约与免责：故意违反商业禁止或同协议开源义务的，授权立即终止；其余首次非
+   故意违约在收到书面通知后 32 日内完全纠正并消除影响的，许可方可恢复。本软件
+   按“现状”提供，不承担任何明示或默示担保及赔偿责任。
