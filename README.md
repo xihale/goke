@@ -42,7 +42,7 @@
 
 ## 发布与签名
 
-版本号由 `v*` Git Tag 通过 `git describe` 自动派生（支持 `v0.0.1-beta.1` 等 SemVer 预发布标签）。推送 `v*` 标签会自动触发 Release 工作流，构建正式签名 APK 并创建 GitHub Release（含 `-` 后缀的标签自动标记为 Pre-release）。
+版本号由 `v*` Git Tag 通过 `git describe` 自动派生（支持 `v0.0.1-beta.1` 等 SemVer 预发布标签）。因正式发行版需打包未入库的私有 `adapters/` 模块，发版 APK 由维护者在本地配置 `keystore.properties` 后执行 `./gradlew :app:assembleRelease` 构建并上传至 GitHub Release；`.github/workflows/release.yml` 仅保留手动 `workflow_dispatch` 触发（用于开源骨架包发布演练），防止打 tag 时覆写正式产物。
 
 GitHub Actions 的 `release` 环境需配置以下四个 Secrets（缺一不可，构建脚本不会回退 Debug 签名）：
 
