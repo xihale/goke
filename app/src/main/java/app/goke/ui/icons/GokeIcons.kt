@@ -2315,3 +2315,17 @@ private val downloadIcon by gokeIcon("Rounded.Download") {
 
 val Icons.Rounded.Download: ImageVector
     get() = downloadIcon
+
+private val waterDropIcon by gokeIcon("Rounded.WaterDrop") {
+    solidPath {
+        moveTo(12.0f, 2.0f)
+        curveToRelative(-5.33f, 4.55f, -8.0f, 8.48f, -8.0f, 11.8f)
+        curveToRelative(0.0f, 4.98f, 3.8f, 8.2f, 8.0f, 8.2f)
+        reflectiveCurveToRelative(8.0f, -3.22f, 8.0f, -8.2f)
+        curveToRelative(0.0f, -3.32f, -2.67f, -7.25f, -8.0f, -11.8f)
+        close()
+    }
+}
+
+val Icons.Rounded.WaterDrop: ImageVector
+    get() = waterDropIcon

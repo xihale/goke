@@ -99,6 +99,7 @@ import app.goke.data.UpdateChecker
 import app.goke.data.UpdateDownloadState
 import app.goke.data.UpdateInterval
 import app.goke.debug.DebugHooks
+import app.goke.hotwater.HotWaterPhase
 import app.goke.notify.Notifications
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
@@ -140,6 +141,7 @@ import app.goke.ui.icons.RestartAlt
 import app.goke.ui.icons.School
 import app.goke.ui.icons.SwapVert
 import app.goke.ui.icons.Terminal
+import app.goke.ui.icons.WaterDrop
 import app.goke.ui.icons.Widgets
 import app.goke.ui.liveSnapshot
 import app.goke.ui.reduceMotion
@@ -262,6 +264,31 @@ fun SettingsScreen() {
                         Icons.Rounded.LocalShipping,
                         trailing = stringResource(if (st.parcelEnabled) R.string.parcel_status_on else R.string.parcel_status_off),
                     ) { nav.push(Route.Parcel) }
+                    val hwState by app.hotWater.state.collectAsState()
+                    val hwTrailing =
+                        when {
+                            !hwState.isBound -> {
+                                stringResource(R.string.hotwater_status_unbound)
+                            }
+
+                            hwState.phase == HotWaterPhase.VALVE_OPEN -> {
+                                stringResource(R.string.hotwater_status_open)
+                            }
+
+                            hwState.lastCheckAt > 0L -> {
+                                stringResource(R.string.hotwater_can_use_amount, hwState.canUseAmount / 100.0)
+                            }
+
+                            else -> {
+                                stringResource(R.string.hotwater_status_bound)
+                            }
+                        }
+                    NavRow(
+                        stringResource(R.string.hotwater_title),
+                        null,
+                        Icons.Rounded.WaterDrop,
+                        trailing = hwTrailing,
+                    ) { nav.push(Route.HotWater) }
                     NavRow(
                         stringResource(R.string.widgets_title),
                         null,

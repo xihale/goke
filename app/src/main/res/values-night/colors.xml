@@ -19,6 +19,22 @@
     <color name="widget_course_progress_overlay">#9918201E</color>
     <color name="widget_next_progress_overlay">#2F3D3A</color>
 
+    <!-- 智慧热水小组件（深色模式植物薄荷绿按钮） -->
+    <color name="widget_hw_idle_bg">#213D37</color>
+    <color name="widget_hw_idle_stroke">#2F554D</color>
+    <color name="widget_hw_idle_fg">#C5F1E5</color>
+    <color name="widget_hw_idle_sub">#8EC0B4</color>
+    <color name="widget_hw_idle_ripple">#28C5F1E5</color>
+    <color name="widget_hw_open_bg">#7CCDBA</color>
+    <color name="widget_hw_open_stroke">#9ADBC9</color>
+    <color name="widget_hw_open_fg">#102B26</color>
+    <color name="widget_hw_open_sub">#214A42</color>
+    <color name="widget_hw_open_ripple">#28102B26</color>
+    <color name="widget_hw_work_stroke">#313D3A</color>
+    <color name="widget_hw_error_bg">#44232A</color>
+    <color name="widget_hw_error_stroke">#63333C</color>
+    <color name="widget_hw_error_ripple">#28FF8F84</color>
+
     <!-- 8 组植物课表色（深色模式：深底浅字） -->
     <color name="widget_course0_bg">#2B4350</color>
     <color name="widget_course0_fg">#BFE0F0</color>

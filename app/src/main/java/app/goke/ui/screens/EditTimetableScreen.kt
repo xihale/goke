@@ -544,6 +544,7 @@ private fun jxfwCardErrorText(
         JxfwException.Kind.CAPTCHA -> stringResource(R.string.jxfw_err_captcha)
         JxfwException.Kind.SMS -> stringResource(R.string.jxfw_err_sms)
         JxfwException.Kind.NETWORK -> stringResource(R.string.jxfw_err_network)
+        JxfwException.Kind.UNSUPPORTED -> stringResource(R.string.jxfw_err_unsupported)
         else -> raw
     }
 

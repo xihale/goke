@@ -1,6 +1,8 @@
 package app.goke
 
 import app.goke.GokeApp
+import app.goke.core.campus.JxfwAdapter
+import app.goke.core.campus.TzcsAdapter
 import app.goke.core.jxfw.ClassroomBuilding
 import app.goke.core.jxfw.ClassroomOccupancy
 import app.goke.core.jxfw.ClassroomRoom
@@ -19,9 +21,7 @@ import app.goke.core.model.Attachment
 import app.goke.data.Attachments
 import app.goke.jxfw.JxfwCourseSelectionState
 import app.goke.jxfw.JxfwGradesState
-import app.goke.jxfw.JxfwManager
 import app.goke.jxfw.JxfwState
-import app.goke.jxfw.TzcsManager
 import app.goke.jxfw.TzcsState
 import java.awt.BasicStroke
 import java.awt.Color
@@ -32,7 +32,7 @@ import java.io.File
 import java.time.LocalDate
 import javax.imageio.ImageIO
 
-internal fun JxfwManager.seedClassroomDemoForTest(weekStart: LocalDate) {
+internal fun JxfwAdapter.seedClassroomDemoForTest(weekStart: LocalDate) {
     val now = System.currentTimeMillis()
     val state =
         JxfwState(
@@ -129,7 +129,7 @@ internal fun JxfwManager.seedClassroomDemoForTest(weekStart: LocalDate) {
     )
 }
 
-internal fun TzcsManager.seedPhysicalTestDemoForTest() {
+internal fun TzcsAdapter.seedPhysicalTestDemoForTest() {
     val now = System.currentTimeMillis()
     val reports =
         listOf(

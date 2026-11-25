@@ -23,3 +23,6 @@ keystore.properties
 # Local-only ops docs & machine-specific scripts
 scripts/server/
 scripts/xbuild.sh
+
+# Private reverse-engineered campus/hardware adapters (half-open-source)
+adapters/

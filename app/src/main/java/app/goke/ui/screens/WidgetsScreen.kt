@@ -89,6 +89,7 @@ import app.goke.ui.monthDayWeekday
 import app.goke.ui.rememberNow
 import app.goke.ui.settingsState
 import app.goke.ui.theme.MintTheme
+import app.goke.widget.HotWaterWidgetProvider
 import app.goke.widget.NextWidgetProvider
 import app.goke.widget.ParcelWidgetProvider
 import app.goke.widget.ScheduleWidgetProvider
@@ -140,6 +141,12 @@ internal enum class WidgetSpec(
         descRes = R.string.widget_next_desc,
         sizeLabel = "4×1",
         providerClass = NextWidgetProvider::class.java,
+    ),
+    HOT_WATER(
+        labelRes = R.string.widget_hotwater_name,
+        descRes = R.string.widget_hotwater_desc,
+        sizeLabel = "2×1",
+        providerClass = HotWaterWidgetProvider::class.java,
     ),
 }
 
@@ -528,6 +535,7 @@ private fun WidgetItemBlock(
                 WidgetSpec.TODO -> TodoWidgetPreview(snap, now)
                 WidgetSpec.PARCEL -> ParcelWidgetPreview(snap, now)
                 WidgetSpec.NEXT -> NextWidgetPreview(snap, st, now)
+                WidgetSpec.HOT_WATER -> HotWaterWidgetPreview()
             }
         }
     }
@@ -932,6 +940,66 @@ private fun NextWidgetPreview(
             }
         }
         PreviewAddPill()
+    }
+}
+
+@Composable
+private fun HotWaterWidgetPreview() {
+    val scheme = MaterialTheme.colorScheme
+    val typography = MaterialTheme.typography
+    val shape = RoundedCornerShape(20.dp)
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(scheme.primaryContainer)
+                .border(1.dp, scheme.outlineVariant, shape)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                painter =
+                    androidx.compose.ui.res
+                        .painterResource(R.drawable.ic_widget_hotwater),
+                contentDescription = null,
+                tint = scheme.onPrimaryContainer,
+                modifier = Modifier.size(22.dp),
+            )
+            Text(
+                stringResource(R.string.widget_hotwater_btn_open),
+                style = typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = scheme.onPrimaryContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                stringResource(R.string.widget_hotwater_name),
+                style = typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = scheme.onPrimaryContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                stringResource(R.string.hotwater_status_idle),
+                style = typography.labelSmall,
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

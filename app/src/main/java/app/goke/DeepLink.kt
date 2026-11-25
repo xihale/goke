@@ -32,6 +32,8 @@ sealed interface DeepLink {
     data object Timetable : DeepLink
 
     data object Parcel : DeepLink
+
+    data object HotWater : DeepLink
 }
 
 object DeepLinks {
@@ -95,6 +97,13 @@ object DeepLinks {
             .authority("parcel")
             .build()
 
+    fun hotWaterUri(): Uri =
+        Uri
+            .Builder()
+            .scheme(SCHEME)
+            .authority("hotwater")
+            .build()
+
     fun parseUri(uri: Uri): DeepLink? {
         if (uri.scheme != SCHEME) return null
         return when (uri.host) {
@@ -105,6 +114,7 @@ object DeepLinks {
             "todo" -> DeepLink.Todo
             "timetable" -> DeepLink.Timetable
             "parcel" -> DeepLink.Parcel
+            "hotwater" -> DeepLink.HotWater
             else -> null
         }
     }

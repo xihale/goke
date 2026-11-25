@@ -35,6 +35,7 @@ import app.goke.ui.screens.WidgetPinOutcome
 import app.goke.ui.screens.WidgetSpec
 import app.goke.ui.screens.requestPinWidget
 import app.goke.ui.screens.totalAddedWidgets
+import app.goke.widget.HotWaterWidgetProvider
 import app.goke.widget.NextWidgetProvider
 import app.goke.widget.ParcelWidgetProvider
 import app.goke.widget.ParcelWidgetService
@@ -510,6 +511,7 @@ class WidgetsAndCalendarSyncTest {
                     TodoWidgetProvider::class.java,
                     ParcelWidgetProvider::class.java,
                     NextWidgetProvider::class.java,
+                    HotWaterWidgetProvider::class.java,
                 ),
                 WidgetSpec.entries.map { it.providerClass }.toSet(),
             )

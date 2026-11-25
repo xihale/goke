@@ -60,6 +60,7 @@ materialkolor = { group = "com.materialkolor", name = "material-kolor", version.
 [plugins]
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
 android-test = { id = "com.android.test", version.ref = "agp" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

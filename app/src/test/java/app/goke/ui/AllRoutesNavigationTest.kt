@@ -55,6 +55,8 @@ class AllRoutesNavigationTest {
             Route.Trash,
             Route.History,
             Route.Parcel,
+            Route.HotWater,
+            Route.HotWaterBills,
             Route.Mcp,
             Route.LanWeb,
             Route.Periods,

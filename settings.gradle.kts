@@ -25,3 +25,5 @@ include(":script")
 include(":app")
 // benchmark 模块可能被临时移除；存在才挂载，避免整个构建无法配置
 if (file("benchmark").exists()) include(":benchmark")
+// adapters 为私有协议适配器模块（半开源边界）；存在时自动挂载，缺失时自动回退至开源桩实现
+if (file("adapters/build.gradle.kts").exists()) include(":adapters")

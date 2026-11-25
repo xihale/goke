@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import app.goke.core.campus.CampusVault
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -28,7 +29,8 @@ interface McpTokenVault {
 class SecretStore(
     context: Context,
 ) : SyncTokenVault,
-    McpTokenVault {
+    McpTokenVault,
+    CampusVault {
     private val sp = context.getSharedPreferences("secrets", Context.MODE_PRIVATE)
 
     // Keystore 的 load + getKey 与解密结果按进程缓存：冷启动路径上只做一次加解密，
@@ -113,25 +115,34 @@ class SecretStore(
 
     override fun syncToken(): String? = get("sync_token")
 
-    /** 教务系统（CAS）密码：仅为定时登录取课表保存，加密落盘，退出教务登录时清除。 */
-    fun setJxfwPassword(plain: String) = put("jxfw_password", plain)
+    /** 教务系统密码：仅为定时登录取课表保存，加密落盘，退出教务登录时清除。 */
+    override fun setJxfwPassword(plain: String) = put("jxfw_password", plain)
 
-    fun jxfwPassword(): String? = get("jxfw_password")
+    override fun jxfwPassword(): String? = get("jxfw_password")
 
-    /** 体测平台（tzcs.gdut.edu.cn）密码：加密落盘，退出体测登录时清除。 */
-    fun setTzcsPassword(plain: String) = put("tzcs_password", plain)
+    /** 体测平台密码：加密落盘，退出体测登录时清除。 */
+    override fun setTzcsPassword(plain: String) = put("tzcs_password", plain)
 
-    fun tzcsPassword(): String? = get("tzcs_password")
+    override fun tzcsPassword(): String? = get("tzcs_password")
 
     /** 体测平台会话 Cookie（JSON）：加密落盘，用于会话未过期时免验证码刷新，退出登录或过期时清除。 */
-    fun setTzcsCookies(plain: String) = put("tzcs_cookies", plain)
+    override fun setTzcsCookies(plain: String) = put("tzcs_cookies", plain)
 
-    fun tzcsCookies(): String? = get("tzcs_cookies")
+    override fun tzcsCookies(): String? = get("tzcs_cookies")
 
     /** 本地 MCP 服务的 Bearer 令牌：加密落盘，仅用于本机或局域网 AI Agent 连接鉴权。 */
     override fun setMcpToken(plain: String) = put("mcp_token", plain)
 
     override fun mcpToken(): String? = get("mcp_token")
+
+    /** 智慧热水 UserID 与 UUID：加密落盘，解绑时清除。 */
+    override fun hotWaterUserId(): String? = get("hw_user_id")
+
+    override fun setHotWaterUserId(plain: String) = put("hw_user_id", plain)
+
+    override fun hotWaterUuid(): String? = get("hw_uuid")
+
+    override fun setHotWaterUuid(plain: String) = put("hw_uuid", plain)
 
     companion object {
         // 历史命名（曾是 AI Key 的别名）；换名会生成新密钥，导致旧密文（同步令牌/教务密码）无法解密

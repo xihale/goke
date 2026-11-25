@@ -23,6 +23,6 @@
 
 - **Room / KSP**：数据采用「一条记录一行 JSON」双表结构，手写 `SQLiteOpenHelper` 更少依赖与构建步骤，见 [ADR-0002](adr/0002-handwritten-sqlite.md)。
 - **DataStore**：设置项少，`SharedPreferences` + `StateFlow` 足够。
-- **OkHttp / Retrofit / Ktor**：教务登录（`JxfwClient`）与同步请求用 `HttpURLConnection`；App 本地 MCP 服务用 `ServerSocket` 轻量 HTTP 实现。
+- **OkHttp / Retrofit / Ktor**：同步与网络请求统一使用 `HttpURLConnection`；App 本地 MCP 服务用 `ServerSocket` 轻量 HTTP 实现。
 - **第三方图表 / 图片渲染库**：课表分享图用 `Canvas` 直接绘制。
 - **前端框架 / 打包器 / npm 依赖**：Web 端采用原生 ES 模块 `go:embed` 进服务端，测试用 Node 内置 `node:test`，见 [ADR-0006](adr/0006-web-client-vanilla-esm.md)。

@@ -89,6 +89,8 @@ import app.goke.ui.screens.DataScreen
 import app.goke.ui.screens.EditTimetableScreen
 import app.goke.ui.screens.GradesScreen
 import app.goke.ui.screens.HistoryScreen
+import app.goke.ui.screens.HotWaterBillsScreen
+import app.goke.ui.screens.HotWaterScreen
 import app.goke.ui.screens.ImportScreen
 import app.goke.ui.screens.JxfwScreen
 import app.goke.ui.screens.LanWebScreen
@@ -194,6 +196,10 @@ fun GokeRoot(
 
             DeepLink.Parcel -> {
                 nav.push(Route.Parcel)
+            }
+
+            DeepLink.HotWater -> {
+                nav.push(Route.HotWater)
             }
 
             is DeepLink.Add -> {
@@ -380,6 +386,14 @@ private fun RouteContent(
 
         Route.Parcel -> {
             ParcelScreen(onBack)
+        }
+
+        Route.HotWater -> {
+            HotWaterScreen(onBack)
+        }
+
+        Route.HotWaterBills -> {
+            HotWaterBillsScreen(onBack)
         }
 
         Route.Mcp -> {

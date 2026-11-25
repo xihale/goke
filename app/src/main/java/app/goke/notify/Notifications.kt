@@ -16,12 +16,14 @@ import androidx.core.content.ContextCompat
 import app.goke.DeepLinks
 import app.goke.MainActivity
 import app.goke.R
+import app.goke.hotwater.HotWaterShowerRecord
 
 /** 通知渠道与发送。 */
 object Notifications {
     const val CHANNEL_REMINDER = "reminder"
     const val CHANNEL_EXAM = "exam_reminder"
     const val CHANNEL_PARCEL = "parcel"
+    const val CHANNEL_HOT_WATER = "hot_water"
     const val CHANNEL_QUICK = "quickadd"
     const val CHANNEL_LAN_WEB = "lan_web"
     const val NOTIFY_QUICK_ID = 9002
@@ -44,6 +46,9 @@ object Notifications {
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_PARCEL, ctx.getString(R.string.channel_parcel), NotificationManager.IMPORTANCE_DEFAULT),
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_HOT_WATER, ctx.getString(R.string.channel_hot_water), NotificationManager.IMPORTANCE_DEFAULT),
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_QUICK, ctx.getString(R.string.channel_quick), NotificationManager.IMPORTANCE_LOW).apply {
@@ -166,6 +171,47 @@ object Notifications {
                 .setAutoCancel(true)
                 .setSilent(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
+        runCatching { NotificationManagerCompat.from(ctx).notify(notifId, n.build()) }
+    }
+
+    fun formatHotWaterDuration(
+        ctx: Context,
+        durationSec: Long,
+    ): String =
+        when {
+            durationSec < 60L -> ctx.getString(R.string.hotwater_duration_sec, durationSec.coerceAtLeast(1L))
+            durationSec % 60L == 0L -> ctx.getString(R.string.hotwater_duration_min, durationSec / 60L)
+            else -> ctx.getString(R.string.hotwater_duration_min_sec, durationSec / 60L, durationSec % 60L)
+        }
+
+    /** 热水关水结算后发送本次洗浴消费、出水量与时长通知，点击直达智慧热水页。 */
+    fun postHotWaterSummary(
+        ctx: Context,
+        record: HotWaterShowerRecord,
+    ) {
+        if (!canPost(ctx)) return
+        ensureChannels(ctx)
+        val notifId = ("hotwater:${record.consumeId}:${record.startTime}").hashCode()
+        val open =
+            PendingIntent.getActivity(
+                ctx,
+                notifId,
+                Intent(Intent.ACTION_VIEW, DeepLinks.hotWaterUri(), ctx, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        val durationText = formatHotWaterDuration(ctx, record.durationSec)
+        val text = ctx.getString(R.string.hotwater_summary_notif_text, record.costYuan, record.liters, durationText)
+        val n =
+            NotificationCompat
+                .Builder(ctx, CHANNEL_HOT_WATER)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(ctx.getString(R.string.hotwater_summary_notif_title))
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
         runCatching { NotificationManagerCompat.from(ctx).notify(notifId, n.build()) }
     }
 

@@ -301,6 +301,9 @@ composeCompiler {
 dependencies {
     implementation(project(":core"))
     implementation(project(":script"))
+    if (rootProject.file("adapters/build.gradle.kts").exists()) {
+        implementation(project(":adapters"))
+    }
     implementation(libs.quickjs.kt)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

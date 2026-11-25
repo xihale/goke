@@ -55,6 +55,14 @@ GitHub Actions 的 `release` 环境需配置以下四个 Secrets（缺一不可�
 
 本地构建 `./gradlew :app:assembleRelease` 时，可在仓库根目录放置未入库的 `keystore.properties`，或设置环境变量 `SIGNING_KEYSTORE_FILE`、`SIGNING_KEYSTORE_PASSWORD`、`SIGNING_KEY_ALIAS`、`SIGNING_KEY_PASSWORD`。
 
+## 半开源说明与贡献边界
+
+为防止第三方校园与硬件协议被恶意滥用，本项目采用**核心及界面开源 + 逆向协议适配器闭源**的半开源架构：
+
+- **公开仓库包含**：全部 Android UI 页面与组件、桌面小组件、本地 SQLite 存储、课表/日历/待办/取件核心逻辑、QuickJS 脚本沙箱、Go 同步服务端、Web 端与所有适配器接口契约。
+- **公开仓库不包含**：教务、体测、空教室、选课、智慧热水等逆向通信协议、抓包文档与真实网络/蓝牙实现（本地私有 `adapters/` 模块由构建脚本按需挂载）。
+- **欢迎 UI 与本地功能贡献**：即使没有私有适配器源码，也可直接克隆本仓库执行 `./gradlew :app:assembleDebug` 与 `./gradlew :app:testDebugUnitTest` 编译、预览和参与 UI 及本地功能开发（仅校内/热水联机功能在开源编译版本中不可用）。
+
 ## 开发文档
 
 - [工程入口与规范](CLAUDE.md) · [代码模块索引](CODEMAP.md) · [视觉与组件规范](DESIGN.md)

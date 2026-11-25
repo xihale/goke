@@ -117,10 +117,21 @@ fun PhysicalTestScreen(onBack: () -> Unit) {
 
     MintScreen(title = stringResource(R.string.tzcs_title), onBack = onBack) {
         if (!tzcsState.loggedIn) {
-            TzcsLoginPanel(
-                state = tzcsState,
-                defaultStudentId = jxfwState.username.orEmpty(),
-            )
+            Column(Modifier.fillMaxSize()) {
+                if (!app.tzcs.isSupported) {
+                    MintCard(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text(
+                            stringResource(R.string.adapter_unavailable_banner),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                TzcsLoginPanel(
+                    state = tzcsState,
+                    defaultStudentId = jxfwState.username.orEmpty(),
+                )
+            }
             return@MintScreen
         }
 

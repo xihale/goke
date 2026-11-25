@@ -110,7 +110,6 @@ import app.goke.core.change.repeatInstances
 import app.goke.core.jxfw.ClassroomBuilding
 import app.goke.core.jxfw.ClassroomOccupancy
 import app.goke.core.jxfw.ClassroomRoom
-import app.goke.core.jxfw.JwcwxParse
 import app.goke.core.jxfw.OccupancyType
 import app.goke.core.model.GdutPeriods
 import app.goke.core.model.PeriodTime

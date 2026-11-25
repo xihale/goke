@@ -43,7 +43,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.goke.R
 import app.goke.debug.DebugHooks
-import app.goke.jxfw.JxfwClient
 import app.goke.jxfw.JxfwException
 import app.goke.jxfw.JxfwState
 import app.goke.ui.LocalActions
@@ -89,6 +88,15 @@ fun JxfwScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             DebugHooks.JxfwDebugBanner()
+            if (!app.jxfw.isSupported && !state.loggedIn) {
+                MintCard {
+                    Text(
+                        stringResource(R.string.adapter_unavailable_banner),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             if (state.loggedIn) AccountPanel(state) else LoginPanel(state)
         }
     }
@@ -105,6 +113,7 @@ private fun errorText(
         JxfwException.Kind.CAPTCHA -> stringResource(R.string.jxfw_err_captcha)
         JxfwException.Kind.SMS -> stringResource(R.string.jxfw_err_sms)
         JxfwException.Kind.NETWORK -> stringResource(R.string.jxfw_err_network)
+        JxfwException.Kind.UNSUPPORTED -> stringResource(R.string.jxfw_err_unsupported)
         else -> raw
     }
 
@@ -115,6 +124,7 @@ internal fun JxfwErrorGuidance(
 ) {
     val msg = errorText(kind, raw) ?: return
     val ctx = LocalContext.current
+    val app = LocalApp.current
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
             msg,
@@ -122,12 +132,13 @@ internal fun JxfwErrorGuidance(
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.padding(horizontal = 4.dp),
         )
-        if (kind == JxfwException.Kind.CAPTCHA || kind == JxfwException.Kind.SMS) {
+        val host = app.jxfw.portalHost
+        if ((kind == JxfwException.Kind.CAPTCHA || kind == JxfwException.Kind.SMS) && host.isNotBlank()) {
             TextButton(
                 onClick = {
                     runCatching {
                         ctx.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(JxfwClient.HOST))
+                            Intent(Intent.ACTION_VIEW, Uri.parse(host))
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                         )
                     }
@@ -136,7 +147,7 @@ internal fun JxfwErrorGuidance(
             ) {
                 Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(JxfwClient.HOST.removePrefix("https://"))
+                Text(host.removePrefix("https://"))
             }
         }
     }

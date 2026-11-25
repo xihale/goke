@@ -47,6 +47,10 @@ sealed interface Route {
 
     @Serializable data object Parcel : Route
 
+    @Serializable data object HotWater : Route
+
+    @Serializable data object HotWaterBills : Route
+
     @Serializable data object Mcp : Route
 
     @Serializable data object LanWeb : Route

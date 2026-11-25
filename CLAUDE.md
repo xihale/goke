@@ -11,7 +11,7 @@
 - **工程结构与导航路由**：[docs/architecture.md](docs/architecture.md)（模块划分、目录树、状态流、屏幕 ↔ 文件映射）
 - **构建、测试与 Benchmark**：[docs/testing.md](docs/testing.md)（单测、Robolectric 截图、Spotless、E2E、Macrobenchmark）
 - **依赖与选型记录**：[docs/DEPENDENCIES.md](docs/DEPENDENCIES.md)（版本以 [gradle/libs.versions.toml](gradle/libs.versions.toml) 为准）
-- **需求与决策背景**：[docs/specs/README.md](docs/specs/README.md)、`docs/adr/*`、[docs/jxfw-sync-design.md](docs/jxfw-sync-design.md)
+- **需求与决策背景**：[docs/specs/README.md](docs/specs/README.md)、`docs/adr/*`
 
 ## 2. 技术栈速查
 

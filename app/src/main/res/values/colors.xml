@@ -20,6 +20,22 @@
     <color name="widget_course_progress_overlay">#8AC4CEC9</color>
     <color name="widget_next_progress_overlay">#D4E2DD</color>
 
+    <!-- 智慧热水小组件（植物薄荷绿按钮） -->
+    <color name="widget_hw_idle_bg">#D4EFE7</color>
+    <color name="widget_hw_idle_stroke">#B2DDD1</color>
+    <color name="widget_hw_idle_fg">#14463D</color>
+    <color name="widget_hw_idle_sub">#376960</color>
+    <color name="widget_hw_idle_ripple">#2414463D</color>
+    <color name="widget_hw_open_bg">#286D62</color>
+    <color name="widget_hw_open_stroke">#1E594F</color>
+    <color name="widget_hw_open_fg">#FFFFFF</color>
+    <color name="widget_hw_open_sub">#D7F2EB</color>
+    <color name="widget_hw_open_ripple">#33FFFFFF</color>
+    <color name="widget_hw_work_stroke">#CFDCD7</color>
+    <color name="widget_hw_error_bg">#F9E4E7</color>
+    <color name="widget_hw_error_stroke">#E7BCC3</color>
+    <color name="widget_hw_error_ripple">#24B23E50</color>
+
     <!-- 8 组植物课表色（浅底深字），与 Theme.kt MintColors / web COURSE_COLORS.light 一致 -->
     <color name="widget_course0_bg">#D9E8EF</color>
     <color name="widget_course0_fg">#3B6173</color>

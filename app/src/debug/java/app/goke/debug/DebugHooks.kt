@@ -20,9 +20,6 @@ import app.goke.R
 import app.goke.core.change.Change
 import app.goke.core.model.Semester
 import app.goke.data.DemoData
-import app.goke.jxfw.JwcwxClient
-import app.goke.jxfw.JxfwClient
-import app.goke.jxfw.TzcsClient
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.components.FormSection
@@ -32,15 +29,7 @@ import java.time.LocalDateTime
 object DebugHooks {
     internal var suppressUiForShots: Boolean = false
 
-    fun init(ctx: Context) {
-        DebugMockStore.init(ctx)
-    }
-
-    fun newJxfwClient(): JxfwClient = MockJxfwClient()
-
-    fun newJwcwxClient(): JwcwxClient = MockJwcwxClient()
-
-    fun newTzcsClient(): TzcsClient = MockTzcsClient()
+    fun init(ctx: Context) = Unit
 
     @Composable
     fun DataScreenExtra() {
@@ -48,19 +37,13 @@ object DebugHooks {
     }
 
     @Composable
-    fun SettingsDebugSection() {
-        if (!suppressUiForShots) SettingsDebugMockSection()
-    }
+    fun SettingsDebugSection() = Unit
 
     @Composable
-    fun JxfwDebugBanner() {
-        if (!suppressUiForShots) JxfwDebugMockBanner()
-    }
+    fun JxfwDebugBanner() = Unit
 
     @Composable
-    fun CourseSelectionDebugBanner(onRefresh: () -> Unit) {
-        if (!suppressUiForShots) CourseSelectionDebugMockBanner(onRefresh = onRefresh)
-    }
+    fun CourseSelectionDebugBanner(onRefresh: () -> Unit) = Unit
 }
 
 /** 填入一批真实含量的演示数据：整批一次提交，可在操作记录里一步撤销。 */

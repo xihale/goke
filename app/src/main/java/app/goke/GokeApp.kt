@@ -1,11 +1,26 @@
 package app.goke
 
+import android.app.AlarmManager
 import android.app.Application
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import app.goke.advanced.AdvancedController
 import app.goke.calendar.CalendarSyncStore
 import app.goke.calendar.SystemCalendarSync
+import app.goke.core.campus.CampusAdapterFactory
+import app.goke.core.campus.CampusHost
+import app.goke.core.campus.CampusRepoPort
+import app.goke.core.campus.CampusVault
+import app.goke.core.campus.HotWaterAdapter
+import app.goke.core.campus.JxfwAdapter
+import app.goke.core.campus.JxfwStrings
+import app.goke.core.campus.TzcsAdapter
+import app.goke.core.campus.TzcsStrings
+import app.goke.core.campus.UnavailableCampusAdapterFactory
+import app.goke.core.change.ChangeSet
 import app.goke.core.change.Unify
+import app.goke.core.model.Snapshot
 import app.goke.data.AutoBackup
 import app.goke.data.ErrorReporter
 import app.goke.data.MintDb
@@ -15,13 +30,16 @@ import app.goke.data.SecretStore
 import app.goke.data.SettingsStore
 import app.goke.data.UpdateChecker
 import app.goke.debug.DebugHooks
-import app.goke.jxfw.JxfwManager
-import app.goke.jxfw.TzcsManager
+import app.goke.hotwater.HotWaterArrearsWorker
+import app.goke.hotwater.HotWaterShowerRecord
+import app.goke.hotwater.HotWaterTaskCopy
+import app.goke.jxfw.JxfwReceiver
 import app.goke.notify.Notifications
 import app.goke.notify.ReminderScheduler
 import app.goke.sync.PeriodicSync
 import app.goke.sync.SyncManager
 import app.goke.sync.SyncStore
+import app.goke.widget.HotWaterWidgetProvider
 import app.goke.widget.NextWidgetProvider
 import app.goke.widget.ParcelWidgetProvider
 import app.goke.widget.ScheduleWidgetProvider
@@ -32,12 +50,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.temporal.TemporalAdjusters
 
 /** 应用级容器：数据仓库、设置、密钥、提醒调度、本地 MCP 与高级修改预览控制器。open 仅为测试子类（SmokeTestApp）服务。 */
 open class GokeApp : Application() {
@@ -59,9 +84,11 @@ open class GokeApp : Application() {
         private set
     lateinit var calendarSync: SystemCalendarSync
         private set
-    lateinit var jxfw: JxfwManager
+    lateinit var jxfw: JxfwAdapter
         private set
-    lateinit var tzcs: TzcsManager
+    lateinit var tzcs: TzcsAdapter
+        private set
+    lateinit var hotWater: HotWaterAdapter
         private set
     lateinit var updateChecker: UpdateChecker
         private set
@@ -99,16 +126,13 @@ open class GokeApp : Application() {
         advanced = AdvancedController(this)
         sync = SyncManager(repo, SyncStore(this, secrets), scope, errors = errors)
         calendarSync = SystemCalendarSync(this, repo, settings, CalendarSyncStore(this), scope, errors = errors)
-        jxfw =
-            JxfwManager(
-                this,
-                repo,
-                secrets,
-                newClient = { DebugHooks.newJxfwClient() },
-                newJwcwxClient = { DebugHooks.newJwcwxClient() },
-                errors = errors,
-            )
-        tzcs = TzcsManager(this, secrets, newClient = { DebugHooks.newTzcsClient() }, errors = errors)
+
+        val campusHost = createCampusHost()
+        val adapterFactory = loadCampusAdapterFactory()
+        jxfw = adapterFactory.createJxfw(this, campusHost)
+        tzcs = adapterFactory.createTzcs(this, campusHost)
+        hotWater = adapterFactory.createHotWater(this, campusHost)
+
         updateChecker = UpdateChecker(settings)
         scope.launch {
             loadJob.join()
@@ -117,6 +141,7 @@ open class GokeApp : Application() {
                 parcelRules.preload()
                 jxfw.hydrate()
                 tzcs.hydrate()
+                hotWater.hydrate()
                 sync.hydrate()
                 updateChecker.clearStalePendingUpdate(cacheDir)
                 Notifications.ensureChannels(this@GokeApp)
@@ -155,6 +180,12 @@ open class GokeApp : Application() {
                         PeriodicSync.followCalendar(this@GokeApp, it)
                     }
             }
+            launch {
+                hotWater.state
+                    .map { it.isBound && it.config.arrearsTodoEnabled }
+                    .distinctUntilChanged()
+                    .collect { HotWaterArrearsWorker.follow(this@GokeApp, it) }
+            }
             // 本地数据有变化后，稍后触发云端与系统日历对账
             launch {
                 repo.snapshot.collect { snap ->
@@ -180,6 +211,154 @@ open class GokeApp : Application() {
                     }
                 }
         }
+    }
+
+    private fun loadCampusAdapterFactory(): CampusAdapterFactory =
+        runCatching {
+            Class
+                .forName(PRIVATE_ADAPTER_FACTORY)
+                .getDeclaredConstructor()
+                .newInstance() as CampusAdapterFactory
+        }.getOrElse { UnavailableCampusAdapterFactory }
+
+    private fun createCampusHost(): CampusHost =
+        object : CampusHost {
+            override val vault: CampusVault get() = secrets
+            override val repo: CampusRepoPort =
+                object : CampusRepoPort {
+                    override val snapshot: StateFlow<Snapshot> get() = this@GokeApp.repo.snapshot
+
+                    override suspend fun awaitReady() {
+                        this@GokeApp.repo.ready.first { it }
+                    }
+
+                    override suspend fun loadIfEmpty() {
+                        if (this@GokeApp
+                                .repo.snapshot.value.semesters
+                                .isEmpty()
+                        ) {
+                            this@GokeApp.repo.load()
+                        }
+                    }
+
+                    override suspend fun ensureDefaultSemester() {
+                        this@GokeApp.repo.ensureDefaultSemester()
+                    }
+
+                    override suspend fun commit(changeSet: ChangeSet) {
+                        this@GokeApp.repo.commit(changeSet)
+                    }
+                }
+
+            override val jxfwStrings: JxfwStrings =
+                object : JxfwStrings {
+                    override val progressLogin: String get() = getString(R.string.jxfw_progress_login)
+                    override val progressSaving: String get() = getString(R.string.jxfw_progress_saving)
+                    override val resultSemesterOver: String get() = getString(R.string.jxfw_result_semester_over)
+                    override val notifyTitle: String get() = getString(R.string.jxfw_notify_title)
+                    override val errNoCredentials: String get() = getString(R.string.jxfw_err_no_credentials)
+                    override val errNetwork: String get() = getString(R.string.jxfw_err_network)
+                    override val errUnsupported: String get() = getString(R.string.jxfw_err_unsupported)
+
+                    override fun progressCourses(
+                        done: Int,
+                        total: Int,
+                    ): String = getString(R.string.jxfw_progress_courses, done, total)
+
+                    override fun progressRefineWeeks(
+                        done: Int,
+                        total: Int,
+                    ): String = getString(R.string.jxfw_progress_refine_weeks, done, total)
+
+                    override fun progressWeek(week: Int): String = getString(R.string.jxfw_progress_week, week)
+
+                    override fun resultFull(
+                        courses: Int,
+                        exams: Int,
+                    ): String = getString(R.string.jxfw_result_full, courses, exams)
+
+                    override fun resultNoChange(week: Int): String = getString(R.string.jxfw_result_nochange, week)
+
+                    override fun resultChanged(
+                        week: Int,
+                        changes: Int,
+                    ): String = getString(R.string.jxfw_result_changed, week, changes)
+                }
+
+            override val tzcsStrings: TzcsStrings =
+                object : TzcsStrings {
+                    override val errUnknown: String get() = getString(R.string.tzcs_err_unknown)
+                    override val errNetwork: String get() = getString(R.string.tzcs_err_network)
+                    override val sessionExpired: String get() = getString(R.string.tzcs_session_expired)
+                    override val errUnsupported: String get() = getString(R.string.tzcs_err_unsupported)
+                }
+
+            override fun recordError(
+                tag: String,
+                throwable: Throwable,
+            ) {
+                errors.record(tag, throwable)
+            }
+
+            override fun postWeeklyJxfwNotification(
+                title: String,
+                body: String,
+            ) {
+                Notifications.post(this@GokeApp, JXFW_NOTIFY_ID, Notifications.CHANNEL_REMINDER, title, body)
+            }
+
+            override fun updateWeeklyJxfwAlarm(enabled: Boolean) {
+                val am = getSystemService(AlarmManager::class.java) ?: return
+                if (!enabled) {
+                    PendingIntent
+                        .getBroadcast(
+                            this@GokeApp,
+                            JXFW_ALARM_CODE,
+                            Intent(this@GokeApp, JxfwReceiver::class.java),
+                            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+                        )?.let {
+                            am.cancel(it)
+                            it.cancel()
+                        }
+                    return
+                }
+                val pi =
+                    PendingIntent.getBroadcast(
+                        this@GokeApp,
+                        JXFW_ALARM_CODE,
+                        Intent(this@GokeApp, JxfwReceiver::class.java),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    ) ?: return
+                val zone = ZoneId.systemDefault()
+                var at = LocalDateTime.of(LocalDate.now(zone).with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY)), LocalTime.of(21, 0))
+                if (at.isBefore(LocalDateTime.now(zone))) at = at.plusWeeks(1)
+                am.setInexactRepeating(AlarmManager.RTC_WAKEUP, at.atZone(zone).toInstant().toEpochMilli(), AlarmManager.INTERVAL_DAY * 7, pi)
+            }
+
+            override fun followHotWaterArrearsWorker(enabled: Boolean) {
+                HotWaterArrearsWorker.follow(this@GokeApp, enabled)
+            }
+
+            override fun hotWaterTaskCopy(arrearsYuan: Double): HotWaterTaskCopy =
+                HotWaterTaskCopy(
+                    title = getString(R.string.hw_arrears_task_title, arrearsYuan),
+                    note = getString(R.string.hw_arrears_task_note, arrearsYuan),
+                    opDesc = getString(R.string.hw_arrears_task_op_desc),
+                )
+
+            override fun onHotWaterWidgetRefresh() {
+                HotWaterWidgetProvider.refreshAll(this@GokeApp)
+            }
+
+            override fun onHotWaterShowerCompleted(record: HotWaterShowerRecord) {
+                Notifications.postHotWaterSummary(this@GokeApp, record)
+            }
+        }
+
+    companion object {
+        private const val PRIVATE_ADAPTER_FACTORY = "app.goke.adapters.PrivateCampusAdapterFactory"
+        private const val JXFW_ALARM_CODE = 7421
+        private const val JXFW_NOTIFY_ID = 7422
     }
 }
 
