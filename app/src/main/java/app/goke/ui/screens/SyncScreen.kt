@@ -1,8 +1,6 @@
 package app.goke.ui.screens
 
 import android.Manifest
-import android.content.ClipData
-import android.content.ClipboardManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -22,11 +20,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,7 +39,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,21 +47,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import app.goke.R
 import app.goke.calendar.SystemCalendarSync
-import app.goke.sync.SyncAccount
-import app.goke.sync.SyncClient
-import app.goke.sync.SyncException
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
-import app.goke.ui.components.FieldText
+import app.goke.ui.components.ComingSoonScreen
 import app.goke.ui.components.FormSection
-import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintCheck
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.SwitchRow
-import app.goke.ui.components.TonalField
-import app.goke.ui.components.ValueRow
 import app.goke.ui.components.mintClickable
-import app.goke.ui.icons.ContentCopy
+import app.goke.ui.icons.Cloud
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDateTime
@@ -78,41 +66,14 @@ private val SYNC_STAMP: DateTimeFormatter = DateTimeFormatter.ofPattern("M月d�
 
 private fun syncStamp(ms: Long): String = LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault()).format(SYNC_STAMP)
 
-/** 「账号与同步」：自建云端服务器同步。 */
+/** 「账号与同步」：自建云端同步功能暂未开放，统一展示敬请期待。 */
 @Composable
 fun SyncScreen(onBack: () -> Unit) {
-    val app = LocalApp.current
-    val scope = rememberCoroutineScope()
-    val cloudState by app.sync.state.collectAsState()
-
-    MintScreen(title = stringResource(R.string.sync_title), onBack = onBack) {
-        PullToRefreshBox(
-            isRefreshing = cloudState.syncing,
-            onRefresh = {
-                scope.launch {
-                    runCatching { app.sync.syncNow() }
-                }
-            },
-        ) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp)
-                    .navigationBarsPadding()
-                    .padding(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                val account = cloudState.account
-                if (account == null) {
-                    LoginPanel()
-                } else {
-                    AccountPanel(account, cloudState.syncing, cloudState.lastSyncAt, cloudState.lastError, cloudState.needsRelogin)
-                    CloudMcpCard(account)
-                }
-            }
-        }
-    }
+    ComingSoonScreen(
+        title = stringResource(R.string.sync_title),
+        icon = Icons.Rounded.Cloud,
+        onBack = onBack,
+    )
 }
 
 /** 「系统日历同步」：独立的系统日历与桌面账号双向同步设置页（可直接从设置主页进入）。 */
@@ -315,299 +276,6 @@ private fun SystemCalendarSection() {
             }
         }
     }
-}
-
-@Composable
-private fun LoginPanel() {
-    val app = LocalApp.current
-    val scope = rememberCoroutineScope()
-    var url by remember { mutableStateOf(app.sync.lastServerUrl) }
-    var user by remember { mutableStateOf(app.sync.lastUsername) }
-    var password by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    FormSection(stringResource(R.string.sync_login_section)) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            TonalField(
-                stringResource(R.string.sync_server),
-                url,
-                { url = it },
-                placeholder = "https://cal.example.com",
-                supporting = if (SyncClient.isInsecure(url.trim().lowercase())) stringResource(R.string.sync_http_warning) else null,
-                isError = SyncClient.isInsecure(url.trim().lowercase()),
-            )
-            TonalField(stringResource(R.string.sync_username), user, { user = it })
-            TonalField(stringResource(R.string.sync_password), password, { password = it }, secret = true)
-            error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-            Button(
-                enabled = !busy && url.isNotBlank() && user.isNotBlank() && password.isNotEmpty(),
-                onClick = {
-                    busy = true
-                    error = null
-                    scope.launch {
-                        try {
-                            app.sync.login(url, user, password)
-                            password = ""
-                        } catch (e: SyncException) {
-                            error = e.message
-                        } finally {
-                            busy = false
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            ) {
-                if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.sync_login))
-            }
-        }
-    }
-}
-
-@Composable
-private fun AccountPanel(
-    account: SyncAccount,
-    syncing: Boolean,
-    lastSyncAt: Long?,
-    lastError: String?,
-    needsRelogin: Boolean,
-) {
-    val ctx = LocalContext.current
-    val app = LocalApp.current
-    val actions = LocalActions.current
-    val scope = rememberCoroutineScope()
-    val uriHandler = LocalUriHandler.current
-    var showPassword by remember { mutableStateOf(false) }
-    var showLogout by remember { mutableStateOf(false) }
-    var showRelogin by remember { mutableStateOf(false) }
-
-    FormSection(stringResource(R.string.sync_mode_cloud)) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            InfoLine(stringResource(R.string.sync_server), account.serverUrl)
-            InfoLine(
-                stringResource(R.string.sync_account),
-                account.username + if (account.role == "admin") " · " + stringResource(R.string.sync_role_admin) else "",
-            )
-            InfoLine(
-                stringResource(R.string.sync_last),
-                when {
-                    syncing -> stringResource(R.string.sync_running)
-                    lastSyncAt != null -> syncStamp(lastSyncAt)
-                    else -> stringResource(R.string.sync_never)
-                },
-            )
-            if (needsRelogin) {
-                MintCard(
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    modifier = Modifier.padding(top = 4.dp),
-                ) {
-                    Text(
-                        stringResource(R.string.sync_relogin_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                    Text(
-                        stringResource(R.string.sync_relogin_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-                    )
-                    Button(onClick = { showRelogin = true }) {
-                        Text(stringResource(R.string.sync_relogin))
-                    }
-                }
-            } else if (lastError != null) {
-                Text(lastError, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 2.dp))
-            }
-            Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(enabled = !syncing && !needsRelogin, onClick = {
-                    scope.launch {
-                        try {
-                            val n = app.sync.syncNow()
-                            actions.toast(ctx.getString(R.string.sync_done_toast, n))
-                        } catch (_: SyncException) {
-                            // 错误展示在状态行
-                        }
-                    }
-                }) {
-                    if (syncing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.sync_now))
-                }
-                FilledTonalButton(onClick = { showPassword = true }) { Text(stringResource(R.string.sync_change_password)) }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (account.role == "admin") {
-                    TextButton(onClick = { runCatching { uriHandler.openUri(account.serverUrl + "/admin/") } }) {
-                        Text(stringResource(R.string.sync_open_admin))
-                    }
-                }
-                TextButton(onClick = { showLogout = true }) { Text(stringResource(R.string.sync_logout), color = MaterialTheme.colorScheme.error) }
-            }
-        }
-    }
-
-    if (showRelogin) {
-        ReloginDialog(account = account, onDismiss = { showRelogin = false })
-    }
-    if (showLogout) {
-        AlertDialog(
-            onDismissRequest = { showLogout = false },
-            title = { Text(stringResource(R.string.sync_logout)) },
-            text = { Text(stringResource(R.string.sync_logout_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showLogout = false
-                    scope.launch { app.sync.logout() }
-                }) { Text(stringResource(R.string.sync_logout)) }
-            },
-            dismissButton = { TextButton(onClick = { showLogout = false }) { Text(stringResource(R.string.cancel)) } },
-        )
-    }
-    if (showPassword) {
-        ChangePasswordDialog(onDismiss = { showPassword = false })
-    }
-}
-
-@Composable
-private fun CloudMcpCard(account: SyncAccount) {
-    val ctx = LocalContext.current
-    val app = LocalApp.current
-    val actions = LocalActions.current
-    val endpoint = app.sync.cloudMcpEndpoint() ?: "${account.serverUrl.trimEnd('/')}/mcp"
-
-    FormSection(stringResource(R.string.sync_cloud_mcp_title)) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                stringResource(R.string.sync_cloud_mcp_desc),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
-            ValueRow(
-                stringResource(R.string.sync_cloud_mcp_endpoint),
-                endpoint,
-                onClick = {
-                    ctx.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("Cloud MCP Endpoint", endpoint))
-                    actions.toast(ctx.getString(R.string.sync_copied_mcp_config))
-                },
-            )
-            FilledTonalButton(
-                onClick = {
-                    val cfg = app.sync.cloudMcpConfigJson() ?: return@FilledTonalButton
-                    ctx.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("Cloud MCP JSON", cfg))
-                    actions.toast(ctx.getString(R.string.sync_copied_mcp_config))
-                },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) {
-                Icon(Icons.Rounded.ContentCopy, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.sync_copy_mcp_config))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReloginDialog(
-    account: SyncAccount,
-    onDismiss: () -> Unit,
-) {
-    val app = LocalApp.current
-    val scope = rememberCoroutineScope()
-    var password by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    AlertDialog(
-        onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text(stringResource(R.string.sync_relogin_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                InfoLine(stringResource(R.string.sync_server), account.serverUrl)
-                InfoLine(stringResource(R.string.sync_account), account.username)
-                FieldText(stringResource(R.string.sync_password), password, { password = it }, secret = true)
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = !busy && password.isNotEmpty(),
-                onClick = {
-                    busy = true
-                    error = null
-                    scope.launch {
-                        try {
-                            app.sync.login(account.serverUrl, account.username, password)
-                            onDismiss()
-                        } catch (e: SyncException) {
-                            error = e.message
-                        } finally {
-                            busy = false
-                        }
-                    }
-                },
-            ) {
-                if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.sync_relogin))
-            }
-        },
-        dismissButton = {
-            TextButton(enabled = !busy, onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        },
-    )
-}
-
-@Composable
-private fun ChangePasswordDialog(onDismiss: () -> Unit) {
-    val ctx = LocalContext.current
-    val app = LocalApp.current
-    val actions = LocalActions.current
-    val scope = rememberCoroutineScope()
-    var old by remember { mutableStateOf("") }
-    var new by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    AlertDialog(
-        onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text(stringResource(R.string.sync_change_password)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                FieldText(stringResource(R.string.sync_old_password), old, { old = it }, secret = true)
-                FieldText(
-                    stringResource(R.string.sync_new_password),
-                    new,
-                    { new = it },
-                    secret = true,
-                    supporting = stringResource(R.string.sync_password_rule),
-                )
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = !busy && old.isNotEmpty() && new.length >= 8,
-                onClick = {
-                    if (busy) return@TextButton
-                    busy = true
-                    error = null
-                    scope.launch {
-                        try {
-                            app.sync.changePassword(old, new)
-                            actions.toast(ctx.getString(R.string.sync_password_changed))
-                            onDismiss()
-                        } catch (e: SyncException) {
-                            error = e.message
-                        } finally {
-                            busy = false
-                        }
-                    }
-                },
-            ) {
-                if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.save))
-            }
-        },
-        dismissButton = {
-            TextButton(enabled = !busy, onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        },
-    )
 }
 
 @Composable

@@ -58,23 +58,14 @@ object PeriodicSync {
     }
 }
 
-/** 一次后台云同步：未登录时直接成功；失败按退避重试。 */
+/** 后台云同步暂未启用：清理遗留周期任务并直接返回成功。 */
 class SyncWorker(
     context: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        val app = applicationContext.gokeApp
-        if (app.sync.state.value.account == null) return Result.success()
-        return try {
-            app.sync.syncNow()
-            if (app.calendarSync.state.value.prefs.enabled) {
-                runCatching { app.calendarSync.syncNow() }
-            }
-            Result.success()
-        } catch (_: SyncException) {
-            Result.retry()
-        }
+        PeriodicSync.follow(applicationContext, false)
+        return Result.success()
     }
 }
 

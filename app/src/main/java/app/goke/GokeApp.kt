@@ -37,8 +37,6 @@ import app.goke.jxfw.JxfwReceiver
 import app.goke.notify.Notifications
 import app.goke.notify.ReminderScheduler
 import app.goke.sync.PeriodicSync
-import app.goke.sync.SyncManager
-import app.goke.sync.SyncStore
 import app.goke.widget.HotWaterWidgetProvider
 import app.goke.widget.NextWidgetProvider
 import app.goke.widget.ParcelWidgetProvider
@@ -79,8 +77,6 @@ open class GokeApp : Application() {
     lateinit var reminders: ReminderScheduler
         private set
     lateinit var advanced: AdvancedController
-        private set
-    lateinit var sync: SyncManager
         private set
     lateinit var calendarSync: SystemCalendarSync
         private set
@@ -124,7 +120,6 @@ open class GokeApp : Application() {
         secrets = SecretStore(this)
         reminders = ReminderScheduler(this)
         advanced = AdvancedController(this)
-        sync = SyncManager(repo, SyncStore(this, secrets), scope, errors = errors)
         calendarSync = SystemCalendarSync(this, repo, settings, CalendarSyncStore(this), scope, errors = errors)
 
         val campusHost = createCampusHost()
@@ -142,7 +137,7 @@ open class GokeApp : Application() {
                 jxfw.hydrate()
                 tzcs.hydrate()
                 hotWater.hydrate()
-                sync.hydrate()
+                PeriodicSync.follow(this@GokeApp, false)
                 updateChecker.clearStalePendingUpdate(cacheDir)
                 Notifications.ensureChannels(this@GokeApp)
                 DeepLinks.publishShortcuts(this@GokeApp)
@@ -153,23 +148,15 @@ open class GokeApp : Application() {
                 uiActive.first { it }
                 runCatching { updateChecker.maybeAutoCheck() }
             }
-            // 回到前台才做网络同步、系统日历监听与教务抓取；后台拉起的进程（小组件 tick / 开机）不碰网络
+            // 回到前台才做系统日历监听与教务抓取；后台拉起的进程（小组件 tick / 开机）不碰网络
             launch {
                 uiActive.collect { active ->
                     calendarSync.updateObserving(active)
                     if (active) {
-                        sync.requestSync(1000)
                         calendarSync.requestSync(1200)
                         launch { jxfw.catchUp() }
                     }
                 }
-            }
-            // 登录状态下排后台周期同步（MCP / 其他设备的写入由此到达本机），退出登录自动取消。
-            launch {
-                sync.state
-                    .map { it.account != null }
-                    .distinctUntilChanged()
-                    .collect { PeriodicSync.follow(this@GokeApp, it) }
             }
             launch {
                 calendarSync.state
@@ -186,11 +173,10 @@ open class GokeApp : Application() {
                     .distinctUntilChanged()
                     .collect { HotWaterArrearsWorker.follow(this@GokeApp, it) }
             }
-            // 本地数据有变化后，稍后触发云端与系统日历对账
+            // 本地数据有变化后，稍后触发系统日历对账
             launch {
                 repo.snapshot.collect { snap ->
                     if (uiActive.value) {
-                        sync.requestSync()
                         calendarSync.onLocalSnapshotChanged(snap)
                     }
                 }

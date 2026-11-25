@@ -591,13 +591,11 @@ private fun CalendarSyncNavRow(onOpen: () -> Unit) {
 
 @Composable
 private fun SyncNavRow(onOpen: () -> Unit) {
-    val app = LocalApp.current
-    val account by app.sync.state.collectAsState()
     NavRow(
         stringResource(R.string.sync_title),
         null,
         Icons.Rounded.Cloud,
-        trailing = account.account?.username,
+        trailing = stringResource(R.string.feature_coming_soon_short),
         onClick = onOpen,
     )
 }

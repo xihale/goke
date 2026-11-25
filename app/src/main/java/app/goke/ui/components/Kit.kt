@@ -174,6 +174,44 @@ fun MintScreen(
     }
 }
 
+/** 暂未开放功能的统一占位页骨架：沿用 [MintScreen] 顶栏与居中图标说明。 */
+@Composable
+fun ComingSoonScreen(
+    title: String,
+    icon: ImageVector,
+    onBack: () -> Unit,
+) {
+    MintScreen(title = title, onBack = onBack) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(48.dp),
+            )
+            Text(
+                text = stringResource(R.string.feature_coming_soon),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = stringResource(R.string.feature_coming_soon_desc),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
 @Composable
 fun MintCard(
     modifier: Modifier = Modifier,
