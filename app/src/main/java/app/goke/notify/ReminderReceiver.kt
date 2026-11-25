@@ -12,18 +12,41 @@ class ReminderReceiver : BroadcastReceiver() {
         val title = intent.getStringExtra(EXTRA_TITLE) ?: return
         val text = intent.getStringExtra(EXTRA_TEXT).orEmpty()
         val id = intent.getIntExtra(EXTRA_ID, title.hashCode())
+        val taskId = intent.getStringExtra(EXTRA_TASK_ID)
+        val courseId = intent.getStringExtra(EXTRA_COURSE_ID)
+        val insistent = intent.getBooleanExtra(EXTRA_PERSISTENT, false)
         val important = intent.getBooleanExtra(EXTRA_IMPORTANT, false)
+        val digest = intent.getBooleanExtra(EXTRA_DIGEST, false)
         Notifications.ensureChannels(context)
+        if (insistent && Notifications.canPost(context)) {
+            val started =
+                ReminderAlertService.start(
+                    ctx = context,
+                    id = id,
+                    title = title,
+                    text = text,
+                    taskId = taskId,
+                    important = important,
+                    courseId = courseId,
+                )
+            if (started) return
+        }
+        val channel =
+            when {
+                important -> Notifications.CHANNEL_EXAM
+                digest -> Notifications.CHANNEL_DIGEST
+                else -> Notifications.CHANNEL_REMINDER
+            }
         Notifications.post(
             ctx = context,
             id = id,
-            channel = if (important) Notifications.CHANNEL_EXAM else Notifications.CHANNEL_REMINDER,
+            channel = channel,
             title = title,
             text = text,
-            taskId = intent.getStringExtra(EXTRA_TASK_ID),
-            insistent = intent.getBooleanExtra(EXTRA_PERSISTENT, false),
+            taskId = taskId,
+            insistent = insistent,
             important = important,
-            courseId = intent.getStringExtra(EXTRA_COURSE_ID),
+            courseId = courseId,
         )
     }
 
@@ -35,5 +58,6 @@ class ReminderReceiver : BroadcastReceiver() {
         const val EXTRA_COURSE_ID = "course_id"
         const val EXTRA_PERSISTENT = "persistent"
         const val EXTRA_IMPORTANT = "important"
+        const val EXTRA_DIGEST = "digest"
     }
 }

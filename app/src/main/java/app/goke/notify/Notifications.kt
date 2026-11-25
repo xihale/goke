@@ -8,8 +8,12 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.AudioManager
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -20,25 +24,56 @@ import app.goke.hotwater.HotWaterShowerRecord
 
 /** 通知渠道与发送。 */
 object Notifications {
-    const val CHANNEL_REMINDER = "reminder"
-    const val CHANNEL_EXAM = "exam_reminder"
+    const val CHANNEL_REMINDER = "reminder_v3"
+    const val CHANNEL_DIGEST = "digest_reminder"
+    const val CHANNEL_EXAM = "exam_reminder_v3"
+    private val LEGACY_CHANNELS = listOf("reminder", "reminder_v2", "exam_reminder", "exam_reminder_v2")
     const val CHANNEL_PARCEL = "parcel"
     const val CHANNEL_HOT_WATER = "hot_water"
     const val CHANNEL_QUICK = "quickadd"
     const val CHANNEL_LAN_WEB = "lan_web"
     const val NOTIFY_QUICK_ID = 9002
     const val NOTIFY_LAN_WEB_ID = 9003
+    private const val BURST_COOLDOWN_MS = 3_000L
+
+    @Volatile
+    private var lastOrdinaryAlertAtMs: Long = 0L
 
     fun ensureChannels(ctx: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = ctx.getSystemService(NotificationManager::class.java)
+        // 清理旧渠道，确保升级用户也能切换至新版现代提示音配置
+        runCatching {
+            for (legacyId in LEGACY_CHANNELS) {
+                nm.deleteNotificationChannel(legacyId)
+            }
+        }
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_REMINDER, ctx.getString(R.string.channel_reminder), NotificationManager.IMPORTANCE_HIGH),
+            NotificationChannel(CHANNEL_REMINDER, ctx.getString(R.string.channel_reminder), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = ctx.getString(R.string.channel_reminder_desc)
+                setSound(normalChimeUri(ctx), notifAudioAttributes())
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0L, 140L)
+                enableLights(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            },
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_DIGEST, ctx.getString(R.string.channel_digest), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = ctx.getString(R.string.channel_digest_desc)
+                setSound(digestChimeUri(ctx), notifAudioAttributes())
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0L, 80L)
+                enableLights(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            },
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_EXAM, ctx.getString(R.string.channel_exam), NotificationManager.IMPORTANCE_HIGH).apply {
                 description = ctx.getString(R.string.channel_exam_desc)
+                setSound(urgentChimeUri(ctx), alarmAudioAttributes())
                 enableVibration(true)
+                vibrationPattern = longArrayOf(0L, 500L, 250L, 500L)
                 enableLights(true)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 setBypassDnd(true)
@@ -219,6 +254,82 @@ object Notifications {
         Build.VERSION.SDK_INT < 33 ||
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
+    fun buildReminderNotification(
+        ctx: Context,
+        id: Int,
+        channel: String,
+        title: String,
+        text: String,
+        taskId: String? = null,
+        insistent: Boolean = false,
+        important: Boolean = false,
+        courseId: String? = null,
+        silentForService: Boolean = false,
+    ): Notification {
+        ensureChannels(ctx)
+        val openIntent =
+            when {
+                taskId != null -> Intent(Intent.ACTION_VIEW, DeepLinks.taskUri(taskId), ctx, MainActivity::class.java)
+                courseId != null -> Intent(Intent.ACTION_VIEW, DeepLinks.courseUri(courseId), ctx, MainActivity::class.java)
+                else -> Intent(ctx, MainActivity::class.java)
+            }.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .putExtra(ReminderAlertService.EXTRA_STOP_ALERT_ID, id)
+        val open =
+            PendingIntent.getActivity(
+                ctx,
+                id,
+                openIntent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+
+        fun actionIntent(op: String): Intent =
+            Intent(ctx, TaskActionReceiver::class.java)
+                .setAction(op)
+                .setData(Uri.parse("goke://notif/$id/$op"))
+                .putExtra(TaskActionReceiver.EXTRA_TASK_ID, taskId)
+                .putExtra(TaskActionReceiver.EXTRA_NOTIFICATION_ID, id)
+                .putExtra(ReminderReceiver.EXTRA_TITLE, title)
+                .putExtra(ReminderReceiver.EXTRA_TEXT, text)
+                .putExtra(ReminderReceiver.EXTRA_PERSISTENT, insistent)
+                .putExtra(ReminderReceiver.EXTRA_IMPORTANT, important)
+
+        fun actionPi(op: String): PendingIntent = PendingIntent.getBroadcast(ctx, id, actionIntent(op), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+        val dismissPi = actionPi(TaskActionReceiver.ACTION_DISMISS)
+        val n =
+            NotificationCompat
+                .Builder(ctx, channel)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setContentIntent(open)
+                .setDeleteIntent(dismissPi)
+                .setAutoCancel(true)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setPriority(if (important || insistent) NotificationCompat.PRIORITY_MAX else NotificationCompat.PRIORITY_HIGH)
+                .setCategory(if (important || insistent) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_REMINDER)
+                .apply {
+                    if (silentForService) {
+                        // 持续提醒服务或并发退避静默时避免重叠提示音
+                        setSilent(true)
+                    } else {
+                        setDefaults(NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_LIGHTS)
+                        setSound(soundForChannel(ctx, channel, important))
+                    }
+                }
+        if (taskId != null) {
+            n.addAction(NotificationCompat.Action.Builder(0, ctx.getString(R.string.notif_action_done), actionPi(TaskActionReceiver.ACTION_DONE)).build())
+            n.addAction(NotificationCompat.Action.Builder(0, ctx.getString(R.string.notif_action_snooze), actionPi(TaskActionReceiver.ACTION_SNOOZE)).build())
+        }
+        if (insistent) {
+            n.addAction(NotificationCompat.Action.Builder(0, ctx.getString(R.string.notif_action_stop), dismissPi).build())
+        }
+        val built = n.build()
+        if (insistent && !silentForService) built.flags = built.flags or Notification.FLAG_INSISTENT
+        return built
+    }
+
     fun post(
         ctx: Context,
         id: Int,
@@ -231,58 +342,99 @@ object Notifications {
         courseId: String? = null,
     ) {
         if (!canPost(ctx)) return
-        val open =
-            PendingIntent.getActivity(
-                ctx,
-                id,
-                (
-                    when {
-                        taskId != null -> Intent(Intent.ACTION_VIEW, DeepLinks.taskUri(taskId), ctx, MainActivity::class.java)
-                        courseId != null -> Intent(Intent.ACTION_VIEW, DeepLinks.courseUri(courseId), ctx, MainActivity::class.java)
-                        else -> Intent(ctx, MainActivity::class.java)
-                    }
-                ).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-        val n =
-            NotificationCompat
-                .Builder(ctx, channel)
-                .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle(title)
-                .setContentText(text)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-                .setContentIntent(open)
-                .setAutoCancel(true)
-                .setPriority(if (important) NotificationCompat.PRIORITY_MAX else NotificationCompat.PRIORITY_HIGH)
-                .apply {
-                    if (important) {
-                        setCategory(NotificationCompat.CATEGORY_ALARM)
-                        setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                    }
-                }
-        if (taskId != null) {
-            fun action(
-                op: String,
-                label: Int,
-            ): NotificationCompat.Action {
-                val i =
-                    Intent(ctx, TaskActionReceiver::class.java)
-                        .setAction(op)
-                        .setData(Uri.parse("goke://notif/$id/$op"))
-                        .putExtra(TaskActionReceiver.EXTRA_TASK_ID, taskId)
-                        .putExtra(TaskActionReceiver.EXTRA_NOTIFICATION_ID, id)
-                        .putExtra(ReminderReceiver.EXTRA_TITLE, title)
-                        .putExtra(ReminderReceiver.EXTRA_TEXT, text)
-                        .putExtra(ReminderReceiver.EXTRA_PERSISTENT, insistent)
-                        .putExtra(ReminderReceiver.EXTRA_IMPORTANT, important)
-                val pi = PendingIntent.getBroadcast(ctx, id, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-                return NotificationCompat.Action.Builder(0, ctx.getString(label), pi).build()
-            }
-            n.addAction(action(TaskActionReceiver.ACTION_DONE, R.string.notif_action_done))
-            n.addAction(action(TaskActionReceiver.ACTION_SNOOZE, R.string.notif_action_snooze))
+        val now = System.currentTimeMillis()
+        // 同一时刻多个普通提醒齐发时，仅首条发声，后续 3 秒内静音弹出，避免提示音碰撞
+        val throttled = !insistent && !important && (now - lastOrdinaryAlertAtMs) in 0 until BURST_COOLDOWN_MS
+        if (!insistent && !important && !throttled) {
+            lastOrdinaryAlertAtMs = now
         }
-        val built = n.build()
-        if (insistent) built.flags = built.flags or Notification.FLAG_INSISTENT
+        val built =
+            buildReminderNotification(
+                ctx = ctx,
+                id = id,
+                channel = channel,
+                title = title,
+                text = text,
+                taskId = taskId,
+                insistent = insistent,
+                important = important,
+                courseId = courseId,
+                silentForService = throttled,
+            )
         runCatching { NotificationManagerCompat.from(ctx).notify(id, built) }
+        if (!insistent && !throttled) {
+            playFallbackSoundIfChannelSilenced(ctx, channel, important)
+        }
     }
+
+    internal fun resetAlertCooldownForTest() {
+        lastOrdinaryAlertAtMs = 0L
+    }
+
+    private fun playFallbackSoundIfChannelSilenced(
+        ctx: Context,
+        channel: String,
+        important: Boolean,
+    ) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        val ch = nm.getNotificationChannel(channel) ?: return
+        if (ch.importance == NotificationManager.IMPORTANCE_NONE) return
+        if (ch.sound != null && ch.importance >= NotificationManager.IMPORTANCE_DEFAULT) return
+        val am = ctx.getSystemService(AudioManager::class.java) ?: return
+        if (am.ringerMode != AudioManager.RINGER_MODE_NORMAL) return
+        val dndBlocked = nm.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL && !ch.canBypassDnd()
+        if (dndBlocked) return
+        val uri = soundForChannel(ctx, channel, important)
+        runCatching {
+            RingtoneManager.getRingtone(ctx, uri)?.apply {
+                audioAttributes = if (important) alarmAudioAttributes() else notifAudioAttributes()
+                play()
+            }
+        }
+    }
+
+    internal fun rawUri(
+        ctx: Context,
+        resId: Int,
+    ): Uri = Uri.parse("android.resource://${ctx.packageName}/$resId")
+
+    internal fun normalChimeUri(ctx: Context): Uri = rawUri(ctx, R.raw.goke_chime_normal)
+
+    internal fun digestChimeUri(ctx: Context): Uri = rawUri(ctx, R.raw.goke_chime_digest)
+
+    internal fun urgentChimeUri(ctx: Context): Uri = rawUri(ctx, R.raw.goke_chime_urgent)
+
+    internal fun loopChimeUri(ctx: Context): Uri = rawUri(ctx, R.raw.goke_chime_loop)
+
+    private fun soundForChannel(
+        ctx: Context,
+        channel: String,
+        important: Boolean,
+    ): Uri =
+        when {
+            important || channel == CHANNEL_EXAM -> urgentChimeUri(ctx)
+            channel == CHANNEL_DIGEST -> digestChimeUri(ctx)
+            else -> normalChimeUri(ctx)
+        }
+
+    internal fun fallbackAlarmSound(): Uri? =
+        RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            ?: Settings.System.DEFAULT_ALARM_ALERT_URI
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+    private fun notifAudioAttributes(): AudioAttributes =
+        AudioAttributes
+            .Builder()
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+            .build()
+
+    private fun alarmAudioAttributes(): AudioAttributes =
+        AudioAttributes
+            .Builder()
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .build()
 }

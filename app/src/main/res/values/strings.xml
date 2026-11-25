@@ -9,11 +9,15 @@
     <string name="widget_todo_title">待办 · %1$d</string>
     <string name="notif_action_done">完成</string>
     <string name="notif_action_snooze">1 小时后再提醒</string>
+    <string name="notif_action_stop">停止提醒</string>
     <string name="shortcut_add_task">新建待办</string>
     <string name="shortcut_today">今天</string>
     <string name="process_text_label">加到 Goke 待办</string>
     <string name="widget_empty">(〃\'▽\'〃) 今天没有安排啦</string>
     <string name="channel_reminder">课程与待办提醒</string>
+    <string name="channel_reminder_desc">普通课程、待办与日程提醒</string>
+    <string name="channel_digest">每日安排摘要</string>
+    <string name="channel_digest_desc">每天在设定时间轻柔提醒今日安排</string>
     <string name="channel_exam">重要考试提醒</string>
     <string name="channel_exam_desc">考试与重要考核提前强提醒</string>
     <string name="channel_parcel">快递取件</string>

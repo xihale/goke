@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import app.goke.data.DarkMode
+import app.goke.notify.ReminderAlertService
 import app.goke.ui.GokeRoot
 import app.goke.ui.theme.GokeTheme
 
@@ -83,6 +84,9 @@ class MainActivity : ComponentActivity() {
     @Suppress("DEPRECATION")
     private fun handleIntent(intent: android.content.Intent?) {
         intent ?: return
+        if (intent.hasExtra(ReminderAlertService.EXTRA_STOP_ALERT_ID)) {
+            ReminderAlertService.stop(this, intent.getIntExtra(ReminderAlertService.EXTRA_STOP_ALERT_ID, 0))
+        }
         DeepLinks.parse(intent)?.let {
             gokeApp.links.value = it
             return

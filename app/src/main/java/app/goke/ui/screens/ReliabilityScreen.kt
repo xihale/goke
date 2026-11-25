@@ -90,10 +90,13 @@ fun ReliabilityScreen(onBack: () -> Unit) {
             val s =
                 withContext(Dispatchers.IO) {
                     val notif = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+                    Notifications.ensureChannels(ctx)
                     val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     val channel =
                         Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
-                            nm.getNotificationChannel(Notifications.CHANNEL_REMINDER)?.importance != NotificationManager.IMPORTANCE_NONE
+                            nm.getNotificationChannel(Notifications.CHANNEL_REMINDER)?.let {
+                                it.importance != NotificationManager.IMPORTANCE_NONE && it.importance >= NotificationManager.IMPORTANCE_DEFAULT
+                            } ?: false
                     val exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
                     val battery = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName)
                     val parcelListener = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)

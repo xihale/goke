@@ -43,6 +43,8 @@ data class Reminder(
     val important: Boolean = false,
     /** 课程提醒直达课程页。 */
     val courseId: String? = null,
+    /** 每日摘要：走温和的晨间提示音渠道。 */
+    val digest: Boolean = false,
 )
 
 /**
@@ -113,6 +115,7 @@ class ReminderScheduler(
                     .putExtra(ReminderReceiver.EXTRA_COURSE_ID, r.courseId)
                     .putExtra(ReminderReceiver.EXTRA_PERSISTENT, r.persistent)
                     .putExtra(ReminderReceiver.EXTRA_IMPORTANT, r.important)
+                    .putExtra(ReminderReceiver.EXTRA_DIGEST, r.digest)
             val pi = PendingIntent.getBroadcast(ctx, i, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             val at =
                 r.triggerAt
@@ -177,8 +180,12 @@ class ReminderScheduler(
         val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
         for (t in snap.tasks) {
             if (t.done || t.deletedAt != null || !t.remindPersistent || t.effectiveRemindMinutes.isEmpty()) {
-                nm.cancel(persistentNotifId(t.id, false))
-                nm.cancel(persistentNotifId(t.id, true))
+                val id0 = persistentNotifId(t.id, false)
+                val id1 = persistentNotifId(t.id, true)
+                ReminderAlertService.stop(ctx, id0)
+                ReminderAlertService.stop(ctx, id1)
+                nm.cancel(id0)
+                nm.cancel(id1)
             }
         }
     }
@@ -294,7 +301,14 @@ class ReminderScheduler(
                             }.toSet()
                             .size
                     if (courses + tasks > 0) {
-                        out += Reminder(date.atTime(LocalTime.of(st.digestHour, st.digestMinute)), ctx.getString(R.string.digest_title), ctx.getString(R.string.today_summary, courses, tasks), "digest$date")
+                        out +=
+                            Reminder(
+                                triggerAt = date.atTime(LocalTime.of(st.digestHour, st.digestMinute)),
+                                title = ctx.getString(R.string.digest_title),
+                                text = ctx.getString(R.string.today_summary, courses, tasks),
+                                key = "digest$date",
+                                digest = true,
+                            )
                     }
                 }
                 for (item in items) {

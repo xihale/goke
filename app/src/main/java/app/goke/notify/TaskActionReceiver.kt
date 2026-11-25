@@ -19,8 +19,13 @@ class TaskActionReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent,
     ) {
-        val taskId = intent.getStringExtra(EXTRA_TASK_ID) ?: return
         val nid = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
+        if (intent.action == ACTION_DISMISS) {
+            ReminderAlertService.stop(context, nid)
+            if (nid != 0) context.getSystemService(android.app.NotificationManager::class.java).cancel(nid)
+            return
+        }
+        val taskId = intent.getStringExtra(EXTRA_TASK_ID) ?: return
         val app = context.gokeApp
         when (intent.action) {
             ACTION_DONE -> {
@@ -63,12 +68,14 @@ class TaskActionReceiver : BroadcastReceiver() {
                 }
             }
         }
+        ReminderAlertService.stop(context, nid)
         if (nid != 0) context.getSystemService(android.app.NotificationManager::class.java).cancel(nid)
     }
 
     companion object {
         const val ACTION_DONE = "app.goke.action.TASK_DONE"
         const val ACTION_SNOOZE = "app.goke.action.TASK_SNOOZE"
+        const val ACTION_DISMISS = "app.goke.action.TASK_DISMISS"
         const val EXTRA_TASK_ID = "task_id"
         const val EXTRA_NOTIFICATION_ID = "nid"
         const val SNOOZE_MS = 60 * 60 * 1000L

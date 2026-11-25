@@ -11,6 +11,7 @@ import android.media.AudioManager
 import androidx.core.app.NotificationCompat
 import androidx.test.core.app.ApplicationProvider
 import app.goke.GokeApp
+import app.goke.R
 import app.goke.SmokeTestApp
 import app.goke.core.agenda.Agenda
 import app.goke.core.change.Edits
@@ -28,6 +29,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -285,11 +287,141 @@ class NotifyFixesTest {
                 .putExtra(ReminderReceiver.EXTRA_PERSISTENT, first.persistent)
                 .putExtra(ReminderReceiver.EXTRA_IMPORTANT, first.important),
         )
+        val serviceIntent = shadowOf(app).nextStartedService
+        assertNotNull(serviceIntent)
+        assertEquals(ReminderAlertService::class.java.name, serviceIntent.component?.className)
+        assertEquals(ReminderAlertService.ACTION_START, serviceIntent.action)
+        val serviceController = Robolectric.buildService(ReminderAlertService::class.java, serviceIntent).create().startCommand(0, 0)
+        assertEquals(777, ReminderAlertService.activeNotifId)
+
         val posted = shadowOf(nm).getNotification(777)
         assertNotNull(posted)
         assertEquals(Notifications.CHANNEL_EXAM, posted!!.channelId)
         assertEquals(NotificationCompat.CATEGORY_ALARM, posted.category)
-        assertTrue((posted.flags and Notification.FLAG_INSISTENT) != 0)
+        assertNotNull(posted.deleteIntent)
+        assertTrue(posted.actions.any { it.title == app.getString(R.string.notif_action_stop) })
+
+        TaskActionReceiver().onReceive(
+            app,
+            Intent(app, TaskActionReceiver::class.java)
+                .setAction(TaskActionReceiver.ACTION_DISMISS)
+                .putExtra(TaskActionReceiver.EXTRA_NOTIFICATION_ID, 777),
+        )
+        assertEquals(0, ReminderAlertService.activeNotifId)
+        assertNull(shadowOf(nm).getNotification(777))
+        serviceController.destroy()
+    }
+
+    @Test
+    fun ordinaryReminderUsesAudibleChannelAndPersistentStopClearsTaskAlert() {
+        Notifications.resetAlertCooldownForTest()
+        val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        Notifications.ensureChannels(app)
+
+        val reminderChannel = nm.getNotificationChannel(Notifications.CHANNEL_REMINDER)
+        assertNotNull(reminderChannel)
+        assertEquals(NotificationManager.IMPORTANCE_HIGH, reminderChannel!!.importance)
+        assertEquals(Notifications.normalChimeUri(app), reminderChannel.sound)
+        assertTrue(reminderChannel.shouldVibrate())
+
+        val digestChannel = nm.getNotificationChannel(Notifications.CHANNEL_DIGEST)
+        assertNotNull(digestChannel)
+        assertEquals(NotificationManager.IMPORTANCE_HIGH, digestChannel!!.importance)
+        assertEquals(Notifications.digestChimeUri(app), digestChannel.sound)
+
+        val examChannel = nm.getNotificationChannel(Notifications.CHANNEL_EXAM)
+        assertNotNull(examChannel)
+        assertEquals(NotificationManager.IMPORTANCE_HIGH, examChannel!!.importance)
+        assertEquals(Notifications.urgentChimeUri(app), examChannel.sound)
+        assertTrue(examChannel.shouldVibrate())
+        assertTrue(examChannel.canBypassDnd())
+
+        ReminderReceiver().onReceive(
+            app,
+            Intent(app, ReminderReceiver::class.java)
+                .putExtra(ReminderReceiver.EXTRA_TITLE, "普通待办提醒")
+                .putExtra(ReminderReceiver.EXTRA_TEXT, "待办到时间了")
+                .putExtra(ReminderReceiver.EXTRA_ID, 888)
+                .putExtra(ReminderReceiver.EXTRA_TASK_ID, "t-ordinary-1")
+                .putExtra(ReminderReceiver.EXTRA_PERSISTENT, false)
+                .putExtra(ReminderReceiver.EXTRA_IMPORTANT, false),
+        )
+        assertNull(shadowOf(app).nextStartedService)
+        val ordinary = shadowOf(nm).getNotification(888)
+        assertNotNull(ordinary)
+        assertEquals(Notifications.CHANNEL_REMINDER, ordinary!!.channelId)
+        assertEquals(NotificationCompat.CATEGORY_REMINDER, ordinary.category)
+        assertEquals(2, ordinary.actions.size)
+
+        // 连续 3 秒内的第二条普通提醒自动静默避让，避免重叠刺耳
+        ReminderReceiver().onReceive(
+            app,
+            Intent(app, ReminderReceiver::class.java)
+                .putExtra(ReminderReceiver.EXTRA_TITLE, "普通待办提醒 2")
+                .putExtra(ReminderReceiver.EXTRA_TEXT, "待办到时间了")
+                .putExtra(ReminderReceiver.EXTRA_ID, 889)
+                .putExtra(ReminderReceiver.EXTRA_TASK_ID, "t-ordinary-2")
+                .putExtra(ReminderReceiver.EXTRA_PERSISTENT, false)
+                .putExtra(ReminderReceiver.EXTRA_IMPORTANT, false),
+        )
+        val burstSecond = shadowOf(nm).getNotification(889)
+        assertNotNull(burstSecond)
+        assertNull(burstSecond!!.sound)
+
+        // 每日摘要走独立温和渠道，且不受普通提醒退避影响
+        Notifications.resetAlertCooldownForTest()
+        ReminderReceiver().onReceive(
+            app,
+            Intent(app, ReminderReceiver::class.java)
+                .putExtra(ReminderReceiver.EXTRA_TITLE, "今日安排")
+                .putExtra(ReminderReceiver.EXTRA_TEXT, "今天 2 节课 · 1 项待办")
+                .putExtra(ReminderReceiver.EXTRA_ID, 890)
+                .putExtra(ReminderReceiver.EXTRA_DIGEST, true),
+        )
+        val digestNotif = shadowOf(nm).getNotification(890)
+        assertNotNull(digestNotif)
+        assertEquals(Notifications.CHANNEL_DIGEST, digestNotif!!.channelId)
+    }
+
+    @Test
+    fun smartAlertRampAdaptsToHeadphonesForegroundAndQuietHours() {
+        val headphones =
+            ReminderAlertService.computeRampProfile(
+                important = true,
+                headphonesConnected = true,
+                quietHours = false,
+                inForeground = false,
+            )
+        assertTrue(headphones.maxVolume <= 0.55f)
+        assertTrue(headphones.startVolume < headphones.maxVolume)
+
+        val foreground =
+            ReminderAlertService.computeRampProfile(
+                important = false,
+                headphonesConnected = false,
+                quietHours = false,
+                inForeground = true,
+            )
+        assertTrue(foreground.maxVolume <= 0.6f)
+
+        val night =
+            ReminderAlertService.computeRampProfile(
+                important = false,
+                headphonesConnected = false,
+                quietHours = true,
+                inForeground = false,
+            )
+        val dayExam =
+            ReminderAlertService.computeRampProfile(
+                important = true,
+                headphonesConnected = false,
+                quietHours = false,
+                inForeground = false,
+            )
+        assertTrue(night.startVolume < dayExam.startVolume)
+        assertTrue(night.rampDurationMs > dayExam.rampDurationMs)
+        assertEquals(1.0f, dayExam.maxVolume, 0.001f)
     }
 
     @Test
