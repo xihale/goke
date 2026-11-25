@@ -187,15 +187,11 @@ class AttachmentEditorTest {
         val start = Offset(bounds.width * 0.85f, bounds.height * 0.5f)
         val mid = Offset(bounds.width * 0.5f, bounds.height * 0.5f)
         val end = Offset(bounds.width * 0.15f, bounds.height * 0.5f)
-        node.performTouchInput {
-            down(start)
-            advanceEventTime(650L)
-            moveTo(start)
-        }
+        node.performTouchInput { down(start) }
+        rule.mainClock.advanceTimeBy(600L)
         rule.waitForIdle()
 
         node.performTouchInput {
-            advanceEventTime(32L)
             moveTo(mid)
             advanceEventTime(32L)
             moveTo(end)

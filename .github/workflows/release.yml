@@ -1,8 +1,9 @@
 name: Release
 
-# 正式发版包包含未入库的私有 adapters/ 模块，由本地签名构建并发布；
-# 仅保留手动触发用于无适配器开源骨架包验证，避免打 tag 时 CI 自动覆写正式 Release。
+# 正式发版时通过 ADAPTERS_SSH_KEY（Deploy Key）从私有仓库拉取 adapters/ 后由 CI 签名打包。
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
@@ -13,7 +14,7 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    # 签名 Secrets 存放在 release 环境，便于后续加保护规则
+    # 签名与私有适配器密钥存放在 release 环境
     environment: release
     permissions:
       contents: write
@@ -21,12 +22,36 @@ jobs:
       # fetch-depth: 0 拉全量历史和 tag，构建脚本用 git describe 派生版本号
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.tag || '' }}
           fetch-depth: 0
+
+      - name: Check private adapters secret
+        env:
+          ADAPTERS_SSH_KEY: ${{ secrets.ADAPTERS_SSH_KEY }}
+        run: |
+          if [ -z "$ADAPTERS_SSH_KEY" ]; then
+            echo "::error::缺少 ADAPTERS_SSH_KEY Secret，拒绝在缺失私有适配器的情况下构建发布包"
+            exit 1
+          fi
+
+      - name: Checkout private adapters
+        uses: actions/checkout@v4
+        with:
+          repository: xihale/goke-adapters
+          ssh-key: ${{ secrets.ADAPTERS_SSH_KEY }}
+          path: adapters
+
+      - name: Verify private adapters mounted
+        run: |
+          if [ ! -f adapters/build.gradle.kts ]; then
+            echo "::error::adapters/build.gradle.kts 缺失，私有适配器仓库检出异常"
+            exit 1
+          fi
 
       - name: Extract release changelog
         run: |
-          python3 scripts/extract_changelog.py "${{ inputs.tag }}" \
+          TAG_NAME="${{ inputs.tag || github.ref_name }}"
+          python3 scripts/extract_changelog.py "$TAG_NAME" \
             --changelog CHANGELOG.md \
             --allow-tag-fallback \
             --out "${RUNNER_TEMP}/release_notes.md"
@@ -44,11 +69,14 @@ jobs:
       - name: Check string resources
         run: python3 scripts/check_strings.py
 
+      - name: Check UI rules
+        run: python3 scripts/check_ui_rules.py
+
       - name: Format check
         run: ./gradlew spotlessCheck
 
       - name: Unit tests
-        run: ./gradlew :core:test :script:test :app:testDebugUnitTest --stacktrace
+        run: ./gradlew :core:test :script:test :adapters:testDebugUnitTest :app:testDebugUnitTest --stacktrace
 
       - name: Check and decode signing keystore
         env:
@@ -80,7 +108,7 @@ jobs:
       - name: Prepare release asset
         id: meta
         run: |
-          TAG_NAME="${{ inputs.tag }}"
+          TAG_NAME="${{ inputs.tag || github.ref_name }}"
           VERSION="${TAG_NAME#v}"
           src="app/build/outputs/apk/release/app-release.apk"
           if [ ! -f "$src" ]; then
@@ -106,8 +134,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.tag }}
-          name: ${{ inputs.tag }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: ${{ inputs.tag || github.ref_name }}
           files: Goke-*.apk
           prerelease: ${{ steps.meta.outputs.prerelease }}
           body_path: ${{ runner.temp }}/release_notes.md
