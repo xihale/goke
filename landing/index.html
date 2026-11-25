@@ -199,8 +199,8 @@
               <div class="feat-ic">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
               </div>
-              <h4>广工教务选课</h4>
-              <p>查看选课窗口与学分钱包，实时标记时间冲突并快捷选退课。</p>
+              <h4>广工教务选课（实验性）</h4>
+              <p>查看选课窗口与学分钱包，实时标记时间冲突并预览课表。</p>
             </article>
 
             <article class="feat-card feat-span-2" data-reveal>
@@ -268,10 +268,11 @@
       <div class="wrap">
         <div class="sec-head sec-head--split" data-reveal>
           <div>
-            <span class="sec-eyebrow sec-eyebrow--dark">多端</span>
+            <span class="sec-eyebrow sec-eyebrow--dark">多端 · 开发中</span>
             <h2 class="sec-title sec-title--dark">本地优先，自建同步</h2>
-            <p class="sec-desc sec-desc--dark">数据默认存本机，可按需部署 Go + SQLite 服务端，大屏浏览器直连与整库备份。</p>
+            <p class="sec-desc sec-desc--dark">开发中，敬请期待。数据默认存本机，后续将陆续完善自建 Go + SQLite 服务端同步、大屏浏览器直连与整库备份。</p>
           </div>
+          <span class="stage-hint stage-hint--dark mono">开发中 · 敬请期待</span>
         </div>
 
         <div class="obsidian-stage" data-reveal>
@@ -321,24 +322,24 @@
             <div class="feat-ic">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.5-5.8L20 8"/><path d="M20 4v4h-4"/><path d="M20 12a8 8 0 0 1-13.5 5.8L4 16"/><path d="M4 20v-4h4"/></svg>
             </div>
-            <h4>自建增量同步</h4>
-            <p>单二进制 Go + SQLite 服务端，多端自动增量同步课表与待办。</p>
+            <h4>自建增量同步（开发中）</h4>
+            <p>开发中，敬请期待。未来通过单二进制 Go + SQLite 服务端，多端自动增量同步课表与待办。</p>
           </article>
 
           <article class="feat-card feat-card--dark" data-reveal data-delay="1">
             <div class="feat-ic">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
             </div>
-            <h4>原生 Web 端</h4>
-            <p>服务端内置零构建网页端，电脑大屏直连排课；手机局域网直连即将回归。</p>
+            <h4>原生 Web 端（开发中）</h4>
+            <p>开发中，敬请期待。未来支持电脑浏览器大屏排课与手机局域网直连管理。</p>
           </article>
 
           <article class="feat-card feat-card--dark" data-reveal data-delay="2">
             <div class="feat-ic">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 9l-3 3 3 3M16 9l3 3-3 3M13 7l-2 10"/></svg>
             </div>
-            <h4>整库备份与导出</h4>
-            <p>支持每日自动 JSON 备份、导出课表图片与 <code>.ics</code>，并兼容服务端 MCP。</p>
+            <h4>整库备份与导出（可用）</h4>
+            <p>当前版本已支持每日自动 JSON 备份、一键导出课表图片与 <code>.ics</code> 日历文件。</p>
           </article>
         </div>
       </div>
@@ -389,10 +390,10 @@
             <figcaption>教室周课表</figcaption>
           </figure>
 
-          <figure class="shot-card" data-cat="gdut" data-title="广工选课" data-desc="查看选课窗口、学分钱包与时间冲突。" data-reveal>
-            <button type="button" class="shot-btn" aria-label="放大查看：广工选课">
+          <figure class="shot-card" data-cat="gdut" data-title="广工选课（EXP）" data-desc="查看选课窗口、学分钱包与个人课表冲突。" data-reveal>
+            <button type="button" class="shot-btn" aria-label="放大查看：广工选课（EXP）">
               <div class="shot-frame">
-                <img src="./assets/shot-course-selection.webp" data-light="./assets/shot-course-selection.webp" data-dark="./assets/shot-course-selection-dark.webp" width="1233" height="2673" alt="广工选课" loading="lazy">
+                <img src="./assets/shot-course-selection.webp" data-light="./assets/shot-course-selection.webp" data-dark="./assets/shot-course-selection-dark.webp" width="1233" height="2673" alt="广工选课（EXP）" loading="lazy">
               </div>
             </button>
             <figcaption>广工选课</figcaption>
@@ -443,6 +444,33 @@
             <figcaption>课表</figcaption>
           </figure>
 
+          <figure class="shot-card" data-cat="daily" data-title="课程详情" data-desc="按教学周高亮本周备注，直达编辑与调课。" data-reveal>
+            <button type="button" class="shot-btn" aria-label="放大查看：课程详情">
+              <div class="shot-frame">
+                <img src="./assets/shot-course-detail.webp" data-light="./assets/shot-course-detail.webp" data-dark="./assets/shot-course-detail-dark.webp" width="1233" height="2673" alt="课程详情" loading="lazy">
+              </div>
+            </button>
+            <figcaption>课程详情</figcaption>
+          </figure>
+
+          <figure class="shot-card" data-cat="daily" data-title="课表直接调课" data-desc="周视图内直接点选或拖动格子重排时段。" data-reveal>
+            <button type="button" class="shot-btn" aria-label="放大查看：课表直接调课">
+              <div class="shot-frame">
+                <img src="./assets/shot-course-reschedule.webp" data-light="./assets/shot-course-reschedule.webp" data-dark="./assets/shot-course-reschedule-dark.webp" width="1233" height="2673" alt="课表直接调课" loading="lazy">
+              </div>
+            </button>
+            <figcaption>课表调课</figcaption>
+          </figure>
+
+          <figure class="shot-card" data-cat="daily" data-title="课程与考试编辑" data-desc="普通课程与考试切换，支持多时段与自定义提醒。" data-reveal>
+            <button type="button" class="shot-btn" aria-label="放大查看：课程与考试编辑">
+              <div class="shot-frame">
+                <img src="./assets/shot-course-edit.webp" data-light="./assets/shot-course-edit.webp" data-dark="./assets/shot-course-edit-dark.webp" width="1233" height="2673" alt="课程与考试编辑" loading="lazy">
+              </div>
+            </button>
+            <figcaption>课程与考试</figcaption>
+          </figure>
+
           <figure class="shot-card" data-cat="daily" data-title="日历" data-desc="教学周对照与考试日期标记。" data-reveal>
             <button type="button" class="shot-btn" aria-label="放大查看：日历">
               <div class="shot-frame">
@@ -459,6 +487,15 @@
               </div>
             </button>
             <figcaption>待办</figcaption>
+          </figure>
+
+          <figure class="shot-card" data-cat="daily" data-title="待办图片网格" data-desc="多列图片网格排版与文件附件，点按全屏预览。" data-reveal>
+            <button type="button" class="shot-btn" aria-label="放大查看：待办图片网格">
+              <div class="shot-frame">
+                <img src="./assets/shot-todo-attachments.webp" data-light="./assets/shot-todo-attachments.webp" data-dark="./assets/shot-todo-attachments-dark.webp" width="1233" height="2673" alt="待办图片网格" loading="lazy">
+              </div>
+            </button>
+            <figcaption>待办图片网格</figcaption>
           </figure>
 
           <figure class="shot-card" data-cat="daily" data-title="桌面小组件" data-desc="5 款桌面微件，支持直接勾选。" data-reveal>

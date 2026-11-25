@@ -308,6 +308,11 @@ code {
   padding: 5px 12px; border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.72); border: 1px solid rgba(46, 119, 108, 0.18);
 }
+.stage-hint--dark {
+  color: var(--mint-glow);
+  background: rgba(46, 119, 108, 0.22);
+  border-color: rgba(127, 227, 206, 0.28);
+}
 
 /* 5 Native Desktop Widgets Matrix */
 .widget-matrix {
