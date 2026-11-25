@@ -977,4 +977,94 @@ class ScreensSmokeTest {
             assertFalse("Expected no vertical overflow for $label", r.didOverflowHeight)
         }
     }
+
+    /** 补充最近新增功能的深浅截图：待办多图附件网格、课程详情周次备注、课表直接点选调课。 */
+    @Test
+    fun todoAttachmentsAndCourseDetailShots() {
+        val attachments = createDemoAttachmentsForTest(app)
+        // 在主线程预热 Robolectric NATIVE 图形库，避免 Dispatchers.IO 首次调用 BitmapFactory 时触发 JniConstants 崩溃
+        android.graphics.BitmapFactory
+            .decodeFile(File(Attachments.dir(app), "demo_shot_wave.png").path)
+            ?.recycle()
+        val today = LocalDate.now()
+        val richTask =
+            Task(
+                id = Ids.next(),
+                title = "整理物理实验报告",
+                note = "附上示波器波形与误差拟合图，按模板排版后提交。",
+                priority = 2,
+                due = today.atTime(20, 0),
+                dueHasTime = true,
+                remindMinutes = 15,
+                remindMinutesList = listOf(15, 60),
+                attachments = attachments,
+                extra = mapOf("attachmentColumns" to "2"),
+            )
+        val labCourse =
+            app.repo.snapshot.value.courses
+                .first { it.name == "大学物理实验" }
+                .copy(
+                    note = "第12周：实验九、霍尔效应实验\n第13周：实验十、示波器测量与波形分析（需带坐标纸）\n第14周：实验十一、分光计调整",
+                )
+        runBlocking {
+            app.repo.commit(
+                Edits.saveAll(
+                    app.repo.snapshot.value,
+                    listOf(richTask, labCourse),
+                    "seed-extra-shots",
+                    System.currentTimeMillis(),
+                ),
+            )
+        }
+
+        val mode = mutableIntStateOf(0)
+        rule.setContent {
+            Host {
+                when (mode.intValue) {
+                    0 -> TodoEditScreen(richTask.id) {}
+                    else -> GokeRoot(app, null, initialTab = Tab.TIMETABLE) {}
+                }
+            }
+        }
+        rule.waitForIdle()
+        rule.waitUntil(timeoutMillis = 5_000) {
+            listOf("示波器实验波形.png", "数据拟合对比.png").all { label ->
+                rule
+                    .onAllNodes(hasContentDescription(label))
+                    .fetchSemanticsNodes()
+                    .any { it.size.width > 120 }
+            }
+        }
+        rule.waitForIdle()
+        shot("todo_attachments")
+
+        try {
+            app.settings.update { it.copy(darkMode = DarkMode.DARK) }
+            rule.waitForIdle()
+            shot("todo_attachments_dark")
+
+            app.settings.update { it.copy(darkMode = DarkMode.SYSTEM) }
+            rule.runOnIdle { mode.intValue = 1 }
+            rule.waitForIdle()
+            rule.onAllNodesWithText("大学物理实验")[0].performClick()
+            rule.waitForIdle()
+            shot("course_detail")
+
+            app.settings.update { it.copy(darkMode = DarkMode.DARK) }
+            rule.waitForIdle()
+            shot("course_detail_dark")
+
+            app.settings.update { it.copy(darkMode = DarkMode.SYSTEM) }
+            rule.waitForIdle()
+            rule.onNodeWithText(app.getString(R.string.reschedule)).performClick()
+            rule.waitForIdle()
+            shot("course_reschedule")
+
+            app.settings.update { it.copy(darkMode = DarkMode.DARK) }
+            rule.waitForIdle()
+            shot("course_reschedule_dark")
+        } finally {
+            app.settings.update { it.copy(darkMode = DarkMode.SYSTEM) }
+        }
+    }
 }

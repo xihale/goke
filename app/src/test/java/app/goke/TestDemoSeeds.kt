@@ -1,5 +1,6 @@
 package app.goke
 
+import app.goke.GokeApp
 import app.goke.core.jxfw.ClassroomBuilding
 import app.goke.core.jxfw.ClassroomOccupancy
 import app.goke.core.jxfw.ClassroomRoom
@@ -14,13 +15,22 @@ import app.goke.core.jxfw.XkCourseItem
 import app.goke.core.jxfw.XkCreditWallet
 import app.goke.core.jxfw.XkScheduleSummary
 import app.goke.core.jxfw.XkWindowStatus
+import app.goke.core.model.Attachment
+import app.goke.data.Attachments
 import app.goke.jxfw.JxfwCourseSelectionState
 import app.goke.jxfw.JxfwGradesState
 import app.goke.jxfw.JxfwManager
 import app.goke.jxfw.JxfwState
 import app.goke.jxfw.TzcsManager
 import app.goke.jxfw.TzcsState
+import java.awt.BasicStroke
+import java.awt.Color
+import java.awt.RenderingHints
+import java.awt.geom.RoundRectangle2D
+import java.awt.image.BufferedImage
+import java.io.File
 import java.time.LocalDate
+import javax.imageio.ImageIO
 
 internal fun JxfwManager.seedClassroomDemoForTest(weekStart: LocalDate) {
     val now = System.currentTimeMillis()
@@ -277,3 +287,84 @@ internal fun demoCourseSelectionStateForTest(): JxfwCourseSelectionState =
                 ),
             ),
     )
+
+internal fun createDemoAttachmentsForTest(app: GokeApp): List<Attachment> {
+    val dir = Attachments.dir(app).apply { mkdirs() }
+
+    fun writeDiagram(
+        fileName: String,
+        bg: Color,
+        card: Color,
+        accent: Color,
+        accent2: Color,
+        drawWave: Boolean,
+    ): String {
+        val w = 480
+        val h = 360
+        val img = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
+        val g = img.createGraphics()
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        g.color = bg
+        g.fillRect(0, 0, w, h)
+        g.color = card
+        g.fill(RoundRectangle2D.Double(28.0, 28.0, w - 56.0, h - 56.0, 28.0, 28.0))
+        g.color = Color(accent.red, accent.green, accent.blue, 36)
+        g.stroke = BasicStroke(2f)
+        for (i in 1..4) {
+            val y = 68 + i * 52
+            g.drawLine(52, y, w - 52, y)
+        }
+        if (drawWave) {
+            g.color = accent
+            g.stroke = BasicStroke(6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+            var prevX = 60
+            var prevY = 200
+            for (step in 1..24) {
+                val x = 60 + step * 15
+                val y = (185.0 - kotlin.math.sin(step * 0.45) * 68.0).toInt()
+                g.drawLine(prevX, prevY, x, y)
+                prevX = x
+                prevY = y
+            }
+            g.color = accent2
+            g.fill(RoundRectangle2D.Double(60.0, 52.0, 136.0, 30.0, 15.0, 15.0))
+        } else {
+            g.color = accent
+            g.fill(RoundRectangle2D.Double(64.0, 210.0, 54.0, 82.0, 14.0, 14.0))
+            g.color = accent2
+            g.fill(RoundRectangle2D.Double(146.0, 150.0, 54.0, 142.0, 14.0, 14.0))
+            g.color = accent
+            g.fill(RoundRectangle2D.Double(228.0, 108.0, 54.0, 184.0, 14.0, 14.0))
+            g.color = accent2
+            g.fill(RoundRectangle2D.Double(310.0, 174.0, 54.0, 118.0, 14.0, 14.0))
+        }
+        g.dispose()
+        ImageIO.write(img, "png", File(dir, fileName))
+        return fileName
+    }
+
+    val f1 =
+        writeDiagram(
+            "demo_shot_wave.png",
+            bg = Color(225, 240, 235),
+            card = Color(248, 252, 250),
+            accent = Color(46, 119, 108),
+            accent2 = Color(198, 232, 222),
+            drawWave = true,
+        )
+    val f2 =
+        writeDiagram(
+            "demo_shot_chart.png",
+            bg = Color(228, 236, 244),
+            card = Color(249, 251, 254),
+            accent = Color(58, 95, 138),
+            accent2 = Color(142, 186, 224),
+            drawWave = false,
+        )
+    val pdf = File(dir, "demo_shot_lab.pdf").apply { writeText("PDF demo") }
+    return listOf(
+        Attachment("示波器实验波形.png", "image/png", f1),
+        Attachment("数据拟合对比.png", "image/png", f2),
+        Attachment("实验报告模板.pdf", "application/pdf", pdf.name),
+    )
+}
