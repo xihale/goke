@@ -19,3 +19,7 @@ keystore.properties
 .csearch/
 .impeccable/
 *.mp4
+
+# Local-only ops docs & machine-specific scripts
+scripts/server/
+scripts/xbuild.sh

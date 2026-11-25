@@ -10,12 +10,11 @@
 python3 scripts/check_strings.py --unused  # 检查缺失与未使用的 strings.xml 资源
 ```
 
-## 端到端与远程构建脚本
+## 端到端测试脚本
 
 ```bash
 bash scripts/sync-e2e.sh                   # Go 同步服务端到端测试（含双模拟设备对齐）
 bash scripts/web-e2e.sh                    # 启动临时服务端并运行 Web / MCP 端到端测试（需 Go 与 Node ≥ 20）
-bash scripts/xbuild.sh <gradle-task>       # 在远程构建机拉取代码并执行 Gradle，日志写入 build/xbuild.log
 ```
 
 ## Macrobenchmark（`:benchmark`，需真机）
