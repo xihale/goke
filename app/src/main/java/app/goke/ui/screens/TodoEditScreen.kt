@@ -221,6 +221,15 @@ fun TodoEditScreen(
     var note by remember { mutableStateOf(existing?.note ?: noteDraft.orEmpty()) }
     var location by remember { mutableStateOf(existing?.extra?.get("location") ?: locationArg.orEmpty()) }
     var attachments by remember { mutableStateOf(existing?.attachments.orEmpty()) }
+    var imageCols by remember {
+        mutableStateOf(
+            existing
+                ?.extra
+                ?.get("imageCols")
+                ?.toIntOrNull()
+                ?.coerceIn(1, 3),
+        )
+    }
     var picked by remember { mutableStateOf(initWhen) }
     var cleared by remember { mutableStateOf(false) }
     val initRemindList =
@@ -311,7 +320,14 @@ fun TodoEditScreen(
     val hasChanges =
         text != existing?.title.orEmpty() || note != existing?.note.orEmpty() ||
             location.trim() != existing?.extra?.get("location").orEmpty() ||
-            attachments != existing?.attachments.orEmpty() || listId != existing?.listId || priority != (existing?.priority ?: 0) ||
+            attachments != existing?.attachments.orEmpty() ||
+            imageCols !=
+            existing
+                ?.extra
+                ?.get("imageCols")
+                ?.toIntOrNull()
+                ?.coerceIn(1, 3) ||
+            listId != existing?.listId || priority != (existing?.priority ?: 0) ||
             remindList != existing?.effectiveRemindMinutes.orEmpty() || persistent != (existing?.remindPersistent == true) || freq != existing?.repeat?.freq ||
             dueBeforeNextClass != (existing?.dueBeforeNextClass ?: false) ||
             (
@@ -405,6 +421,8 @@ fun TodoEditScreen(
             base.extra.toMutableMap().apply {
                 val loc = location.trim()
                 if (loc.isNotEmpty()) put("location", loc) else remove("location")
+                val cols = imageCols?.takeIf { attachments.any { a -> a.mime.startsWith("image/") } }
+                if (cols != null) put("imageCols", cols.toString()) else remove("imageCols")
             }
         val next =
             base.copy(
@@ -652,7 +670,12 @@ fun TodoEditScreen(
                 FlatField(note, stringResource(R.string.label_note), onChange = { note = it }, singleLine = false)
                 if (attachments.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
-                    AttachmentEditor(attachments, onChange = { attachments = it })
+                    AttachmentEditor(
+                        items = attachments,
+                        onChange = { attachments = it },
+                        imageColumns = imageCols,
+                        onImageColumnsChange = { imageCols = it },
+                    )
                 }
                 Spacer(Modifier.height(24.dp))
             }

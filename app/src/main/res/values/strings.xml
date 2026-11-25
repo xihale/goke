@@ -150,6 +150,12 @@
     <string name="remove_attachment">移除附件</string>
     <string name="attachment_missing">这个附件不在本机</string>
     <string name="attachment_failed">读取附件失败</string>
+    <string name="attachment_save_gallery">保存到相册</string>
+    <string name="attachment_saved_gallery">已保存到相册</string>
+    <string name="attachment_save_failed">保存失败</string>
+    <string name="attachment_share">分享</string>
+    <string name="attachment_zoom_reset">还原缩放</string>
+    <string name="attachment_page_counter">%1$d / %2$d</string>
     <string name="section_display">显示</string>
     <string name="section_export">导出</string>
     <string name="section_import">导入</string>
