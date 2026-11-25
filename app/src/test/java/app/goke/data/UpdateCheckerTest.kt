@@ -358,4 +358,93 @@ class UpdateCheckerTest {
             val betaRes = betaChecker.checkNow(nowMs = 20_000L) as UpdateCheckResult.Newer
             assertEquals("1.0.1-beta.1", betaRes.info.version)
         }
+
+    @Test
+    fun `跨多个版本更新时按版本倒序汇总当前到最新之间的更新日志`(): Unit =
+        runBlocking {
+            val latestJson =
+                """
+                {
+                  "tag_name": "v0.0.1-beta.13",
+                  "prerelease": true,
+                  "body": "- 选课页面与调课优化",
+                  "apk_url": "https://goke.xeed.ink/downloads/Goke-0.0.1-beta.13-arm64-v8a.apk",
+                  "apk_size": 3037593,
+                  "latest_any": {
+                    "tag_name": "v0.0.1-beta.13",
+                    "prerelease": true,
+                    "body": "- 选课页面与调课优化",
+                    "apk_url": "https://goke.xeed.ink/downloads/Goke-0.0.1-beta.13-arm64-v8a.apk",
+                    "apk_size": 3037593
+                  },
+                  "changelog": [
+                    {"tag_name": "v0.0.1-beta.13", "prerelease": true, "body": "- 选课页面与调课优化"},
+                    {"tag_name": "v0.0.1-beta.12", "prerelease": true, "body": "- 异常堆栈弹窗"},
+                    {"tag_name": "v0.0.1-beta.11", "prerelease": true, "body": "- 修复自动静音"},
+                    {"tag_name": "v0.0.1-beta.10", "prerelease": true, "body": "- 当前版本旧日志"},
+                    {"tag_name": "v0.0.1-beta.9", "prerelease": true, "body": "- 更早日志"}
+                  ]
+                }
+                """.trimIndent()
+
+            val betaJump =
+                UpdateChecker(
+                    settings = store,
+                    currentVersionProvider = { "0.0.1-beta.10" },
+                    fetchReleasesJson = { latestJson },
+                )
+            val res = betaJump.checkNow(nowMs = 30_000L) as UpdateCheckResult.Newer
+            assertEquals("0.0.1-beta.13", res.info.version)
+            val expected =
+                """
+                v0.0.1-beta.13
+                - 选课页面与调课优化
+
+                v0.0.1-beta.12
+                - 异常堆栈弹窗
+
+                v0.0.1-beta.11
+                - 修复自动静音
+                """.trimIndent()
+            assertEquals(expected, res.info.notes)
+            assertEquals(expected, store.value.pendingUpdateNotes)
+
+            // 仅跨 1 个版本时保持单版正文，不额外叠加版本标题
+            val singleStep =
+                UpdateChecker(
+                    settings = store,
+                    currentVersionProvider = { "0.0.1-beta.12" },
+                    fetchReleasesJson = { latestJson },
+                )
+            val singleRes = singleStep.checkNow(nowMs = 40_000L) as UpdateCheckResult.Newer
+            assertEquals("- 选课页面与调课优化", singleRes.info.notes)
+
+            // 正式版跨多版本更新时跳过中间预发布版，仅汇总正式版更新日志
+            val stableManifest =
+                """
+                {
+                  "tag_name": "v0.2.0",
+                  "prerelease": false,
+                  "body": "- v0.2.0 正式发布",
+                  "stable": {"tag_name": "v0.2.0", "prerelease": false, "body": "- v0.2.0 正式发布"},
+                  "latest_any": {"tag_name": "v0.2.1-beta.1", "prerelease": true, "body": "- 新 beta"},
+                  "changelog": [
+                    {"tag_name": "v0.2.1-beta.1", "prerelease": true, "body": "- 新 beta"},
+                    {"tag_name": "v0.2.0", "prerelease": false, "body": "- v0.2.0 正式发布"},
+                    {"tag_name": "v0.2.0-rc.1", "prerelease": true, "body": "- rc 测试"},
+                    {"tag_name": "v0.1.5", "prerelease": false, "body": "- v0.1.5 稳定修复"},
+                    {"tag_name": "v0.1.0", "prerelease": false, "body": "- 当前版本"}
+                  ]
+                }
+                """.trimIndent()
+            val stableJump =
+                UpdateChecker(
+                    settings = store,
+                    currentVersionProvider = { "0.1.0" },
+                    fetchReleasesJson = { stableManifest },
+                )
+            val stableRes = stableJump.checkNow(nowMs = 50_000L) as UpdateCheckResult.Newer
+            assertEquals("0.2.0", stableRes.info.version)
+            assertEquals("v0.2.0\n- v0.2.0 正式发布\n\nv0.1.5\n- v0.1.5 稳定修复", stableRes.info.notes)
+        }
 }

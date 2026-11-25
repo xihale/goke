@@ -151,12 +151,13 @@ class UpdateChecker(
             _checking.value = true
             try {
                 val response = fetchReleasesJson()
-                val releases = parseManifest(response)
+                val manifest = parseManifestData(response)
                 val current = currentVersion()
-                val allowPrerelease = parseSemVer(current)?.preRelease?.isNotEmpty() == true
+                val currentSemVer = parseSemVer(current)
+                val allowPrerelease = currentSemVer?.preRelease?.isNotEmpty() == true
 
                 val best =
-                    releases
+                    manifest.candidates
                         .asSequence()
                         .filter { !it.draft && it.tagName.isNotBlank() }
                         .mapNotNull { release ->
@@ -170,14 +171,19 @@ class UpdateChecker(
 
                 if (best != null) {
                     val release = best.third
+                    val aggregatedNotes =
+                        aggregateReleaseNotes(
+                            entries = manifest.changelog,
+                            currentSemVer = currentSemVer,
+                            targetSemVer = best.first,
+                            allowPrerelease = allowPrerelease,
+                            fallbackNotes = release.body,
+                        )
                     val info =
                         ReleaseInfo(
                             version = best.second,
                             url = release.htmlUrl.ifBlank { LANDING_URL },
-                            notes =
-                                release.body
-                                    ?.trim()
-                                    ?.takeIf { it.isNotEmpty() },
+                            notes = aggregatedNotes,
                             apkUrl = release.apkUrl.trim(),
                             apkSize = release.apkSize.coerceAtLeast(0L),
                             apkSha256 = release.apkSha256.trim().lowercase(),
@@ -384,29 +390,67 @@ class UpdateChecker(
                 isLenient = true
             }
 
-        private fun parseManifest(raw: String): List<RemoteRelease> {
+        private fun parseManifestData(raw: String): ManifestData {
             val trimmed = raw.trim()
             if (trimmed.startsWith("[")) {
-                return json.decodeFromString<List<RemoteRelease>>(trimmed)
+                val list = json.decodeFromString<List<RemoteRelease>>(trimmed)
+                return ManifestData(candidates = list, changelog = list)
             }
             val latest = json.decodeFromString<LatestManifest>(trimmed)
             val entries = listOfNotNull(latest.stable, latest.latestAny)
-            if (entries.isNotEmpty()) return entries
-            return if (latest.tagName.isNotBlank()) {
-                listOf(
-                    RemoteRelease(
-                        tagName = latest.tagName,
-                        htmlUrl = latest.htmlUrl,
-                        prerelease = latest.prerelease,
-                        draft = latest.draft,
-                        body = latest.body,
-                        apkUrl = latest.apkUrl,
-                        apkSize = latest.apkSize,
-                        apkSha256 = latest.apkSha256,
-                    ),
-                )
-            } else {
-                emptyList()
+            val candidates =
+                entries.ifEmpty {
+                    if (latest.tagName.isNotBlank()) {
+                        listOf(
+                            RemoteRelease(
+                                tagName = latest.tagName,
+                                htmlUrl = latest.htmlUrl,
+                                prerelease = latest.prerelease,
+                                draft = latest.draft,
+                                body = latest.body,
+                                apkUrl = latest.apkUrl,
+                                apkSize = latest.apkSize,
+                                apkSha256 = latest.apkSha256,
+                            ),
+                        )
+                    } else {
+                        emptyList()
+                    }
+                }
+            return ManifestData(
+                candidates = candidates,
+                changelog = latest.changelog + candidates,
+            )
+        }
+
+        private fun aggregateReleaseNotes(
+            entries: List<RemoteRelease>,
+            currentSemVer: SemVer?,
+            targetSemVer: SemVer,
+            allowPrerelease: Boolean,
+            fallbackNotes: String?,
+        ): String? {
+            val sections =
+                entries
+                    .asSequence()
+                    .filter { !it.draft && it.tagName.isNotBlank() }
+                    .mapNotNull { entry ->
+                        val ver = entry.tagName.removePrefix("v").removePrefix("V")
+                        val parsed = parseSemVer(ver) ?: return@mapNotNull null
+                        val isPre = entry.prerelease || parsed.preRelease.isNotEmpty()
+                        if (!allowPrerelease && isPre) return@mapNotNull null
+                        if (currentSemVer != null && compareSemVer(parsed, currentSemVer) <= 0) return@mapNotNull null
+                        if (compareSemVer(parsed, targetSemVer) > 0) return@mapNotNull null
+                        val body = entry.body?.trim().orEmpty()
+                        if (body.isEmpty()) return@mapNotNull null
+                        Triple(parsed, ver, body)
+                    }.distinctBy { it.first }
+                    .sortedWith { a, b -> compareSemVer(b.first, a.first) }
+                    .toList()
+            return when (sections.size) {
+                0 -> fallbackNotes?.trim()?.takeIf { it.isNotEmpty() }
+                1 -> sections[0].third
+                else -> sections.joinToString("\n\n") { (_, ver, body) -> "v$ver\n$body" }
             }
         }
 
@@ -583,6 +627,11 @@ internal fun isNewerVersion(
     return compareSemVer(l, c) > 0
 }
 
+private data class ManifestData(
+    val candidates: List<RemoteRelease>,
+    val changelog: List<RemoteRelease>,
+)
+
 @Serializable
 private data class RemoteRelease(
     @SerialName("tag_name") val tagName: String,
@@ -607,4 +656,5 @@ private data class LatestManifest(
     @SerialName("apk_sha256") val apkSha256: String = "",
     val stable: RemoteRelease? = null,
     @SerialName("latest_any") val latestAny: RemoteRelease? = null,
+    val changelog: List<RemoteRelease> = emptyList(),
 )
