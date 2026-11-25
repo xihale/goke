@@ -1,15 +1,21 @@
 package app.goke.ui.screens
 
 import android.content.Context
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +29,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
@@ -34,10 +44,12 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -52,12 +64,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.goke.R
 import app.goke.core.jxfw.JxfwParse
 import app.goke.core.jxfw.JxfwXkParse
@@ -68,8 +92,10 @@ import app.goke.core.jxfw.XkCourseDetail
 import app.goke.core.jxfw.XkCourseItem
 import app.goke.core.jxfw.XkCreditWallet
 import app.goke.core.jxfw.XkFailureKind
+import app.goke.core.jxfw.XkOccupiedSlot
 import app.goke.core.jxfw.XkOpenPlan
 import app.goke.core.jxfw.XkScheduleSummary
+import app.goke.core.jxfw.XkSlotConflict
 import app.goke.core.jxfw.XkWindowStatus
 import app.goke.debug.DebugHooks
 import app.goke.jxfw.JxfwCourseSelectionState
@@ -77,16 +103,17 @@ import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
 import app.goke.ui.Route
-import app.goke.ui.components.ChipChoice
 import app.goke.ui.components.ChipPill
 import app.goke.ui.components.ConfirmDialog
+import app.goke.ui.components.ConflictCard
 import app.goke.ui.components.EmptyState
 import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.SectionLabel
 import app.goke.ui.components.SegmentedPill
-import app.goke.ui.components.TonalField
+import app.goke.ui.components.Tag
+import app.goke.ui.components.mintClickable
 import app.goke.ui.icons.Checklist
 import app.goke.ui.icons.Schedule
 import app.goke.ui.icons.School
@@ -228,12 +255,22 @@ internal fun CourseSelectionContent(
         title = stringResource(R.string.xk_title),
         onBack = onBack,
         actions = {
-            if (loggedIn) {
-                IconButton(
-                    onClick = onRefresh,
-                    enabled = !xkState.loading,
-                ) {
-                    Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.xk_refresh_cd))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Tag(
+                    text = stringResource(R.string.xk_exp_badge),
+                    bg = MaterialTheme.colorScheme.tertiaryContainer,
+                    fg = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+                if (loggedIn) {
+                    IconButton(
+                        onClick = onRefresh,
+                        enabled = !xkState.loading,
+                    ) {
+                        Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.xk_refresh_cd))
+                    }
                 }
             }
         },
@@ -283,6 +320,10 @@ internal fun CourseSelectionContent(
                 }
             }
 
+            item(key = "exp-disclaimer") {
+                XkExpDisclaimerBanner()
+            }
+
             if (window == null) return@LazyColumn
 
             if (!window.isOpen) {
@@ -308,7 +349,6 @@ internal fun CourseSelectionContent(
                             busy = xkState.actionBusyId == item.kcrwdm,
                             actionsDisabled = xkState.actionBusyId != null,
                             onClick = { selectedItem = item },
-                            onEnrollClick = {},
                             onDropClick = { confirmRequest = XkConfirmRequest(item, XkConfirmMode.DROP) },
                         )
                     }
@@ -377,7 +417,6 @@ internal fun CourseSelectionContent(
                             busy = xkState.actionBusyId == item.kcrwdm,
                             actionsDisabled = xkState.actionBusyId != null,
                             onClick = { selectedItem = item },
-                            onEnrollClick = { confirmRequest = XkConfirmRequest(item, XkConfirmMode.ENROLL) },
                             onDropClick = { confirmRequest = XkConfirmRequest(item, XkConfirmMode.DROP) },
                         )
                     }
@@ -422,7 +461,6 @@ internal fun CourseSelectionContent(
                             busy = xkState.actionBusyId == item.kcrwdm,
                             actionsDisabled = xkState.actionBusyId != null,
                             onClick = { selectedItem = item },
-                            onEnrollClick = {},
                             onDropClick = { confirmRequest = XkConfirmRequest(item, XkConfirmMode.DROP) },
                         )
                     }
@@ -434,6 +472,7 @@ internal fun CourseSelectionContent(
     selectedItem?.let { item ->
         XkCourseDetailSheet(
             item = item,
+            occupiedSlots = xkState.occupiedSlots,
             canDrop = xkState.window?.canDrop ?: false,
             windowOpen = xkState.window?.isOpen ?: false,
             busy = xkState.actionBusyId == item.kcrwdm,
@@ -501,6 +540,27 @@ private data class ConfirmMeta(
     val confirm: String,
     val danger: Boolean,
 )
+
+@Composable
+private fun XkExpDisclaimerBanner() {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = scheme.surfaceContainerLow,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.xk_exp_disclaimer),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
+        }
+    }
+}
 
 @Composable
 private fun XkErrorBanner(
@@ -575,7 +635,7 @@ private fun XkOpenPlanCard(plan: XkOpenPlan) {
                     modifier = Modifier.weight(1f),
                 )
                 if (plan.planType.isNotBlank()) {
-                    XkTagPill(
+                    Tag(
                         text = plan.planType,
                         bg = MaterialTheme.colorScheme.primaryContainer,
                         fg = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -600,6 +660,7 @@ private fun XkOpenSummaryCard(
     loading: Boolean,
 ) {
     val scheme = MaterialTheme.colorScheme
+    var noticeExpanded by rememberSaveable(window.headerNotice) { mutableStateOf(false) }
     MintCard(color = scheme.primaryContainer.copy(alpha = 0.42f)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
@@ -611,14 +672,27 @@ private fun XkOpenSummaryCard(
                     JxfwParse.termLabel(window.xnxqdm),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
-                XkTagPill(
+                Spacer(Modifier.width(8.dp))
+                Tag(
                     text = stringResource(R.string.xk_window_open_badge),
                     bg = scheme.primaryContainer,
                     fg = scheme.onPrimaryContainer,
                 )
             }
-            XkWindowBadges(window = window)
+            val metaLine =
+                listOfNotNull(
+                    stringResource(if (window.canDrop) R.string.xk_can_drop else R.string.xk_cannot_drop),
+                    window.maxCourses?.let { stringResource(R.string.xk_max_courses, it) },
+                ).joinToString(" · ")
+            Text(
+                metaLine,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+            )
             if (wallet != null) {
                 val ratio =
                     if (wallet.totalCredits > 0.0) {
@@ -643,7 +717,7 @@ private fun XkOpenSummaryCard(
                                 formatNumber(wallet.usedCredits),
                                 formatNumber(wallet.totalCredits),
                             ),
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
                             color = scheme.onPrimaryContainer,
                             fontWeight = FontWeight.Medium,
                         )
@@ -659,6 +733,13 @@ private fun XkOpenSummaryCard(
                     window.headerNotice,
                     style = MaterialTheme.typography.bodySmall,
                     color = scheme.onSurfaceVariant,
+                    maxLines = if (noticeExpanded) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .mintClickable(pressedScale = 0.99f) { noticeExpanded = !noticeExpanded },
                 )
             }
             if (loading) {
@@ -676,13 +757,13 @@ private fun XkWindowBadges(window: XkWindowStatus) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        XkTagPill(
+        Tag(
             text = stringResource(if (window.canDrop) R.string.xk_can_drop else R.string.xk_cannot_drop),
             bg = if (window.canDrop) scheme.secondaryContainer else scheme.surfaceContainerHighest,
             fg = if (window.canDrop) scheme.onSecondaryContainer else scheme.onSurfaceVariant,
         )
         window.maxCourses?.let { maxCount ->
-            XkTagPill(
+            Tag(
                 text = stringResource(R.string.xk_max_courses, maxCount),
                 bg = scheme.surfaceContainerHighest,
                 fg = scheme.onSurfaceVariant,
@@ -704,47 +785,110 @@ private fun XkSearchAndFilterPanel(
     onToggleHasSeats: () -> Unit,
     onToggleNoConflict: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    val borderColor = if (focused) scheme.primary.copy(alpha = 0.65f) else Color.Transparent
+    val fieldShape = RoundedCornerShape(12.dp)
+    val searchLabel = stringResource(R.string.xk_search_label)
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            TonalField(
-                label = stringResource(R.string.xk_search_label),
-                value = searchQuery,
-                onChange = onSearchQueryChange,
-                placeholder = stringResource(R.string.xk_search_placeholder),
-                modifier = Modifier.weight(1f),
-            )
-            if (searchQuery.isNotEmpty()) {
-                IconButton(
-                    onClick = onClearSearch,
-                    modifier = Modifier.padding(bottom = 4.dp).size(48.dp),
+        BasicTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            interactionSource = interaction,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = scheme.onSurface),
+            cursorBrush = SolidColor(scheme.primary),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSubmitSearch() }),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = searchLabel },
+            decorationBox = { inner ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clip(fieldShape)
+                        .background(scheme.surfaceContainerHighest)
+                        .border(1.5.dp, borderColor, fieldShape)
+                        .padding(start = 12.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.xk_search_clear_cd))
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = scheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Box(Modifier.weight(1f)) {
+                        if (searchQuery.isEmpty()) {
+                            Text(
+                                stringResource(R.string.xk_search_placeholder),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = scheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        inner()
+                    }
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(
+                            onClick = onClearSearch,
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.xk_search_clear_cd),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = onSubmitSearch,
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(
+                            Icons.Rounded.Search,
+                            contentDescription = stringResource(R.string.xk_search_cd),
+                            tint = scheme.primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
-            }
-            FilledTonalButton(
-                onClick = onSubmitSearch,
-                modifier = Modifier.padding(bottom = 4.dp).heightIn(min = 48.dp),
-            ) {
-                Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(stringResource(R.string.xk_search_action))
-            }
-        }
-        ChipChoice(
-            options =
-                listOf(
-                    "kcmc" to stringResource(R.string.xk_search_key_name),
-                    "teaxm" to stringResource(R.string.xk_search_key_teacher),
-                    "kcflmc" to stringResource(R.string.xk_search_key_category),
-                ),
-            selected = searchKey,
-            onSelect = onSearchKeyChange,
+            },
         )
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            items(
+                listOf(
+                    "kcmc" to R.string.xk_search_key_name,
+                    "teaxm" to R.string.xk_search_key_teacher,
+                    "kcflmc" to R.string.xk_search_key_category,
+                ),
+                key = { it.first },
+            ) { (key, labelRes) ->
+                ChipPill(
+                    label = stringResource(labelRes),
+                    on = searchKey == key,
+                    onClick = { onSearchKeyChange(key) },
+                )
+            }
+            item(key = "filter-divider") {
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .height(18.dp)
+                        .background(scheme.outlineVariant.copy(alpha = 0.6f)),
+                )
+            }
             item(key = "only-seats") {
                 ChipPill(
                     label = stringResource(R.string.xk_filter_has_seats),
@@ -763,7 +907,6 @@ private fun XkSearchAndFilterPanel(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun XkCourseCard(
     item: XkCourseItem,
@@ -771,109 +914,26 @@ private fun XkCourseCard(
     busy: Boolean,
     actionsDisabled: Boolean,
     onClick: () -> Unit,
-    onEnrollClick: () -> Unit,
     onDropClick: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val ctx = LocalContext.current
     MintCard(onClick = onClick) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top,
             ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        item.displayName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    val subLine =
-                        listOfNotNull(
-                            item.teacher.takeIf { it.isNotBlank() },
-                            item.classGroup.takeIf { it.isNotBlank() },
-                        ).joinToString(" · ")
-                    if (subLine.isNotBlank()) {
-                        Text(
-                            subLine,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = scheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-                Spacer(Modifier.width(8.dp))
-                item.credit?.let { credit ->
-                    XkTagPill(
-                        text = stringResource(R.string.xk_credit_value, formatNumber(credit)),
-                        bg = scheme.primaryContainer,
-                        fg = scheme.onPrimaryContainer,
-                    )
-                }
-            }
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                if (item.category.isNotBlank()) {
-                    XkTagPill(
-                        text = item.category,
-                        bg = scheme.surfaceContainerHighest,
-                        fg = scheme.onSurfaceVariant,
-                    )
-                }
-                if (item.subCategory.isNotBlank() && item.subCategory != item.category) {
-                    XkTagPill(
-                        text = item.subCategory,
-                        bg = scheme.surfaceContainerHighest,
-                        fg = scheme.onSurfaceVariant,
-                    )
-                }
-                if (item.campusHint.isNotBlank()) {
-                    XkTagPill(
-                        text = item.campusHint,
-                        bg = scheme.secondaryContainer,
-                        fg = scheme.onSecondaryContainer,
-                    )
-                }
-                if (item.hasConflict && !item.enrolled) {
-                    XkTagPill(
-                        text = stringResource(R.string.xk_conflict_badge, item.conflicts.size),
-                        bg = scheme.errorContainer,
-                        fg = scheme.error,
-                    )
-                }
-            }
-
-            if (item.scheduleSummary.isEmpty()) {
                 Text(
-                    stringResource(R.string.xk_schedule_tba),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = scheme.onSurfaceVariant,
+                    item.displayName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    item.scheduleSummary.forEach { summary ->
-                        Text(
-                            formatScheduleSummary(ctx, summary),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = scheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val seatsText =
+                val seatTag =
                     if (item.capacity != null && item.enrolledCount != null) {
                         val rem = item.remainingSeats ?: 0
                         if (item.isFull) {
@@ -884,23 +944,69 @@ private fun XkCourseCard(
                     } else {
                         null
                     }
-                if (seatsText != null) {
-                    Text(
-                        seatsText,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (item.isFull) scheme.error else MintTheme.colors.success,
-                        fontWeight = FontWeight.Medium,
-                    )
-                } else {
-                    Spacer(Modifier.width(1.dp))
+                if (seatTag != null) {
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        modifier =
+                            Modifier
+                                .clip(CircleShape)
+                                .background(if (item.isFull) scheme.surfaceContainerHighest else scheme.secondaryContainer)
+                                .padding(horizontal = 10.dp, vertical = 3.dp),
+                    ) {
+                        Text(
+                            text = seatTag,
+                            style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                            color = if (item.isFull) scheme.onSurfaceVariant else scheme.onSecondaryContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
+            }
+
+            val metaParts =
+                listOfNotNull(
+                    item.teacher.takeIf { it.isNotBlank() },
+                    item.credit?.let { stringResource(R.string.xk_credit_value, formatNumber(it)) },
+                    item.campusHint.takeIf { it.isNotBlank() },
+                )
+            if (metaParts.isNotEmpty()) {
+                Text(
+                    metaParts.joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val primarySchedule =
+                    if (item.scheduleSummary.isEmpty()) {
+                        stringResource(R.string.xk_schedule_tba)
+                    } else {
+                        formatScheduleSummary(ctx, item.scheduleSummary.first())
+                    }
+                Text(
+                    primarySchedule,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
 
                 if (item.enrolled) {
+                    Spacer(Modifier.width(8.dp))
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        XkTagPill(
+                        Tag(
                             text = stringResource(R.string.xk_action_enrolled_tag),
                             bg = scheme.primaryContainer,
                             fg = scheme.onPrimaryContainer,
@@ -908,7 +1014,8 @@ private fun XkCourseCard(
                         FilledTonalButton(
                             onClick = onDropClick,
                             enabled = canDrop && !actionsDisabled,
-                            modifier = Modifier.heightIn(min = 48.dp),
+                            modifier = Modifier.heightIn(min = 36.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                             colors =
                                 ButtonDefaults.filledTonalButtonColors(
                                     containerColor = scheme.errorContainer,
@@ -916,27 +1023,39 @@ private fun XkCourseCard(
                                 ),
                         ) {
                             if (busy) {
-                                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
                             } else {
-                                Text(stringResource(if (canDrop) R.string.xk_action_drop else R.string.xk_cannot_drop))
+                                Text(
+                                    stringResource(if (canDrop) R.string.xk_action_drop else R.string.xk_cannot_drop),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
                             }
                         }
                     }
-                } else {
-                    Button(
-                        onClick = onEnrollClick,
-                        enabled = !item.isFull && !actionsDisabled,
-                        modifier = Modifier.heightIn(min = 48.dp),
+                } else if (item.hasConflict) {
+                    Spacer(Modifier.width(8.dp))
+                    Row(
+                        modifier =
+                            Modifier
+                                .clip(CircleShape)
+                                .background(MintTheme.colors.conflictBg)
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        if (busy) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = scheme.onPrimary,
-                            )
-                        } else {
-                            Text(stringResource(R.string.xk_action_enroll))
-                        }
+                        Icon(
+                            Icons.Rounded.Warning,
+                            contentDescription = null,
+                            tint = MintTheme.colors.removed,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            text = stringResource(R.string.xk_conflict_badge, item.conflicts.size),
+                            style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                            color = MintTheme.colors.removed,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                        )
                     }
                 }
             }
@@ -948,6 +1067,7 @@ private fun XkCourseCard(
 @Composable
 private fun XkCourseDetailSheet(
     item: XkCourseItem,
+    occupiedSlots: List<XkOccupiedSlot>,
     canDrop: Boolean,
     windowOpen: Boolean,
     busy: Boolean,
@@ -966,6 +1086,15 @@ private fun XkCourseDetailSheet(
         detail = onLoadDetail(item).getOrNull()
         loading = false
     }
+
+    val preview =
+        remember(occupiedSlots, item, detail?.calendar) {
+            JxfwXkParse.buildSchedulePreview(
+                occupiedSlots = occupiedSlots,
+                candidate = item,
+                calendarOverride = detail?.calendar.orEmpty(),
+            )
+        }
 
     MintBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -997,74 +1126,95 @@ private fun XkCourseDetailSheet(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 item.credit?.let {
-                    XkTagPill(
+                    Tag(
                         text = stringResource(R.string.xk_credit_value, formatNumber(it)),
                         bg = scheme.primaryContainer,
                         fg = scheme.onPrimaryContainer,
                     )
                 }
-                val code = detail?.extra?.courseCode?.takeIf { it.isNotBlank() } ?: item.kcdm
-                if (code.isNotBlank()) {
-                    XkTagPill(
-                        text = stringResource(R.string.xk_detail_code, code),
-                        bg = scheme.surfaceContainerHighest,
-                        fg = scheme.onSurfaceVariant,
+                if (item.capacity != null && item.enrolledCount != null) {
+                    val rem = item.remainingSeats ?: 0
+                    val seatLabel =
+                        if (item.isFull) {
+                            stringResource(R.string.xk_seats_full, item.enrolledCount!!, item.capacity!!)
+                        } else {
+                            stringResource(R.string.xk_seats_remaining, rem, item.capacity!!)
+                        }
+                    Tag(
+                        text = seatLabel,
+                        bg = if (item.isFull) scheme.surfaceContainerHighest else scheme.secondaryContainer,
+                        fg = if (item.isFull) scheme.onSurfaceVariant else scheme.onSecondaryContainer,
                     )
                 }
-                detail?.extra?.plannedHours?.takeIf { it.isNotBlank() }?.let { hours ->
-                    XkTagPill(
-                        text = stringResource(R.string.xk_detail_hours, hours),
-                        bg = scheme.surfaceContainerHighest,
-                        fg = scheme.onSurfaceVariant,
+                if (item.enrolled) {
+                    Tag(
+                        text = stringResource(R.string.xk_action_enrolled_tag),
+                        bg = scheme.primaryContainer,
+                        fg = scheme.onPrimaryContainer,
                     )
                 }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (item.teacher.isNotBlank()) {
-                    DetailMetaText(stringResource(R.string.xk_detail_teacher, item.teacher))
-                }
-                val classGroup = detail?.extra?.classGroup?.takeIf { it.isNotBlank() } ?: item.classGroup
-                if (classGroup.isNotBlank()) {
-                    DetailMetaText(stringResource(R.string.xk_detail_class_group, classGroup))
-                }
-                val platform = detail?.extra?.platformName?.takeIf { it.isNotBlank() } ?: item.category
-                if (platform.isNotBlank()) {
-                    DetailMetaText(stringResource(R.string.xk_detail_platform, platform))
-                }
-                detail?.extra?.studyMode?.takeIf { it.isNotBlank() }?.let {
-                    DetailMetaText(stringResource(R.string.xk_detail_study_mode, it))
-                }
-                detail?.extra?.gradingMode?.takeIf { it.isNotBlank() }?.let {
-                    DetailMetaText(stringResource(R.string.xk_detail_grading_mode, it))
+            val code = detail?.extra?.courseCode?.takeIf { it.isNotBlank() } ?: item.kcdm
+            val hours = detail?.extra?.plannedHours.orEmpty()
+            val classGroup = detail?.extra?.classGroup?.takeIf { it.isNotBlank() } ?: item.classGroup
+            val platform = detail?.extra?.platformName?.takeIf { it.isNotBlank() } ?: item.category
+            val studyMode = detail?.extra?.studyMode.orEmpty()
+            val gradingMode = detail?.extra?.gradingMode.orEmpty()
+            val metaRows =
+                listOfNotNull(
+                    item.teacher.takeIf { it.isNotBlank() }?.let { stringResource(R.string.xk_detail_label_teacher) to it },
+                    classGroup.takeIf { it.isNotBlank() }?.let { stringResource(R.string.xk_detail_label_class_group) to it },
+                    code.takeIf { it.isNotBlank() }?.let { stringResource(R.string.xk_detail_label_code) to it },
+                    hours.takeIf { it.isNotBlank() }?.let { stringResource(R.string.xk_detail_label_hours) to it },
+                    platform.takeIf { it.isNotBlank() }?.let { stringResource(R.string.xk_detail_label_platform) to it },
+                    studyMode.takeIf { it.isNotBlank() }?.let { stringResource(R.string.xk_detail_label_study_mode) to it },
+                    gradingMode.takeIf { it.isNotBlank() }?.let { stringResource(R.string.xk_detail_label_grading_mode) to it },
+                )
+            if (metaRows.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = scheme.surfaceContainerLow,
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)) {
+                        metaRows.forEachIndexed { index, (label, value) ->
+                            XkDetailMetaRow(label = label, value = value)
+                            if (index < metaRows.lastIndex) {
+                                HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.35f))
+                            }
+                        }
+                    }
                 }
             }
 
-            if (item.hasConflict && !item.enrolled) {
-                MintCard(color = scheme.errorContainer) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Icon(
-                                Icons.Rounded.Warning,
-                                contentDescription = null,
-                                tint = scheme.error,
-                                modifier = Modifier.size(18.dp),
-                            )
+            if (preview.candidateBlocks.isNotEmpty()) {
+                XkTimetablePreview(preview = preview)
+            }
+
+            val previewSlotConflicts =
+                remember(preview.conflictCells) {
+                    preview.conflictCells.values
+                        .flatten()
+                        .distinct()
+                }
+            val displaySlotConflicts = previewSlotConflicts.ifEmpty { item.slotConflicts }
+            if (!item.enrolled && (displaySlotConflicts.isNotEmpty() || item.conflicts.isNotEmpty())) {
+                ConflictCard(title = stringResource(R.string.xk_detail_conflicts_section)) {
+                    if (displaySlotConflicts.isNotEmpty()) {
+                        displaySlotConflicts.forEach { slotConflict ->
                             Text(
-                                stringResource(R.string.xk_detail_conflicts_section),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = scheme.error,
-                                fontWeight = FontWeight.SemiBold,
+                                formatSlotConflictLine(ctx, slotConflict),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = scheme.onSurface,
                             )
                         }
+                    } else {
                         item.conflicts.forEach { conflict ->
                             Text(
                                 formatConflictLine(ctx, conflict),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = scheme.onErrorContainer,
+                                color = scheme.onSurface,
                             )
                         }
                     }
@@ -1157,35 +1307,378 @@ private fun XkCourseDetailSheet(
 }
 
 @Composable
-private fun DetailMetaText(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+private fun XkDetailMetaRow(
+    label: String,
+    value: String,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.padding(end = 12.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = scheme.onSurface,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.End,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+    }
 }
 
 @Composable
-private fun XkTagPill(
-    text: String,
+private fun XkTimetablePreview(preview: app.goke.core.jxfw.XkSchedulePreview) {
+    val scheme = MaterialTheme.colorScheme
+    val weekdays = stringArrayResource(R.array.weekday_short)
+    val candidateDays = remember(preview) { preview.candidateBlocks.map { it.dayOfWeek }.toSet() }
+    val conflictDays =
+        remember(preview) {
+            preview.conflictCells.keys
+                .map { it.first }
+                .toSet()
+        }
+    val conflictRuns =
+        remember(preview) {
+            preview.conflictCells.keys
+                .groupBy { it.first }
+                .flatMap { (day, cells) ->
+                    val sorted = cells.map { it.second }.distinct().sorted()
+                    val runs = mutableListOf<Pair<Int, Int>>()
+                    var start = -1
+                    var prev = -1
+                    for (p in sorted) {
+                        if (start == -1) {
+                            start = p
+                            prev = p
+                        } else if (p == prev + 1) {
+                            prev = p
+                        } else {
+                            runs += start to prev
+                            start = p
+                            prev = p
+                        }
+                    }
+                    if (start != -1) runs += start to prev
+                    runs.map { Triple(day, it.first, it.second) }
+                }
+        }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        SectionLabel(stringResource(R.string.xk_preview_section))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            XkLegendItem(
+                label = stringResource(R.string.xk_preview_legend_existing),
+                bg = scheme.surfaceContainerHighest,
+                border = null,
+            )
+            XkLegendItem(
+                label = stringResource(R.string.xk_preview_legend_candidate),
+                bg = scheme.primaryContainer,
+                border = scheme.primary,
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Box(
+                    Modifier
+                        .size(10.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(MintTheme.colors.conflictBg)
+                        .border(1.5.dp, MintTheme.colors.removed, RoundedCornerShape(3.dp)),
+                )
+                Icon(
+                    Icons.Rounded.Warning,
+                    contentDescription = null,
+                    tint = MintTheme.colors.removed,
+                    modifier = Modifier.size(12.dp),
+                )
+                Text(
+                    stringResource(R.string.xk_preview_legend_conflict),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MintTheme.colors.removed,
+                )
+            }
+        }
+
+        if (preview.candidateWeeks.isNotEmpty()) {
+            val weeksText = JxfwXkParse.formatWeeksRange(preview.candidateWeeks)
+            if (weeksText.isNotBlank()) {
+                Text(
+                    stringResource(R.string.xk_preview_week_scope, weeksText),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = scheme.surfaceContainerLowest,
+            border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.5f)),
+        ) {
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+            ) {
+                val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.3f)
+                val axisW = 24.dp * fontScale
+                val colW = ((maxWidth - axisW) / 7f).coerceAtLeast(16.dp)
+                val rowH = 22.dp * fontScale
+                val groupGap = 6.dp
+                val gridLineColor = scheme.outlineVariant.copy(alpha = 0.35f)
+                val groupLineColor = scheme.outlineVariant.copy(alpha = 0.7f)
+
+                fun periodTop(period: Int): Dp {
+                    val p = (period - 1).coerceAtLeast(0)
+                    val gap =
+                        when {
+                            period > 8 -> groupGap * 2
+                            period > 4 -> groupGap
+                            else -> 0.dp
+                        }
+                    return rowH * p + gap
+                }
+
+                fun periodBottom(period: Int): Dp = periodTop(period) + rowH
+
+                val totalGridH = periodBottom(preview.maxPeriod)
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = axisW, bottom = 4.dp),
+                    ) {
+                        for (day in 1..7) {
+                            val hasConflict = day in conflictDays
+                            val isCandidate = day in candidateDays
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = weekdays.getOrElse(day - 1) { day.toString() },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (hasConflict || isCandidate) FontWeight.Bold else FontWeight.Normal,
+                                    color =
+                                        when {
+                                            hasConflict -> MintTheme.colors.removed
+                                            isCandidate -> scheme.primary
+                                            else -> scheme.onSurfaceVariant
+                                        },
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
+
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(totalGridH)
+                                .drawBehind {
+                                    val axisPx = axisW.toPx()
+                                    for (p in 2..preview.maxPeriod) {
+                                        if (p == 5 || p == 9) {
+                                            val y = (periodTop(p) - groupGap / 2).toPx()
+                                            drawLine(
+                                                color = groupLineColor,
+                                                start = Offset(axisPx, y),
+                                                end = Offset(size.width, y),
+                                                strokeWidth = 1.dp.toPx(),
+                                            )
+                                        } else {
+                                            val y = periodTop(p).toPx()
+                                            drawLine(
+                                                color = gridLineColor,
+                                                start = Offset(axisPx, y),
+                                                end = Offset(size.width, y),
+                                                strokeWidth = 0.5.dp.toPx(),
+                                            )
+                                        }
+                                    }
+                                },
+                    ) {
+                        for (p in 1..preview.maxPeriod) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .absoluteOffset(x = 0.dp, y = periodTop(p))
+                                        .size(width = axisW, height = rowH),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = p.toString(),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontFeatureSettings = "tnum"),
+                                    color = scheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+
+                        preview.occupiedBlocks.forEach { block ->
+                            if (block.dayOfWeek in 1..7) {
+                                val top = periodTop(block.startPeriod)
+                                val bottom = periodBottom(block.endPeriod)
+                                val span = (block.endPeriod - block.startPeriod + 1).coerceAtLeast(1)
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .absoluteOffset(
+                                                x = axisW + colW * (block.dayOfWeek - 1) + 1.dp,
+                                                y = top + 1.dp,
+                                            ).size(
+                                                width = (colW - 2.dp).coerceAtLeast(1.dp),
+                                                height = (bottom - top - 2.dp).coerceAtLeast(1.dp),
+                                            ).clip(RoundedCornerShape(6.dp))
+                                            .background(scheme.surfaceContainerHighest.copy(alpha = 0.85f))
+                                            .padding(horizontal = 2.dp, vertical = 1.dp),
+                                    contentAlignment = Alignment.TopStart,
+                                ) {
+                                    Text(
+                                        text = block.title,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 10.sp),
+                                        color = scheme.onSurfaceVariant,
+                                        maxLines = span.coerceAtMost(2),
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+
+                        preview.candidateBlocks.forEach { block ->
+                            if (block.dayOfWeek in 1..7) {
+                                val top = periodTop(block.startPeriod)
+                                val bottom = periodBottom(block.endPeriod)
+                                val span = (block.endPeriod - block.startPeriod + 1).coerceAtLeast(1)
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .absoluteOffset(
+                                                x = axisW + colW * (block.dayOfWeek - 1) + 1.dp,
+                                                y = top + 1.dp,
+                                            ).size(
+                                                width = (colW - 2.dp).coerceAtLeast(1.dp),
+                                                height = (bottom - top - 2.dp).coerceAtLeast(1.dp),
+                                            ).clip(RoundedCornerShape(6.dp))
+                                            .background(scheme.primaryContainer)
+                                            .border(1.5.dp, scheme.primary, RoundedCornerShape(6.dp))
+                                            .padding(horizontal = 2.dp, vertical = 1.dp),
+                                    contentAlignment = Alignment.TopStart,
+                                ) {
+                                    Text(
+                                        text = block.title,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 10.sp),
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = scheme.onPrimaryContainer,
+                                        maxLines = span.coerceAtMost(2),
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+
+                        conflictRuns.forEach { (day, startP, endP) ->
+                            if (day in 1..7) {
+                                val top = periodTop(startP)
+                                val bottom = periodBottom(endP)
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .absoluteOffset(
+                                                x = axisW + colW * (day - 1) + 1.dp,
+                                                y = top + 1.dp,
+                                            ).size(
+                                                width = (colW - 2.dp).coerceAtLeast(1.dp),
+                                                height = (bottom - top - 2.dp).coerceAtLeast(1.dp),
+                                            ).clip(RoundedCornerShape(6.dp))
+                                            .background(MintTheme.colors.conflictBg)
+                                            .border(2.dp, MintTheme.colors.removed, RoundedCornerShape(6.dp))
+                                            .padding(horizontal = 2.dp, vertical = 1.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Warning,
+                                            contentDescription = null,
+                                            tint = MintTheme.colors.removed,
+                                            modifier = Modifier.size(11.dp),
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.xk_preview_conflict_tag),
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 10.sp),
+                                            fontWeight = FontWeight.Bold,
+                                            color = MintTheme.colors.removed,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun XkLegendItem(
+    label: String,
     bg: Color,
-    fg: Color,
+    border: Color?,
 ) {
-    Box(
-        modifier =
-            Modifier
-                .clip(CircleShape)
-                .background(bg)
-                .padding(horizontal = 10.dp, vertical = 4.dp),
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        val baseMod =
+            Modifier
+                .size(10.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(bg)
+        Box(if (border != null) baseMod.border(1.dp, border, RoundedCornerShape(3.dp)) else baseMod)
         Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            color = fg,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+private fun formatSlotConflictLine(
+    ctx: Context,
+    conflict: XkSlotConflict,
+): String {
+    val weekday = weekdayLabel(ctx, conflict.dayOfWeek)
+    val periods = ctx.getString(R.string.xk_schedule_periods, formatPeriods(conflict.periods))
+    val weeks = JxfwXkParse.formatWeeksRange(conflict.weeks)
+    val source =
+        ctx.getString(
+            when (conflict.source) {
+                XkConflictSource.JXFW -> R.string.xk_conflict_source_jxfw
+                XkConflictSource.LOCAL_TIMETABLE -> R.string.xk_conflict_source_local
+            },
+        )
+    return ctx.getString(R.string.xk_conflict_line, conflict.courseName, weekday, periods, weeks, source)
 }
 
 private fun formatScheduleSummary(
