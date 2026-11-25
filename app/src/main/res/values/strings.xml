@@ -1010,7 +1010,7 @@
     <string name="about_qq_saved">已保存二维码到相册</string>
     <string name="about_qq_save_failed">保存二维码失败</string>
     <string name="about_license_section">许可协议</string>
-    <string name="about_license_desc">仅限非商业使用，衍生作品与套件须同协议公开源码</string>
+    <string name="about_license_desc">极端非商业 · 永不接受捐款与赞助 · 衍生须同协议公开源码</string>
     <string name="about_ack_section">致谢</string>
     <string name="about_ack_jetpack_desc">Google · Material 3 界面与系统集成（Apache-2.0）</string>
     <string name="about_ack_kotlin_desc">JetBrains · Kotlin 语言、协程与序列化（Apache-2.0）</string>
