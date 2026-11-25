@@ -96,6 +96,9 @@ class TodayWidgetProvider : AppWidgetProvider() {
         val courseDate: String? = null,
         val startPeriod: Int? = null,
         val endPeriod: Int? = null,
+        val listName: String? = null,
+        val hasRemind: Boolean = false,
+        val repeating: Boolean = false,
     )
 
     companion object {
@@ -195,6 +198,7 @@ class TodayWidgetProvider : AppWidgetProvider() {
                     }
                 }
             val listColor = live.lists.associate { it.id to it.colorIndex }
+            val listNames = live.lists.associate { it.id to it.name }
             val shownTaskIds = HashSet<String>()
             val result = mutableListOf<Row>()
 
@@ -300,6 +304,9 @@ class TodayWidgetProvider : AppWidgetProvider() {
                                 ongoing = false,
                                 taskId = t.id,
                                 targetUri = DeepLinks.taskUri(t.id).toString(),
+                                listName = if (code != null) null else (t.listId?.let { listNames[it] } ?: ctx.getString(R.string.bucket_inbox)),
+                                hasRemind = code == null && t.effectiveRemindMinutes.isNotEmpty(),
+                                repeating = code == null && t.repeat != null,
                             )
                     }
                 }

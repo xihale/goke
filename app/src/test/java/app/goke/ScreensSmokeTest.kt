@@ -36,6 +36,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -46,6 +47,8 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
@@ -640,11 +643,12 @@ class ScreensSmokeTest {
                     }
         }
 
-        // 重新打开后未做新修改，主按钮恢复为「完成」可一键勾选完成
+        // 重新打开后未做新修改，不显示底部「保存」按钮；通过标题勾选框直接完成
         dismissed = false
         rule.runOnIdle { target.value = OverlayTarget.TaskDetail(todo.id) }
         rule.waitForIdle()
-        rule.onNodeWithText(app.getString(R.string.widget_overlay_task_done)).performClick()
+        rule.onAllNodesWithText(app.getString(R.string.save)).assertCountEquals(0)
+        rule.onAllNodes(isToggleable())[0].performClick()
         rule.waitUntil(5_000) {
             app.repo.snapshot.value.tasks
                 .first { it.id == todo.id }
@@ -789,5 +793,88 @@ class ScreensSmokeTest {
                     app.getString(R.string.course_progress_finished),
                 ),
             ).assertCountEquals(2)
+    }
+
+    @Test
+    fun overlayCourseNoteTogglesHighlightAndCopiesOnLongPress() {
+        val snap = app.repo.snapshot.value
+        val sem = snap.currentSemester!!
+        val today = LocalDate.now()
+        val week = SemesterCalendar(sem).weekOf(today).coerceIn(1, sem.totalWeeks)
+        val otherWeek = if (week == 1) 2 else 1
+        val trailingLines =
+            (3..20)
+                .filter { it != week && it != otherWeek }
+                .joinToString("\n") { i -> "第${i}周：第${i}周课程拓展内容与实验安排说明" }
+        val rawNote =
+            listOf(
+                "第${otherWeek}周：往周导论内容",
+                "第${week}周：本周&ldquo;重点&rdquo;实验",
+                "自带实验报告纸",
+                trailingLines,
+            ).joinToString("\n")
+        val decodedNote = rawNote.replace("&ldquo;", "“").replace("&rdquo;", "”")
+        val course =
+            snap.courses.first().copy(
+                id = Ids.next(),
+                name = "离散数学实验",
+                note = rawNote,
+            )
+        runBlocking {
+            app.repo.commit(ChangeSet(Ids.next(), "seed-note-course", Source.MANUAL, 2L, listOf(Change.Add(course))))
+        }
+
+        rule.setContent {
+            val st by app.settings.flow.collectAsState()
+            val curSnap by app.repo.snapshot.collectAsState()
+            GokeTheme(st) {
+                WidgetOverlayRoot(
+                    app = app,
+                    ready = true,
+                    snap = curSnap,
+                    target = OverlayTarget.CourseDetail(course.id, dateStr = today.toString()),
+                    onChangeTarget = {},
+                    onOpenInApp = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        rule.waitForIdle()
+
+        // 默认仅显示本周与通用备注，且不显示「查看全部备注」按钮，HTML 实体已解码
+        rule.onAllNodesWithText("查看全部备注").assertCountEquals(0)
+        rule.onNodeWithText("本周“重点”实验\n自带实验报告纸").assertIsDisplayed()
+
+        // 单击备注块展开全部，并高亮当前周目所在行
+        rule.onNodeWithText("本周“重点”实验\n自带实验报告纸").performClick()
+        rule.waitForIdle()
+        val expandedNode = rule.onNodeWithText("往周导论内容", substring = true)
+        expandedNode.assertIsDisplayed()
+        val annotated = expandedNode.fetchSemanticsNode().config[SemanticsProperties.Text].first()
+        val currentLineStart = annotated.text.indexOf("第${week}周：本周“重点”实验")
+        assertTrue(currentLineStart >= 0)
+        assertTrue(annotated.spanStyles.any { it.start == currentLineStart && it.item.background != androidx.compose.ui.graphics.Color.Unspecified })
+
+        // 超长备注块支持上下滑动
+        expandedNode.performTouchInput { swipeUp() }
+        rule.waitForIdle()
+        rule.onNodeWithText("第20周：第20周课程拓展内容与实验安排说明", substring = true).assertIsDisplayed()
+
+        // 长按备注块复制全部展示内容
+        expandedNode.performTouchInput { longClick() }
+        rule.waitForIdle()
+        val cm = app.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        assertEquals(
+            decodedNote,
+            cm.primaryClip
+                ?.getItemAt(0)
+                ?.text
+                ?.toString(),
+        )
+
+        // 再次单击备注块收起回部分备注
+        expandedNode.performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("本周“重点”实验\n自带实验报告纸").assertIsDisplayed()
     }
 }

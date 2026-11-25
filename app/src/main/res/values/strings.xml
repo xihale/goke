@@ -873,8 +873,6 @@
     <string name="widget_overlay_course_detail">课程详情</string>
     <string name="widget_overlay_parcel_done">已取件</string>
     <string name="widget_overlay_parcel_done_toast">已标记「%1$s」取件完成</string>
-    <string name="widget_overlay_task_done">完成</string>
-    <string name="widget_overlay_task_reopen">恢复未完成</string>
     <string name="widget_overlay_task_done_toast">已完成「%1$s」</string>
     <string name="widget_overlay_saved_toast">已保存「%1$s」</string>
     <string name="widget_overlay_reschedule">改时间</string>
@@ -1217,6 +1215,5 @@
     <string name="course_kind_normal">普通课程</string>
     <string name="course_kind_exam">考试</string>
     <string name="course_exam_remind_hint">考试类型将使用重要提醒通道并默认开启强提醒</string>
-    <string name="course_notes_all">查看全部备注</string>
-    <string name="course_notes_collapse">收起全部备注</string>
+    <string name="course_note_copied">已复制备注</string>
 </resources>

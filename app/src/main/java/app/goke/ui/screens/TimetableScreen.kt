@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.absoluteOffset
@@ -145,6 +146,7 @@ import app.goke.ui.LocalTabVisible
 import app.goke.ui.Route
 import app.goke.ui.Tab
 import app.goke.ui.components.ConflictCard
+import app.goke.ui.components.CourseNoteBox
 import app.goke.ui.components.CourseProgressAxis
 import app.goke.ui.components.EmptyState
 import app.goke.ui.components.FieldText
@@ -1662,6 +1664,8 @@ private fun InWindowSheet(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(top = 16.dp)
                         .pointerInput(Unit) {
                             detectTapGestures {}
                         },
@@ -2254,16 +2258,17 @@ private fun CourseSheet(
             label = "course-sheet-mode",
         ) { editing ->
             if (!editing && activeCell != null) {
-                val parsedNote =
+                val noteState =
                     remember(liveCourse.note, o.originalWeek, o.week) {
                         val byOrig = CourseNotes.parse(liveCourse.note, o.originalWeek)
                         if (byOrig.currentWeekNotes.isNotEmpty() || o.week == o.originalWeek) {
-                            byOrig
+                            o.originalWeek to byOrig
                         } else {
-                            CourseNotes.parse(liveCourse.note, o.week)
+                            o.week to CourseNotes.parse(liveCourse.note, o.week)
                         }
                     }
-                var showAllNotes by remember(liveCourse.id, o.week) { mutableStateOf(false) }
+                val noteWeek = noteState.first
+                val parsedNote = noteState.second
 
                 Column(
                     Modifier
@@ -2334,56 +2339,15 @@ private fun CourseSheet(
                     }
                     ValueRow(stringResource(R.string.week_label), WeekSets.format(liveCourse.weeks), onClick = ::openEdit)
                     if (liveCourse.note.isNotBlank()) {
-                        val displayNote =
-                            if (showAllNotes) {
-                                liveCourse.note.trim()
-                            } else {
-                                parsedNote.focusedNotes.joinToString("\n").ifBlank { liveCourse.note.trim() }
-                            }
-                        Text(
-                            displayNote,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 6.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f))
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                        CourseNoteBox(
+                            note = liveCourse.note,
+                            week = noteWeek,
+                            parsedNote = parsedNote,
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(top = 6.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+                            onCopied = actions::toast,
                         )
-                        if (parsedNote.hasOtherWeeks) {
-                            val arrowRot by animateFloatAsState(
-                                targetValue = if (showAllNotes) 90f else 0f,
-                                animationSpec = MintTheme.press(),
-                                label = "course-notes-arrow",
-                            )
-                            Row(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 48.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .mintClickable(pressedScale = 0.98f, role = Role.Button) {
-                                            showAllNotes = !showAllNotes
-                                        }.padding(horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.End,
-                            ) {
-                                Text(
-                                    stringResource(if (showAllNotes) R.string.course_notes_collapse else R.string.course_notes_all),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Spacer(Modifier.width(2.dp))
-                                Icon(
-                                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = arrowRot },
-                                )
-                            }
-                        }
                     }
                     if (activeCell.kind == CellKind.NORMAL) {
                         Spacer(Modifier.height(10.dp))

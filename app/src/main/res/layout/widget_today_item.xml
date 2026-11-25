@@ -3,7 +3,7 @@
     android:id="@+id/today_item_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:minHeight="42dp">
+    android:minHeight="36dp">
 
     <ProgressBar
         android:id="@+id/today_item_progress"
@@ -21,12 +21,12 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
-        android:minHeight="42dp"
+        android:minHeight="36dp"
         android:orientation="horizontal"
-        android:paddingBottom="5dp"
+        android:paddingBottom="3dp"
         android:paddingEnd="8dp"
         android:paddingStart="10dp"
-        android:paddingTop="5dp">
+        android:paddingTop="3dp">
 
         <LinearLayout
             android:id="@+id/today_item_time_col"
@@ -75,15 +75,53 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/today_item_title"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/widget_text"
-                android:textSize="13.5sp"
-                android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/today_item_title"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_text"
+                    android:textSize="13.5sp"
+                    android:textStyle="bold" />
+
+                <ImageView
+                    android:id="@+id/today_item_remind"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:layout_marginStart="4dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_widget_alarm"
+                    android:visibility="gone" />
+
+                <ImageView
+                    android:id="@+id/today_item_repeat"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:layout_marginStart="4dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_widget_repeat"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/today_item_list"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:maxWidth="80dp"
+                    android:textColor="@color/widget_muted"
+                    android:textSize="11sp"
+                    android:visibility="gone" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/today_item_sub"

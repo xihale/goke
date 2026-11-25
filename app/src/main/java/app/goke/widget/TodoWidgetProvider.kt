@@ -59,6 +59,10 @@ class TodoWidgetProvider : AppWidgetProvider() {
         val due: String?,
         val priority: Int,
         val overdue: Boolean,
+        val note: String? = null,
+        val listName: String? = null,
+        val hasRemind: Boolean = false,
+        val repeating: Boolean = false,
     )
 
     companion object {
@@ -101,6 +105,7 @@ class TodoWidgetProvider : AppWidgetProvider() {
                     .live()
             val overdue = TaskLogic.filter(snap.tasks, SmartList.OVERDUE, now).filter { !it.done }
             val today = TaskLogic.filter(snap.tasks, SmartList.TODAY, now).filter { !it.done && it !in overdue }
+            val listNames = snap.lists.associate { it.id to it.name }
             val date = now.toLocalDate()
             return (overdue + today).take(MAX_ROWS).map { t ->
                 val due = TaskLogic.effectiveDue(t, snap.currentSemester, snap.courses, snap.exceptions, now)
@@ -114,6 +119,19 @@ class TodoWidgetProvider : AppWidgetProvider() {
                     due = if (code != null) null else due?.let { ctx.dueLabel(it, t.dueHasTime, date) },
                     priority = t.priority,
                     overdue = t in overdue,
+                    note =
+                        if (code != null) {
+                            null
+                        } else {
+                            t.note
+                                .lineSequence()
+                                .map { it.trim() }
+                                .firstOrNull { it.isNotEmpty() }
+                                ?.take(80)
+                        },
+                    listName = t.listId?.let { listNames[it] } ?: ctx.getString(R.string.bucket_inbox),
+                    hasRemind = t.effectiveRemindMinutes.isNotEmpty(),
+                    repeating = t.repeat != null,
                 )
             }
         }

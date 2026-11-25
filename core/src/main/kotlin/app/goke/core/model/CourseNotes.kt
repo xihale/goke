@@ -1,6 +1,7 @@
 package app.goke.core.model
 
 import app.goke.core.time.WeekSets
+import app.goke.core.util.HtmlEntities
 
 /**
  * 课程备注解析与整理：把教务按周导入的「第X周：授课内容」与用户手动备注分离，
@@ -32,7 +33,7 @@ object CourseNotes {
         val general = mutableListOf<String>()
         val otherWeeks = mutableListOf<String>()
         for (raw in note.lines()) {
-            val line = raw.trim()
+            val line = HtmlEntities.decode(raw).trim()
             if (line.isEmpty()) continue
             val m = WEEK_LINE_RE.matchEntire(line)
             if (m == null) {
@@ -59,6 +60,19 @@ object CourseNotes {
         week: Int?,
         maxWeeks: Int = MAX_WEEKS,
     ): String = parse(note, week, maxWeeks).focusedNotes.joinToString("\n")
+
+    fun isWeekLine(line: String): Boolean = WEEK_LINE_RE.matches(line.trim())
+
+    fun isCurrentWeekLine(
+        line: String,
+        week: Int?,
+        maxWeeks: Int = MAX_WEEKS,
+    ): Boolean {
+        if (week == null) return false
+        val m = WEEK_LINE_RE.matchEntire(line.trim()) ?: return false
+        val ws = WeekSets.parse(m.groupValues[1], maxWeeks)
+        return week in ws && m.groupValues[2].trim().isNotEmpty()
+    }
 
     fun stripWeekPrefix(line: String): String {
         val trimmed = line.trim()

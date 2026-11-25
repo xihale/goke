@@ -1,5 +1,10 @@
 package app.goke.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -151,7 +156,6 @@ internal fun WhenPanel(
     var datePicked by remember { mutableStateOf(initial != null) }
     var timeDlg by remember { mutableStateOf(false) }
     var durDlg by remember { mutableStateOf(false) }
-    var wantDur by remember { mutableStateOf(false) }
     var remindDlg by remember { mutableStateOf(false) }
     var repeatDlg by remember { mutableStateOf(false) }
     var endDlg by remember { mutableStateOf(false) }
@@ -235,13 +239,14 @@ internal fun WhenPanel(
                     minutes = null
                     timeDlg = false
                 }) { timeDlg = true }
-                // 持续常驻：没选开始时间时点它先弹时刻，选完接着弹时长
-                SettingRow(Icons.Rounded.Timer, stringResource(R.string.label_lasting), durText, minutes != null, onClear = { minutes = null }) {
-                    if (start != null) {
+                // 持续仅在已选开始时间后出现
+                AnimatedVisibility(
+                    visible = start != null,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    SettingRow(Icons.Rounded.Timer, stringResource(R.string.label_lasting), durText, minutes != null, onClear = { minutes = null }) {
                         durDlg = true
-                    } else {
-                        timeDlg = true
-                        wantDur = true
                     }
                 }
                 if (start != null && (m ?: 0) > 180) {
@@ -301,16 +306,10 @@ internal fun WhenPanel(
             initial = start ?: LocalTime.of(18, 0),
             onDismiss = {
                 timeDlg = false
-                wantDur = false
             },
         ) { t ->
             startMin = t.hour * 60 + t.minute
             timeDlg = false
-            // 点的是「持续」但还没有开始时间：选完时刻接着弹时长
-            if (wantDur) {
-                wantDur = false
-                durDlg = true
-            }
         }
     }
     if (durDlg) {

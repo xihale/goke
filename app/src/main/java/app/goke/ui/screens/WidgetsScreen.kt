@@ -702,6 +702,7 @@ private fun TodoWidgetPreview(
         remember(snap, now) {
             val overdue = TaskLogic.filter(snap.tasks, SmartList.OVERDUE, now).filter { !it.done }
             val todayList = TaskLogic.filter(snap.tasks, SmartList.TODAY, now).filter { !it.done && it !in overdue }
+            val listNames = snap.lists.associate { it.id to it.name }
             (overdue + todayList).take(3).map { t ->
                 val due = TaskLogic.effectiveDue(t, snap.currentSemester, snap.courses, snap.exceptions, now)
                 val code = WidgetKit.parcelCode(t)
@@ -712,6 +713,19 @@ private fun TodoWidgetPreview(
                     due = if (code != null) null else due?.let { ctx.dueLabel(it, t.dueHasTime, today) },
                     priority = t.priority,
                     overdue = t in overdue,
+                    note =
+                        if (code != null) {
+                            null
+                        } else {
+                            t.note
+                                .lineSequence()
+                                .map { it.trim() }
+                                .firstOrNull { it.isNotEmpty() }
+                                ?.take(80)
+                        },
+                    listName = t.listId?.let { listNames[it] } ?: ctx.getString(R.string.bucket_inbox),
+                    hasRemind = t.effectiveRemindMinutes.isNotEmpty(),
+                    repeating = t.repeat != null,
                 )
             }
         }

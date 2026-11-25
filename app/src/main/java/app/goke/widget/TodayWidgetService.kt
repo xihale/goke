@@ -138,8 +138,22 @@ class TodayWidgetService : RemoteViewsService() {
                         .putExtra(TodoWidgetProvider.EXTRA_OP, TodoWidgetProvider.OP_DONE)
                         .putExtra(TodoWidgetProvider.EXTRA_TASK_ID, r.taskId),
                 )
+                val muted = ctx.getColor(R.color.widget_muted)
+                v.setViewVisibility(R.id.today_item_remind, if (r.hasRemind) View.VISIBLE else View.GONE)
+                v.setViewVisibility(R.id.today_item_repeat, if (r.repeating) View.VISIBLE else View.GONE)
+                v.setInt(R.id.today_item_remind, "setColorFilter", muted)
+                v.setInt(R.id.today_item_repeat, "setColorFilter", muted)
+                if (!compact && r.listName != null) {
+                    v.setViewVisibility(R.id.today_item_list, View.VISIBLE)
+                    v.setTextViewText(R.id.today_item_list, r.listName)
+                } else {
+                    v.setViewVisibility(R.id.today_item_list, View.GONE)
+                }
             } else {
                 v.setViewVisibility(R.id.today_item_check, View.GONE)
+                v.setViewVisibility(R.id.today_item_remind, View.GONE)
+                v.setViewVisibility(R.id.today_item_repeat, View.GONE)
+                v.setViewVisibility(R.id.today_item_list, View.GONE)
             }
 
             val open =

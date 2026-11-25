@@ -3,12 +3,15 @@ package app.goke.ui.components
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,8 +21,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -27,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,10 +47,15 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import app.goke.R
 import app.goke.core.agenda.AgendaItem
@@ -56,6 +67,7 @@ import app.goke.core.change.Change
 import app.goke.core.change.ChangeSet
 import app.goke.core.change.Edits
 import app.goke.core.change.Unify
+import app.goke.core.model.CourseNotes
 import app.goke.core.model.Event
 import app.goke.core.model.EventKind
 import app.goke.core.model.Snapshot
@@ -63,6 +75,7 @@ import app.goke.core.model.Source
 import app.goke.core.model.Task
 import app.goke.core.time.CourseProgress
 import app.goke.core.time.TimePhase
+import app.goke.core.util.HtmlEntities
 import app.goke.core.util.Ids
 import app.goke.ui.Actions
 import app.goke.ui.LocalActions
@@ -598,6 +611,93 @@ private fun EventInfoRow(
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/**
+ * 课程备注块：默认仅展示当周与通用备注；存在其他周备注时单击切换展开全部/部分，
+ * 展开全部时高亮当前周目对应行；长按可复制当前展示的备注文本。
+ */
+@Composable
+fun CourseNoteBox(
+    note: String,
+    week: Int?,
+    parsedNote: CourseNotes.Parsed,
+    textStyle: TextStyle,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+    onCopied: ((String) -> Unit)? = null,
+) {
+    val ctx = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    var showAllNotes by remember(note, week) { mutableStateOf(false) }
+    val canToggle = parsedNote.hasOtherWeeks && parsedNote.focusedNotes.isNotEmpty()
+    val trimmed = remember(note) { HtmlEntities.decode(note).trim() }
+    val focusedText = remember(trimmed, parsedNote) { parsedNote.focusedNotes.joinToString("\n").ifBlank { trimmed } }
+    val highlightStyle =
+        SpanStyle(
+            color = scheme.primary,
+            fontWeight = FontWeight.SemiBold,
+            background = scheme.primary.copy(alpha = 0.14f),
+        )
+    val mutedStyle = SpanStyle(color = scheme.onSurfaceVariant)
+    val displayText =
+        if (showAllNotes) {
+            remember(trimmed, week, highlightStyle, mutedStyle) {
+                buildAnnotatedString {
+                    trimmed.lines().forEachIndexed { index, line ->
+                        if (index > 0) append('\n')
+                        when {
+                            CourseNotes.isCurrentWeekLine(line, week) -> withStyle(highlightStyle) { append(line) }
+                            CourseNotes.isWeekLine(line) -> withStyle(mutedStyle) { append(line) }
+                            else -> append(line)
+                        }
+                    }
+                }
+            }
+        } else {
+            AnnotatedString(focusedText)
+        }
+    val copiedMsg = stringResource(R.string.course_note_copied)
+    val scrollState = rememberScrollState()
+    LaunchedEffect(showAllNotes) {
+        if (!showAllNotes) scrollState.scrollTo(0)
+    }
+    Box(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(scheme.surfaceContainerHighest.copy(alpha = 0.6f))
+                .animateContentSize(MintTheme.spec())
+                .heightIn(max = 220.dp)
+                .verticalScroll(scrollState),
+    ) {
+        Text(
+            text = displayText,
+            style = textStyle,
+            color = scheme.onSurface,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .mintClickable(
+                        pressedScale = if (canToggle) 0.985f else 0.99f,
+                        role = if (canToggle) Role.Button else null,
+                        onLongClick = {
+                            ctx
+                                .getSystemService(ClipboardManager::class.java)
+                                ?.setPrimaryClip(ClipData.newPlainText("course_note", displayText.text))
+                            if (onCopied != null) {
+                                onCopied(copiedMsg)
+                            } else {
+                                Toast.makeText(ctx, copiedMsg, Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onClick = {
+                            if (canToggle) showAllNotes = !showAllNotes
+                        },
+                    ).padding(contentPadding),
         )
     }
 }

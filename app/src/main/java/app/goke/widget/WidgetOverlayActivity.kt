@@ -18,9 +18,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -34,6 +36,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,6 +47,7 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -61,6 +65,8 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -97,6 +103,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.goke.DeepLinks
@@ -123,12 +130,13 @@ import app.goke.data.DarkMode
 import app.goke.gokeApp
 import app.goke.ui.components.ChipPill
 import app.goke.ui.components.ConfirmDialog
+import app.goke.ui.components.CourseNoteBox
 import app.goke.ui.components.ErrorReportDialog
 import app.goke.ui.components.MintCheck
-import app.goke.ui.components.SegmentedPill
 import app.goke.ui.components.Tag
 import app.goke.ui.components.mintClickable
 import app.goke.ui.components.mintPressScale
+import app.goke.ui.components.rememberNoFocusPopup
 import app.goke.ui.dueLabel
 import app.goke.ui.formatAllRooms
 import app.goke.ui.hm
@@ -161,7 +169,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import android.graphics.Color as AndroidColor
 
-private enum class OverlayQuickPanel { PRIORITY, LIST }
+private val OverlayLeadW = 48.dp
+private val OverlayRowMinH = 44.dp
 
 internal sealed interface OverlayTarget {
     data class Add(
@@ -436,6 +445,8 @@ internal fun WidgetOverlayRoot(
                     Modifier
                         .widthIn(max = 560.dp)
                         .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(top = 16.dp)
                         .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
                         .pointerInput(Unit) { detectTapGestures {} },
                 shape = sheetShape,
@@ -881,7 +892,6 @@ private fun OverlayCourseCard(
             cal?.weekOf(targetDate)?.takeIf { it > 0 }
         }
     val parsedNote = remember(course.note, week) { CourseNotes.parse(course.note, week) }
-    var showAllNotes by remember(course.id, week) { mutableStateOf(false) }
 
     Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
@@ -923,37 +933,13 @@ private fun OverlayCourseCard(
             )
         }
         if (course.note.isNotBlank()) {
-            val noteText =
-                if (showAllNotes) {
-                    course.note.trim()
-                } else {
-                    parsedNote.focusedNotes.joinToString("\n").ifBlank { course.note.trim() }
-                }
-            Text(
-                noteText,
-                style = MaterialTheme.typography.bodySmall,
-                color = scheme.onSurface,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 6.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(scheme.surfaceContainerHighest.copy(alpha = 0.6f))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+            CourseNoteBox(
+                note = course.note,
+                week = week,
+                parsedNote = parsedNote,
+                textStyle = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 6.dp),
             )
-            if (parsedNote.hasOtherWeeks) {
-                Text(
-                    stringResource(if (showAllNotes) R.string.course_notes_collapse else R.string.course_notes_all),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = scheme.primary,
-                    modifier =
-                        Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .mintClickable(pressedScale = 0.96f, role = Role.Button) {
-                                showAllNotes = !showAllNotes
-                            }.padding(horizontal = 4.dp, vertical = 8.dp),
-                )
-            }
         }
     }
 
@@ -1273,7 +1259,7 @@ private fun OverlayTaskCard(
     var byDays by remember(task.id) { mutableStateOf(task.repeat?.byDays ?: emptySet()) }
     var byMonths by remember(task.id) { mutableStateOf(task.repeat?.byMonths ?: emptySet()) }
 
-    var toolPanel by remember { mutableStateOf<OverlayQuickPanel?>(null) }
+    var listPanel by remember { mutableStateOf(false) }
     var whenPanel by remember { mutableStateOf(false) }
 
     val listName = remember(snap.lists, listId) { snap.lists.firstOrNull { it.id == listId }?.name }
@@ -1448,16 +1434,6 @@ private fun OverlayTaskCard(
                 }
         } == true
 
-    val prioText =
-        when (priority) {
-            3 -> stringResource(R.string.priority_3)
-            2 -> stringResource(R.string.priority_2)
-            1 -> stringResource(R.string.priority_1)
-            else -> stringResource(R.string.label_priority)
-        }
-    val prioFlagTint = colors.priorityColor(priority)?.copy(alpha = 0.85f) ?: scheme.onSurfaceVariant.copy(alpha = 0.7f)
-    val prioTextColor = if (priority > 0) scheme.onSurface else scheme.onSurfaceVariant
-
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         MintCheck(
             checked = done,
@@ -1473,7 +1449,7 @@ private fun OverlayTaskCard(
             modifier =
                 Modifier
                     .weight(1f)
-                    .padding(vertical = 4.dp)
+                    .padding(vertical = 8.dp)
                     .alpha(if (done) 0.45f else 1f),
         ) {
             BasicTextField(
@@ -1511,29 +1487,16 @@ private fun OverlayTaskCard(
         }
     }
 
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 42.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .mintClickable(pressedScale = 0.98f, role = Role.Button) { whenPanel = true }
-                .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    OverlayFieldRow(
+        icon = Icons.Rounded.Schedule,
+        iconTint =
+            when {
+                overdue -> scheme.error
+                hasWhenInfo -> scheme.primary
+                else -> scheme.onSurfaceVariant.copy(alpha = 0.7f)
+            },
+        onClick = { whenPanel = true },
     ) {
-        Box(modifier = Modifier.width(48.dp), contentAlignment = Alignment.Center) {
-            Icon(
-                Icons.Rounded.Schedule,
-                contentDescription = null,
-                tint =
-                    when {
-                        overdue -> scheme.error
-                        hasWhenInfo -> scheme.primary
-                        else -> scheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    },
-                modifier = Modifier.size(18.dp),
-            )
-        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 whenPrimary,
@@ -1556,26 +1519,16 @@ private fun OverlayTaskCard(
         }
     }
 
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.Top,
+    val locationHint = stringResource(R.string.field_location)
+    OverlayFieldRow(
+        icon = Icons.Rounded.Place,
+        iconTint = if (location.isNotBlank()) scheme.onSurfaceVariant else scheme.onSurfaceVariant.copy(alpha = 0.6f),
     ) {
-        Box(
-            modifier = Modifier.width(48.dp).padding(top = 2.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Rounded.Place,
-                contentDescription = null,
-                tint = if (location.isNotBlank()) scheme.onSurfaceVariant else scheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        val locationHint = stringResource(R.string.field_location)
         Box(modifier = Modifier.weight(1f)) {
             BasicTextField(
                 value = location,
                 onValueChange = { location = it },
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = locationHint },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurface),
                 cursorBrush = SolidColor(scheme.primary),
@@ -1591,23 +1544,19 @@ private fun OverlayTaskCard(
         }
     }
 
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.Top,
+    val noteHint = stringResource(R.string.label_note)
+    OverlayFieldRow(
+        icon = Icons.Rounded.Notes,
+        iconTint = if (note.isNotBlank()) scheme.onSurfaceVariant else scheme.onSurfaceVariant.copy(alpha = 0.6f),
+        alignTop = true,
     ) {
         Box(
-            modifier = Modifier.width(48.dp).padding(top = 2.dp),
-            contentAlignment = Alignment.Center,
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .heightIn(max = 160.dp)
+                    .verticalScroll(rememberScrollState()),
         ) {
-            Icon(
-                Icons.Rounded.Notes,
-                contentDescription = null,
-                tint = if (note.isNotBlank()) scheme.onSurfaceVariant else scheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        val noteHint = stringResource(R.string.label_note)
-        Box(modifier = Modifier.weight(1f)) {
             BasicTextField(
                 value = note,
                 onValueChange = { note = it },
@@ -1626,142 +1575,113 @@ private fun OverlayTaskCard(
         }
     }
 
-    Spacer(Modifier.height(6.dp))
-
-    FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(start = 40.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .heightIn(min = 48.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (toolPanel == OverlayQuickPanel.PRIORITY) scheme.surfaceContainerHigh else Color.Transparent)
-                    .mintClickable(pressedScale = 0.96f, role = Role.Button) {
-                        toolPanel = if (toolPanel == OverlayQuickPanel.PRIORITY) null else OverlayQuickPanel.PRIORITY
-                    }.padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
+    var prioMenu by remember { mutableStateOf(false) }
+    val noFocusPopup = rememberNoFocusPopup()
+    val prioOptions = listOf(3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1, 0 to R.string.priority_0)
+    Box {
+        OverlayFieldRow(
+            icon = Icons.Rounded.Flag,
+            iconTint = colors.priorityColor(priority) ?: scheme.onSurfaceVariant.copy(alpha = 0.6f),
+            onClick = { prioMenu = true },
         ) {
-            Icon(Icons.Rounded.Flag, null, modifier = Modifier.size(15.dp), tint = prioFlagTint)
             Text(
-                prioText,
-                style = MaterialTheme.typography.labelMedium,
-                color = prioTextColor,
+                if (priority > 0) stringResource(prioOptions.first { it.first == priority }.second) else stringResource(R.string.label_priority),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (priority > 0) scheme.onSurface else scheme.onSurfaceVariant.copy(alpha = 0.7f),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
         }
-        if (snap.lists.isNotEmpty()) {
-            Row(
+        DropdownMenu(prioMenu, { prioMenu = false }, offset = DpOffset(OverlayLeadW, 0.dp), properties = noFocusPopup) {
+            prioOptions.forEach { (v, label) ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(label)) },
+                    leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = colors.priorityColor(v) ?: scheme.onSurfaceVariant) },
+                    trailingIcon = if (v == priority) ({ Icon(Icons.Rounded.Check, null, tint = scheme.primary, modifier = Modifier.size(18.dp)) }) else null,
+                    onClick = {
+                        priority = v
+                        prioMenu = false
+                    },
+                )
+            }
+        }
+    }
+
+    if (snap.lists.isNotEmpty()) {
+        OverlayFieldRow(
+            icon = Icons.Rounded.Inbox,
+            iconTint = if (listName != null) scheme.primary else scheme.onSurfaceVariant.copy(alpha = 0.7f),
+            onClick = { listPanel = !listPanel },
+        ) {
+            Text(
+                listName?.let { "#$it" } ?: stringResource(R.string.label_list),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (listName != null) scheme.primary else scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        AnimatedVisibility(
+            visible = listPanel,
+            enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+            exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+        ) {
+            FlowRow(
                 modifier =
                     Modifier
-                        .heightIn(min = 36.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .mintClickable(pressedScale = 0.96f, role = Role.Button) {
-                            toolPanel = if (toolPanel == OverlayQuickPanel.LIST) null else OverlayQuickPanel.LIST
-                        }.padding(horizontal = 8.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        .fillMaxWidth()
+                        .heightIn(max = 132.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = OverlayLeadW, bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(
-                    Icons.Rounded.Inbox,
-                    null,
-                    modifier = Modifier.size(16.dp),
-                    tint = if (listName != null) scheme.primary else scheme.onSurfaceVariant,
-                )
-                Text(
-                    listName?.let { "#$it" } ?: stringResource(R.string.label_list),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (listName != null) scheme.primary else scheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        if (course != null) {
-            Row(
-                modifier = Modifier.heightIn(min = 36.dp).padding(horizontal = 6.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(colors.fg(course.colorIndex)),
-                )
-                Text(
-                    course.name,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = scheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-
-    AnimatedVisibility(
-        visible = toolPanel == OverlayQuickPanel.PRIORITY,
-        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-    ) {
-        SegmentedPill(
-            options =
-                listOf(
-                    3 to stringResource(R.string.priority_3),
-                    2 to stringResource(R.string.priority_2),
-                    1 to stringResource(R.string.priority_1),
-                    0 to stringResource(R.string.priority_0),
-                ),
-            selected = priority,
-            onSelect = { v ->
-                priority = v
-                toolPanel = null
-            },
-            modifier = Modifier.padding(top = 10.dp),
-        )
-    }
-
-    AnimatedVisibility(
-        visible = toolPanel == OverlayQuickPanel.LIST && snap.lists.isNotEmpty(),
-        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-    ) {
-        FlowRow(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 132.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(top = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            ChipPill(stringResource(R.string.widget_overlay_no_list), on = listId == null) {
-                listId = null
-                toolPanel = null
-            }
-            snap.lists.sortedBy { it.sort }.forEach { l ->
-                ChipPill("#${l.name}", on = listId == l.id) {
-                    listId = l.id
-                    toolPanel = null
+                ChipPill(stringResource(R.string.widget_overlay_no_list), on = listId == null) {
+                    listId = null
+                    listPanel = false
+                }
+                snap.lists.sortedBy { it.sort }.forEach { l ->
+                    ChipPill("#${l.name}", on = listId == l.id) {
+                        listId = l.id
+                        listPanel = false
+                    }
                 }
             }
         }
     }
 
+    if (course != null) {
+        OverlayFieldRow(
+            icon = null,
+            iconTint = Color.Unspecified,
+            lead = {
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(colors.fg(course.colorIndex)),
+                )
+            },
+        ) {
+            Text(
+                course.name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+
     if (subtasks.isNotEmpty()) {
-        Spacer(Modifier.height(12.dp))
         Text(
             stringResource(R.string.widget_overlay_subtasks),
             style = MaterialTheme.typography.labelMedium,
             color = scheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 12.dp, bottom = 2.dp),
+            modifier = Modifier.padding(start = OverlayLeadW, top = 8.dp, bottom = 2.dp),
         )
         subtasks.forEach { sub ->
             Row(
@@ -1771,7 +1691,6 @@ private fun OverlayTaskCard(
                 MintCheck(
                     checked = sub.done,
                     onChange = { onToggleDone(sub, it, false) },
-                    size = 18.dp,
                     tint = colors.priorityColor(sub.priority),
                 )
                 Text(
@@ -1787,7 +1706,7 @@ private fun OverlayTaskCard(
         }
     }
 
-    Spacer(Modifier.height(14.dp))
+    Spacer(Modifier.height(12.dp))
 
     val primaryInteraction = remember { MutableInteractionSource() }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1806,32 +1725,25 @@ private fun OverlayTaskCard(
             iconSize = 20.dp,
             onClick = { saveAndMaybe(closeAfter = false, thenOpenUri = DeepLinks.taskUri(task.id)) },
         )
-        Spacer(Modifier.width(6.dp))
-        val canSave = title.trim().isNotEmpty()
-        val primaryEnabled = if (isDirty) canSave else true
-        Button(
-            onClick = {
-                if (isDirty) {
-                    saveAndMaybe(closeAfter = true)
-                } else {
-                    onToggleDone(task, !task.done, !task.done)
-                }
-            },
-            enabled = primaryEnabled,
-            interactionSource = primaryInteraction,
-            modifier = Modifier.heightIn(min = 44.dp).mintPressScale(primaryInteraction, 0.96f, enabled = primaryEnabled),
+        AnimatedVisibility(
+            visible = isDirty,
+            enter = fadeIn(MintTheme.spec()) + expandHorizontally(MintTheme.spec()),
+            exit = fadeOut(MintTheme.spec()) + shrinkHorizontally(MintTheme.spec()),
         ) {
-            Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(
-                stringResource(
-                    when {
-                        isDirty -> R.string.save
-                        task.done -> R.string.widget_overlay_task_reopen
-                        else -> R.string.widget_overlay_task_done
-                    },
-                ),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.width(6.dp))
+                val canSave = title.trim().isNotEmpty()
+                Button(
+                    onClick = { saveAndMaybe(closeAfter = true) },
+                    enabled = canSave,
+                    interactionSource = primaryInteraction,
+                    modifier = Modifier.heightIn(min = 44.dp).mintPressScale(primaryInteraction, 0.96f, enabled = canSave),
+                ) {
+                    Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(R.string.save))
+                }
+            }
         }
     }
 
@@ -1861,6 +1773,51 @@ private fun OverlayTaskCard(
                 whenPanel = false
             },
         )
+    }
+}
+
+@Composable
+private fun OverlayFieldRow(
+    icon: ImageVector?,
+    iconTint: Color,
+    onClick: (() -> Unit)? = null,
+    alignTop: Boolean = false,
+    lead: (@Composable () -> Unit)? = null,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val rowMod =
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = OverlayRowMinH)
+            .let { mod ->
+                if (onClick != null) {
+                    mod
+                        .clip(RoundedCornerShape(12.dp))
+                        .mintClickable(pressedScale = 0.98f, role = Role.Button, onClick = onClick)
+                } else {
+                    mod
+                }
+            }
+    Row(
+        modifier = rowMod,
+        verticalAlignment = if (alignTop) Alignment.Top else Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier.width(OverlayLeadW).heightIn(min = OverlayRowMinH),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (lead != null) {
+                lead()
+            } else if (icon != null) {
+                Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
+            }
+        }
+        Row(
+            modifier = Modifier.weight(1f).padding(top = 10.dp, bottom = 10.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            content()
+        }
     }
 }
 
