@@ -30,6 +30,9 @@ jobs:
       - name: Check string resources
         run: python3 scripts/check_strings.py
 
+      - name: Check UI rules
+        run: python3 scripts/check_ui_rules.py
+
       - name: Format check
         run: ./gradlew spotlessCheck
 

@@ -22,6 +22,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
@@ -49,7 +51,9 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
@@ -127,6 +131,7 @@ import app.goke.widget.WidgetKit
 import app.goke.widget.WidgetOverlayRoot
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -876,5 +881,74 @@ class ScreensSmokeTest {
         expandedNode.performClick()
         rule.waitForIdle()
         rule.onNodeWithText("本周“重点”实验\n自带实验报告纸").assertIsDisplayed()
+    }
+
+    @Test
+    fun agendaRowTimeDoesNotClipAtLargeFontScale() {
+        val today = LocalDate.of(2026, 11, 24)
+        val now = today.atTime(9, 0)
+        val morning =
+            Task(
+                id = "t_morning",
+                title = "数字逻辑与系统设计",
+                blockStart = today.atTime(10, 25),
+                blockMinutes = 95,
+                due = today.atTime(12, 0),
+                dueHasTime = true,
+            )
+        val evening =
+            Task(
+                id = "t_evening",
+                title = "数字逻辑及系统设计实验",
+                blockStart = today.atTime(18, 30),
+                blockMinutes = 145,
+                due = today.atTime(20, 55),
+                dueHasTime = true,
+            )
+
+        rule.setContent {
+            val baseDensity = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(baseDensity.density, fontScale = 1.35f)) {
+                Host {
+                    Column {
+                        AgendaRow(
+                            item = BlockItem(morning, today.atTime(10, 25), today.atTime(12, 0)),
+                            now = now,
+                            showTeacher = true,
+                            onOpenCourse = {},
+                            onOpenEvent = {},
+                            onOpenTask = {},
+                            onToggleTask = { _, _ -> },
+                        )
+                        AgendaRow(
+                            item = BlockItem(evening, today.atTime(18, 30), today.atTime(20, 55)),
+                            now = now,
+                            showTeacher = true,
+                            onOpenCourse = {},
+                            onOpenEvent = {},
+                            onOpenTask = {},
+                            onToggleTask = { _, _ -> },
+                        )
+                    }
+                }
+            }
+        }
+        rule.waitForIdle()
+
+        listOf("10:25", "12:00", "18:30", "20:55").forEach { label ->
+            val node = rule.onNodeWithText(label).fetchSemanticsNode()
+            val action = node.config[SemanticsActions.GetTextLayoutResult]
+            val results = mutableListOf<TextLayoutResult>()
+            assertTrue("GetTextLayoutResult failed for $label", action.action?.invoke(results) == true)
+            assertTrue("Expected TextLayoutResult for $label", results.isNotEmpty())
+            val r = results.first()
+            assertEquals("Expected single line for $label", 1, r.lineCount)
+            assertEquals("Expected full text on line 0 for $label", label.length, r.getLineEnd(0))
+            assertTrue(
+                "Expected rendered line width (${r.getLineRight(0)}) <= box width (${r.size.width}) for $label",
+                r.getLineRight(0) <= r.size.width + 1f,
+            )
+            assertFalse("Expected no vertical overflow for $label", r.didOverflowHeight)
+        }
     }
 }

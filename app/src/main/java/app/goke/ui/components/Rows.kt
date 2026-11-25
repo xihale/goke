@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -251,8 +252,8 @@ private fun RowShell(
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 40dp 时间槽 + 8dp 间隔：与 TaskRow 的勾选框槽（8+48+4=60）同起点，混排时标题左沿对齐
-        Column(Modifier.width(40.dp)) {
+        // 至少 48dp 时间槽 + 8dp 间隔：常规字号下与 TaskRow 的勾选框槽（12+48+8=68）同起点，大字号时随时间文本自然撑宽不裁切
+        Column(Modifier.widthIn(min = 48.dp)) {
             Text(
                 time,
                 color = textFg,
@@ -298,11 +299,11 @@ fun TaskRow(
             .fillMaxWidth()
             .heightIn(min = 50.dp)
             .mintClickable(pressedScale = 0.98f) { onOpen(task.id) }
-            .padding(start = 8.dp, end = if (code != null) 4.dp else 12.dp, top = 2.dp, bottom = 2.dp),
+            .padding(start = 12.dp, end = if (code != null) 4.dp else 12.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         MintCheck(task.done, { onToggle(task, it) })
-        Spacer(Modifier.width(4.dp))
+        Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             if (code != null) {
                 ParcelCodeHeadline(code = code, done = task.done, copyEnabled = true, alpha = rowAlpha)

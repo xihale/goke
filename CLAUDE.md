@@ -42,5 +42,6 @@
 ./gradlew :app:assembleDebug               # 构建 Debug APK
 ./gradlew spotlessCheck                    # ktlint 检查（spotlessApply 自动修复）
 python3 scripts/check_strings.py --unused  # 字符串资源检查
+python3 scripts/check_ui_rules.py          # Compose / 小组件 UI 规范检查
 bash scripts/sync-e2e.sh                   # 同步端到端测试
 ```

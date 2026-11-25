@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -904,7 +905,7 @@ internal fun RepeatPickDialog(
                         StepPill(Icons.Rounded.Remove, stringResource(R.string.repeat_interval_down), every > 1) { every -= 1 }
                         Text(
                             every.toString(),
-                            Modifier.width(40.dp),
+                            Modifier.widthIn(min = 40.dp),
                             style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
                             textAlign = TextAlign.Center,
                         )

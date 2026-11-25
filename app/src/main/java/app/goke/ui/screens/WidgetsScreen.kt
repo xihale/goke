@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -868,7 +869,7 @@ private fun NextWidgetPreview(
         )
         if (startTime != null) {
             Spacer(Modifier.width(10.dp))
-            Column(Modifier.width(44.dp), horizontalAlignment = Alignment.End) {
+            Column(Modifier.widthIn(min = 48.dp), horizontalAlignment = Alignment.End) {
                 Text(
                     startTime,
                     style = typography.labelLarge.copy(fontFeatureSettings = "tnum"),
@@ -960,12 +961,13 @@ private fun PreviewCourseStrip(
                 }.padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.width(44.dp)) {
+        Column(Modifier.widthIn(min = 44.dp)) {
             Text(time, style = typography.labelMedium.copy(fontFeatureSettings = "tnum"), fontWeight = FontWeight.Bold, color = fg)
             if (endTime != null) {
                 Text(endTime, style = typography.labelSmall.copy(fontFeatureSettings = "tnum"), color = fg.copy(alpha = 0.78f))
             }
         }
+        Spacer(Modifier.width(6.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!sub.isNullOrBlank()) {
@@ -1001,9 +1003,9 @@ private fun PreviewScheduleCourseBlock(
                 }.padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.width(44.dp), horizontalAlignment = Alignment.End) {
-            Text(start, style = typography.labelLarge, fontWeight = FontWeight.Bold, color = fg)
-            Text(end, style = typography.labelSmall, color = fg.copy(alpha = 0.78f))
+        Column(Modifier.widthIn(min = 48.dp), horizontalAlignment = Alignment.End) {
+            Text(start, style = typography.labelLarge.copy(fontFeatureSettings = "tnum"), fontWeight = FontWeight.Bold, color = fg)
+            Text(end, style = typography.labelSmall.copy(fontFeatureSettings = "tnum"), color = fg.copy(alpha = 0.78f))
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
@@ -1032,7 +1034,7 @@ private fun PreviewTaskStrip(
             left,
             style = typography.labelMedium.copy(fontFeatureSettings = "tnum"),
             color = scheme.onSurfaceVariant,
-            modifier = Modifier.width(44.dp),
+            modifier = Modifier.widthIn(min = 44.dp),
         )
         Spacer(Modifier.width(6.dp))
         Column(Modifier.weight(1f)) {
