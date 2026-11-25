@@ -485,7 +485,7 @@ code {
   box-shadow: 0 24px 56px -14px rgba(0, 0, 0, 0.65);
 }
 .obs-phone-card { height: 256px; }
-.obs-mcp-card { height: 226px; background: #FFFFFF; }
+.obs-mcp-card { height: 226px; background: #101D19; }
 .obs-phone-card img, .obs-mcp-card img { width: 100%; height: auto; display: block; }
 .obs-browser {
   position: relative; z-index: 2;

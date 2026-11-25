@@ -399,7 +399,7 @@
         if (!data || !data.apk_name) return;
         var latest = data.stable || data;
         var ver = latest.tag_name || ('v' + latest.version);
-        var sizeStr = latest.apk_size ? formatMiB(latest.apk_size) : '3.83 MiB';
+        var sizeStr = latest.apk_size ? formatMiB(latest.apk_size) : '2.88 MiB';
         var href = './downloads/' + latest.apk_name;
 
         setText('heroVer', ver);
