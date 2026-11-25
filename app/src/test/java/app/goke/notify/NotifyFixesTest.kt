@@ -1,5 +1,6 @@
 package app.goke.notify
 
+import android.Manifest
 import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationManager
@@ -271,6 +272,7 @@ class NotifyFixesTest {
         assertTrue(taskReminders.any { it.text.contains("教1-201") })
 
         val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         val receiver = ReminderReceiver()
         val first = courseReminders.first { it.persistent }
         receiver.onReceive(
