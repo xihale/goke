@@ -30,6 +30,8 @@ import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 
 object DebugHooks {
+    internal var suppressUiForShots: Boolean = false
+
     fun init(ctx: Context) {
         DebugMockStore.init(ctx)
     }
@@ -42,22 +44,22 @@ object DebugHooks {
 
     @Composable
     fun DataScreenExtra() {
-        DemoDataSection()
+        if (!suppressUiForShots) DemoDataSection()
     }
 
     @Composable
     fun SettingsDebugSection() {
-        SettingsDebugMockSection()
+        if (!suppressUiForShots) SettingsDebugMockSection()
     }
 
     @Composable
     fun JxfwDebugBanner() {
-        JxfwDebugMockBanner()
+        if (!suppressUiForShots) JxfwDebugMockBanner()
     }
 
     @Composable
     fun CourseSelectionDebugBanner(onRefresh: () -> Unit) {
-        CourseSelectionDebugMockBanner(onRefresh = onRefresh)
+        if (!suppressUiForShots) CourseSelectionDebugMockBanner(onRefresh = onRefresh)
     }
 }
 

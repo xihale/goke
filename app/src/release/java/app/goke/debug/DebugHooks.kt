@@ -7,6 +7,8 @@ import app.goke.jxfw.JxfwClient
 import app.goke.jxfw.TzcsClient
 
 object DebugHooks {
+    internal var suppressUiForShots: Boolean = false
+
     fun init(ctx: Context) = Unit
 
     fun newJxfwClient(): JxfwClient = JxfwClient()

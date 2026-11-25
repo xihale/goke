@@ -79,6 +79,7 @@ import app.goke.core.util.Ids
 import app.goke.data.Attachments
 import app.goke.data.DarkMode
 import app.goke.data.ThemeSource
+import app.goke.debug.DebugHooks
 import app.goke.notify.ParcelTasks
 import app.goke.ui.Actions
 import app.goke.ui.GokeRoot
@@ -95,8 +96,10 @@ import app.goke.ui.rememberNav
 import app.goke.ui.screens.AboutScreen
 import app.goke.ui.screens.AppearanceScreen
 import app.goke.ui.screens.CalendarScreen
+import app.goke.ui.screens.CalendarSyncScreen
 import app.goke.ui.screens.ClassroomScreen
 import app.goke.ui.screens.CourseEditScreen
+import app.goke.ui.screens.CourseSelectionContent
 import app.goke.ui.screens.DataScreen
 import app.goke.ui.screens.EditTimetableScreen
 import app.goke.ui.screens.GradesScreen
@@ -328,7 +331,22 @@ class ScreensSmokeTest {
                 "settings" to { GokeRoot(app, null, initialTab = Tab.ME) {} },
                 "data" to { DataScreen {} },
                 "sync" to { SyncScreen {} },
+                "calendar_sync" to { CalendarSyncScreen {} },
                 "jxfw" to { JxfwScreen {} },
+                "course_selection" to {
+                    CourseSelectionContent(
+                        loggedIn = true,
+                        xkState = demoCourseSelectionStateForTest(),
+                        onBack = {},
+                        onOpenJxfw = {},
+                        onRefresh = {},
+                        onSearch = { _, _ -> },
+                        onLoadMore = {},
+                        onLoadDetail = { Result.failure(IllegalStateException("demo")) },
+                        onEnroll = {},
+                        onDrop = {},
+                    )
+                },
                 "reliability" to { ReliabilityScreen {} },
                 "reschedule_sheet" to { RescheduleSheet(listOf(task), liveSnapshot(), onDismiss = {}) },
                 "morning_sheet" to { MorningSheet(listOf(task), java.time.LocalDateTime.now()) {} },
@@ -351,19 +369,20 @@ class ScreensSmokeTest {
                 "root_shell" to { GokeRoot(app, null) {} },
             )
         val idx = mutableIntStateOf(0)
+        DebugHooks.suppressUiForShots = true
         rule.setContent { Host { key(idx.intValue) { screens[idx.intValue].second() } } }
         val failures = mutableListOf<String>()
-        screens.forEachIndexed { i, (name, _) ->
-            try {
-                rule.runOnIdle { idx.intValue = i }
-                rule.waitForIdle()
-                shot(name)
-            } catch (t: Throwable) {
-                failures += "$name: ${t::class.simpleName}: ${t.message?.take(300)}"
-                t.printStackTrace()
-            }
-        }
         try {
+            screens.forEachIndexed { i, (name, _) ->
+                try {
+                    rule.runOnIdle { idx.intValue = i }
+                    rule.waitForIdle()
+                    shot(name)
+                } catch (t: Throwable) {
+                    failures += "$name: ${t::class.simpleName}: ${t.message?.take(300)}"
+                    t.printStackTrace()
+                }
+            }
             app.settings.update { it.copy(darkMode = DarkMode.DARK) }
             val darkTargets =
                 listOf(
@@ -373,7 +392,13 @@ class ScreensSmokeTest {
                     "todo" to "todo_dark",
                     "settings" to "settings_dark",
                     "course_edit" to "course_edit_dark",
+                    "appearance" to "appearance_dark",
                     "widgets" to "widgets_dark",
+                    "data" to "data_dark",
+                    "sync" to "sync_dark",
+                    "calendar_sync" to "calendar_sync_dark",
+                    "jxfw" to "jxfw_dark",
+                    "course_selection" to "course_selection_dark",
                     "grades" to "grades_dark",
                     "classroom" to "classroom_dark",
                     "classroom_grid" to "classroom_grid_dark",
@@ -389,6 +414,7 @@ class ScreensSmokeTest {
             }
         } finally {
             app.settings.update { it.copy(darkMode = DarkMode.SYSTEM) }
+            DebugHooks.suppressUiForShots = false
         }
         assertTrue("渲染失败的页面：\n" + failures.joinToString("\n"), failures.isEmpty())
     }

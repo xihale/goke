@@ -8,6 +8,13 @@ import app.goke.core.jxfw.OccupancyType
 import app.goke.core.jxfw.TzcsItem
 import app.goke.core.jxfw.TzcsParse
 import app.goke.core.jxfw.TzcsYearReport
+import app.goke.core.jxfw.XkConflict
+import app.goke.core.jxfw.XkConflictSource
+import app.goke.core.jxfw.XkCourseItem
+import app.goke.core.jxfw.XkCreditWallet
+import app.goke.core.jxfw.XkScheduleSummary
+import app.goke.core.jxfw.XkWindowStatus
+import app.goke.jxfw.JxfwCourseSelectionState
 import app.goke.jxfw.JxfwGradesState
 import app.goke.jxfw.JxfwManager
 import app.goke.jxfw.JxfwState
@@ -162,3 +169,111 @@ internal fun TzcsManager.seedPhysicalTestDemoForTest() {
         ),
     )
 }
+
+internal fun demoCourseSelectionStateForTest(): JxfwCourseSelectionState =
+    JxfwCourseSelectionState(
+        window =
+            XkWindowStatus(
+                xkjd = "1",
+                xnxqdm = "202601",
+                isCreditWallet = true,
+                canDrop = true,
+                maxCourses = 3,
+                headerNotice = "当前开放通识教育选修课选课，支持实时检测个人课表冲突",
+            ),
+        wallet = XkCreditWallet(totalCredits = 10.0, usedCredits = 4.0),
+        available =
+            listOf(
+                XkCourseItem(
+                    kcrwdm = "demo-xk-1",
+                    kcdm = "GENE2041",
+                    kcptdm = "pt1",
+                    name = "岭南建筑与城市文化",
+                    credit = 2.0,
+                    teacher = "陈教授",
+                    capacity = 120,
+                    enrolledCount = 96,
+                    category = "通识教育选修",
+                    classGroup = "通识26-01班",
+                    campusHint = "大学城",
+                    scheduleSummary =
+                        listOf(
+                            XkScheduleSummary(
+                                dayOfWeek = 4,
+                                periods = listOf(6, 7),
+                                weeks = (1..16).toSet(),
+                                room = "教3-101",
+                                campusHint = "大学城",
+                            ),
+                        ),
+                ),
+                XkCourseItem(
+                    kcrwdm = "demo-xk-2",
+                    kcdm = "COMP3092",
+                    kcptdm = "pt1",
+                    name = "人工智能导论",
+                    credit = 2.0,
+                    teacher = "张老师",
+                    capacity = 80,
+                    enrolledCount = 74,
+                    category = "通识教育选修",
+                    classGroup = "通识26-03班",
+                    campusHint = "大学城",
+                    scheduleSummary =
+                        listOf(
+                            XkScheduleSummary(
+                                dayOfWeek = 1,
+                                periods = listOf(1, 2),
+                                weeks = (1..14).toSet(),
+                                room = "教3-204",
+                                campusHint = "大学城",
+                            ),
+                        ),
+                    conflicts =
+                        listOf(
+                            XkConflict(
+                                courseName = "概率论与数理统计",
+                                dayOfWeek = 1,
+                                periods = listOf(1, 2),
+                                weeks = (1..14).toSet(),
+                                source = XkConflictSource.JXFW,
+                            ),
+                        ),
+                ),
+                XkCourseItem(
+                    kcrwdm = "demo-xk-3",
+                    kcdm = "ART1015",
+                    kcptdm = "pt1",
+                    name = "西方古典音乐鉴赏",
+                    credit = 1.5,
+                    teacher = "李老师",
+                    capacity = 60,
+                    enrolledCount = 60,
+                    category = "艺术素养",
+                    classGroup = "美育26-02班",
+                    campusHint = "大学城",
+                    scheduleSummary =
+                        listOf(
+                            XkScheduleSummary(
+                                dayOfWeek = 2,
+                                periods = listOf(10, 11),
+                                weeks = (3..14).toSet(),
+                                room = "实验楼B102",
+                                campusHint = "大学城",
+                            ),
+                        ),
+                ),
+            ),
+        availableTotal = 3,
+        enrolled =
+            listOf(
+                XkCourseItem(
+                    kcrwdm = "demo-xk-enrolled",
+                    kcdm = "HIS1002",
+                    name = "中国近现代史纲要",
+                    credit = 2.0,
+                    teacher = "王老师",
+                    enrolled = true,
+                ),
+            ),
+    )
