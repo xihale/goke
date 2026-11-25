@@ -1,13 +1,5 @@
-import org.gradle.api.DefaultTask
-import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.file.FileSystemOperations
 import org.gradle.api.provider.ValueSource
 import org.gradle.api.provider.ValueSourceParameters
-import org.gradle.api.tasks.InputDirectory
-import org.gradle.api.tasks.OutputDirectory
-import org.gradle.api.tasks.PathSensitive
-import org.gradle.api.tasks.PathSensitivity
-import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.ByteArrayOutputStream
@@ -160,6 +152,31 @@ android {
         versionName = appVersion.first
         // benchmark 变体置 true：只用来在首启时塞一份可滚动数据（BenchSeed），release/debug 下被常量折叠
         buildConfigField("boolean", "BENCHMARK", "false")
+    }
+
+    androidResources {
+        localeFilters += listOf("zh", "en")
+    }
+
+    packaging {
+        jniLibs {
+            // release 压缩存储 native .so，减小 APK 分发体积
+            useLegacyPackaging = true
+        }
+        resources {
+            excludes +=
+                setOf(
+                    "META-INF/*.version",
+                    "META-INF/**/LICENSE*",
+                    "META-INF/LICENSE*",
+                    "META-INF/NOTICE*",
+                    "META-INF/com/android/build/gradle/app-metadata.properties",
+                    "DebugProbesKt.bin",
+                    "kotlin/*.kotlin_builtins",
+                    "kotlin/**/*.kotlin_builtins",
+                    "kotlin-tooling-metadata.json",
+                )
+        }
     }
 
     if (hasReleaseSigning) {
@@ -317,41 +334,4 @@ dependencies {
 configurations.matching { it.name.contains("UnitTest") }.configureEach {
     exclude(group = "io.github.dokar3", module = "quickjs-kt")
     exclude(group = "io.github.dokar3", module = "quickjs-kt-android")
-}
-
-// 局域网电脑端网页资源以 server/internal/server/web/app 为唯一真源，通过 Variant API 同步进各变体 assets/lanweb/app。
-abstract class SyncLanWebAssetsTask : DefaultTask() {
-    @get:InputDirectory
-    @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val sourceDir: DirectoryProperty
-
-    @get:OutputDirectory
-    abstract val outputDir: DirectoryProperty
-
-    @get:Inject
-    abstract val fs: FileSystemOperations
-
-    @TaskAction
-    fun syncAssets() {
-        fs.sync {
-            from(sourceDir) {
-                into("lanweb/app")
-            }
-            into(outputDir.get().asFile)
-        }
-    }
-}
-
-androidComponents {
-    onVariants { variant ->
-        val taskName = "sync${variant.name.replaceFirstChar { it.uppercase() }}LanWebAssets"
-        val syncTask =
-            tasks.register<SyncLanWebAssetsTask>(taskName) {
-                sourceDir.set(layout.projectDirectory.dir("../server/internal/server/web/app"))
-            }
-        variant.sources.assets?.addGeneratedSourceDirectory(
-            syncTask,
-            SyncLanWebAssetsTask::outputDir,
-        )
-    }
 }

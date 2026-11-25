@@ -642,15 +642,9 @@ private fun PhysicalTestNavRow(onOpen: () -> Unit) {
 
 @Composable
 private fun LanWebNavRow(onOpen: () -> Unit) {
-    val app = LocalApp.current
-    val lanState by app.lanWeb.state.collectAsState()
     NavRow(
         stringResource(R.string.lan_web_title),
-        if (lanState.running) {
-            stringResource(R.string.lan_web_nav_running, lanState.port)
-        } else {
-            stringResource(R.string.lan_web_nav_off)
-        },
+        stringResource(R.string.feature_coming_soon),
         Icons.Rounded.LaptopMac,
         onClick = onOpen,
     )
@@ -658,13 +652,11 @@ private fun LanWebNavRow(onOpen: () -> Unit) {
 
 @Composable
 private fun McpNavRow(onOpen: () -> Unit) {
-    val app = LocalApp.current
-    val mcpState by app.mcp.state.collectAsState()
     NavRow(
         stringResource(R.string.mcp_title),
         null,
         Icons.Rounded.Terminal,
-        trailing = stringResource(if (mcpState.running) R.string.mcp_status_on else R.string.mcp_status_off),
+        trailing = stringResource(R.string.feature_coming_soon),
         onClick = onOpen,
     )
 }

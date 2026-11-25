@@ -17,9 +17,6 @@ import app.goke.data.UpdateChecker
 import app.goke.debug.DebugHooks
 import app.goke.jxfw.JxfwManager
 import app.goke.jxfw.TzcsManager
-import app.goke.lanweb.LanWebManager
-import app.goke.mcp.LocalMcpManager
-import app.goke.mcp.McpStore
 import app.goke.notify.Notifications
 import app.goke.notify.ReminderScheduler
 import app.goke.sync.PeriodicSync
@@ -58,8 +55,6 @@ open class GokeApp : Application() {
         private set
     lateinit var advanced: AdvancedController
         private set
-    lateinit var mcp: LocalMcpManager
-        private set
     lateinit var sync: SyncManager
         private set
     lateinit var calendarSync: SystemCalendarSync
@@ -67,8 +62,6 @@ open class GokeApp : Application() {
     lateinit var jxfw: JxfwManager
         private set
     lateinit var tzcs: TzcsManager
-        private set
-    lateinit var lanWeb: LanWebManager
         private set
     lateinit var updateChecker: UpdateChecker
         private set
@@ -104,7 +97,6 @@ open class GokeApp : Application() {
         secrets = SecretStore(this)
         reminders = ReminderScheduler(this)
         advanced = AdvancedController(this)
-        mcp = LocalMcpManager(repo, advanced, McpStore(this, secrets), scope)
         sync = SyncManager(repo, SyncStore(this, secrets), scope, errors = errors)
         calendarSync = SystemCalendarSync(this, repo, settings, CalendarSyncStore(this), scope, errors = errors)
         jxfw =
@@ -117,7 +109,6 @@ open class GokeApp : Application() {
                 errors = errors,
             )
         tzcs = TzcsManager(this, secrets, newClient = { DebugHooks.newTzcsClient() }, errors = errors)
-        lanWeb = LanWebManager(this, repo, errors = errors)
         updateChecker = UpdateChecker(settings)
         scope.launch {
             loadJob.join()

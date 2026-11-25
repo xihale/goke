@@ -323,7 +323,7 @@ func TestWebAppServed(t *testing.T) {
 		{"/app/js/main.js", "javascript", "import"},
 		{"/app/app.css", "text/css", "--primary"},
 		{"/app/manifest.webmanifest", "", "Goke"},
-		{"/app/icon-192.png", "image/png", ""},
+		{"/app/icon-192.webp", "image/webp", ""},
 		{"/admin/", "text/html", "管理后台"},
 	}
 	for _, c := range cases {

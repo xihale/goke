@@ -814,6 +814,8 @@
     <string name="jxfw_term_second">%1$d–%2$d 学年第二学期</string>
     <string name="jxfw_keystore_reassurance">学号与密码仅通过 Android Keystore 加密保存在本机，直接连接学校教务系统，不经过任何第三方服务器。</string>
     <!-- LAN Web Console -->
+    <string name="feature_coming_soon">正在制作中，敬请期待</string>
+    <string name="feature_coming_soon_desc">该功能正在完善中，将在后续版本回归，敬请期待。</string>
     <string name="channel_lan_web">局域网电脑端管理</string>
     <string name="lan_web_notif_title">局域网电脑端管理运行中</string>
     <string name="lan_web_notif_text">访问 %1$s · 连接码 %2$s</string>

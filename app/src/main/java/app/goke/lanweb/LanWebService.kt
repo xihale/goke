@@ -25,12 +25,19 @@ class LanWebService : Service() {
         startId: Int,
     ): Int {
         Notifications.ensureChannels(this)
-        val app = applicationContext as? GokeApp
-        val state = app?.lanWeb?.state?.value ?: LanWebUiState()
+        stopForegroundCompat()
+        stopSelf()
+        return START_NOT_STICKY
+    }
+
+    @Suppress("UNREACHABLE_CODE", "unused")
+    private fun unusedLegacyStart(
+        intent: Intent?,
+    ): Int {
+        val state = LanWebUiState()
 
         if (intent?.action == ACTION_STOP) {
             stopForegroundCompat()
-            app?.lanWeb?.stop()
             stopSelf()
             return START_NOT_STICKY
         }
