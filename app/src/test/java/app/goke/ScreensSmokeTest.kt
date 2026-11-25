@@ -254,6 +254,11 @@ class ScreensSmokeTest {
     }
 
     private fun shot(name: String) {
+        // CI 不归档截图产物，跳过 PNG 压缩写盘但保留完整渲染校验
+        if (System.getenv("CI").equals("true", ignoreCase = true)) {
+            rule.onRoot().captureToImage()
+            return
+        }
         val dir = File("build/shots").apply { mkdirs() }
         val bmp = rule.onRoot().captureToImage().asAndroidBitmap()
         File(dir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }

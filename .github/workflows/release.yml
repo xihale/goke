@@ -12,15 +12,66 @@ on:
         type: string
 
 jobs:
-  release:
+  verify:
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || '' }}
+
+      - name: Check private adapters secret
+        env:
+          ADAPTERS_SSH_KEY: ${{ secrets.ADAPTERS_SSH_KEY }}
+        run: |
+          if [ -z "$ADAPTERS_SSH_KEY" ]; then
+            echo "::error::缺少 ADAPTERS_SSH_KEY Secret，拒绝在缺失私有适配器的情况下构建发布包"
+            exit 1
+          fi
+
+      - name: Checkout private adapters
+        uses: actions/checkout@v7
+        with:
+          repository: xihale/goke-adapters
+          ssh-key: ${{ secrets.ADAPTERS_SSH_KEY }}
+          path: adapters
+
+      - name: Verify private adapters mounted
+        run: |
+          if [ ! -f adapters/build.gradle.kts ]; then
+            echo "::error::adapters/build.gradle.kts 缺失，私有适配器仓库检出异常"
+            exit 1
+          fi
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
+
+      - name: Check string resources and UI rules
+        run: |
+          python3 scripts/check_strings.py
+          python3 scripts/check_ui_rules.py
+
+      - name: Format and unit tests
+        run: ./gradlew spotlessCheck :core:test :script:test :adapters:testDebugUnitTest :app:testDebugUnitTest --stacktrace
+
+  build:
     runs-on: ubuntu-latest
     # 签名与私有适配器密钥存放在 release 环境
     environment: release
-    permissions:
-      contents: write
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
     steps:
       # fetch-depth: 0 拉全量历史和 tag，构建脚本用 git describe 派生版本号
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || '' }}
           fetch-depth: 0
@@ -35,7 +86,7 @@ jobs:
           fi
 
       - name: Checkout private adapters
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: xihale/goke-adapters
           ssh-key: ${{ secrets.ADAPTERS_SSH_KEY }}
@@ -51,32 +102,23 @@ jobs:
       - name: Extract release changelog
         run: |
           TAG_NAME="${{ inputs.tag || github.ref_name }}"
+          mkdir -p release-payload
           python3 scripts/extract_changelog.py "$TAG_NAME" \
             --changelog CHANGELOG.md \
             --allow-tag-fallback \
-            --out "${RUNNER_TEMP}/release_notes.md"
-          cat "${RUNNER_TEMP}/release_notes.md"
+            --out release-payload/release_notes.md
+          cat release-payload/release_notes.md
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Check string resources
-        run: python3 scripts/check_strings.py
-
-      - name: Check UI rules
-        run: python3 scripts/check_ui_rules.py
-
-      - name: Format check
-        run: ./gradlew spotlessCheck
-
-      - name: Unit tests
-        run: ./gradlew :core:test :script:test :adapters:testDebugUnitTest :app:testDebugUnitTest --stacktrace
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
 
       - name: Check and decode signing keystore
         env:
@@ -115,8 +157,8 @@ jobs:
             echo "::error::缺少构建产物: $src"
             exit 1
           fi
-          cp "$src" "Goke-${VERSION}-arm64-v8a.apk"
-          ls -lh "Goke-${VERSION}-arm64-v8a.apk"
+          cp "$src" "release-payload/Goke-${VERSION}-arm64-v8a.apk"
+          ls -lh "release-payload/Goke-${VERSION}-arm64-v8a.apk"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           if [[ "$VERSION" == *-* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
@@ -125,18 +167,38 @@ jobs:
           fi
 
       - name: Archive ProGuard mapping
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: goke-${{ steps.meta.outputs.version }}-mapping
           path: app/build/outputs/mapping/release/mapping.txt
           if-no-files-found: ignore
 
+      - name: Upload release payload
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-payload
+          path: release-payload
+          retention-days: 1
+
+  publish:
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Download release payload
+        uses: actions/download-artifact@v8
+        with:
+          name: release-payload
+          path: release-payload
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           name: ${{ inputs.tag || github.ref_name }}
-          files: Goke-*.apk
-          prerelease: ${{ steps.meta.outputs.prerelease }}
-          body_path: ${{ runner.temp }}/release_notes.md
+          files: release-payload/Goke-*.apk
+          prerelease: ${{ needs.build.outputs.prerelease }}
+          body_path: release-payload/release_notes.md
           generate_release_notes: false

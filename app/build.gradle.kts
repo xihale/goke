@@ -245,7 +245,10 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
-            all { it.jvmArgs("-Xmx2g") }
+            all {
+                it.jvmArgs("-Xmx1536m")
+                it.maxParallelForks = 2
+            }
         }
     }
     lint {

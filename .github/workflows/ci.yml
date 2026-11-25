@@ -3,7 +3,17 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'landing/**'
+      - 'LICENSE*'
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'landing/**'
+      - 'LICENSE*'
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -14,36 +24,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # fetch-depth: 0 拉全量历史和 tag，构建脚本用 git describe 派生版本号
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
-      - name: Check string resources
-        run: python3 scripts/check_strings.py
+      - name: Check string resources and UI rules
+        run: |
+          python3 scripts/check_strings.py
+          python3 scripts/check_ui_rules.py
 
-      - name: Check UI rules
-        run: python3 scripts/check_ui_rules.py
-
-      - name: Format check
-        run: ./gradlew spotlessCheck
-
-      - name: Unit tests
-        run: ./gradlew :core:test :script:test :app:testDebugUnitTest
-
-      - name: Build debug APK
-        run: ./gradlew :app:assembleDebug
+      - name: Format, unit tests, and debug APK
+        run: ./gradlew spotlessCheck :core:test :script:test :app:testDebugUnitTest :app:assembleDebug
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: goke-debug
           path: app/build/outputs/apk/debug/app-debug.apk
@@ -51,15 +54,16 @@ jobs:
   server:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
