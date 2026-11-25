@@ -157,11 +157,9 @@
     <string name="attachment_share">分享</string>
     <string name="attachment_zoom_reset">还原缩放</string>
     <string name="attachment_page_counter">%1$d / %2$d</string>
-    <string name="section_display">显示</string>
     <string name="section_export">导出</string>
     <string name="section_import">导入</string>
     <string name="section_more">更多</string>
-    <string name="section_reminders">提醒</string>
     <string name="section_restore">恢复</string>
     <string name="start_period">开始节次</string>
     <string name="weeks_all">全部周</string>
@@ -779,8 +777,6 @@
     <string name="event_detail_all_day">全天日程</string>
     <string name="event_detail_repeat">重复规则</string>
     <string name="event_detail_converted_toast">已转为待办</string>
-    <string name="settings_group_tools">AI 与工具</string>
-    <string name="settings_group_about">其他</string>
     <string name="reliability_section_optional">可选功能授权</string>
     <string name="reliability_parcel_listener">通知使用权（快递识别）</string>
     <string name="reliability_parcel_listener_desc">允许读取通知栏取件短信以自动生成取件待办。</string>
@@ -816,6 +812,7 @@
     <string name="jxfw_keystore_reassurance">学号与密码仅通过 Android Keystore 加密保存在本机，直接连接学校教务系统，不经过任何第三方服务器。</string>
     <!-- LAN Web Console -->
     <string name="feature_coming_soon">正在制作中，敬请期待</string>
+    <string name="feature_coming_soon_short">敬请期待</string>
     <string name="feature_coming_soon_desc">该功能正在完善中，将在后续版本回归，敬请期待。</string>
     <string name="channel_lan_web">局域网电脑端管理</string>
     <string name="lan_web_notif_title">局域网电脑端管理运行中</string>
@@ -1035,8 +1032,19 @@
     <string name="course_note_placeholder">选填，如教室变更或考核方式</string>
     <string name="parcel_test_placeholder">如：【菜鸟驿站】凭 4-2-1086 取件</string>
     <string name="parcel_test_matched_rule">已匹配规则 · %1$s</string>
-    <string name="me_hub_campus_section">校园与效率</string>
-    <string name="me_hub_sync_section">同步与数据</string>
+    <string name="me_hub_campus_section">校园服务</string>
+    <string name="me_hub_prefs_section">偏好设置</string>
+    <string name="me_hub_sync_section">数据与同步</string>
+    <string name="prefs_title">显示与交互</string>
+    <string name="prefs_section_schedule">课表与日历</string>
+    <string name="prefs_section_todo">待办与手势</string>
+    <string name="reminders_title">提醒与通知</string>
+    <string name="reminders_section_schedule">提醒开关</string>
+    <string name="reminders_section_assist">每日与快捷</string>
+    <string name="reminders_section_delivery">权限与送达</string>
+    <string name="reminders_enabled_count">已开启 %1$d 项</string>
+    <string name="reminders_status_off">未开启</string>
+    <string name="remind_timing">提前时间</string>
     <string name="me_hub_bind_jxfw">绑定广工教务</string>
     <string name="me_hub_bind_jxfw_sub">同步课表、考试与成绩</string>
     <string name="me_hub_bound_id">学号 %1$s</string>

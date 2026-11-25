@@ -50,6 +50,8 @@ class AllRoutesNavigationTest {
         listOf(
             Route.EditTimetable,
             Route.Appearance,
+            Route.Preferences,
+            Route.Reminders,
             Route.Widgets,
             Route.Permission,
             Route.Trash,

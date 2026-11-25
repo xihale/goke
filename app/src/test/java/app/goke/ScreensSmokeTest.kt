@@ -112,7 +112,9 @@ import app.goke.ui.screens.MorningSheet
 import app.goke.ui.screens.ParcelScreen
 import app.goke.ui.screens.PeriodsScreen
 import app.goke.ui.screens.PhysicalTestScreen
+import app.goke.ui.screens.PreferencesScreen
 import app.goke.ui.screens.ReliabilityScreen
+import app.goke.ui.screens.RemindersScreen
 import app.goke.ui.screens.RepeatPickDialog
 import app.goke.ui.screens.RescheduleSheet
 import app.goke.ui.screens.SettingsScreen
@@ -327,6 +329,8 @@ class ScreensSmokeTest {
                 "edit_timetable" to { EditTimetableScreen {} },
                 "periods" to { PeriodsScreen {} },
                 "appearance" to { AppearanceScreen {} },
+                "preferences" to { PreferencesScreen {} },
+                "reminders" to { RemindersScreen {} },
                 "widgets" to { WidgetsScreen {} },
                 "settings" to { GokeRoot(app, null, initialTab = Tab.ME) {} },
                 "data" to { DataScreen {} },

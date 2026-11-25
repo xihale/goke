@@ -98,7 +98,9 @@ import app.goke.ui.screens.McpScreen
 import app.goke.ui.screens.ParcelScreen
 import app.goke.ui.screens.PeriodsScreen
 import app.goke.ui.screens.PhysicalTestScreen
+import app.goke.ui.screens.PreferencesScreen
 import app.goke.ui.screens.ReliabilityScreen
+import app.goke.ui.screens.RemindersScreen
 import app.goke.ui.screens.SettingsScreen
 import app.goke.ui.screens.SyncScreen
 import app.goke.ui.screens.TimetableScreen
@@ -366,6 +368,14 @@ private fun RouteContent(
 
         Route.Appearance -> {
             AppearanceScreen(onBack)
+        }
+
+        Route.Preferences -> {
+            PreferencesScreen(onBack)
+        }
+
+        Route.Reminders -> {
+            RemindersScreen(onBack)
         }
 
         Route.Widgets -> {

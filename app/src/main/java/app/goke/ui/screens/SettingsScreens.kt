@@ -141,6 +141,7 @@ import app.goke.ui.icons.RestartAlt
 import app.goke.ui.icons.School
 import app.goke.ui.icons.SwapVert
 import app.goke.ui.icons.Terminal
+import app.goke.ui.icons.Tune
 import app.goke.ui.icons.WaterDrop
 import app.goke.ui.icons.Widgets
 import app.goke.ui.liveSnapshot
@@ -165,11 +166,7 @@ fun SettingsScreen() {
     val reduce = reduceMotion()
     val listState = rememberLazyListState()
     val tabVisibleState = LocalTabVisible.current
-    val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    fun ensureNotifPermission() {
-        if (Build.VERSION.SDK_INT >= 33 && !Notifications.canPost(ctx)) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
-    }
     // 权限入口行与桌面小组件行需要实时状态：切到本 Tab 或从子页/系统设置回来后在异步协程中重算
     var permOkCount by remember { mutableIntStateOf(4) }
     var widgetAddedCount by remember { mutableIntStateOf(0) }
@@ -233,18 +230,6 @@ fun SettingsScreen() {
                 CampusHubCard { nav.push(Route.Jxfw) }
             }
             item(key = "campus_section", contentType = "form_section") {
-                val themeSource =
-                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && st.themeSource == ThemeSource.DYNAMIC) {
-                        ThemeSource.PRESET
-                    } else {
-                        st.themeSource
-                    }
-                val sourceLabel =
-                    when (themeSource) {
-                        ThemeSource.DYNAMIC -> stringResource(R.string.theme_dynamic)
-                        ThemeSource.PRESET -> stringResource(Preset.entries.firstOrNull { it.key == st.preset }?.label ?: R.string.theme_preset)
-                        ThemeSource.CUSTOM -> stringResource(R.string.theme_custom)
-                    }
                 FormSection(stringResource(R.string.me_hub_campus_section)) {
                     GradesNavRow { nav.push(Route.Grades) }
                     PhysicalTestNavRow { nav.push(Route.PhysicalTest) }
@@ -258,12 +243,6 @@ fun SettingsScreen() {
                         null,
                         Icons.Rounded.Checklist,
                     ) { nav.push(Route.CourseSelection) }
-                    NavRow(
-                        stringResource(R.string.parcel_title),
-                        null,
-                        Icons.Rounded.LocalShipping,
-                        trailing = stringResource(if (st.parcelEnabled) R.string.parcel_status_on else R.string.parcel_status_off),
-                    ) { nav.push(Route.Parcel) }
                     val hwState by app.hotWater.state.collectAsState()
                     val hwTrailing =
                         when {
@@ -290,6 +269,38 @@ fun SettingsScreen() {
                         trailing = hwTrailing,
                     ) { nav.push(Route.HotWater) }
                     NavRow(
+                        stringResource(R.string.parcel_title),
+                        null,
+                        Icons.Rounded.LocalShipping,
+                        trailing = stringResource(if (st.parcelEnabled) R.string.parcel_status_on else R.string.parcel_status_off),
+                    ) { nav.push(Route.Parcel) }
+                }
+            }
+            item(key = "prefs_section", contentType = "form_section") {
+                val themeSource =
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && st.themeSource == ThemeSource.DYNAMIC) {
+                        ThemeSource.PRESET
+                    } else {
+                        st.themeSource
+                    }
+                val sourceLabel =
+                    when (themeSource) {
+                        ThemeSource.DYNAMIC -> stringResource(R.string.theme_dynamic)
+                        ThemeSource.PRESET -> stringResource(Preset.entries.firstOrNull { it.key == st.preset }?.label ?: R.string.theme_preset)
+                        ThemeSource.CUSTOM -> stringResource(R.string.theme_custom)
+                    }
+                val enabledReminders =
+                    listOf(st.remindCourse, st.remindExam, st.remindTask, st.remindEvent, st.dailyDigest).count { it }
+                val anyNotifFeature = enabledReminders > 0 || st.quickAddNotif || st.autoMute
+                val remindersTrailing =
+                    when {
+                        anyNotifFeature && permOkCount < 4 -> permStatusDesc(permOkCount)
+                        enabledReminders > 0 -> stringResource(R.string.reminders_enabled_count, enabledReminders)
+                        else -> stringResource(R.string.reminders_status_off)
+                    }
+                FormSection(stringResource(R.string.me_hub_prefs_section)) {
+                    NavRow(stringResource(R.string.appearance), null, Icons.Rounded.Palette, trailing = sourceLabel) { nav.push(Route.Appearance) }
+                    NavRow(
                         stringResource(R.string.widgets_title),
                         null,
                         Icons.Rounded.Widgets,
@@ -300,31 +311,75 @@ fun SettingsScreen() {
                                 stringResource(R.string.widgets_available_count, WidgetSpec.entries.size)
                             },
                     ) { nav.push(Route.Widgets) }
-                    NavRow(stringResource(R.string.appearance), null, Icons.Rounded.Palette, trailing = sourceLabel) { nav.push(Route.Appearance) }
+                    NavRow(stringResource(R.string.prefs_title), null, Icons.Rounded.Tune) { nav.push(Route.Preferences) }
+                    NavRow(
+                        stringResource(R.string.reminders_title),
+                        null,
+                        Icons.Rounded.NotificationsActive,
+                        trailing = remindersTrailing,
+                    ) { nav.push(Route.Reminders) }
                 }
             }
             item(key = "sync_data_section", contentType = "form_section") {
                 FormSection(stringResource(R.string.me_hub_sync_section)) {
-                    CalendarSyncNavRow { nav.push(Route.CalendarSync) }
                     SyncNavRow { nav.push(Route.Sync) }
+                    CalendarSyncNavRow { nav.push(Route.CalendarSync) }
                     NavRow(stringResource(R.string.data_title), null, Icons.Rounded.SwapVert) { nav.push(Route.Data) }
                     TrashNavRow { nav.push(Route.Trash) }
                     NavRow(stringResource(R.string.history_title), null, Icons.Rounded.History) { nav.push(Route.History) }
                 }
             }
-            item(key = "display_header", contentType = "section_label") {
-                SectionLabel(stringResource(R.string.section_display), modifier = Modifier.padding(top = 24.dp))
+            item(key = "more_section", contentType = "form_section") {
+                val hasPendingUpdate =
+                    st.pendingUpdateVersion.isNotBlank() &&
+                        app.updateChecker.isNewerThanCurrent(st.pendingUpdateVersion)
+                FormSection(stringResource(R.string.section_more)) {
+                    LanWebNavRow { nav.push(Route.LanWeb) }
+                    McpNavRow { nav.push(Route.Mcp) }
+                    NavRow(
+                        stringResource(R.string.about_title),
+                        null,
+                        Icons.Rounded.Info,
+                        trailing =
+                            if (hasPendingUpdate) {
+                                stringResource(R.string.update_new_badge_with_version, st.pendingUpdateVersion)
+                            } else {
+                                null
+                            },
+                    ) { nav.push(Route.About) }
+                }
             }
-            item(key = "display_show_teacher", contentType = "switch_row") {
-                SwitchRow(stringResource(R.string.show_teacher), null, st.showTeacher) { v -> app.settings.update { it.copy(showTeacher = v) } }
+            item(key = "debug_mock_section") {
+                DebugHooks.SettingsDebugSection()
             }
-            item(key = "display_week_starts_monday", contentType = "switch_row") {
-                SwitchRow(stringResource(R.string.week_starts_monday), null, st.weekStartsMonday) { v -> app.settings.update { it.copy(weekStartsMonday = v) } }
+        }
+    }
+}
+
+@Composable
+fun PreferencesScreen(onBack: () -> Unit) {
+    val app = LocalApp.current
+    val st = settingsState()
+
+    MintScreen(title = stringResource(R.string.prefs_title), onBack = onBack) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            FormSection(stringResource(R.string.prefs_section_schedule)) {
+                SwitchRow(stringResource(R.string.show_teacher), null, st.showTeacher) { v ->
+                    app.settings.update { it.copy(showTeacher = v) }
+                }
+                SwitchRow(stringResource(R.string.week_starts_monday), null, st.weekStartsMonday) { v ->
+                    app.settings.update { it.copy(weekStartsMonday = v) }
+                }
             }
-            item(key = "display_swap_swipe", contentType = "switch_row") {
-                SwitchRow(stringResource(R.string.swap_swipe), stringResource(R.string.swap_swipe_desc), st.swapSwipe) { v -> app.settings.update { it.copy(swapSwipe = v) } }
-            }
-            item(key = "display_default_block", contentType = "value_row") {
+            FormSection(stringResource(R.string.prefs_section_todo)) {
                 var blockDial by remember { mutableStateOf(false) }
                 ValueRow(stringResource(R.string.default_block_minutes), durationLabel(st.defaultBlockMinutes), onClick = { blockDial = true })
                 if (blockDial) {
@@ -332,17 +387,52 @@ fun SettingsScreen() {
                         app.settings.update { it.copy(defaultBlockMinutes = v) }
                     }
                 }
+                SwitchRow(stringResource(R.string.swap_swipe), stringResource(R.string.swap_swipe_desc), st.swapSwipe) { v ->
+                    app.settings.update { it.copy(swapSwipe = v) }
+                }
             }
-            item(key = "reminders_header", contentType = "section_label") {
-                SectionLabel(stringResource(R.string.section_reminders), modifier = Modifier.padding(top = 24.dp))
-            }
-            item(key = "remind_courses", contentType = "switch_row") {
+        }
+    }
+}
+
+@Composable
+fun RemindersScreen(onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    val app = LocalApp.current
+    val nav = LocalNav.current
+    val st = settingsState()
+    val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    var permOkCount by remember { mutableIntStateOf(4) }
+    val scope = rememberCoroutineScope()
+
+    fun ensureNotifPermission() {
+        if (Build.VERSION.SDK_INT >= 33 && !Notifications.canPost(ctx)) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    fun refreshPermCount() {
+        scope.launch {
+            val count = withContext(Dispatchers.IO) { permGrantedCount(ctx) }
+            if (permOkCount != count) permOkCount = count
+        }
+    }
+    LaunchedEffect(Unit) { refreshPermCount() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refreshPermCount() }
+
+    MintScreen(title = stringResource(R.string.reminders_title), onBack = onBack) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            FormSection(stringResource(R.string.reminders_section_schedule)) {
                 SwitchRow(stringResource(R.string.remind_courses), stringResource(R.string.remind_courses_desc), st.remindCourse) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(remindCourse = v) }
                 }
-            }
-            item(key = "remind_courses_minutes", contentType = "expandable_value_row") {
                 AnimatedVisibility(
                     visible = st.remindCourse,
                     enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
@@ -352,7 +442,7 @@ fun SettingsScreen() {
                         var remindDlg by remember { mutableStateOf(false) }
                         val courseReminders = st.effectiveCourseRemindMinutes
                         ValueRow(
-                            stringResource(R.string.remind_courses),
+                            stringResource(R.string.remind_timing),
                             remindSummaryLabel(courseReminders),
                             onClick = { remindDlg = true },
                         )
@@ -379,14 +469,10 @@ fun SettingsScreen() {
                         }
                     }
                 }
-            }
-            item(key = "remind_exams", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.remind_exams), stringResource(R.string.remind_exams_desc), st.remindExam) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(remindExam = v) }
                 }
-            }
-            item(key = "remind_exams_minutes", contentType = "expandable_value_row") {
                 AnimatedVisibility(
                     visible = st.remindExam,
                     enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
@@ -402,7 +488,7 @@ fun SettingsScreen() {
                                 remindSummaryLabel(examReminders)
                             }
                         ValueRow(
-                            stringResource(R.string.remind_exams),
+                            stringResource(R.string.remind_timing),
                             summary,
                             onClick = { examRemindDlg = true },
                         )
@@ -429,33 +515,27 @@ fun SettingsScreen() {
                         }
                     }
                 }
-            }
-            item(key = "remind_tasks", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.remind_tasks), null, st.remindTask) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(remindTask = v) }
                 }
-            }
-            item(key = "remind_events", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.remind_events), null, st.remindEvent) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(remindEvent = v) }
                 }
             }
-            item(key = "remind_digest", contentType = "switch_row") {
+            FormSection(stringResource(R.string.reminders_section_assist)) {
                 SwitchRow(stringResource(R.string.remind_digest), stringResource(R.string.remind_digest_desc), st.dailyDigest) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(dailyDigest = v) }
                 }
-            }
-            item(key = "remind_digest_time", contentType = "expandable_value_row") {
                 AnimatedVisibility(
                     visible = st.dailyDigest,
                     enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
                     exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
                 ) {
-                    var pickTime by remember { mutableStateOf(false) }
                     Column {
+                        var pickTime by remember { mutableStateOf(false) }
                         ValueRow(
                             stringResource(R.string.digest_time),
                             "%02d:%02d".format(st.digestHour, st.digestMinute),
@@ -468,57 +548,22 @@ fun SettingsScreen() {
                         }
                     }
                 }
-            }
-            item(key = "remind_quick_notif", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.quick_notif_row), stringResource(R.string.quick_notif_desc), st.quickAddNotif) { v ->
                     if (v) ensureNotifPermission()
                     app.settings.update { it.copy(quickAddNotif = v) }
                 }
-            }
-            item(key = "remind_auto_mute", contentType = "switch_row") {
                 SwitchRow(stringResource(R.string.auto_mute), stringResource(R.string.auto_mute_desc), st.autoMute) { v ->
                     val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     if (v && !nm.isNotificationPolicyAccessGranted) {
                         runCatching {
-                            ctx.startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            ctx.startActivity(Intent(AndroidSettings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                         }
                     }
                     app.settings.update { it.copy(autoMute = v) }
                 }
             }
-            item(key = "more_reliability", contentType = "nav_row") {
+            FormSection(stringResource(R.string.reminders_section_delivery)) {
                 ReliabilityNavRow(permOkCount = { permOkCount }) { nav.push(Route.Reliability) }
-            }
-            item(key = "group_tools_header", contentType = "section_label") {
-                SectionLabel(stringResource(R.string.settings_group_tools), modifier = Modifier.padding(top = 24.dp))
-            }
-            item(key = "more_lan_web", contentType = "nav_row") {
-                LanWebNavRow { nav.push(Route.LanWeb) }
-            }
-            item(key = "more_mcp", contentType = "nav_row") {
-                McpNavRow { nav.push(Route.Mcp) }
-            }
-            item(key = "group_about_header", contentType = "section_label") {
-                SectionLabel(stringResource(R.string.settings_group_about), modifier = Modifier.padding(top = 24.dp))
-            }
-            item(key = "more_about", contentType = "nav_row") {
-                val hasPendingUpdate =
-                    st.pendingUpdateVersion.isNotBlank() &&
-                        app.updateChecker.isNewerThanCurrent(st.pendingUpdateVersion)
-                NavRow(
-                    stringResource(R.string.about_title),
-                    null,
-                    Icons.Rounded.Info,
-                    trailing =
-                        if (hasPendingUpdate) {
-                            stringResource(R.string.update_new_badge_with_version, st.pendingUpdateVersion)
-                        } else {
-                            null
-                        },
-                ) { nav.push(Route.About) }
-            }
-            item(key = "debug_mock_section") {
-                DebugHooks.SettingsDebugSection()
             }
         }
     }
@@ -671,8 +716,9 @@ private fun PhysicalTestNavRow(onOpen: () -> Unit) {
 private fun LanWebNavRow(onOpen: () -> Unit) {
     NavRow(
         stringResource(R.string.lan_web_title),
-        stringResource(R.string.feature_coming_soon),
+        null,
         Icons.Rounded.LaptopMac,
+        trailing = stringResource(R.string.feature_coming_soon_short),
         onClick = onOpen,
     )
 }
@@ -683,7 +729,7 @@ private fun McpNavRow(onOpen: () -> Unit) {
         stringResource(R.string.mcp_title),
         null,
         Icons.Rounded.Terminal,
-        trailing = stringResource(R.string.feature_coming_soon),
+        trailing = stringResource(R.string.feature_coming_soon_short),
         onClick = onOpen,
     )
 }

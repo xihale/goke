@@ -73,7 +73,7 @@ server/internal/server/web/app/   # Web 客户端（js/views + app.css）
 | 快速添加 | `QuickAddSheet(...)` | `QuickAddBar.kt` |
 | 课程编辑 | `CourseEditScreen(...)` | `CourseEditScreen.kt` |
 | 课表管理 / 节次 | `EditTimetableScreen()` / `PeriodsScreen()` | `EditTimetableScreen.kt` |
-| 外观 / 权限 / 关于 | `AppearanceScreen` / `PermissionScreen` / `AboutScreen` | `SettingsScreens.kt` |
+| 外观 / 显示与交互 / 提醒与通知 / 权限 / 关于 | `AppearanceScreen` / `PreferencesScreen` / `RemindersScreen` / `PermissionScreen` / `AboutScreen` | `SettingsScreens.kt` |
 | 桌面小组件 | `WidgetsScreen()` | `WidgetsScreen.kt` |
 | 账号与同步 / 系统日历同步 / 教务系统 / 成绩与绩点 / 体测成绩 | `SyncScreen()` / `CalendarSyncScreen()` / `JxfwScreen()` / `GradesScreen()` / `PhysicalTestScreen()` | `SyncScreen.kt` / `JxfwScreen.kt` / `GradesScreen.kt` / `PhysicalTestScreen.kt` |
 | 本地 MCP / 局域网管理 | `McpScreen()` / `LanWebScreen()` | `McpScreen.kt` / `LanWebScreen.kt` |

@@ -71,16 +71,17 @@ class SettingsNavigationTest {
                 R.string.tzcs_title,
                 R.string.classroom_title,
                 R.string.xk_title,
-                R.string.parcel_title,
                 R.string.hotwater_title,
-                R.string.widgets_title,
+                R.string.parcel_title,
                 R.string.appearance,
-                R.string.cal_sync_title,
+                R.string.widgets_title,
+                R.string.prefs_title,
+                R.string.reminders_title,
                 R.string.sync_title,
+                R.string.cal_sync_title,
                 R.string.data_title,
                 R.string.trash_title,
                 R.string.history_title,
-                R.string.reliability_title,
                 R.string.lan_web_title,
                 R.string.mcp_title,
                 R.string.about_title,
@@ -88,15 +89,17 @@ class SettingsNavigationTest {
 
         for (titleRes in subpages) {
             val label = app.getString(titleRes)
-            rule.onAllNodes(hasScrollAction()).onLast().performScrollToNode(hasText(label))
-            if (titleRes == R.string.history_title) {
-                rule.onAllNodes(hasScrollAction()).onLast().performTouchInput {
-                    swipeUp(startY = bottom * 0.6f, endY = bottom * 0.35f)
-                }
-            } else if (titleRes == R.string.reliability_title || titleRes == R.string.lan_web_title || titleRes == R.string.mcp_title || titleRes == R.string.about_title) {
-                rule.onAllNodes(hasScrollAction()).onLast().performTouchInput { swipeUp() }
-            }
+            val list = rule.onAllNodes(hasScrollAction()).onLast()
+            list.performScrollToNode(hasText(label))
             rule.waitForIdle()
+            val listBounds = list.fetchSemanticsNode().boundsInRoot
+            val nodeBounds = rule.onNodeWithText(label).fetchSemanticsNode().boundsInRoot
+            if (nodeBounds.bottom > listBounds.bottom - 180f) {
+                list.performTouchInput {
+                    swipeUp(startY = bottom * 0.6f, endY = bottom * 0.3f)
+                }
+                rule.waitForIdle()
+            }
             rule.onNodeWithText(label).performClick()
             rule.waitForIdle()
 
@@ -180,6 +183,22 @@ class SettingsNavigationTest {
         rule.waitForIdle()
         assertEquals(0, rule.onAllNodesWithContentDescription(app.getString(R.string.back)).fetchSemanticsNodes().size)
         rule.onNodeWithText(app.getString(R.string.grades_title)).assertIsDisplayed()
+
+        // Settings -> Reminders -> Reliability -> back -> back -> Settings
+        rule.onAllNodes(hasScrollAction()).onLast().performScrollToNode(hasText(app.getString(R.string.reminders_title)))
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(R.string.reminders_title)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(R.string.reliability_title)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription(app.getString(R.string.back)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(R.string.remind_courses)).assertIsDisplayed()
+        rule.runOnUiThread {
+            rule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+        rule.waitForIdle()
+        assertEquals(0, rule.onAllNodesWithContentDescription(app.getString(R.string.back)).fetchSemanticsNodes().size)
     }
 
     @Test
