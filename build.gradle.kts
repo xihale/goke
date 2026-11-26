@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.Test
+
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.library) apply false
@@ -38,5 +40,36 @@ spotless {
         ktlint(libs.versions.ktlint.get())
             .setEditorConfigPath("$rootDir/.editorconfig")
             .editorConfigOverride(ktlintOverrides)
+    }
+}
+
+// 由 Gradle 解析并缓存 Robolectric 所需的 Android SDK（对应 libs.robolectric 4.16 + sdk=35），
+// 避免测试 JVM 运行时通过 MavenArtifactFetcher 直连 repo1.maven.org 触发瞬态网络失败。
+val robolectricSdk =
+    configurations.create("robolectricSdk") {
+        isCanBeConsumed = false
+        isCanBeResolved = true
+        isTransitive = false
+    }
+
+dependencies {
+    robolectricSdk("org.robolectric:android-all-instrumented:15-robolectric-13954326-i7")
+}
+
+val robolectricDepsDir = layout.buildDirectory.dir("robolectric-deps")
+val syncRobolectricDeps =
+    tasks.register<Sync>("syncRobolectricDeps") {
+        from(robolectricSdk)
+        into(robolectricDepsDir)
+    }
+
+subprojects {
+    if (name == "app" || name == "adapters") {
+        val depsPath = robolectricDepsDir.get().asFile.absolutePath
+        tasks.withType<Test>().configureEach {
+            dependsOn(syncRobolectricDeps)
+            systemProperty("robolectric.dependency.dir", depsPath)
+            systemProperty("robolectric.offline", "true")
+        }
     }
 }
