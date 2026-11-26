@@ -111,6 +111,7 @@ import app.goke.ui.screens.RemindersScreen
 import app.goke.ui.screens.SettingsScreen
 import app.goke.ui.screens.SyncScreen
 import app.goke.ui.screens.TimetableScreen
+import app.goke.ui.screens.TimetableShareScreen
 import app.goke.ui.screens.TodayScreen
 import app.goke.ui.screens.TodoEditScreen
 import app.goke.ui.screens.TodoScreen
@@ -837,6 +838,10 @@ private fun RouteContent(
 
         Route.Data -> {
             DataScreen(onBack)
+        }
+
+        Route.TimetableShare -> {
+            TimetableShareScreen(onBack)
         }
 
         Route.Sync -> {

@@ -66,6 +66,7 @@ class AllRoutesNavigationTest {
             Route.Periods,
             Route.About,
             Route.Data,
+            Route.TimetableShare,
             Route.Sync,
             Route.CalendarSync,
             Route.Jxfw,

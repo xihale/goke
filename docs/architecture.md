@@ -77,6 +77,7 @@ server/internal/server/web/app/   # Web 客户端（js/views + app.css）
 | 账号与同步 / 系统日历同步 / 教务系统 / 成绩与绩点 / 体测成绩 | `SyncScreen()` / `CalendarSyncScreen()` / `JxfwScreen()` / `GradesScreen()` / `PhysicalTestScreen()` | `SyncScreen.kt` / `JxfwScreen.kt` / `GradesScreen.kt` / `PhysicalTestScreen.kt` |
 | 本地 MCP / 局域网管理 | `McpScreen()` / `LanWebScreen()` | `McpScreen.kt` / `LanWebScreen.kt` |
 | 数据与备份 / 导入文件 | `DataScreen()` / `ImportScreen(...)` | `DataScreens.kt` |
+| 课表快速分享（实验性） | `TimetableShareScreen()` | `TimetableShareScreen.kt` |
 | 快递取件 / 回收站 / 操作历史 | `ParcelScreen` / `TrashScreen` / `HistoryScreen` | `ManageScreens.kt`（短信规则表单 `RuleEditSheet` 在 `ParcelRules.kt`） |
 | 提醒自检 | `ReliabilityScreen()` | `ReliabilityScreen.kt` |
 | 改期弹窗 / 晨间弹窗 | `RescheduleSheet` / `MorningSheet` | `TodoSheets.kt` |
