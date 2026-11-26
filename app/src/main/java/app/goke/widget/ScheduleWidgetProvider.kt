@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import app.goke.DeepLinks
@@ -39,8 +40,12 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
         val snap = if (app.repo.ready.value) app.repo.snapshot.value else null
         val st = app.settings.value
         for (id in appWidgetIds) {
-            val size = WidgetKit.sizeClass(context, manager, id)
-            manager.updateAppWidget(id, build(context, id, snap, st, size = size))
+            manager.updateAppWidget(
+                id,
+                WidgetKit.buildResponsive(context, manager, id) { size ->
+                    build(context, id, snap, st, size = size)
+                },
+            )
         }
         manager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.sched_list)
         if (snap != null) scheduleTick(context, snap, st)
@@ -55,8 +60,12 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
         val app = context.gokeApp
         val snap = if (app.repo.ready.value) app.repo.snapshot.value else null
         val st = app.settings.value
-        val size = WidgetKit.sizeClass(context, newOptions)
-        appWidgetManager.updateAppWidget(appWidgetId, build(context, appWidgetId, snap, st, size = size))
+        appWidgetManager.updateAppWidget(
+            appWidgetId,
+            WidgetKit.buildResponsive(context, newOptions) { size ->
+                build(context, appWidgetId, snap, st, size = size)
+            },
+        )
         appWidgetManager.notifyAppWidgetViewDataChanged(intArrayOf(appWidgetId), R.id.sched_list)
     }
 
@@ -98,8 +107,12 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, ScheduleWidgetProvider::class.java))
             if (ids.isEmpty()) return
             for (id in ids) {
-                val size = WidgetKit.sizeClass(ctx, mgr, id)
-                mgr.updateAppWidget(id, build(ctx, id, snap, st, size = size))
+                mgr.updateAppWidget(
+                    id,
+                    WidgetKit.buildResponsive(ctx, mgr, id) { size ->
+                        build(ctx, id, snap, st, size = size)
+                    },
+                )
             }
             mgr.notifyAppWidgetViewDataChanged(ids, R.id.sched_list)
             scheduleTick(ctx, snap, st)
@@ -195,6 +208,14 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
             val today = now.toLocalDate()
             val live = snap?.live()
             views.setTextViewText(R.id.sched_title, if (size.compactWidth) ctx.monthDay(today) else ctx.monthDayWeekday(today))
+            views.setTextViewTextSize(R.id.sched_title, TypedValue.COMPLEX_UNIT_SP, if (size.compactWidth) 14f else 15f)
+            views.setViewPadding(
+                R.id.sched_header,
+                WidgetKit.dp(ctx, if (size.compactWidth) 12 else 16),
+                0,
+                WidgetKit.dp(ctx, if (size.compactWidth) 10 else 12),
+                WidgetKit.dp(ctx, 6),
+            )
             val weekBadge = WidgetKit.weekBadge(ctx, live?.currentSemester, today)
             if (!size.compactWidth && weekBadge != null) {
                 views.setViewVisibility(R.id.sched_week, View.VISIBLE)

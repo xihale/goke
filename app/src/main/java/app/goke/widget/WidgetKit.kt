@@ -6,7 +6,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.util.SizeF
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.graphics.ColorUtils
@@ -34,7 +36,7 @@ internal object WidgetKit {
     const val COMPACT_WIDTH_DP = 180
 
     /** 单行矮高阈值（dp）：小于此值时折叠顶栏，让列表直接占满 1 行高度。 */
-    const val COMPACT_HEIGHT_DP = 100
+    const val COMPACT_HEIGHT_DP = 115
     const val PROGRESS_MAX = 1000
     const val ONGOING_TICK_MINUTES = 5L
 
@@ -42,9 +44,29 @@ internal object WidgetKit {
         val compactWidth: Boolean = false,
         val ultraCompactWidth: Boolean = false,
         val compactHeight: Boolean = false,
+        val widthDp: Int = 0,
+        val heightDp: Int = 0,
     ) {
-        /** 1 列或 1 行等迷你尺寸：全部统一收敛为「下一件事」卡片。 */
+        /** 1 列或 1 行等迷你尺寸：列表类小组件统一收敛为「下一件事」卡片。 */
         val isMini: Boolean get() = ultraCompactWidth || compactHeight
+
+        /** 1×2 / 1×3 等竖向单列窄条。 */
+        val isVerticalStrip: Boolean get() = ultraCompactWidth && !compactHeight
+
+        /** 实测高度达到 2 行以上且宽度 ≥ 2 列（如 2×2 / 3×2 / 4×2 / 3×3），用于 Next 多行看板。 */
+        val isMultiRowCard: Boolean get() = heightDp >= COMPACT_HEIGHT_DP && !ultraCompactWidth
+
+        /** 3 行及以上高尺寸（1×3 / 2×3 / 3×3 / 4×3）。 */
+        val isTall: Boolean get() = heightDp >= 220
+
+        /** 是否接近方形单元格（n×n 网格在竖屏通常略高、横屏略宽）。 */
+        val isSquare: Boolean
+            get() {
+                if (widthDp <= 0 || heightDp <= 0) return false
+                val minSide = minOf(widthDp, heightDp).coerceAtLeast(1)
+                val ratio = maxOf(widthDp, heightDp).toFloat() / minSide.toFloat()
+                return if (heightDp >= widthDp) ratio <= 1.45f else ratio <= 1.35f
+            }
     }
 
     enum class TimePhase {
@@ -58,11 +80,39 @@ internal object WidgetKit {
         value: Int,
     ): Int = (value * ctx.resources.displayMetrics.density).roundToInt()
 
+    fun sizeClassFor(
+        widthDp: Int,
+        heightDp: Int,
+    ): SizeClass =
+        SizeClass(
+            compactWidth = widthDp in 1 until COMPACT_WIDTH_DP,
+            ultraCompactWidth = widthDp in 1 until ULTRA_COMPACT_WIDTH_DP,
+            compactHeight = heightDp in 1 until COMPACT_HEIGHT_DP,
+            widthDp = widthDp,
+            heightDp = heightDp,
+        )
+
+    fun extractAppWidgetSizes(options: Bundle?): List<SizeF> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || options == null) return emptyList()
+        val sizes =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                options.getParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES, SizeF::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                options.getParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES)
+            }
+        return sizes?.filter { it.width > 0f && it.height > 0f }.orEmpty()
+    }
+
     fun sizeClass(
         ctx: Context,
         options: Bundle?,
     ): SizeClass {
         if (options == null) return SizeClass()
+        val sizes = extractAppWidgetSizes(options)
+        if (sizes.size == 1) {
+            return sizeClassFor(sizes[0].width.roundToInt(), sizes[0].height.roundToInt())
+        }
         val isLandscape = ctx.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         val minW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
         val maxW = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0)
@@ -80,11 +130,7 @@ internal object WidgetKit {
             } else {
                 if (maxH > 0) maxH else minH
             }
-        return SizeClass(
-            compactWidth = widthDp in 1 until COMPACT_WIDTH_DP,
-            ultraCompactWidth = widthDp in 1 until ULTRA_COMPACT_WIDTH_DP,
-            compactHeight = heightDp in 1 until COMPACT_HEIGHT_DP,
-        )
+        return sizeClassFor(widthDp, heightDp)
     }
 
     fun sizeClass(
@@ -92,6 +138,29 @@ internal object WidgetKit {
         manager: AppWidgetManager,
         widgetId: Int,
     ): SizeClass = sizeClass(ctx, manager.getAppWidgetOptions(widgetId))
+
+    fun buildResponsive(
+        ctx: Context,
+        options: Bundle?,
+        builder: (SizeClass) -> RemoteViews,
+    ): RemoteViews {
+        val sizes = extractAppWidgetSizes(options)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && sizes.size >= 2) {
+            return RemoteViews(
+                sizes.associateWith { sz ->
+                    builder(sizeClassFor(sz.width.roundToInt(), sz.height.roundToInt()))
+                },
+            )
+        }
+        return builder(sizeClass(ctx, options))
+    }
+
+    fun buildResponsive(
+        ctx: Context,
+        manager: AppWidgetManager,
+        widgetId: Int,
+        builder: (SizeClass) -> RemoteViews,
+    ): RemoteViews = buildResponsive(ctx, manager.getAppWidgetOptions(widgetId), builder)
 
     fun isCompactWidth(options: Bundle?): Boolean {
         val minWidth = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) ?: 0

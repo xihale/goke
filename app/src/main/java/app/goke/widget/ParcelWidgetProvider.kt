@@ -7,7 +7,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import app.goke.DeepLinks
@@ -29,7 +31,12 @@ class ParcelWidgetProvider : AppWidgetProvider() {
         for (id in appWidgetIds) {
             val size = WidgetKit.sizeClass(context, manager, id)
             if (size.isMini) hasMini = true
-            manager.updateAppWidget(id, build(context, id, size = size))
+            manager.updateAppWidget(
+                id,
+                WidgetKit.buildResponsive(context, manager, id) { s ->
+                    build(context, id, size = s)
+                },
+            )
         }
         manager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.parcel_list)
         if (hasMini && context.gokeApp.repo.ready.value) {
@@ -44,7 +51,12 @@ class ParcelWidgetProvider : AppWidgetProvider() {
         newOptions: Bundle,
     ) {
         val size = WidgetKit.sizeClass(context, newOptions)
-        appWidgetManager.updateAppWidget(appWidgetId, build(context, appWidgetId, size = size))
+        appWidgetManager.updateAppWidget(
+            appWidgetId,
+            WidgetKit.buildResponsive(context, newOptions) { s ->
+                build(context, appWidgetId, size = s)
+            },
+        )
         appWidgetManager.notifyAppWidgetViewDataChanged(intArrayOf(appWidgetId), R.id.parcel_list)
         if (size.isMini && context.gokeApp.repo.ready.value) {
             NextWidgetProvider.scheduleTick(context, context.gokeApp.repo.snapshot.value, context.gokeApp.settings.value)
@@ -67,8 +79,12 @@ class ParcelWidgetProvider : AppWidgetProvider() {
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, ParcelWidgetProvider::class.java))
             if (ids.isEmpty()) return
             for (id in ids) {
-                val size = WidgetKit.sizeClass(ctx, mgr, id)
-                mgr.updateAppWidget(id, build(ctx, id, size = size))
+                mgr.updateAppWidget(
+                    id,
+                    WidgetKit.buildResponsive(ctx, mgr, id) { size ->
+                        build(ctx, id, size = size)
+                    },
+                )
             }
             mgr.notifyAppWidgetViewDataChanged(ids, R.id.parcel_list)
         }
@@ -78,7 +94,14 @@ class ParcelWidgetProvider : AppWidgetProvider() {
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, ParcelWidgetProvider::class.java))
             for (id in ids) {
                 val size = WidgetKit.sizeClass(ctx, mgr, id)
-                if (size.isMini) mgr.updateAppWidget(id, build(ctx, id, size = size))
+                if (size.isMini) {
+                    mgr.updateAppWidget(
+                        id,
+                        WidgetKit.buildResponsive(ctx, mgr, id) { s ->
+                            build(ctx, id, size = s)
+                        },
+                    )
+                }
             }
         }
 
@@ -131,6 +154,19 @@ class ParcelWidgetProvider : AppWidgetProvider() {
                 R.id.parcel_title,
                 ctx.getString(if (size.compactWidth) R.string.widget_parcel_title else R.string.widget_parcel_name),
             )
+            views.setTextViewTextSize(R.id.parcel_title, TypedValue.COMPLEX_UNIT_SP, if (size.compactWidth) 14f else 15f)
+            views.setViewPadding(
+                R.id.parcel_header,
+                WidgetKit.dp(ctx, if (size.compactWidth) 12 else 16),
+                0,
+                WidgetKit.dp(ctx, if (size.compactWidth) 10 else 12),
+                WidgetKit.dp(ctx, 6),
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val addDp = if (size.compactWidth) 28f else 32f
+                views.setViewLayoutWidth(R.id.parcel_add, addDp, TypedValue.COMPLEX_UNIT_DIP)
+                views.setViewLayoutHeight(R.id.parcel_add, addDp, TypedValue.COMPLEX_UNIT_DIP)
+            }
             val count = rows(ctx, now).size
             if (count > 0) {
                 views.setViewVisibility(R.id.parcel_count, View.VISIBLE)
@@ -140,7 +176,8 @@ class ParcelWidgetProvider : AppWidgetProvider() {
             }
             views.setRemoteAdapter(
                 R.id.parcel_list,
-                Intent(ctx, ParcelWidgetService::class.java).setData(Uri.parse("goke://widget/parcel/$widgetId")),
+                Intent(ctx, ParcelWidgetService::class.java)
+                    .setData(Uri.parse("goke://widget/parcel/$widgetId?compact=${size.compactWidth}")),
             )
             views.setEmptyView(R.id.parcel_list, R.id.parcel_empty)
             views.setPendingIntentTemplate(

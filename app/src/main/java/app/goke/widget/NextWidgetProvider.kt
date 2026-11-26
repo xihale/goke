@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import app.goke.DeepLinks
@@ -40,8 +41,12 @@ class NextWidgetProvider : AppWidgetProvider() {
         val snap = if (app.repo.ready.value) app.repo.snapshot.value else null
         val st = app.settings.value
         for (id in appWidgetIds) {
-            val size = WidgetKit.sizeClass(context, manager, id)
-            manager.updateAppWidget(id, build(context, snap, st, size = size))
+            manager.updateAppWidget(
+                id,
+                WidgetKit.buildResponsive(context, manager, id) { size ->
+                    build(context, snap, st, size = size)
+                },
+            )
         }
         if (snap != null) scheduleTick(context, snap, st)
     }
@@ -55,7 +60,12 @@ class NextWidgetProvider : AppWidgetProvider() {
         val app = context.gokeApp
         val snap = if (app.repo.ready.value) app.repo.snapshot.value else null
         val st = app.settings.value
-        appWidgetManager.updateAppWidget(appWidgetId, build(context, snap, st, size = WidgetKit.sizeClass(context, newOptions)))
+        appWidgetManager.updateAppWidget(
+            appWidgetId,
+            WidgetKit.buildResponsive(context, newOptions) { size ->
+                build(context, snap, st, size = size)
+            },
+        )
     }
 
     override fun onReceive(
@@ -115,8 +125,12 @@ class NextWidgetProvider : AppWidgetProvider() {
             val ids = mgr.getAppWidgetIds(ComponentName(ctx, NextWidgetProvider::class.java))
             if (ids.isEmpty()) return
             for (id in ids) {
-                val size = WidgetKit.sizeClass(ctx, mgr, id)
-                mgr.updateAppWidget(id, build(ctx, snap, st, size = size))
+                mgr.updateAppWidget(
+                    id,
+                    WidgetKit.buildResponsive(ctx, mgr, id) { size ->
+                        build(ctx, snap, st, size = size)
+                    },
+                )
             }
             scheduleTick(ctx, snap, st)
         }
@@ -452,8 +466,12 @@ class NextWidgetProvider : AppWidgetProvider() {
         private fun buildMiniStack(
             ctx: Context,
             summaries: List<Summary>,
+            showThird: Boolean = false,
         ): RemoteViews {
             val views = RemoteViews(ctx.packageName, R.layout.widget_next_stack)
+            val maxTitleLines = if (showThird) 1 else 2
+            views.setInt(R.id.next_title0, "setMaxLines", maxTitleLines)
+            views.setInt(R.id.next_title1, "setMaxLines", maxTitleLines)
             val first = summaries.first()
             bindMiniCard(
                 ctx,
@@ -482,10 +500,117 @@ class NextWidgetProvider : AppWidgetProvider() {
             } else {
                 views.setViewVisibility(R.id.next_card1, View.GONE)
             }
+            val third = if (showThird) summaries.getOrNull(2) else null
+            if (third != null) {
+                bindMiniCard(
+                    ctx,
+                    views,
+                    third,
+                    cardId = R.id.next_card2,
+                    progressId = R.id.next_progress2,
+                    titleId = R.id.next_title2,
+                    timeId = R.id.next_time2,
+                    subId = R.id.next_sub2,
+                    requestCode = 54,
+                )
+            } else {
+                views.setViewVisibility(R.id.next_card2, View.GONE)
+            }
             views.setOnClickPendingIntent(
                 R.id.widget_root,
                 WidgetKit.mainActivityIntent(ctx, 53, DeepLinks.timetableUri()),
             )
+            return views
+        }
+
+        private fun bindUpcomingRow(
+            ctx: Context,
+            views: RemoteViews,
+            s: Summary,
+            rowId: Int,
+            dotId: Int,
+            titleId: Int,
+            timeId: Int,
+            requestCode: Int,
+        ) {
+            views.setViewVisibility(rowId, View.VISIBLE)
+            views.setInt(dotId, "setColorFilter", s.barColor)
+            views.setTextViewText(titleId, s.title)
+            val timeText = s.startTime ?: s.badge
+            views.setTextViewText(timeId, timeText)
+            views.setViewVisibility(timeId, if (timeText.isNotBlank()) View.VISIBLE else View.GONE)
+            views.setOnClickPendingIntent(rowId, pendingIntentFor(ctx, s, requestCode))
+        }
+
+        private fun buildMultiRowCard(
+            ctx: Context,
+            summaries: List<Summary>,
+            size: WidgetKit.SizeClass,
+        ): RemoteViews {
+            val views = RemoteViews(ctx.packageName, R.layout.widget_next_card)
+            val first = summaries.first()
+            if (first.ongoing) {
+                views.setViewVisibility(R.id.next_progress, View.VISIBLE)
+                views.setProgressBar(R.id.next_progress, WidgetKit.PROGRESS_MAX, WidgetKit.progressPermille(first.progress), false)
+            } else {
+                views.setViewVisibility(R.id.next_progress, View.GONE)
+            }
+            views.setInt(R.id.next_bar, "setColorFilter", first.barColor)
+            val timeText = first.timeRangeText() ?: first.badge.takeIf { it.isNotBlank() }
+            views.setTextViewText(R.id.next_time, timeText ?: ctx.getString(R.string.widget_next_label))
+            views.setTextViewText(R.id.next_title, first.title)
+            views.setTextViewTextSize(R.id.next_title, TypedValue.COMPLEX_UNIT_SP, if (!size.compactWidth) 19f else 16.5f)
+            val subText =
+                first.sub?.takeIf { it.isNotBlank() }
+                    ?: if (first.timeRangeText() != null) first.badge.takeIf { it.isNotBlank() } else null
+            if (subText != null) {
+                views.setViewVisibility(R.id.next_sub, View.VISIBLE)
+                views.setTextViewText(R.id.next_sub, subText)
+            } else {
+                views.setViewVisibility(R.id.next_sub, View.GONE)
+            }
+
+            val padH = WidgetKit.dp(ctx, if (size.compactWidth) 12 else 16)
+            val padTop = WidgetKit.dp(ctx, 12)
+            val padBottom = WidgetKit.dp(ctx, 10)
+            views.setViewPadding(R.id.next_hero_content, padH, padTop, padH, padBottom)
+            views.setViewPadding(R.id.next_upcoming_group, padH, 0, padH, padBottom)
+
+            val second = summaries.getOrNull(1)
+            val third = if (size.isTall) summaries.getOrNull(2) else null
+            if (second != null) {
+                views.setViewVisibility(R.id.next_upcoming_group, View.VISIBLE)
+                bindUpcomingRow(
+                    ctx,
+                    views,
+                    second,
+                    rowId = R.id.next_row1,
+                    dotId = R.id.next_dot1,
+                    titleId = R.id.next_row1_title,
+                    timeId = R.id.next_row1_time,
+                    requestCode = 51,
+                )
+                if (third != null) {
+                    bindUpcomingRow(
+                        ctx,
+                        views,
+                        third,
+                        rowId = R.id.next_row2,
+                        dotId = R.id.next_dot2,
+                        titleId = R.id.next_row2_title,
+                        timeId = R.id.next_row2_time,
+                        requestCode = 54,
+                    )
+                } else {
+                    views.setViewVisibility(R.id.next_row2, View.GONE)
+                }
+            } else {
+                views.setViewVisibility(R.id.next_upcoming_group, View.GONE)
+            }
+
+            views.setOnClickPendingIntent(R.id.next_hero, pendingIntentFor(ctx, first, 50))
+            views.setOnClickPendingIntent(R.id.next_add, WidgetKit.overlayIntent(ctx, 52, WidgetOverlayActivity.addIntent(ctx)))
+            views.setOnClickPendingIntent(R.id.widget_root, WidgetKit.mainActivityIntent(ctx, 53, DeepLinks.timetableUri()))
             return views
         }
 
@@ -496,8 +621,19 @@ class NextWidgetProvider : AppWidgetProvider() {
             now: LocalDateTime = LocalDateTime.now(),
             size: WidgetKit.SizeClass = WidgetKit.SizeClass(),
         ): RemoteViews {
-            if (size.ultraCompactWidth && !size.compactHeight) {
-                return buildMiniStack(ctx, pickSummaries(ctx, snap, st, now, limit = 2))
+            if (size.isVerticalStrip) {
+                return buildMiniStack(
+                    ctx,
+                    pickSummaries(ctx, snap, st, now, limit = if (size.isTall) 3 else 2),
+                    showThird = size.isTall,
+                )
+            }
+            if (size.isMultiRowCard) {
+                return buildMultiRowCard(
+                    ctx,
+                    pickSummaries(ctx, snap, st, now, limit = if (size.isTall) 3 else 2),
+                    size,
+                )
             }
             val views = RemoteViews(ctx.packageName, R.layout.widget_next)
             val s = pickSummary(ctx, snap, st, now)
@@ -520,10 +656,19 @@ class NextWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(R.id.next_end, View.GONE)
                 }
             }
-            val padStart = WidgetKit.dp(ctx, if (size.ultraCompactWidth) 6 else 14)
-            val padEnd = WidgetKit.dp(ctx, if (size.ultraCompactWidth) 6 else 12)
-            val padV = WidgetKit.dp(ctx, if (size.ultraCompactWidth) 6 else 8)
+            val padStart = WidgetKit.dp(ctx, if (size.ultraCompactWidth) 8 else 14)
+            val padEnd = WidgetKit.dp(ctx, if (size.ultraCompactWidth) 8 else 12)
+            val padV = WidgetKit.dp(ctx, 8)
             views.setViewPadding(R.id.next_content, padStart, padV, padEnd, padV)
+            if (size.ultraCompactWidth) {
+                views.setTextViewTextSize(R.id.next_title, TypedValue.COMPLEX_UNIT_SP, 12.5f)
+                views.setInt(R.id.next_title, "setMaxLines", 2)
+                views.setTextViewTextSize(R.id.next_sub, TypedValue.COMPLEX_UNIT_SP, 10f)
+            } else {
+                views.setTextViewTextSize(R.id.next_title, TypedValue.COMPLEX_UNIT_SP, 14.5f)
+                views.setInt(R.id.next_title, "setMaxLines", 1)
+                views.setTextViewTextSize(R.id.next_sub, TypedValue.COMPLEX_UNIT_SP, 11.5f)
+            }
             views.setInt(R.id.next_bar, "setColorFilter", s.barColor)
             val showBadge = !size.ultraCompactWidth && s.badge.isNotEmpty()
             views.setViewVisibility(R.id.next_badge, if (showBadge) View.VISIBLE else View.GONE)

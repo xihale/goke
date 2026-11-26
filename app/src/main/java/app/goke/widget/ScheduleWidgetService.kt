@@ -2,6 +2,7 @@ package app.goke.widget
 
 import android.content.Context
 import android.content.Intent
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
@@ -80,6 +81,10 @@ class ScheduleWidgetService : RemoteViewsService() {
                     }
                 }
             v.setViewVisibility(R.id.sched_item_time_col, if (compact) View.GONE else View.VISIBLE)
+            val padH = WidgetKit.dp(ctx, if (compact) 8 else 10)
+            val padV = WidgetKit.dp(ctx, if (compact) 5 else 6)
+            v.setViewPadding(R.id.sched_item_content, padH, padV, padH, padV)
+            v.setTextViewTextSize(R.id.sched_item_name, TypedValue.COMPLEX_UNIT_SP, if (compact) 13.5f else 14f)
             v.setTextColor(R.id.sched_item_time, fg)
             v.setTextColor(R.id.sched_item_end, WidgetKit.softFg(fg))
             v.setTextColor(R.id.sched_item_name, fg)

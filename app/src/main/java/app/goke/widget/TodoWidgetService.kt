@@ -2,6 +2,7 @@ package app.goke.widget
 
 import android.content.Context
 import android.content.Intent
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
@@ -9,10 +10,11 @@ import app.goke.R
 
 /** 待办小组件的列表数据源（RemoteViews 集合）。 */
 class TodoWidgetService : RemoteViewsService() {
-    override fun onGetViewFactory(intent: Intent): RemoteViewsFactory = Factory(applicationContext)
+    override fun onGetViewFactory(intent: Intent): RemoteViewsFactory = Factory(applicationContext, intent.data?.getBooleanQueryParameter("compact", false) == true)
 
     private class Factory(
         private val ctx: Context,
+        private val compact: Boolean,
     ) : RemoteViewsFactory {
         private var rows = emptyList<TodoWidgetProvider.Row>()
 
@@ -28,7 +30,7 @@ class TodoWidgetService : RemoteViewsService() {
 
         override fun getViewAt(position: Int): RemoteViews {
             val r = rows.getOrNull(position) ?: return RemoteViews(ctx.packageName, R.layout.widget_todo_item)
-            return itemView(ctx, r)
+            return itemView(ctx, r, compact = compact)
         }
 
         override fun getLoadingView(): RemoteViews? = null
@@ -49,16 +51,25 @@ class TodoWidgetService : RemoteViewsService() {
         internal fun itemView(
             ctx: Context,
             r: TodoWidgetProvider.Row,
+            compact: Boolean = false,
         ): RemoteViews {
             val v = RemoteViews(ctx.packageName, R.layout.widget_todo_item)
+            v.setViewPadding(
+                R.id.item_root,
+                WidgetKit.dp(ctx, if (compact) 2 else 4),
+                WidgetKit.dp(ctx, 3),
+                WidgetKit.dp(ctx, if (compact) 6 else 8),
+                WidgetKit.dp(ctx, 3),
+            )
+            v.setTextViewTextSize(R.id.item_title, TypedValue.COMPLEX_UNIT_SP, if (compact) 13.5f else 14f)
             val muted = ctx.getColor(R.color.widget_muted)
             v.setInt(R.id.item_check, "setColorFilter", WidgetKit.priorityColor(ctx, r.priority, r.overdue))
             v.setInt(R.id.item_remind, "setColorFilter", muted)
             v.setInt(R.id.item_repeat, "setColorFilter", muted)
             val hasDue = r.code == null && !r.due.isNullOrBlank()
-            val showRemind = r.code == null && r.hasRemind
-            val showRepeat = r.code == null && r.repeating
-            val showList = r.listName != null
+            val showRemind = !compact && r.code == null && r.hasRemind
+            val showRepeat = !compact && r.code == null && r.repeating
+            val showList = !compact && r.listName != null
             if (r.code != null) {
                 v.setViewVisibility(R.id.item_code, View.VISIBLE)
                 v.setTextViewText(R.id.item_code, r.code)

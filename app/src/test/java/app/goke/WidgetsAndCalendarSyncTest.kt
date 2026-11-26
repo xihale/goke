@@ -4,6 +4,7 @@ import android.appwidget.AppWidgetManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Bundle
+import android.util.SizeF
 import android.view.View
 import android.view.ViewGroup
 import android.widget.BaseAdapter
@@ -467,6 +468,100 @@ class WidgetsAndCalendarSyncTest {
                     72,
                 )
             assertEquals("高等数学", todoOneByOne.findViewById<TextView>(R.id.next_title).text.toString())
+
+            val nextTwoByTwo =
+                renderRemoteViews(
+                    "widget_next_2x2",
+                    NextWidgetProvider.build(app, snap, st, now, size = WidgetKit.sizeClassFor(160, 192)),
+                    160,
+                    192,
+                )
+            assertEquals("高等数学", nextTwoByTwo.findViewById<TextView>(R.id.next_title).text.toString())
+            assertEquals(View.VISIBLE, nextTwoByTwo.findViewById<View>(R.id.next_upcoming_group).visibility)
+            assertEquals("操作系统", nextTwoByTwo.findViewById<TextView>(R.id.next_row1_title).text.toString())
+            assertEquals(View.GONE, nextTwoByTwo.findViewById<View>(R.id.next_row2).visibility)
+
+            val nextThreeByThree =
+                renderRemoteViews(
+                    "widget_next_3x3",
+                    NextWidgetProvider.build(app, snap, st, now, size = WidgetKit.sizeClassFor(250, 290)),
+                    250,
+                    290,
+                )
+            assertEquals("高等数学", nextThreeByThree.findViewById<TextView>(R.id.next_title).text.toString())
+            assertEquals("操作系统", nextThreeByThree.findViewById<TextView>(R.id.next_row1_title).text.toString())
+            assertEquals(View.VISIBLE, nextThreeByThree.findViewById<View>(R.id.next_row2).visibility)
+            assertEquals("东门菜鸟驿站 · 顺丰", nextThreeByThree.findViewById<TextView>(R.id.next_row2_title).text.toString())
+
+            val nextOneByThree =
+                renderRemoteViews(
+                    "widget_next_1x3",
+                    NextWidgetProvider.build(app, snap, st, now, size = WidgetKit.sizeClassFor(72, 260)),
+                    72,
+                    260,
+                )
+            assertEquals(View.VISIBLE, nextOneByThree.findViewById<View>(R.id.next_card0).visibility)
+            assertEquals(View.VISIBLE, nextOneByThree.findViewById<View>(R.id.next_card1).visibility)
+            assertEquals(View.VISIBLE, nextOneByThree.findViewById<View>(R.id.next_card2).visibility)
+            assertEquals("东门菜鸟驿站 · 顺丰", nextOneByThree.findViewById<TextView>(R.id.next_title2).text.toString())
+
+            val sampleTaskRow =
+                TodayWidgetProvider.Row(
+                    key = "t_sample",
+                    time = "待办",
+                    title = "提交报告",
+                    sub = null,
+                    code = null,
+                    colorIndex = -1,
+                    priority = 1,
+                    overdue = false,
+                    ongoing = false,
+                    taskId = "t_sample",
+                    targetUri = "goke://todo",
+                    listName = "学习",
+                    hasRemind = true,
+                    repeating = true,
+                )
+            val todayTaskCompact = TodayWidgetService.itemView(app, sampleTaskRow, compact = true).apply(app, FrameLayout(app))
+            assertEquals(View.GONE, todayTaskCompact.findViewById<View>(R.id.today_item_remind).visibility)
+            assertEquals(View.GONE, todayTaskCompact.findViewById<View>(R.id.today_item_repeat).visibility)
+
+            val todoCompactView =
+                TodoWidgetService
+                    .itemView(
+                        app,
+                        TodoWidgetProvider.Row(
+                            id = "t_sample",
+                            title = "提交报告",
+                            code = null,
+                            due = "今天 18:00",
+                            priority = 1,
+                            overdue = false,
+                            listName = "学习",
+                            hasRemind = true,
+                            repeating = true,
+                        ),
+                        compact = true,
+                    ).apply(app, FrameLayout(app))
+            assertEquals(View.GONE, todoCompactView.findViewById<View>(R.id.item_list).visibility)
+            assertEquals(View.GONE, todoCompactView.findViewById<View>(R.id.item_remind).visibility)
+            assertEquals(View.GONE, todoCompactView.findViewById<View>(R.id.item_repeat).visibility)
+            assertEquals(View.VISIBLE, todoCompactView.findViewById<View>(R.id.item_due).visibility)
+
+            val parcelCompactView =
+                ParcelWidgetService
+                    .itemView(
+                        app,
+                        ParcelWidgetProvider.Row(
+                            id = "p_sample",
+                            code = "4-2-1086",
+                            place = "东门菜鸟驿站",
+                            due = "今天 18:00",
+                            overdue = false,
+                        ),
+                        compact = true,
+                    ).apply(app, FrameLayout(app))
+            assertEquals(View.GONE, parcelCompactView.findViewById<View>(R.id.parcel_item_due).visibility)
         }
 
     @Test
@@ -530,6 +625,7 @@ class WidgetsAndCalendarSyncTest {
                 R.xml.widget_todo_info,
                 R.xml.widget_parcel_info,
                 R.xml.widget_next_info,
+                R.xml.widget_hotwater_info,
             )
         val expectedPx = WidgetKit.dp(app, 40).toFloat()
         for (xmlRes in infoXmls) {
@@ -597,6 +693,43 @@ class WidgetsAndCalendarSyncTest {
         assertTrue(twoByTwo.compactWidth)
         assertTrue(!twoByTwo.ultraCompactWidth)
         assertTrue(!twoByTwo.compactHeight)
+
+        val tallOneByOneOpts =
+            Bundle().apply {
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 78)
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 92)
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 76)
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 108)
+            }
+        val tallOneByOne = WidgetKit.sizeClass(app, tallOneByOneOpts)
+        assertTrue(tallOneByOne.compactHeight)
+        assertTrue(!tallOneByOne.isVerticalStrip)
+        assertTrue(tallOneByOne.isSquare)
+
+        val singleSizeOpts =
+            Bundle().apply {
+                putParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES, arrayListOf(SizeF(160f, 192f)))
+            }
+        val singleSize = WidgetKit.sizeClass(app, singleSizeOpts)
+        assertTrue(singleSize.isMultiRowCard)
+        assertTrue(singleSize.compactWidth)
+
+        val multiSizeOpts =
+            Bundle().apply {
+                putParcelableArrayList(
+                    AppWidgetManager.OPTION_APPWIDGET_SIZES,
+                    arrayListOf(SizeF(72f, 92f), SizeF(260f, 190f)),
+                )
+            }
+        val multiRv =
+            WidgetKit.buildResponsive(app, multiSizeOpts) { sc ->
+                NextWidgetProvider.build(app, null, Settings(), size = sc)
+            }
+        val multiRoot = multiRv.apply(app, FrameLayout(app))
+        assertEquals(
+            app.getString(R.string.widget_next_empty),
+            multiRoot.findViewById<TextView>(R.id.next_title).text.toString(),
+        )
     }
 
     @Test

@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.TypedValue
@@ -23,6 +24,7 @@ import app.goke.hotwater.HotWaterPhase
 import app.goke.hotwater.HotWaterState
 import app.goke.ui.screens.errorStringRes
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** 桌面智慧热水一键开关小组件：自适应圆角矩形与圆形触感大按钮，大尺寸时展开宿舍与余额信息。 */
 class HotWaterWidgetProvider : AppWidgetProvider() {
@@ -106,16 +108,68 @@ class HotWaterWidgetProvider : AppWidgetProvider() {
             state: HotWaterState,
             options: Bundle? = null,
         ): RemoteViews {
-            val rawW = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) ?: 0
-            val rawH = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0) ?: 0
+            val sizes = WidgetKit.extractAppWidgetSizes(options)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && sizes.size == 1) {
+                return buildForSize(
+                    ctx,
+                    state,
+                    sizes[0].width.roundToInt(),
+                    sizes[0].height.roundToInt(),
+                )
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && sizes.size > 1) {
+                return RemoteViews(
+                    sizes.associateWith { sz ->
+                        buildForSize(ctx, state, sz.width.roundToInt(), sz.height.roundToInt())
+                    },
+                )
+            }
+
+            val isLandscape = ctx.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+            val minW = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) ?: 0
+            val maxW = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0) ?: 0
+            val minH = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0) ?: 0
+            val maxH = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0) ?: 0
+            val rawW = if (isLandscape) (if (maxW > 0) maxW else minW) else (if (minW > 0) minW else maxW)
+            val rawH = if (isLandscape) (if (minH > 0) minH else maxH) else (if (maxH > 0) maxH else minH)
             val w = if (rawW > 0) rawW else 140
             val h = if (rawH > 0) rawH else 60
-            val ratio = maxOf(w, h).toFloat() / minOf(w, h).coerceAtLeast(1).toFloat()
-            val isCircle = ratio <= 1.28f
-            val isLarge = if (isCircle) minOf(w, h) >= 115 else (w >= 190 || h >= 115)
-            val showMeta = if (isCircle) (isLarge && h >= 135) else isLarge
+            return buildForSize(ctx, state, w, h)
+        }
 
-            val rv = RemoteViews(ctx.packageName, if (isCircle) R.layout.widget_hotwater_circle else R.layout.widget_hotwater)
+        private fun buildForSize(
+            ctx: Context,
+            state: HotWaterState,
+            w: Int,
+            h: Int,
+        ): RemoteViews {
+            val diameter = minOf(w, h)
+            val ratio = maxOf(w, h).toFloat() / diameter.coerceAtLeast(1).toFloat()
+            val isCircle = if (h >= w) ratio <= 1.45f else ratio <= 1.35f
+            val isVerticalRect = !isCircle && h > w
+            val isLarge =
+                when {
+                    isCircle -> diameter >= 115
+                    isVerticalRect -> h >= 145
+                    else -> w >= 190
+                }
+            val isXLarge = isCircle && diameter >= 200
+            val isHuge = isCircle && diameter >= 280
+            val isTallWide = !isCircle && !isVerticalRect && w >= 240 && h >= 130
+            val showMeta =
+                when {
+                    isCircle -> diameter >= 130
+                    isVerticalRect -> h >= 175
+                    else -> isLarge
+                }
+
+            val layoutRes =
+                when {
+                    isCircle -> R.layout.widget_hotwater_circle
+                    isVerticalRect -> R.layout.widget_hotwater_vertical
+                    else -> R.layout.widget_hotwater
+                }
+            val rv = RemoteViews(ctx.packageName, layoutRes)
 
             val isWorking = state.isBound && (state.phase == HotWaterPhase.WORKING || state.busy)
             val isOpen = state.isBound && state.phase == HotWaterPhase.VALVE_OPEN
@@ -195,11 +249,38 @@ class HotWaterWidgetProvider : AppWidgetProvider() {
                     }
                 }
 
-            rv.setInt(R.id.widget_root, "setBackgroundResource", bgRes)
+            if (isCircle) {
+                rv.setImageViewResource(R.id.hw_circle_bg, bgRes)
+            } else {
+                rv.setInt(R.id.widget_root, "setBackgroundResource", bgRes)
+            }
             rv.setInt(R.id.hw_icon, "setColorFilter", fgColor)
             rv.setTextViewText(R.id.hw_action_label, actionLabel)
             rv.setTextColor(R.id.hw_action_label, fgColor)
-            val actionSizeSp = if (isCircle) (if (isLarge) 22f else 14f) else (if (isLarge) 20f else 18f)
+            val actionSizeSp =
+                when {
+                    isCircle -> {
+                        when {
+                            isHuge -> 30f
+                            isXLarge -> 26f
+                            isLarge -> 20f
+                            diameter < 66 -> 13f
+                            else -> 14f
+                        }
+                    }
+
+                    isVerticalRect -> {
+                        if (w >= 130) 20f else 14f
+                    }
+
+                    isTallWide -> {
+                        24f
+                    }
+
+                    else -> {
+                        if (isLarge) 20f else 18f
+                    }
+                }
             rv.setTextViewTextSize(R.id.hw_action_label, TypedValue.COMPLEX_UNIT_SP, actionSizeSp)
 
             rv.setTextViewText(R.id.hw_room, roomLabel)
@@ -209,8 +290,67 @@ class HotWaterWidgetProvider : AppWidgetProvider() {
             rv.setTextViewText(R.id.hw_meta, metaLabel)
             rv.setTextColor(R.id.hw_meta, subColor)
             rv.setViewVisibility(R.id.hw_meta, if (showMeta) View.VISIBLE else View.GONE)
-            if (!isCircle) {
-                rv.setViewVisibility(R.id.hw_info_group, if (isLarge) View.VISIBLE else View.GONE)
+            when {
+                isCircle -> {
+                    val roomSizeSp =
+                        when {
+                            isHuge -> 16f
+                            isXLarge -> 14f
+                            else -> 12f
+                        }
+                    val metaSizeSp =
+                        when {
+                            isHuge -> 14f
+                            isXLarge -> 12.5f
+                            else -> 11f
+                        }
+                    rv.setTextViewTextSize(R.id.hw_room, TypedValue.COMPLEX_UNIT_SP, roomSizeSp)
+                    rv.setTextViewTextSize(R.id.hw_meta, TypedValue.COMPLEX_UNIT_SP, metaSizeSp)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val iconDp =
+                            when {
+                                isHuge -> 46f
+                                isXLarge -> 38f
+                                isLarge -> 30f
+                                diameter < 66 -> 20f
+                                else -> 22f
+                            }
+                        rv.setViewLayoutWidth(R.id.hw_icon, iconDp, TypedValue.COMPLEX_UNIT_DIP)
+                        rv.setViewLayoutHeight(R.id.hw_icon, iconDp, TypedValue.COMPLEX_UNIT_DIP)
+                    }
+                    val extraH = ((w - diameter) / 2f).coerceAtLeast(0f)
+                    val padHDp = (extraH + diameter * 0.14f).roundToInt().coerceAtLeast(8)
+                    val padVDp = (diameter * 0.10f).roundToInt().coerceAtLeast(6)
+                    val padHPx = WidgetKit.dp(ctx, padHDp)
+                    val padVPx = WidgetKit.dp(ctx, padVDp)
+                    rv.setViewPadding(R.id.hw_content, padHPx, padVPx, padHPx, padVPx)
+                }
+
+                isVerticalRect -> {
+                    val wideVert = w >= 130
+                    rv.setTextViewTextSize(R.id.hw_room, TypedValue.COMPLEX_UNIT_SP, if (wideVert) 13f else 11f)
+                    rv.setTextViewTextSize(R.id.hw_meta, TypedValue.COMPLEX_UNIT_SP, if (wideVert) 11.5f else 10f)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val iconDp = if (wideVert) 30f else 24f
+                        rv.setViewLayoutWidth(R.id.hw_icon, iconDp, TypedValue.COMPLEX_UNIT_DIP)
+                        rv.setViewLayoutHeight(R.id.hw_icon, iconDp, TypedValue.COMPLEX_UNIT_DIP)
+                    }
+                    val padHPx = WidgetKit.dp(ctx, if (w < 105) 8 else 14)
+                    val padVPx = WidgetKit.dp(ctx, 12)
+                    rv.setViewPadding(R.id.hw_content, padHPx, padVPx, padHPx, padVPx)
+                }
+
+                else -> {
+                    rv.setViewVisibility(R.id.hw_info_group, if (isLarge) View.VISIBLE else View.GONE)
+                    if (isTallWide) {
+                        rv.setTextViewTextSize(R.id.hw_room, TypedValue.COMPLEX_UNIT_SP, 15f)
+                        rv.setTextViewTextSize(R.id.hw_meta, TypedValue.COMPLEX_UNIT_SP, 13f)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            rv.setViewLayoutWidth(R.id.hw_icon, 32f, TypedValue.COMPLEX_UNIT_DIP)
+                            rv.setViewLayoutHeight(R.id.hw_icon, 32f, TypedValue.COMPLEX_UNIT_DIP)
+                        }
+                    }
+                }
             }
 
             val openIntent = WidgetKit.mainActivityIntent(ctx, RC_OPEN_SCREEN, DeepLinks.hotWaterUri())

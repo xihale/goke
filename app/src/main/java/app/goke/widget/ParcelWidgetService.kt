@@ -2,6 +2,7 @@ package app.goke.widget
 
 import android.content.Context
 import android.content.Intent
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
@@ -9,10 +10,11 @@ import app.goke.R
 
 /** 「待取快递」小组件列表数据源。 */
 class ParcelWidgetService : RemoteViewsService() {
-    override fun onGetViewFactory(intent: Intent): RemoteViewsFactory = Factory(applicationContext)
+    override fun onGetViewFactory(intent: Intent): RemoteViewsFactory = Factory(applicationContext, intent.data?.getBooleanQueryParameter("compact", false) == true)
 
     private class Factory(
         private val ctx: Context,
+        private val compact: Boolean,
     ) : RemoteViewsFactory {
         private var rows = emptyList<ParcelWidgetProvider.Row>()
 
@@ -28,7 +30,7 @@ class ParcelWidgetService : RemoteViewsService() {
 
         override fun getViewAt(position: Int): RemoteViews {
             val r = rows.getOrNull(position) ?: return RemoteViews(ctx.packageName, R.layout.widget_parcel_item)
-            return itemView(ctx, r)
+            return itemView(ctx, r, compact = compact)
         }
 
         override fun getLoadingView(): RemoteViews? = null
@@ -49,11 +51,21 @@ class ParcelWidgetService : RemoteViewsService() {
         internal fun itemView(
             ctx: Context,
             r: ParcelWidgetProvider.Row,
+            compact: Boolean = false,
         ): RemoteViews {
             val v = RemoteViews(ctx.packageName, R.layout.widget_parcel_item)
+            v.setViewPadding(
+                R.id.parcel_item_root,
+                WidgetKit.dp(ctx, if (compact) 2 else 4),
+                WidgetKit.dp(ctx, if (compact) 4 else 6),
+                WidgetKit.dp(ctx, if (compact) 6 else 8),
+                WidgetKit.dp(ctx, if (compact) 4 else 6),
+            )
+            v.setTextViewTextSize(R.id.parcel_item_code, TypedValue.COMPLEX_UNIT_SP, if (compact) 14f else 15f)
+            v.setTextViewTextSize(R.id.parcel_item_place, TypedValue.COMPLEX_UNIT_SP, if (compact) 12f else 13f)
             v.setTextViewText(R.id.parcel_item_code, r.code)
             v.setTextViewText(R.id.parcel_item_place, r.place)
-            if (!r.due.isNullOrBlank()) {
+            if (!compact && !r.due.isNullOrBlank()) {
                 v.setViewVisibility(R.id.parcel_item_due, View.VISIBLE)
                 v.setTextViewText(R.id.parcel_item_due, r.due)
                 v.setTextColor(R.id.parcel_item_due, ctx.getColor(if (r.overdue) R.color.widget_overdue else R.color.widget_muted))

@@ -2,6 +2,7 @@ package app.goke.widget
 
 import android.content.Context
 import android.content.Intent
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
@@ -53,6 +54,14 @@ class TodayWidgetService : RemoteViewsService() {
             compact: Boolean = false,
         ): RemoteViews {
             val v = RemoteViews(ctx.packageName, R.layout.widget_today_item)
+            v.setViewPadding(
+                R.id.today_item_content,
+                WidgetKit.dp(ctx, if (compact) 6 else 10),
+                WidgetKit.dp(ctx, 3),
+                WidgetKit.dp(ctx, if (compact) 4 else 8),
+                WidgetKit.dp(ctx, 3),
+            )
+            v.setTextViewTextSize(R.id.today_item_title, TypedValue.COMPLEX_UNIT_SP, if (compact) 13f else 13.5f)
             if (r.colorIndex < 0) {
                 // 宣纸行规则：待办行无框直落宣纸底（与 App TaskRow / web .task 一致）
                 v.setInt(R.id.today_item_root, "setBackgroundResource", 0)
@@ -139,8 +148,8 @@ class TodayWidgetService : RemoteViewsService() {
                         .putExtra(TodoWidgetProvider.EXTRA_TASK_ID, r.taskId),
                 )
                 val muted = ctx.getColor(R.color.widget_muted)
-                v.setViewVisibility(R.id.today_item_remind, if (r.hasRemind) View.VISIBLE else View.GONE)
-                v.setViewVisibility(R.id.today_item_repeat, if (r.repeating) View.VISIBLE else View.GONE)
+                v.setViewVisibility(R.id.today_item_remind, if (!compact && r.hasRemind) View.VISIBLE else View.GONE)
+                v.setViewVisibility(R.id.today_item_repeat, if (!compact && r.repeating) View.VISIBLE else View.GONE)
                 v.setInt(R.id.today_item_remind, "setColorFilter", muted)
                 v.setInt(R.id.today_item_repeat, "setColorFilter", muted)
                 if (!compact && r.listName != null) {
