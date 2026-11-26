@@ -14,10 +14,13 @@ import app.goke.core.change.canUndo
 import app.goke.core.change.undo
 import app.goke.core.export.ExportBundle
 import app.goke.core.importer.ImportPlanner
+import app.goke.core.jxfw.JxfwSync
 import app.goke.core.model.Attachment
 import app.goke.core.model.Course
+import app.goke.core.model.CourseException
 import app.goke.core.model.Event
 import app.goke.core.model.EventKind
+import app.goke.core.model.ExceptionType
 import app.goke.core.model.Freq
 import app.goke.core.model.PeriodTime
 import app.goke.core.model.Recurrence
@@ -25,6 +28,7 @@ import app.goke.core.model.Snapshot
 import app.goke.core.model.Source
 import app.goke.core.model.Task
 import app.goke.core.model.TaskList
+import app.goke.core.recurrence.CourseExpander
 import app.goke.core.todo.QuickAdd
 import app.goke.core.todo.QuickTokenKind
 import app.goke.core.todo.SmartList
@@ -397,5 +401,198 @@ class ChangeAndTodoTest {
         assertNull(normalTask.extra["checkable"])
         assertEquals("艺术楼", normalTask.extra["location"])
         assertEquals(rec, normalTask.repeat)
+    }
+
+    @Test fun `courseExpander prefers custom startTime and endTime unless periods rescheduled`() {
+        val examCourse =
+            Course(
+                id = "exam-c1",
+                semesterId = sem.id,
+                name = "考试：高等数学",
+                dayOfWeek = 1,
+                startPeriod = 1,
+                endPeriod = 2,
+                weeks = setOf(1, 2, 3),
+                kind = EventKind.EXAM,
+                startTime = LocalTime.of(9, 0),
+                endTime = LocalTime.of(11, 0),
+            )
+        val roomReschedule =
+            CourseException(
+                id = "ex-room",
+                courseId = examCourse.id,
+                week = 2,
+                type = ExceptionType.RESCHEDULE,
+                newRoom = "教2-101",
+            )
+        val periodReschedule =
+            CourseException(
+                id = "ex-period",
+                courseId = examCourse.id,
+                week = 3,
+                type = ExceptionType.RESCHEDULE,
+                newStartPeriod = 5,
+                newEndPeriod = 6,
+            )
+        val occs =
+            CourseExpander.occurrences(
+                sem,
+                listOf(examCourse),
+                listOf(roomReschedule, periodReschedule),
+                sem.week1Monday,
+                sem.week1Monday.plusWeeks(3),
+            )
+        assertEquals(3, occs.size)
+        assertEquals(LocalTime.of(9, 0), occs[0].start.toLocalTime())
+        assertEquals(LocalTime.of(11, 0), occs[0].end.toLocalTime())
+        assertEquals(LocalTime.of(9, 0), occs[1].start.toLocalTime())
+        assertEquals(LocalTime.of(11, 0), occs[1].end.toLocalTime())
+        assertEquals("教2-101", occs[1].room)
+        assertEquals(LocalTime.of(13, 50), occs[2].start.toLocalTime())
+        assertEquals(LocalTime.of(15, 25), occs[2].end.toLocalTime())
+    }
+
+    @Test fun `migrateExamTasksToCourses converts legacy official and course exam tasks cleanly`() {
+        assertNull(JxfwSync.migrateExamTasksToCourses(base, 100L))
+
+        val officialDate = sem.week1Monday.plusWeeks(2).plusDays(4)
+        val officialTask =
+            Task(
+                id = "${JxfwSync.EXAM_PREFIX}202601/ks_01",
+                title = "考试：高等数学",
+                note = "大学城 · 学院停课考 · 座位号 18",
+                tags = listOf("考试"),
+                priority = 3,
+                startDate = officialDate,
+                due = officialDate.atTime(11, 0),
+                dueHasTime = true,
+                remindMinutes = 30,
+                remindMinutesList = listOf(30),
+                remindPersistent = true,
+                blockStart = officialDate.atTime(9, 0),
+                blockMinutes = 120,
+                source = Source.IMPORT,
+                extra = mapOf("kind" to EventKind.EXAM.name, "checkable" to "false", "location" to "教3-201"),
+            )
+        val remarkTask =
+            Task(
+                id = "${JxfwSync.COURSE_EXAM_PREFIX}202601/5/2/3-4/概率论",
+                title = "期中考试：概率论",
+                note = "期中考试",
+                tags = listOf("考试"),
+                remindPersistent = true,
+                source = Source.IMPORT,
+                extra = mapOf("kind" to EventKind.EXAM.name, "checkable" to "false", "location" to "教2-102"),
+            )
+        val tombstonedTarget =
+            Course(
+                id = "${JxfwSync.EXAM_COURSE_PREFIX}202601/ks_deleted",
+                semesterId = sem.id,
+                name = "已删除考试",
+                dayOfWeek = 1,
+                startPeriod = 1,
+                endPeriod = 2,
+                weeks = setOf(1),
+                deletedAt = 50L,
+            )
+        val legacyForDeleted =
+            Task(
+                id = "${JxfwSync.EXAM_PREFIX}202601/ks_deleted",
+                title = "考试：已删除",
+                startDate = officialDate,
+                source = Source.IMPORT,
+            )
+        val snap =
+            base.copy(
+                courses = base.courses + tombstonedTarget,
+                tasks = listOf(officialTask, remarkTask, legacyForDeleted),
+            )
+        val cs = JxfwSync.migrateExamTasksToCourses(snap, 200L, SequentialIds("m"))!!
+        val after = snap.apply(cs, 200L)
+
+        assertTrue(after.tasks.none { it.deletedAt == null })
+        val migratedOfficial = after.courses.single { it.id == "${JxfwSync.EXAM_COURSE_PREFIX}202601/ks_01" }
+        assertEquals("考试：高等数学", migratedOfficial.name)
+        assertEquals(EventKind.EXAM, migratedOfficial.kind)
+        assertEquals(JxfwSync.EXAM_COLOR_INDEX, migratedOfficial.colorIndex)
+        assertEquals("教3-201", migratedOfficial.room)
+        assertEquals(setOf(3), migratedOfficial.weeks)
+        assertEquals(5, migratedOfficial.dayOfWeek)
+        assertEquals(LocalTime.of(9, 0), migratedOfficial.startTime)
+        assertEquals(LocalTime.of(11, 0), migratedOfficial.endTime)
+        assertEquals(listOf(30), migratedOfficial.effectiveRemindMinutes)
+        assertTrue(migratedOfficial.remindPersistent)
+
+        val migratedRemark = after.courses.single { it.id == "${JxfwSync.COURSE_EXAM_COURSE_PREFIX}202601/5/2/3-4/概率论" }
+        assertEquals("期中考试：概率论", migratedRemark.name)
+        assertEquals(EventKind.EXAM, migratedRemark.kind)
+        assertEquals("教2-102", migratedRemark.room)
+        assertEquals(setOf(5), migratedRemark.weeks)
+        assertEquals(2, migratedRemark.dayOfWeek)
+        assertEquals(3, migratedRemark.startPeriod)
+        assertEquals(4, migratedRemark.endPeriod)
+        assertNull(migratedRemark.startTime)
+        assertNull(migratedRemark.endTime)
+
+        assertNotNull(after.courses.singleOrNull { it.id == tombstonedTarget.id && it.deletedAt != null })
+        assertNull(JxfwSync.migrateExamTasksToCourses(after, 300L))
+    }
+
+    @Test fun `isSameCourseForExam normalizes prefixes suffixes and ignores distinct courses`() {
+        assertTrue(JxfwSync.isSameCourseForExam("考试：高等数学", "高等数学"))
+        assertTrue(JxfwSync.isSameCourseForExam("期中考试：大学英语(3)", "大学英语（3）"))
+        assertTrue(JxfwSync.isSameCourseForExam("高等数学期末考试", "高等数学"))
+        assertTrue(JxfwSync.isSameCourseForExam("随堂测验：概率论", "概率论"))
+        assertFalse(JxfwSync.isSameCourseForExam("考试：大学物理", "大学物理实验"))
+        assertEquals("软件测试", JxfwSync.normalizeCourseNameForExam("软件测试"))
+    }
+
+    @Test fun `courseExpander promotes overlapping same-course session to exam layer without conflict`() {
+        val regular =
+            Course(
+                id = "c-math",
+                semesterId = sem.id,
+                name = "高等数学",
+                room = "教1-201",
+                dayOfWeek = 1,
+                startPeriod = 1,
+                endPeriod = 2,
+                weeks = setOf(1, 2),
+            )
+        val sameCourseExam =
+            Course(
+                id = "c-math-exam",
+                semesterId = sem.id,
+                name = "随堂测验：高等数学",
+                room = "",
+                dayOfWeek = 1,
+                startPeriod = 1,
+                endPeriod = 2,
+                weeks = setOf(2),
+                kind = EventKind.EXAM,
+            )
+        val otherCourse =
+            Course(
+                id = "c-eng",
+                semesterId = sem.id,
+                name = "大学英语",
+                room = "教2-101",
+                dayOfWeek = 1,
+                startPeriod = 1,
+                endPeriod = 2,
+                weeks = setOf(2),
+            )
+        val snap = Snapshot(semesters = listOf(sem), courses = listOf(regular, sameCourseExam))
+        val w2 = sem.week1Monday.plusWeeks(1)
+        val occs = CourseExpander.occurrences(sem, snap.courses, emptyList(), w2, w2)
+        assertEquals(1, occs.size)
+        assertEquals("c-math-exam", occs.single().course.id)
+        assertEquals("教1-201", occs.single().room)
+        assertTrue(Conflicts.detect(snap, setOf("c-math-exam", "c-math")).isEmpty())
+
+        val withOther = Snapshot(semesters = listOf(sem), courses = listOf(regular, sameCourseExam, otherCourse))
+        val conflicts = Conflicts.detect(withOther, setOf("c-math-exam"))
+        assertEquals(1, conflicts.size)
+        assertEquals("大学英语", conflicts.single().bTitle)
     }
 }

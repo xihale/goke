@@ -220,7 +220,7 @@ class TodayWidgetProvider : AppWidgetProvider() {
                         val o = item.occ
                         val phase = WidgetKit.timePhase(o.start, o.end, now)
                         val progress = WidgetKit.timeProgress(o.start, o.end, now)
-                        val sub = o.room.takeIf { it.isNotBlank() }
+                        val sub = WidgetKit.courseLocation(ctx, o)
                         result +=
                             Row(
                                 key = "c_${o.course.id}_${o.start}",

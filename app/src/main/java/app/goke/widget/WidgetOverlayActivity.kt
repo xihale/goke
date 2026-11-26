@@ -979,11 +979,10 @@ private fun OverlayCourseCard(
     val timeText =
         buildString {
             append(stringResource(R.string.weekday_prefix, ctx.weekdayShort(dow)))
-            if (cal != null) {
-                val st = cal.startTime(sp)?.hm()
-                val et = cal.endTime(ep)?.hm()
-                if (st != null && et != null) append(" $st–$et")
-            }
+            val customClock = sp == course.startPeriod && ep == course.endPeriod
+            val st = ((if (customClock) course.startTime else null) ?: cal?.startTime(sp))?.hm()
+            val et = ((if (customClock) course.endTime else null) ?: cal?.endTime(ep))?.hm()
+            if (st != null && et != null) append(" $st–$et")
             append(" · ")
             append(stringResource(R.string.periods_range, sp, ep))
         }

@@ -202,7 +202,7 @@ class NextWidgetProvider : AppWidgetProvider() {
                     Summary(
                         startTime = o.start.hm(),
                         endTime = o.end.hm(),
-                        sub = o.room.takeIf { it.isNotBlank() },
+                        sub = WidgetKit.courseLocation(ctx, o),
                         title = o.course.name,
                         barColor = WidgetKit.courseFg(ctx, o.course.colorIndex),
                         uri = DeepLinks.courseUri(o.course.id),

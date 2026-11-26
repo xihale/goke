@@ -110,6 +110,7 @@ import app.goke.ui.theme.MintTheme
 import app.goke.ui.weekdayShort
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
+import java.time.LocalTime
 
 /** 一条上课时段（对应一条 Course 记录）：同一门课可以有多个时段，各自带教室与提醒。 */
 internal data class SlotDraft(
@@ -123,17 +124,22 @@ internal data class SlotDraft(
     val remindMinutes: Int? = null,
     val teacher: String? = null,
     val remindMinutesList: List<Int> = emptyList(),
+    val startTime: LocalTime? = null,
+    val endTime: LocalTime? = null,
 ) {
     val effectiveRemindMinutes: List<Int>
         get() = Reminders.normalize(remindMinutes, remindMinutesList)
 }
 
-/** 时段在课表上的真实钟点，如 `08:30–10:05`；节次越界时留空。 */
+/** 时段在课表上的真实钟点，如 `08:30–10:05`；若课程自带精确时刻（如考试）则优先使用。 */
 private fun clockRange(
     periods: List<PeriodTime>,
     sp: Int,
     ep: Int,
+    startTime: LocalTime? = null,
+    endTime: LocalTime? = null,
 ): String {
+    if (startTime != null && endTime != null) return "${startTime.hm()}–${endTime.hm()}"
     val start = periods.firstOrNull { it.index == sp }?.start?.hm() ?: return ""
     val end = periods.firstOrNull { it.index == ep }?.end?.hm() ?: return ""
     return "$start–$end"
@@ -194,7 +200,22 @@ fun CourseEditScreen(
                 snap.courses
                     .filter { it.deletedAt == null && it.semesterId == sem.id && it.name == existing.name }
                     .sortedWith(compareBy({ it.weeks.minOrNull() ?: 99 }, { it.dayOfWeek }, { it.startPeriod }))
-                    .map { SlotDraft(it.id, it, it.dayOfWeek, it.startPeriod, it.endPeriod, it.weeks, it.room, it.remindMinutes, it.teacher, it.effectiveRemindMinutes) }
+                    .map {
+                        SlotDraft(
+                            it.id,
+                            it,
+                            it.dayOfWeek,
+                            it.startPeriod,
+                            it.endPeriod,
+                            it.weeks,
+                            it.room,
+                            it.remindMinutes,
+                            it.teacher,
+                            it.effectiveRemindMinutes,
+                            it.startTime,
+                            it.endTime,
+                        )
+                    }
             } else {
                 val sp = (initialPeriod ?: 1).coerceIn(1, periodCount)
                 val ep = (sp + 1).coerceAtMost(periodCount).coerceAtLeast(sp)
@@ -267,6 +288,8 @@ fun CourseEditScreen(
                 remindMinutes = s.effectiveRemindMinutes.firstOrNull(),
                 remindMinutesList = s.effectiveRemindMinutes,
                 note = nt,
+                startTime = s.startTime,
+                endTime = s.endTime,
             )
         } else {
             Course(
@@ -284,6 +307,8 @@ fun CourseEditScreen(
                 remindMinutesList = s.effectiveRemindMinutes,
                 note = nt,
                 source = Source.MANUAL,
+                startTime = s.startTime,
+                endTime = s.endTime,
             )
         }
     }
@@ -321,9 +346,10 @@ fun CourseEditScreen(
     val dirty = fieldDirty || slots != initialSlots
 
     // 冲突检测只与已排课表、学期及当前时段配置（星期/节次/周次）相关，
-    // 课程名/教师/颜色/备注变动不改变冲突关系，避免表单打字时每帧触发全学期排课展开
+    // 普通课程名称/教师/颜色/备注变动不改变冲突关系，避免表单打字时每帧触发全学期排课展开；
+    // 考试类型课程需携带名称以识别同课程随堂考升层，避免误报冲突。
     val conflictMatches =
-        remember(snap, slots, committed) {
+        remember(snap, slots, committed, kind, if (kind == EventKind.EXAM) name.trim() else "") {
             if (committed) return@remember emptyList()
             val activeIds = slots.filter { it.weeks.isNotEmpty() }.map { it.id }
             if (activeIds.isEmpty()) {
@@ -332,13 +358,14 @@ fun CourseEditScreen(
                 val changes =
                     buildSlotChanges(
                         semesterId = sem.id,
-                        name = "",
+                        name = if (kind == EventKind.EXAM) name.trim() else "",
                         teacher = "",
                         colorIndex = 0,
                         note = "",
                         initialSlots = initialSlots,
                         slots = slots,
                         liveExceptions = snap.exceptions,
+                        kind = kind,
                     )
                 val synthetic =
                     if (changes.isEmpty()) {
@@ -558,7 +585,7 @@ fun CourseEditScreen(
                     SlotRow(
                         slot = s,
                         color = color,
-                        clock = clockRange(periods, s.startPeriod, s.endPeriod),
+                        clock = clockRange(periods, s.startPeriod, s.endPeriod, s.startTime, s.endTime),
                         showTeacher = showSlotTeacher,
                         onOpen = { openSlot = s.id },
                     )
@@ -933,7 +960,7 @@ internal fun SlotEditorSheet(
     val scheme = MaterialTheme.colorScheme
     val n = periods.size
     var draft by remember(slot) { mutableStateOf(slot) }
-    val clock = clockRange(periods, draft.startPeriod, draft.endPeriod)
+    val clock = clockRange(periods, draft.startPeriod, draft.endPeriod, draft.startTime, draft.endTime)
     var rangeAnchor by remember(slot) { mutableStateOf<Int?>(null) }
 
     MintBottomSheet(onDismissRequest = onDismiss) {
@@ -1024,10 +1051,10 @@ internal fun SlotEditorSheet(
                                             val anchor = rangeAnchor
                                             if (anchor == null) {
                                                 rangeAnchor = p
-                                                draft = draft.copy(startPeriod = p, endPeriod = p)
+                                                draft = draft.copy(startPeriod = p, endPeriod = p, startTime = null, endTime = null)
                                             } else {
                                                 rangeAnchor = null
-                                                draft = draft.copy(startPeriod = minOf(anchor, p), endPeriod = maxOf(anchor, p))
+                                                draft = draft.copy(startPeriod = minOf(anchor, p), endPeriod = maxOf(anchor, p), startTime = null, endTime = null)
                                             }
                                         },
                                     contentAlignment = Alignment.Center,
@@ -1232,6 +1259,8 @@ internal fun buildSlotChanges(
                 note = nt,
                 kind = kind,
                 remindPersistent = remindPersistent,
+                startTime = s.startTime,
+                endTime = s.endTime,
             )
         } else {
             Course(
@@ -1251,6 +1280,8 @@ internal fun buildSlotChanges(
                 source = Source.MANUAL,
                 kind = kind,
                 remindPersistent = remindPersistent,
+                startTime = s.startTime,
+                endTime = s.endTime,
             )
         }
     }

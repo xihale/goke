@@ -93,6 +93,8 @@ data class Course(
     val remindMinutesList: List<Int> = emptyList(),
     val kind: EventKind = EventKind.NORMAL,
     val remindPersistent: Boolean = false,
+    @Serializable(with = LocalTimeSerializer::class) val startTime: LocalTime? = null,
+    @Serializable(with = LocalTimeSerializer::class) val endTime: LocalTime? = null,
 ) : Record {
     val effectiveRemindMinutes: List<Int>
         get() = Reminders.normalize(remindMinutes, remindMinutesList)

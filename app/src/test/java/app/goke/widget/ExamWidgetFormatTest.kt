@@ -4,10 +4,14 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import app.goke.R
 import app.goke.SmokeTestApp
+import app.goke.core.model.Course
 import app.goke.core.model.Event
 import app.goke.core.model.EventKind
+import app.goke.core.model.GdutPeriods
+import app.goke.core.model.Semester
 import app.goke.core.model.Snapshot
 import app.goke.core.model.Source
+import app.goke.core.recurrence.CourseOccurrence
 import app.goke.data.Settings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -15,7 +19,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = SmokeTestApp::class)
@@ -101,5 +107,59 @@ class ExamWidgetFormatTest {
                 LocalDateTime.of(2026, 6, 15, 8, 30),
             )
         assertEquals("教3-208", fallback.sub)
+    }
+
+    @Test
+    fun widgetsFormatExamCourseWithSeatAndCustomTime() {
+        val examDate = LocalDate.of(2026, 8, 31)
+        val sem = Semester(id = "sem1", name = "2026 秋", week1Monday = examDate, totalWeeks = 20, periods = GdutPeriods.default)
+        val examCourse =
+            Course(
+                id = "jxfw-exam-course/202601/ks_01",
+                semesterId = sem.id,
+                name = "考试：高等数学",
+                room = "教3-208",
+                dayOfWeek = 1,
+                startPeriod = 1,
+                endPeriod = 3,
+                weeks = setOf(1),
+                colorIndex = 2,
+                note = "大学城 · 学院停课考 · 座位号 34",
+                source = Source.IMPORT,
+                kind = EventKind.EXAM,
+                remindPersistent = true,
+                startTime = LocalTime.of(9, 0),
+                endTime = LocalTime.of(11, 0),
+            )
+        val occ =
+            CourseOccurrence(
+                course = examCourse,
+                week = 1,
+                date = examDate,
+                startPeriod = 1,
+                endPeriod = 3,
+                start = examDate.atTime(9, 0),
+                end = examDate.atTime(11, 0),
+                room = examCourse.room,
+                rescheduled = false,
+            )
+        assertEquals("教3-208 · 34座", WidgetKit.courseLocation(ctx, occ))
+
+        val snap = Snapshot(semesters = listOf(sem), courses = listOf(examCourse))
+        val now = examDate.atTime(8, 30)
+        val todayRows = TodayWidgetProvider.buildRows(ctx, snap, Settings(), now)
+        assertEquals("09:00", todayRows.single().time)
+        assertEquals("11:00", todayRows.single().endTime)
+        assertEquals("教3-208 · 34座", todayRows.single().sub)
+
+        val nextSummary = NextWidgetProvider.pickSummary(ctx, snap, Settings(), now)
+        assertEquals("09:00", nextSummary.startTime)
+        assertEquals("11:00", nextSummary.endTime)
+        assertEquals("教3-208 · 34座", nextSummary.sub)
+
+        val schedRows = ScheduleWidgetProvider.buildRows(snap, Settings(), now, seatSuffix = "座")
+        assertEquals("09:00", schedRows.single().startTime)
+        assertEquals("11:00", schedRows.single().endTime)
+        assertEquals("教3-208 · 34座", schedRows.single().room)
     }
 }

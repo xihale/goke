@@ -73,6 +73,30 @@ test('课程展开、停课与调课', () => {
   assert.equal(M.expandCourses(sem, [course({ semesterId: 'other' })], [], cal.weekStart(1), cal.weekEnd(4)).length, 0);
 });
 
+test('课程自定义时间优先于节次默认时刻', () => {
+  const exam = course({
+    name: '考试：高等数学',
+    kind: 'EXAM',
+    startPeriod: 1,
+    endPeriod: 3,
+    weeks: [1, 2, 3],
+    startTime: '09:00',
+    endTime: '11:00',
+  });
+  const roomOnly = M.newException({ courseId: exam.id, week: 2, type: 'RESCHEDULE', newRoom: '教3-208' });
+  const periodMove = M.newException({ courseId: exam.id, week: 3, type: 'RESCHEDULE', newStartPeriod: 5, newEndPeriod: 6 });
+  const cal = M.semesterCalendar(sem);
+  const occ = M.expandCourses(sem, [exam], [roomOnly, periodMove], cal.weekStart(1), cal.weekEnd(3));
+  assert.equal(occ.length, 3);
+  assert.equal(occ[0].startMin, 540);
+  assert.equal(occ[0].endMin, 660);
+  assert.equal(occ[1].startMin, 540);
+  assert.equal(occ[1].endMin, 660);
+  assert.equal(occ[1].room, '教3-208');
+  assert.equal(occ[2].startMin, 830);
+  assert.equal(occ[2].endMin, 925);
+});
+
 test('课程冲突', () => {
   const a = course();
   const b = course({ name: '英语', startPeriod: 2, endPeriod: 3, weeks: [1, 2] });
@@ -80,6 +104,19 @@ test('课程冲突', () => {
   const d = course({ name: '单周', startPeriod: 1, endPeriod: 2, weeks: [17] });
   const hit = M.courseConflicts(b, [a, c, d]).map((x) => x.name);
   assert.deepEqual(hit, ['数据结构']);
+});
+
+test('随堂考或同课程考试提升为考试层且不产生冲突', () => {
+  const regular = course({ id: 'c-math', name: '高等数学', room: '教1-201', dayOfWeek: 1, startPeriod: 1, endPeriod: 2, weeks: [1, 2] });
+  const inClassExam = course({ id: 'c-math-exam', name: '随堂测验：高等数学', kind: 'EXAM', room: '', dayOfWeek: 1, startPeriod: 1, endPeriod: 2, weeks: [2] });
+  const other = course({ id: 'c-eng', name: '大学英语', room: '教2-102', dayOfWeek: 1, startPeriod: 1, endPeriod: 2, weeks: [2] });
+  const cal = M.semesterCalendar(sem);
+  const occ = M.expandCourses(sem, [regular, inClassExam], [], cal.weekStart(2), cal.weekEnd(2));
+  assert.equal(occ.length, 1);
+  assert.equal(occ[0].course.id, inClassExam.id);
+  assert.equal(occ[0].room, '教1-201');
+  assert.deepEqual(M.courseConflicts(inClassExam, [regular]), []);
+  assert.deepEqual(M.courseConflicts(inClassExam, [regular, other]).map((x) => x.name), ['大学英语']);
 });
 
 test('重复规则', () => {

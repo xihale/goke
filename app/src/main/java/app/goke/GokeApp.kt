@@ -24,6 +24,7 @@ import app.goke.core.campus.TzcsStrings
 import app.goke.core.campus.UnavailableCampusAdapterFactory
 import app.goke.core.change.ChangeSet
 import app.goke.core.change.Unify
+import app.goke.core.jxfw.JxfwSync
 import app.goke.core.model.Snapshot
 import app.goke.data.AutoBackup
 import app.goke.data.ErrorReporter
@@ -125,6 +126,7 @@ open class GokeApp : Application() {
                     Unify.changeSet(snap, System.currentTimeMillis())?.let { repo.commit(it) }
                     settings.update { it.copy(unifiedTasks = true) }
                 }
+                JxfwSync.migrateExamTasksToCourses(repo.snapshot.value, System.currentTimeMillis())?.let { repo.commit(it) }
             }
         parcelRules = ParcelRuleStore(this)
         secrets = SecretStore(this)

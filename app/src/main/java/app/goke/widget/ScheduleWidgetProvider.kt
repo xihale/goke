@@ -16,6 +16,7 @@ import app.goke.DeepLinks
 import app.goke.R
 import app.goke.core.agenda.Agenda
 import app.goke.core.agenda.CourseItem
+import app.goke.core.jxfw.JxfwSync
 import app.goke.core.model.Snapshot
 import app.goke.data.Settings
 import app.goke.gokeApp
@@ -162,13 +163,19 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
         ): List<Row> {
             val app = ctx.gokeApp
             if (!app.repo.ready.value) return emptyList()
-            return buildRows(app.repo.snapshot.value, app.settings.value, now)
+            return buildRows(
+                app.repo.snapshot.value,
+                app.settings.value,
+                now,
+                seatSuffix = ctx.getString(R.string.widget_exam_seat_suffix),
+            )
         }
 
         internal fun buildRows(
             snap: Snapshot,
             st: Settings,
             now: LocalDateTime = LocalDateTime.now(),
+            seatSuffix: String = "",
         ): List<Row> {
             val today = now.toLocalDate()
             val live = snap.live()
@@ -178,6 +185,12 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
                 .filter { it.occ.end.isAfter(now) }
                 .map { item ->
                     val o = item.occ
+                    val roomText =
+                        if (o.course.isExam) {
+                            JxfwSync.formatExamLocation(o.room, o.course.note, seatSuffix).orEmpty()
+                        } else {
+                            o.room.trim()
+                        }
                     Row(
                         key = "s_${o.course.id}_${o.start}",
                         courseId = o.course.id,
@@ -187,7 +200,7 @@ class ScheduleWidgetProvider : AppWidgetProvider() {
                         startTime = o.start.hm(),
                         endTime = o.end.hm(),
                         name = o.course.name,
-                        room = o.room.trim(),
+                        room = roomText,
                         colorIndex = o.course.colorIndex,
                         phase = WidgetKit.timePhase(o.start, o.end, now),
                         progress = WidgetKit.timeProgress(o.start, o.end, now),

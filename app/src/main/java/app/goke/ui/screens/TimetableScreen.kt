@@ -131,6 +131,7 @@ import app.goke.core.change.ChangeSet
 import app.goke.core.change.Edits
 import app.goke.core.change.apply
 import app.goke.core.change.repeatInstances
+import app.goke.core.jxfw.JxfwSync
 import app.goke.core.model.Course
 import app.goke.core.model.CourseException
 import app.goke.core.model.CourseNotes
@@ -1114,12 +1115,12 @@ private fun WeekGrid(
                         g.map { i ->
                             if (i < courseCount) {
                                 val o = cells[i].occ
-                                val from = cal.startTime(o.startPeriod)
+                                val kindName = ctx.getString(if (o.course.isExam) R.string.kind_exam else R.string.entity_course)
                                 SlotEntry(
                                     o.course.name,
-                                    "${from?.hm().orEmpty()}–${cal.endTime(o.endPeriod)?.hm().orEmpty()} · ${ctx.getString(R.string.entity_course)}",
+                                    "${o.start.hm()}–${o.end.hm()} · $kindName",
                                     o.course.colorIndex,
-                                    o.date.atTime(from ?: java.time.LocalTime.MIN),
+                                    o.start,
                                     cells[i],
                                     null,
                                 )
@@ -2827,7 +2828,7 @@ private fun CourseSheet(
                                 }
                             }
                             Text(
-                                "${ctx.weekdayShort(o.date.dayOfWeek.value).let { stringResource(R.string.weekday_prefix, it) }} ${cal.startTime(o.startPeriod)?.hm().orEmpty()}–${cal.endTime(o.endPeriod)?.hm().orEmpty()} · ${stringResource(R.string.periods_range, o.startPeriod, o.endPeriod)}",
+                                "${ctx.weekdayShort(o.date.dayOfWeek.value).let { stringResource(R.string.weekday_prefix, it) }} ${o.start.hm()}–${o.end.hm()} · ${stringResource(R.string.periods_range, o.startPeriod, o.endPeriod)}",
                                 style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(start = 14.dp, bottom = if (o.rescheduled) 2.dp else 8.dp),
@@ -3132,7 +3133,8 @@ private fun ReschedulePanel(
                     other.date.dayOfWeek.value == dow &&
                         other.startPeriod <= end &&
                         other.endPeriod >= start &&
-                        !(other.course.id == c.id && other.originalWeek == origW)
+                        !(other.course.id == c.id && other.originalWeek == origW) &&
+                        !(c.isExam && !other.course.isExam && JxfwSync.isSameCourseForExam(c.name, other.course.name))
                 }
         }
 

@@ -272,7 +272,8 @@ fun TodayScreen() {
                                     when (nextToday) {
                                         is CourseItem -> {
                                             val o = nextToday.occ
-                                            val kindPrefix = if (o.course.isExam) stringResource(R.string.kind_exam) + " · " else ""
+                                            val examLabel = stringResource(R.string.kind_exam)
+                                            val kindPrefix = if (o.course.isExam && !o.course.name.contains(examLabel)) "$examLabel · " else ""
                                             kindPrefix +
                                                 stringResource(
                                                     R.string.today_next_class,
@@ -328,7 +329,8 @@ fun TodayScreen() {
 
                                         else -> {
                                             nextUp?.occurrence?.let { o ->
-                                                val kindPrefix = if (o.course.isExam) stringResource(R.string.kind_exam) + " · " else ""
+                                                val examLabel = stringResource(R.string.kind_exam)
+                                                val kindPrefix = if (o.course.isExam && !o.course.name.contains(examLabel)) "$examLabel · " else ""
                                                 kindPrefix +
                                                     stringResource(
                                                         R.string.today_next_class,

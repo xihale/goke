@@ -143,6 +143,57 @@ function range(a, b) {
 
 // ---------- 课程展开 ----------
 
+const EXAM_NAME_PREFIX_RE = /^(?:(?:期中|期末|随堂|结课|实验|上机)?(?:考试|测验|小测|考核)|(?:期中|期末|随堂|结课)测试|补考|重考|缓考|机考|机试)\s*[:：·\-—]\s*/;
+const EXAM_NAME_SUFFIX_RE = /\s*[:：·\-—]?\s*(?:(?:期中|期末|随堂|结课|实验|上机)?(?:考试|测验|小测|考核)|(?:期中|期末|随堂|结课)测试|补考|重考|缓考|机考|机试)$/;
+
+export function normalizeCourseNameForExam(raw) {
+  let s = String(raw || '').trim().replace(/（/g, '(').replace(/）/g, ')').replace(/\s+/g, '');
+  let prev;
+  do {
+    prev = s;
+    s = s.replace(EXAM_NAME_PREFIX_RE, '').replace(EXAM_NAME_SUFFIX_RE, '').trim();
+  } while (s !== prev && s.length > 0);
+  return s.toLowerCase();
+}
+
+export function isSameCourseForExam(a, b) {
+  const na = normalizeCourseNameForExam(a);
+  const nb = normalizeCourseNameForExam(b);
+  return Boolean(na) && na === nb;
+}
+
+function promoteExamOccurrences(out) {
+  const exams = out.filter((o) => o.course.kind === 'EXAM');
+  if (!exams.length) return out;
+  const examRooms = exams.map((e) => e.room || '');
+  const suppressed = new Set();
+  for (let i = 0; i < out.length; i++) {
+    const o = out[i];
+    if (o.course.kind === 'EXAM') continue;
+    const examIdx = exams.findIndex((e) => e.day === o.day
+      && isSameCourseForExam(e.course.name, o.course.name)
+      && ((o.startMin < e.endMin && e.startMin < o.endMin) || (o.startPeriod <= e.endPeriod && e.startPeriod <= o.endPeriod)));
+    if (examIdx >= 0) {
+      suppressed.add(i);
+      if (!examRooms[examIdx] && o.room) examRooms[examIdx] = o.room;
+    }
+  }
+  if (!suppressed.size) return out;
+  let nextExam = 0;
+  const res = [];
+  for (let i = 0; i < out.length; i++) {
+    if (suppressed.has(i)) continue;
+    const o = out[i];
+    if (o.course.kind === 'EXAM') {
+      const room = examRooms[nextExam++];
+      res.push(room !== (o.room || '') ? { ...o, room } : o);
+    } else {
+      res.push(o);
+    }
+  }
+  return res;
+}
+
 /** 展开 [from, to]（天数，含）内所有课程出现，按开始时间排序。 */
 export function expandCourses(sem, courses, exceptions, from, to) {
   const cal = semesterCalendar(sem);
@@ -164,8 +215,11 @@ export function expandCourses(sem, courses, exceptions, from, to) {
       const ep = re?.newEndPeriod ?? c.endPeriod;
       const day = cal.dateOf(week, d);
       if (day < from || day > to) continue;
-      const s = cal.startMin(sp);
-      const e = cal.endMin(ep);
+      const useCustomClock = !re || (re.newStartPeriod == null && re.newEndPeriod == null);
+      const cs = useCustomClock && c.startTime ? parseTime(c.startTime) : NaN;
+      const ce = useCustomClock && c.endTime ? parseTime(c.endTime) : NaN;
+      const s = !Number.isNaN(cs) ? cs : cal.startMin(sp);
+      const e = !Number.isNaN(ce) ? ce : cal.endMin(ep);
       if (s == null || e == null) continue;
       out.push({
         kind: 'course', course: c, week, origWeek: w, day, startPeriod: sp, endPeriod: ep,
@@ -173,16 +227,18 @@ export function expandCourses(sem, courses, exceptions, from, to) {
       });
     }
   }
-  return out.sort((a, b) => a.day - b.day || a.startMin - b.startMin || a.course.name.localeCompare(b.course.name));
+  return promoteExamOccurrences(out).sort((a, b) => a.day - b.day || a.startMin - b.startMin || a.course.name.localeCompare(b.course.name));
 }
 
 /** 两门课（含各自周次）是否在时间上冲突，返回冲突的课程列表。 */
 export function courseConflicts(candidate, courses) {
   const wk = new Set(candidate.weeks);
+  const candExam = candidate.kind === 'EXAM';
   return courses.filter((o) => o.id !== candidate.id && o.deletedAt == null && o.semesterId === candidate.semesterId
     && o.dayOfWeek === candidate.dayOfWeek
     && o.startPeriod <= candidate.endPeriod && candidate.startPeriod <= o.endPeriod
-    && o.weeks.some((w) => wk.has(w)));
+    && o.weeks.some((w) => wk.has(w))
+    && !(candExam !== (o.kind === 'EXAM') && isSameCourseForExam(candidate.name, o.name)));
 }
 
 // ---------- 重复规则 ----------
@@ -455,6 +511,9 @@ export function newCourse(f, now = Date.now()) {
     remindMinutes: f.remindMinutes ?? null,
     note: f.note || '',
     source: 'MANUAL',
+    kind: f.kind || 'NORMAL',
+    startTime: f.startTime ?? null,
+    endTime: f.endTime ?? null,
   };
 }
 

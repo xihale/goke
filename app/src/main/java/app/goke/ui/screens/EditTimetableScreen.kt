@@ -558,7 +558,12 @@ private fun CourseGroupRow(
     val first = group.first()
     val rooms = group.map { it.room }.filter { it.isNotBlank() }.distinct()
 
-    fun line(c: Course): String = ctx.getString(R.string.course_line, ctx.weekdayShort(c.dayOfWeek), c.startPeriod, c.endPeriod, WeekSets.format(c.weeks))
+    fun line(c: Course): String {
+        val base = ctx.getString(R.string.course_line, ctx.weekdayShort(c.dayOfWeek), c.startPeriod, c.endPeriod, WeekSets.format(c.weeks))
+        val st = c.startTime
+        val et = c.endTime
+        return if (st != null && et != null) "$base ${st.hm()}–${et.hm()}" else base
+    }
 
     val summary =
         buildString {

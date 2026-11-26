@@ -68,6 +68,7 @@ import app.goke.core.change.Change
 import app.goke.core.change.ChangeSet
 import app.goke.core.change.Edits
 import app.goke.core.change.Unify
+import app.goke.core.jxfw.JxfwSync
 import app.goke.core.model.CourseNotes
 import app.goke.core.model.Event
 import app.goke.core.model.EventKind
@@ -114,7 +115,15 @@ fun AgendaRow(
             val o = item.occ
             val phase = CourseProgress.phase(o.start, o.end, now)
             val progress = CourseProgress.fraction(o.start, o.end, now)
-            val roomText = ctx.formatRooms(o.room)
+            val rawRoomText = ctx.formatRooms(o.room)
+            val roomText =
+                if (o.course.isExam) {
+                    JxfwSync
+                        .formatExamLocation(rawRoomText, o.course.note, stringResource(R.string.widget_exam_seat_suffix))
+                        .orEmpty()
+                } else {
+                    rawRoomText
+                }
             val tag =
                 when {
                     o.course.isExam && o.rescheduled -> "${stringResource(R.string.kind_exam)} · ${stringResource(R.string.rescheduled)}"

@@ -21,6 +21,7 @@ import app.goke.core.model.EventKind
 import app.goke.core.model.Semester
 import app.goke.core.model.Source
 import app.goke.core.model.Task
+import app.goke.core.recurrence.CourseOccurrence
 import app.goke.core.time.SemesterCalendar
 import java.time.Duration
 import java.time.LocalDate
@@ -266,6 +267,20 @@ internal object WidgetKit {
         val w = cal.weekOf(today)
         return if (w in 1..sem.totalWeeks) ctx.getString(R.string.week_n, w) else null
     }
+
+    fun courseLocation(
+        ctx: Context,
+        occ: CourseOccurrence,
+    ): String? =
+        if (occ.course.isExam) {
+            JxfwSync.formatExamLocation(
+                occ.room,
+                occ.course.note,
+                ctx.getString(R.string.widget_exam_seat_suffix),
+            )
+        } else {
+            occ.room.trim().takeIf { it.isNotEmpty() }
+        }
 
     fun eventLocation(
         ctx: Context,

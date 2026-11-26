@@ -55,6 +55,8 @@ data class SharedCourse(
     val colorIndex: Int,
     val kind: String,
     val note: String,
+    val startTime: String? = null,
+    val endTime: String? = null,
 )
 
 @Serializable
@@ -131,6 +133,8 @@ object SharedTimetable {
                         colorIndex = c.colorIndex,
                         kind = c.kind.name,
                         note = c.note,
+                        startTime = c.startTime?.toString(),
+                        endTime = c.endTime?.toString(),
                     )
                 },
             exceptions = liveExceptions,

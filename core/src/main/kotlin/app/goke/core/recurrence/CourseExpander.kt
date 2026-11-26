@@ -1,5 +1,6 @@
 package app.goke.core.recurrence
 
+import app.goke.core.jxfw.JxfwSync
 import app.goke.core.model.Course
 import app.goke.core.model.CourseException
 import app.goke.core.model.ExceptionType
@@ -45,8 +46,13 @@ object CourseExpander {
                 val ep = if (ex?.type == ExceptionType.RESCHEDULE) ex.newEndPeriod ?: c.endPeriod else c.endPeriod
                 val date = cal.dateOf(week, dow)
                 if (date.isBefore(from) || date.isAfter(to)) continue
-                val s = cal.startTime(sp)?.let { date.atTime(it) } ?: continue
-                val e = cal.endTime(ep)?.let { date.atTime(it) } ?: continue
+                val useCustomClock =
+                    ex?.type != ExceptionType.RESCHEDULE ||
+                        (ex.newStartPeriod == null && ex.newEndPeriod == null)
+                val startClock = (if (useCustomClock) c.startTime else null) ?: cal.startTime(sp)
+                val endClock = (if (useCustomClock) c.endTime else null) ?: cal.endTime(ep)
+                val s = startClock?.let { date.atTime(it) } ?: continue
+                val e = endClock?.let { date.atTime(it) } ?: continue
                 out +=
                     CourseOccurrence(
                         course = c,
@@ -62,7 +68,43 @@ object CourseExpander {
                     )
             }
         }
-        return out.sortedWith(compareBy({ it.start }, { it.course.name }))
+        return promoteExamOccurrences(out).sortedWith(compareBy({ it.start }, { it.course.name }))
+    }
+
+    /** 将同一天同课程且时间/节次重叠的常规课次提升并归并到考试层，消除随堂考与常规课的假性时间冲突。 */
+    private fun promoteExamOccurrences(out: List<CourseOccurrence>): List<CourseOccurrence> {
+        val exams = out.filter { it.course.isExam }
+        if (exams.isEmpty()) return out
+        val examRooms = MutableList(exams.size) { exams[it].room }
+        val suppressedIndices = HashSet<Int>()
+        for ((idx, occ) in out.withIndex()) {
+            if (occ.course.isExam) continue
+            val examIdx =
+                exams.indexOfFirst { e ->
+                    e.date == occ.date &&
+                        JxfwSync.isSameCourseForExam(e.course.name, occ.course.name) &&
+                        ((occ.start < e.end && e.start < occ.end) || (occ.startPeriod <= e.endPeriod && e.startPeriod <= occ.endPeriod))
+                }
+            if (examIdx >= 0) {
+                suppressedIndices += idx
+                if (examRooms[examIdx].isBlank() && occ.room.isNotBlank()) {
+                    examRooms[examIdx] = occ.room
+                }
+            }
+        }
+        if (suppressedIndices.isEmpty()) return out
+        var nextExamIdx = 0
+        val result = ArrayList<CourseOccurrence>(out.size - suppressedIndices.size)
+        for ((idx, occ) in out.withIndex()) {
+            if (idx in suppressedIndices) continue
+            if (occ.course.isExam) {
+                val room = examRooms[nextExamIdx++]
+                result += if (room != occ.room) occ.copy(room = room) else occ
+            } else {
+                result += occ
+            }
+        }
+        return result
     }
 
     fun occurrencesInWeek(

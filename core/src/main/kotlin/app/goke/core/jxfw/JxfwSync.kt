@@ -1,7 +1,17 @@
 package app.goke.core.jxfw
 
+import app.goke.core.agenda.Agenda
+import app.goke.core.change.Change
 import app.goke.core.change.ChangeSet
+import app.goke.core.model.Course
 import app.goke.core.model.CourseNotes
+import app.goke.core.model.EventKind
+import app.goke.core.model.Snapshot
+import app.goke.core.model.Source
+import app.goke.core.time.SemesterCalendar
+import app.goke.core.util.IdGenerator
+import app.goke.core.util.Ids
+import java.time.LocalTime
 
 /** 一次同步的结果：要落库的变更集，加上给用户看的统计。 */
 data class JxfwPlan(
@@ -21,6 +31,9 @@ object JxfwSync {
     const val EXCEP_PREFIX = "jxfw-excep/"
     const val EXAM_PREFIX = "jxfw-exam/"
     const val COURSE_EXAM_PREFIX = "jxfw-course-exam/"
+    const val EXAM_COURSE_PREFIX = "jxfw-exam-course/"
+    const val COURSE_EXAM_COURSE_PREFIX = "jxfw-remark-exam/"
+    const val EXAM_COLOR_INDEX = 2
 
     private val EXAM_REMARK_INCLUDE_RE =
         Regex(
@@ -51,6 +64,37 @@ object JxfwSync {
         }
     }
 
+    private val EXAM_NAME_PREFIX_RE =
+        Regex("""^(?:(?:期中|期末|随堂|结课|实验|上机)?(?:考试|测验|小测|考核)|(?:期中|期末|随堂|结课)测试|补考|重考|缓考|机考|机试)\s*[:：·\-—]\s*""")
+    private val EXAM_NAME_SUFFIX_RE =
+        Regex("""\s*[:：·\-—]?\s*(?:(?:期中|期末|随堂|结课|实验|上机)?(?:考试|测验|小测|考核)|(?:期中|期末|随堂|结课)测试|补考|重考|缓考|机考|机试)$""")
+
+    /** 归一化课程/考试名：剥离前后缀的考试标记、统一全半角括号与空白，用于随堂考/同课考试去重与升层。 */
+    fun normalizeCourseNameForExam(raw: String): String {
+        var s =
+            raw
+                .trim()
+                .replace('（', '(')
+                .replace('）', ')')
+                .replace(Regex("""\s+"""), "")
+        var prev: String
+        do {
+            prev = s
+            s = s.replace(EXAM_NAME_PREFIX_RE, "").replace(EXAM_NAME_SUFFIX_RE, "").trim()
+        } while (s != prev && s.isNotEmpty())
+        return s.lowercase()
+    }
+
+    /** 判断考试与常规课程是否属于同一门课。 */
+    fun isSameCourseForExam(
+        examName: String,
+        courseName: String,
+    ): Boolean {
+        val a = normalizeCourseNameForExam(examName)
+        val b = normalizeCourseNameForExam(courseName)
+        return a.isNotEmpty() && a == b
+    }
+
     private val EXAM_SEAT_RE = Regex("""座位号\s*([^\s·,，;；]+)""")
 
     fun extractExamSeat(note: String): String? =
@@ -78,5 +122,106 @@ object JxfwSync {
             seat != null -> seat
             else -> null
         }
+    }
+
+    /** 将旧版导入的考试待办迁移为考试课程，避免历史考试在待办里显示为逾期。 */
+    fun migrateExamTasksToCourses(
+        snap: Snapshot,
+        now: Long,
+        ids: IdGenerator = Ids,
+    ): ChangeSet? {
+        val legacy =
+            snap.tasks.filter {
+                it.deletedAt == null &&
+                    it.source == Source.IMPORT &&
+                    (it.id.startsWith(EXAM_PREFIX) || it.id.startsWith(COURSE_EXAM_PREFIX))
+            }
+        if (legacy.isEmpty()) return null
+        val sem = snap.currentSemester
+        val cal = sem?.let { SemesterCalendar(it) }
+        val maxP = cal?.periods?.lastOrNull()?.index ?: 1
+        val changes = mutableListOf<Change>()
+        for (t in legacy) {
+            changes += Change.Remove(t)
+            if (sem == null || cal == null) continue
+            val isOfficial = t.id.startsWith(EXAM_PREFIX)
+            val targetId =
+                if (isOfficial) {
+                    EXAM_COURSE_PREFIX + t.id.removePrefix(EXAM_PREFIX)
+                } else {
+                    COURSE_EXAM_COURSE_PREFIX + t.id.removePrefix(COURSE_EXAM_PREFIX)
+                }
+            if (snap.courses.any { it.id == targetId }) continue
+
+            var week: Int? = null
+            var dow: Int? = null
+            var sp = 1.coerceAtMost(maxP)
+            var ep = sp
+            var startTime: LocalTime? = null
+            var endTime: LocalTime? = null
+            var resolved = false
+
+            if (!isOfficial) {
+                val parts = t.id.removePrefix(COURSE_EXAM_PREFIX).split("/")
+                val w = parts.getOrNull(1)?.toIntOrNull()
+                val d = parts.getOrNull(2)?.toIntOrNull()?.takeIf { it in 1..7 }
+                val ps =
+                    parts
+                        .getOrNull(3)
+                        ?.split('-', '_')
+                        ?.mapNotNull { it.toIntOrNull() }
+                        .orEmpty()
+                if (w != null && d != null && ps.isNotEmpty()) {
+                    week = w
+                    dow = d
+                    sp = ps.min().coerceIn(1, maxP)
+                    ep = ps.max().coerceIn(sp, maxP)
+                    resolved = true
+                }
+            }
+            if (!resolved) {
+                val date = t.blockStart?.toLocalDate() ?: t.startDate ?: t.due?.toLocalDate()
+                if (date != null) {
+                    week = cal.weekOf(date)
+                    dow = date.dayOfWeek.value
+                    val st = t.blockStart?.toLocalTime()
+                    val mins = t.blockMinutes
+                    if (st != null && mins != null) {
+                        val et = t.blockStart.plusMinutes(mins.toLong()).toLocalTime()
+                        val rows = Agenda.blockRows(cal.periods, st, et)
+                        sp = (rows?.first ?: 1).coerceIn(1, maxP)
+                        ep = (rows?.last ?: sp).coerceIn(sp, maxP)
+                        startTime = st
+                        endTime = et
+                    }
+                    resolved = true
+                }
+            }
+            if (!resolved || week == null || dow == null) continue
+
+            changes +=
+                Change.Add(
+                    Course(
+                        id = targetId,
+                        semesterId = sem.id,
+                        name = t.title,
+                        room = t.extra["location"].orEmpty(),
+                        dayOfWeek = dow,
+                        startPeriod = sp,
+                        endPeriod = ep,
+                        weeks = setOf(week),
+                        colorIndex = EXAM_COLOR_INDEX,
+                        remindMinutes = t.remindMinutes,
+                        remindMinutesList = t.remindMinutesList,
+                        note = t.note,
+                        source = Source.IMPORT,
+                        kind = EventKind.EXAM,
+                        remindPersistent = t.remindPersistent,
+                        startTime = startTime,
+                        endTime = endTime,
+                    ),
+                )
+        }
+        return ChangeSet(ids.next(), "教务考试转为课程", Source.IMPORT, now, changes)
     }
 }
