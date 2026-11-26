@@ -10,6 +10,9 @@
 //	GOKE_ADMIN_USER      首次启动时创建的管理员用户名，默认 admin
 //	GOKE_ADMIN_PASSWORD  首次启动时的管理员密码；不设置则随机生成并打印一次
 //	GOKE_TRUST_PROXY     设为 1 时信任 X-Forwarded-For（部署在反向代理后面时）
+//	GOKE_SHARE_ENABLED   是否启用实验性课表分享（默认 true，设为 0 或 false 关闭）
+//	GOKE_SHARE_MAX_DAYS  课表分享最长有效天数，默认 210
+//	GOKE_SHARE_PUBLIC_URL 可选的分享对外基础 URL（用于拼接 shareUrl）
 package main
 
 import (
@@ -22,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -55,7 +59,23 @@ func main() {
 		return
 	}
 
-	srv := server.New(st, server.Options{TrustProxy: os.Getenv("GOKE_TRUST_PROXY") == "1"})
+	shareEnabled := true
+	if v := strings.TrimSpace(os.Getenv("GOKE_SHARE_ENABLED")); v == "0" || strings.EqualFold(v, "false") {
+		shareEnabled = false
+	}
+	shareMaxDays := 210
+	if v := strings.TrimSpace(os.Getenv("GOKE_SHARE_MAX_DAYS")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			shareMaxDays = n
+		}
+	}
+
+	srv := server.New(st, server.Options{
+		TrustProxy:     os.Getenv("GOKE_TRUST_PROXY") == "1",
+		ShareEnabled:   shareEnabled,
+		ShareMaxDays:   shareMaxDays,
+		SharePublicURL: os.Getenv("GOKE_SHARE_PUBLIC_URL"),
+	})
 	if name, pw, created, err := srv.Bootstrap(os.Getenv("GOKE_ADMIN_USER"), os.Getenv("GOKE_ADMIN_PASSWORD")); err != nil {
 		log.Fatalf("创建管理员失败：%v", err)
 	} else if created {

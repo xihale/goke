@@ -84,6 +84,19 @@ func (s *Store) migrate() error {
 			seq INTEGER NOT NULL,
 			PRIMARY KEY (user_id, id))`,
 		`CREATE INDEX IF NOT EXISTS idx_records_seq ON records(user_id, seq)`,
+		`CREATE TABLE IF NOT EXISTS shared_timetables (
+			student_id_hash TEXT PRIMARY KEY,
+			share_code TEXT NOT NULL UNIQUE,
+			manage_hash TEXT NOT NULL,
+			display_name TEXT NOT NULL,
+			semester_name TEXT NOT NULL,
+			payload_gz BLOB NOT NULL,
+			payload_size INTEGER NOT NULL,
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL,
+			expires_at INTEGER NOT NULL)`,
+		`CREATE INDEX IF NOT EXISTS idx_shared_timetables_code ON shared_timetables(share_code)`,
+		`CREATE INDEX IF NOT EXISTS idx_shared_timetables_expires ON shared_timetables(expires_at)`,
 	}
 	for _, q := range stmts {
 		if _, err := s.db.Exec(q); err != nil {

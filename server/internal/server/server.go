@@ -21,20 +21,47 @@ import (
 var webFS embed.FS
 
 type Server struct {
-	st         *store.Store
-	limiter    *loginLimiter
-	trustProxy bool
-	mux        *http.ServeMux
+	st                *store.Store
+	limiter           *loginLimiter
+	shareFailLimiter  *loginLimiter
+	shareWriteLimiter *loginLimiter
+	trustProxy        bool
+	shareEnabled      bool
+	shareMaxDays      int
+	sharePublicURL    string
+	now               func() time.Time
+	mux               *http.ServeMux
 }
 
 type Options struct {
 	// TrustProxy 为 true 时用 X-Forwarded-For 识别客户端 IP（部署在反向代理后面时开启）。
 	TrustProxy bool
+	// ShareEnabled 控制实验性课表分享接口与公开查看页是否启用。
+	ShareEnabled bool
+	// ShareMaxDays 限制课表分享的最大有效天数（默认 210）。
+	ShareMaxDays int
+	// SharePublicURL 可选的对外基础 URL（用于拼接 shareUrl）。
+	SharePublicURL string
 }
 
 func New(st *store.Store, opt Options) *Server {
 	mcp.Warmup() // 工具 Schema 有错时启动即失败，而不是等第一个请求
-	s := &Server{st: st, limiter: newLoginLimiter(8, 10*time.Minute), trustProxy: opt.TrustProxy, mux: http.NewServeMux()}
+	maxDays := opt.ShareMaxDays
+	if maxDays <= 0 {
+		maxDays = defaultShareMaxDays
+	}
+	s := &Server{
+		st:                st,
+		limiter:           newLoginLimiter(8, 10*time.Minute),
+		shareFailLimiter:  newLoginLimiter(12, 10*time.Minute),
+		shareWriteLimiter: newLoginLimiter(60, time.Minute),
+		trustProxy:        opt.TrustProxy,
+		shareEnabled:      opt.ShareEnabled,
+		shareMaxDays:      maxDays,
+		sharePublicURL:    strings.TrimRight(strings.TrimSpace(opt.SharePublicURL), "/"),
+		now:               time.Now,
+		mux:               http.NewServeMux(),
+	}
 	s.routes()
 	return s
 }
@@ -75,6 +102,24 @@ func (s *Server) routes() {
 	m.Handle("GET /{$}", noCache(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, appFS, "index.html")
 	})))
+
+	// 实验性课表分享：公开只读 JSON、短链内容协商与零构建公开查看页。
+	m.HandleFunc("PUT /api/v1/share", s.handleShareUpsert)
+	m.HandleFunc("POST /api/v1/share/status", s.handleShareStatus)
+	m.HandleFunc("DELETE /api/v1/share", s.handleShareDelete)
+	m.HandleFunc("GET /api/v1/share/{code}", s.handleShareGetAPI)
+	m.HandleFunc("OPTIONS /api/v1/share/{code}", s.handleShareOptions)
+
+	shareFS, _ := fs.Sub(webFS, "web/share")
+	m.Handle("GET /s/assets/", noCache(http.StripPrefix("/s/assets/", http.FileServerFS(shareFS))))
+	m.Handle("GET /s/view", noCache(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.shareEnabledOr503(w) {
+			return
+		}
+		http.ServeFileFS(w, r, shareFS, "index.html")
+	})))
+	m.HandleFunc("GET /s/{code}", s.handleShareShortURL)
+	m.HandleFunc("OPTIONS /s/{code}", s.handleShareShortURLOptions)
 }
 
 // noCache 让浏览器每次向服务器确认静态资源（升级服务端后立即生效）。

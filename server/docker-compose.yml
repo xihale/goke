@@ -10,6 +10,9 @@ services:
       GOKE_ADMIN_USER: admin
       # GOKE_ADMIN_PASSWORD: 请改成自己的密码，不设置则随机生成
       # GOKE_TRUST_PROXY: "1"
+      # GOKE_SHARE_ENABLED: "1"
+      # GOKE_SHARE_MAX_DAYS: "210"
+      # GOKE_SHARE_PUBLIC_URL: "https://goke.example.com"
     volumes:
       - goke-data:/data
 
