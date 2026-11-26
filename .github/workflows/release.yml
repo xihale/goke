@@ -194,11 +194,17 @@ jobs:
           path: release-payload
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
-          name: ${{ inputs.tag || github.ref_name }}
-          files: release-payload/Goke-*.apk
-          prerelease: ${{ needs.build.outputs.prerelease }}
-          body_path: release-payload/release_notes.md
-          generate_release_notes: false
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG_NAME="${{ inputs.tag || github.ref_name }}"
+          FLAGS=(--title "$TAG_NAME" --notes-file release-payload/release_notes.md)
+          if [ "${{ needs.build.outputs.prerelease }}" = "true" ]; then
+            FLAGS+=(--prerelease)
+          fi
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" release-payload/Goke-*.apk --clobber
+            gh release edit "$TAG_NAME" "${FLAGS[@]}"
+          else
+            gh release create "$TAG_NAME" release-payload/Goke-*.apk "${FLAGS[@]}"
+          fi
