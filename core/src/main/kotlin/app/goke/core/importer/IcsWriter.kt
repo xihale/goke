@@ -43,6 +43,33 @@ object IcsWriter {
         return sb.toString()
     }
 
+    /** 仅导出课表（学期元信息 + 课程 VEVENT），不含日程与待办。 */
+    fun writeTimetable(
+        semester: Semester,
+        courses: List<Course>,
+        exceptions: List<CourseException> = emptyList(),
+        zone: ZoneId = ZoneId.systemDefault(),
+        nowMillis: Long = System.currentTimeMillis(),
+    ): String {
+        val sb = StringBuilder()
+
+        fun line(s: String) {
+            sb.append(fold(s)).append("\r\n")
+        }
+        line("BEGIN:VCALENDAR")
+        line("VERSION:2.0")
+        line("PRODID:-//Goke//Goke 1.0//ZH")
+        line("CALSCALE:GREGORIAN")
+        line("X-WR-CALNAME:${escape(semester.name)}")
+        line("X-GOKE-SEMESTER:${escape(semester.name)}")
+        line("X-GOKE-WEEK1-MONDAY:${semester.week1Monday}")
+        line("X-GOKE-TOTAL-WEEKS:${semester.totalWeeks}")
+        val stamp = utc(LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(nowMillis), ZoneOffset.UTC), ZoneOffset.UTC)
+        writeCourses(semester, courses, exceptions, zone, stamp, ::line)
+        line("END:VCALENDAR")
+        return sb.toString()
+    }
+
     private fun utc(
         local: LocalDateTime,
         zone: ZoneId,
@@ -120,7 +147,7 @@ object IcsWriter {
         line: (String) -> Unit,
     ) {
         val cal = SemesterCalendar(sem)
-        for (c in courses.filter { it.semesterId == sem.id }) {
+        for (c in courses.filter { it.semesterId == sem.id && it.deletedAt == null }) {
             val exByWeek = exceptions.filter { it.courseId == c.id && it.deletedAt == null }.associateBy { it.week }
             val desc = "第${c.startPeriod} - ${c.endPeriod}节" + (if (c.room.isNotBlank()) "\n${c.room}" else "") + (if (c.teacher.isNotBlank()) "\n${c.teacher}" else "")
             val sTime = cal.startTime(c.startPeriod) ?: continue
@@ -158,15 +185,23 @@ object IcsWriter {
                 if (ex.type != ExceptionType.RESCHEDULE || w !in c.weeks) continue
                 val nw = ex.newWeek ?: w
                 val nd = ex.newDayOfWeek ?: c.dayOfWeek
-                val st = cal.startTime(ex.newStartPeriod ?: c.startPeriod) ?: continue
-                val et = cal.endTime(ex.newEndPeriod ?: c.endPeriod) ?: continue
+                val sp = ex.newStartPeriod ?: c.startPeriod
+                val ep = ex.newEndPeriod ?: c.endPeriod
+                val st = cal.startTime(sp) ?: continue
+                val et = cal.endTime(ep) ?: continue
+                val room = ex.newRoom ?: c.room
+                val exDesc =
+                    "第$sp - ${ep}节" +
+                        (if (room.isNotBlank()) "\n$room" else "") +
+                        (if (c.teacher.isNotBlank()) "\n${c.teacher}" else "")
                 line("BEGIN:VEVENT")
                 line("UID:${ex.id}@goke")
                 line("DTSTAMP:$stamp")
                 line("DTSTART:${utc(LocalDateTime.of(cal.dateOf(nw, nd), st), zone)}")
                 line("DTEND:${utc(LocalDateTime.of(cal.dateOf(nw, nd), et), zone)}")
                 line("SUMMARY:${escape(c.name)}")
-                line("LOCATION:${escape(ex.newRoom ?: c.room)}")
+                line("LOCATION:${escape(room)}")
+                line("DESCRIPTION:${escape(exDesc)}")
                 line("END:VEVENT")
             }
         }
