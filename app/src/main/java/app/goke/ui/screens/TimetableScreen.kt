@@ -181,6 +181,7 @@ import app.goke.ui.formatRooms
 import app.goke.ui.hm
 import app.goke.ui.icons.CalendarViewWeek
 import app.goke.ui.icons.Cloud
+import app.goke.ui.icons.ExpandMore
 import app.goke.ui.icons.GridView
 import app.goke.ui.icons.Image
 import app.goke.ui.icons.Inventory2
@@ -411,6 +412,7 @@ fun TimetableScreen() {
     var slotPick by remember { mutableStateOf<List<SlotEntry>?>(null) }
     var parcelSheet by remember { mutableStateOf<Pair<LocalDate, List<Task>>?>(null) }
     var showExportSheet by remember { mutableStateOf(false) }
+    var showWeekPicker by remember { mutableStateOf(false) }
     var emptyBannerDismissed by rememberSaveable { mutableStateOf(false) }
 
     // 启动后延迟开放预加载：初始为 0 避免冷/温启同步测量相邻周导致 TTID 回退；首屏稳定后切为 1 保障切周流畅度
@@ -425,7 +427,7 @@ fun TimetableScreen() {
     val afterSnap = remember(previewCs, snap) { previewCs?.let { snap.apply(it, 0).live() } }
 
     // 抽屉展开时隐藏底栏与撤销条，避免与应用内轻量抽屉重叠
-    val sheetOpen = selected != null || slotPick != null || parcelSheet != null || reschedulePrefill != null || showExportSheet
+    val sheetOpen = selected != null || slotPick != null || parcelSheet != null || reschedulePrefill != null || showExportSheet || showWeekPicker
     DisposableEffect(sheetOpen) {
         if (sheetOpen) nav.composerOpen = true
         onDispose { if (sheetOpen) nav.composerOpen = false }
@@ -498,12 +500,27 @@ fun TimetableScreen() {
                         label = "week-title",
                     ) { p ->
                         Column {
-                            Text(
-                                ctx.getString(R.string.week_n, p + 1),
-                                style = MaterialTheme.typography.titleLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            Row(
+                                Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .mintClickable(pressedScale = 0.97f, role = Role.Button) { showWeekPicker = true }
+                                    .padding(end = 4.dp, top = 1.dp, bottom = 1.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                Text(
+                                    ctx.getString(R.string.week_n, p + 1),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Icon(
+                                    Icons.Rounded.ExpandMore,
+                                    contentDescription = stringResource(R.string.timetable_pick_week),
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f),
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
                             Text(
                                 ctx.getString(R.string.fmt_range_md, cal.weekStart(p + 1).monthValue, cal.weekStart(p + 1).dayOfMonth, cal.weekEnd(p + 1).monthValue, cal.weekEnd(p + 1).dayOfMonth),
                                 style = MaterialTheme.typography.bodySmall,
@@ -785,6 +802,27 @@ fun TimetableScreen() {
                 showExportSheet = false
                 nav.push(Route.TimetableShare)
             },
+        )
+        WeekPickerSheet(
+            visible = showWeekPicker,
+            sem = sem,
+            cal = cal,
+            selectedWeek = pager.currentPage + 1,
+            currentWeek = currentWeek,
+            nonEmptyWeeks = {
+                (1..sem.totalWeeks).filterTo(HashSet()) { w ->
+                    weekDiffCache.getOrPut(w) { TimetableDiff.week(snap, afterSnap, w) }.isNotEmpty()
+                }
+            },
+            onSelectWeek = { w ->
+                showWeekPicker = false
+                if (w in 1..sem.totalWeeks && w != pager.currentPage + 1) {
+                    scope.launch {
+                        if (reduce) pager.scrollToPage(w - 1) else pager.animateScrollToPage(w - 1)
+                    }
+                }
+            },
+            onDismiss = { showWeekPicker = false },
         )
         SlotSheet(
             slotPick,
@@ -3437,6 +3475,157 @@ private fun TimetableExportSheet(
             ) {
                 exportAndShare(Sharing.MIME_PNG) {
                     Sharing.exportTimetableImage(ctx, snap, st, week)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeekPickerSheet(
+    visible: Boolean,
+    sem: Semester,
+    cal: SemesterCalendar,
+    selectedWeek: Int,
+    currentWeek: Int,
+    nonEmptyWeeks: () -> Set<Int>,
+    onSelectWeek: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    if (!visible) return
+    val activeWeeks = remember(sem.id, sem.totalWeeks) { nonEmptyWeeks() }
+    val scheme = MaterialTheme.colorScheme
+    val cols = 5
+    val rows = (sem.totalWeeks + cols - 1) / cols
+
+    MintBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .width(4.dp)
+                            .height(22.dp)
+                            .clip(CircleShape)
+                            .background(scheme.primary),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        stringResource(R.string.timetable_pick_week),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                if (selectedWeek != currentWeek && currentWeek in 1..sem.totalWeeks) {
+                    Box(
+                        Modifier
+                            .heightIn(min = 30.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(scheme.primaryContainer)
+                            .mintClickable(pressedScale = 0.96f, role = Role.Button) { onSelectWeek(currentWeek) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            stringResource(R.string.back_to_this_week),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = scheme.onPrimaryContainer,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                }
+            }
+            val subtitle =
+                if (sem.name.isNotBlank()) {
+                    stringResource(R.string.timetable_pick_week_subtitle, sem.name, sem.totalWeeks)
+                } else {
+                    stringResource(R.string.week_n_total, sem.totalWeeks)
+                }
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 14.dp, top = 4.dp, bottom = 14.dp),
+            )
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                for (r in 0 until rows) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        for (c in 0 until cols) {
+                            val w = r * cols + c + 1
+                            if (w <= sem.totalWeeks) {
+                                val isSelected = w == selectedWeek
+                                val isCurrent = w == currentWeek
+                                val isEmpty = w !in activeWeeks
+                                val bg =
+                                    when {
+                                        isSelected -> scheme.primary
+                                        isCurrent -> scheme.primaryContainer
+                                        else -> scheme.surfaceContainerHighest
+                                    }
+                                val fg =
+                                    when {
+                                        isSelected -> scheme.onPrimary
+                                        isCurrent -> scheme.onPrimaryContainer
+                                        else -> scheme.onSurface
+                                    }
+                                val start = cal.weekStart(w)
+                                val sub =
+                                    if (isCurrent) {
+                                        stringResource(R.string.bucket_this_week)
+                                    } else {
+                                        "${start.monthValue}/${start.dayOfMonth}"
+                                    }
+                                Column(
+                                    Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 54.dp)
+                                        .alpha(if (isEmpty && !isSelected && !isCurrent) 0.56f else 1f)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(bg)
+                                        .mintClickable(pressedScale = 0.95f, role = Role.Button) { onSelectWeek(w) }
+                                        .padding(horizontal = 4.dp, vertical = 8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                ) {
+                                    Text(
+                                        "$w",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = fg,
+                                    )
+                                    Text(
+                                        sub,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp, fontFeatureSettings = "tnum"),
+                                        fontWeight = if (isSelected || isCurrent) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = fg.copy(alpha = if (isSelected || isCurrent) 0.92f else 0.72f),
+                                        maxLines = 1,
+                                    )
+                                }
+                            } else {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
                 }
             }
         }

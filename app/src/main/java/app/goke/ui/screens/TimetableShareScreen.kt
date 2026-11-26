@@ -3,6 +3,7 @@ package app.goke.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Share
@@ -44,8 +46,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,9 +69,11 @@ import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.ValueRow
+import app.goke.ui.components.mintClickable
 import app.goke.ui.icons.ContentCopy
 import app.goke.ui.icons.DeleteOutline
 import app.goke.ui.icons.GridView
+import app.goke.ui.icons.OpenInNew
 import app.goke.ui.liveSnapshot
 import app.goke.ui.theme.MintTheme
 import kotlinx.coroutines.launch
@@ -181,14 +187,37 @@ fun TimetableShareScreen(onBack: () -> Unit) {
                 val activeUrl = state.shareUrl.orEmpty()
                 MintCard(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            activeUrl,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .mintClickable(pressedScale = 0.98f, role = Role.Button) {
+                                    runCatching {
+                                        ctx.startActivity(
+                                            Intent(Intent.ACTION_VIEW, Uri.parse(activeUrl))
+                                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                        )
+                                    }
+                                }.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                activeUrl,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Icon(
+                                Icons.AutoMirrored.Rounded.OpenInNew,
+                                contentDescription = stringResource(R.string.share_open_in_browser),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
                         state.expiresAt?.let { exp ->
                             Text(
                                 stringResource(R.string.share_expires_at, formatShareDate(exp)),

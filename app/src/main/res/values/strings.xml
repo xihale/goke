@@ -1431,6 +1431,8 @@
     <string name="timetable_export_json">导出课表（JSON）</string>
     <string name="timetable_export_png">导出本周图片（PNG）</string>
     <string name="timetable_export_no_semester">请先创建或导入学期</string>
+    <string name="timetable_pick_week">选择周次</string>
+    <string name="timetable_pick_week_subtitle">%1$s · 共 %2$d 周</string>
 
     <string name="share_title">课表快速分享</string>
     <string name="share_experimental_tag">实验性</string>
@@ -1470,4 +1472,5 @@
     <string name="share_empty_id_err">请先填写学号</string>
     <string name="share_empty_server_err">请填写正确的服务器地址</string>
     <string name="share_send_chooser">分享课表</string>
+    <string name="share_open_in_browser">在浏览器预览</string>
 </resources>
