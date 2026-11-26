@@ -3,9 +3,9 @@ package app.goke.ui
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
@@ -104,7 +104,7 @@ class CourseTodoFlowTest {
     }
 
     @Test
-    fun todoEditScreenDisplaysUnifiedCourseLinkRowAndAllowsChangingOrClearingCourse() {
+    fun todoEditScreenCourseLinkLivesInBottomToolbarAndSyncsWhenRow() {
         val existingTask =
             Task(
                 id = "task-edit-course",
@@ -125,29 +125,33 @@ class CourseTodoFlowTest {
         }
         rule.waitForIdle()
 
-        // 1. 新建模式从课程进入：显示统一风格 CourseLinkRow，可切换为另一门课并清除
+        // 1. 新建模式从课程进入：课程课前截止自动合入「日期&重复」行，课程入口收纳在底栏图标
         rule.runOnUiThread { nav.push(Route.TodoEdit(courseId = courseA.id)) }
         rule.waitForIdle()
-        rule.onAllNodesWithText(courseA.name).onLast().assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.course_link_before_class_row, courseA.name)).assertIsDisplayed()
 
-        rule.onAllNodesWithText(courseA.name).onLast().performClick()
+        // 点击底栏课程图标展开就地选课面板，切换为 courseB
+        rule.onNodeWithContentDescription(app.getString(R.string.quick_add_link_course)).performClick()
         rule.waitForIdle()
         rule.onAllNodesWithText(courseB.name).onLast().performClick()
         rule.waitForIdle()
-        rule.onAllNodesWithText(courseB.name).onLast().assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.course_link_before_class_row, courseB.name)).assertIsDisplayed()
 
-        rule.onNodeWithContentDescription(app.getString(R.string.detail_editor_clear_course)).performClick()
+        // 再次点开底栏课程图标取消关联
+        rule.onNodeWithContentDescription(app.getString(R.string.quick_add_link_course)).performClick()
         rule.waitForIdle()
-        rule.onNodeWithText(app.getString(R.string.quick_add_link_course)).assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.quick_add_unlink_course)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(R.string.date_and_repeat)).assertIsDisplayed()
 
         // 返回不留草稿
         rule.onNodeWithContentDescription(app.getString(R.string.back)).performClick()
         rule.waitForIdle()
 
-        // 2. 编辑已有任务：可改绑课程并在返回时自动保存
+        // 2. 编辑已有任务：通过底栏课程图标改绑课程并在返回时自动保存
         rule.runOnUiThread { nav.push(Route.TodoEdit(id = existingTask.id)) }
         rule.waitForIdle()
-        rule.onAllNodesWithText(courseA.name).onLast().performClick()
+        rule.onNodeWithContentDescription(app.getString(R.string.quick_add_link_course)).performClick()
         rule.waitForIdle()
         rule.onAllNodesWithText(courseB.name).onLast().performClick()
         rule.waitForIdle()
@@ -158,10 +162,12 @@ class CourseTodoFlowTest {
                 ?.courseId == courseB.id
         }
 
-        // 3. 再次编辑该任务：可清除课程关联并持久化为 null
+        // 3. 再次编辑该任务：取消关联并持久化为 null
         rule.runOnUiThread { nav.push(Route.TodoEdit(id = existingTask.id)) }
         rule.waitForIdle()
-        rule.onNodeWithContentDescription(app.getString(R.string.detail_editor_clear_course)).performClick()
+        rule.onNodeWithContentDescription(app.getString(R.string.quick_add_link_course)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(R.string.quick_add_unlink_course)).performClick()
         rule.waitForIdle()
         rule.onNodeWithContentDescription(app.getString(R.string.back)).performClick()
         rule.waitUntil(3_000) {
@@ -173,7 +179,7 @@ class CourseTodoFlowTest {
     }
 
     @Test
-    fun courseSheetShowsTodosAndQuickBindsExistingTodoUpdatingTimetableIndicator() {
+    fun courseSheetShowsUnifiedTodoRowsAndTiltedStickyTabOnTimetable() {
         val nav = Nav(initialTab = Tab.TIMETABLE)
         rule.setContent {
             val st by app.settings.flow.collectAsState()
@@ -187,8 +193,8 @@ class CourseTodoFlowTest {
         rule.onAllNodes(hasText(courseA.name, substring = true)).onFirst().performClick()
         rule.waitForIdle()
 
-        // 进入「关联已有」快捷绑定面板
-        rule.onNodeWithText(app.getString(R.string.course_todos_bind)).performClick()
+        // 点击 Link 图标进入「关联已有」快捷绑定面板
+        rule.onNodeWithContentDescription(app.getString(R.string.course_todos_bind)).performClick()
         rule.waitForIdle()
         rule.onNodeWithText(app.getString(R.string.course_todos_bind_title)).assertIsDisplayed()
 
@@ -210,24 +216,35 @@ class CourseTodoFlowTest {
             saved?.courseId == courseA.id && !saved.dueBeforeNextClass
         }
 
-        // 系统返回仅退出「关联已有」，保留 CourseSheet 预览
+        // 系统返回仅退出「关联已有」，保留 CourseSheet 预览且待办默认展开（使用 TodoLine 呈现）
         rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
         rule.waitForIdle()
         rule.onAllNodesWithText(unboundTask.title).onLast().assertIsDisplayed()
         rule.onAllNodesWithText(datedTask.title).onLast().assertIsDisplayed()
 
-        // 取消关联其中一条
-        rule.onAllNodes(hasContentDescription(app.getString(R.string.course_todos_unbind))).onFirst().performClick()
+        // 点 Show/Hide 图标收起后再展开
+        rule.onNodeWithContentDescription(app.getString(R.string.course_todos_hide)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription(app.getString(R.string.course_todos_show)).performClick()
+        rule.waitForIdle()
+        rule.onAllNodesWithText(unboundTask.title).onLast().assertIsDisplayed()
+
+        // 点 Link 图标取消关联其中一条
+        rule.onNodeWithContentDescription(app.getString(R.string.course_todos_bind)).performClick()
+        rule.waitForIdle()
+        rule.onAllNodesWithText(unboundTask.title).onLast().performClick()
         rule.waitUntil(3_000) {
             app.repo.snapshot.value.tasks
                 .firstOrNull { it.id == unboundTask.id }
                 ?.courseId == null
         }
 
-        // 再次系统返回关闭 CourseSheet 后，课表卡片上应显示剩余 1 项待办的角标提示
+        // 两次系统返回关闭 CourseSheet 后，课表卡片上应显示剩余 1 项待办的倾斜便利贴提醒
         rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
         rule.waitForIdle()
-        rule.onNodeWithContentDescription(app.getString(R.string.course_card_todos_desc, 1)).assertIsDisplayed()
+        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
+        rule.waitForIdle()
+        rule.onAllNodesWithContentDescription(app.getString(R.string.course_card_todos_desc, 1)).onFirst().assertIsDisplayed()
 
         val updatedDated =
             app.repo.snapshot.value.tasks

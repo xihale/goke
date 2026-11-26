@@ -80,6 +80,10 @@ class MintColors(
     val success: Color,
     /** 优先级语义色 [低, 中, 高]；旗子、圈粗、菜单、chip 同源取色。 */
     val priority: List<Color>,
+    /** 课表卡片便签式待办提醒（底色 / 描边 / 深字）。 */
+    val stickyBg: Color,
+    val stickyBorder: Color,
+    val stickyFg: Color,
     val dark: Boolean,
 ) {
     fun bg(i: Int) = courseBg[((i % 8) + 8) % 8]
@@ -128,6 +132,9 @@ fun mintColors(dark: Boolean): MintColors {
             } else {
                 listOf(Color(0xFF5E6F69), Color(0xFFB07F1E), Color(0xFFB23E50))
             },
+        stickyBg = if (dark) Color(0xFFF6CF65) else Color(0xFFFFF0A8),
+        stickyBorder = if (dark) Color(0xFFD9A734) else Color(0xFFE6C64C),
+        stickyFg = if (dark) Color(0xFF3B2804) else Color(0xFF4A3404),
         dark = dark,
     )
 }

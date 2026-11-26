@@ -594,7 +594,6 @@
     <string name="course_todos">这门课的待办</string>
     <string name="course_weeks_clear">清空</string>
     <string name="course_todos_add">添加待办</string>
-    <string name="course_todos_add_short">新建</string>
     <string name="course_todos_bind">关联已有</string>
     <string name="course_todos_bind_title">关联已有待办</string>
     <string name="course_todos_bind_empty">暂无可关联的未完成待办</string>
@@ -602,7 +601,8 @@
     <string name="course_todos_bound_toast">已关联到「%1$s」</string>
     <string name="course_todos_unbound_toast">已取消关联「%1$s」</string>
     <string name="course_todos_bound_other">已关联：%1$s</string>
-    <string name="course_todos_unbind">取消关联</string>
+    <string name="course_todos_show">展开待办</string>
+    <string name="course_todos_hide">收起待办</string>
     <string name="course_card_todos_desc">有 %1$d 项课程待办</string>
     <string name="course_todos_empty">还没有待办</string>
     <string name="clash_row_course">与「%1$s」冲突 · %2$s</string>
@@ -652,11 +652,9 @@
     <string name="detail_editor_full_edit">详细编辑</string>
     <string name="detail_editor_pick_date">选日期</string>
     <string name="course_link_before_class">下节课前截止</string>
-    <string name="course_link_before_class_time">下节课前截止 · %1$s</string>
+    <string name="course_link_before_class_row">%1$s 课前</string>
     <string name="course_link_before_class_desc">自动对齐该课程下一次上课前</string>
     <string name="course_link_before_class_desc_time">自动对齐下次上课时间（%1$s）</string>
-    <string name="course_link_only">仅关联课程</string>
-    <string name="detail_editor_clear_course">清除关联课程</string>
     <string name="detail_editor_added_course_before">已加入「%1$s」课前待办</string>
     <string name="detail_editor_added_course">已关联至「%1$s」</string>
     <string name="detail_editor_date_token">%1$d月%2$d日</string>

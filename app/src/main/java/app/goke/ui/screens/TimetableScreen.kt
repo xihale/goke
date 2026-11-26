@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -179,12 +180,15 @@ import app.goke.ui.dueLabel
 import app.goke.ui.formatRooms
 import app.goke.ui.hm
 import app.goke.ui.icons.CalendarViewWeek
-import app.goke.ui.icons.Checklist
 import app.goke.ui.icons.Cloud
 import app.goke.ui.icons.GridView
 import app.goke.ui.icons.Image
 import app.goke.ui.icons.Inventory2
 import app.goke.ui.icons.IosShare
+import app.goke.ui.icons.Link
+import app.goke.ui.icons.StickyNote2
+import app.goke.ui.icons.Visibility
+import app.goke.ui.icons.VisibilityOff
 import app.goke.ui.liveSnapshot
 import app.goke.ui.monthDay
 import app.goke.ui.monthDayWeekday
@@ -237,6 +241,7 @@ private val BlockOuterInset = 1.5.dp
 private val NowBarOuterInset = 3.dp
 private val HeaderDayShape = RoundedCornerShape(14.dp)
 private val CourseBlockShape = RoundedCornerShape(BlockCornerRadius)
+private val StickyTabShape = RoundedCornerShape(6.dp)
 private val TaskBlockShape = RoundedCornerShape(BlockCornerRadius)
 private val SheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 private val RoomSplitRegex = Regex("[,，/、;；\\s]+")
@@ -751,6 +756,7 @@ fun TimetableScreen() {
             sem = sem,
             snap = snap,
             cal = cal,
+            now = now,
             today = today,
             onPickOnGrid = { occ ->
                 selected = null
@@ -2220,47 +2226,43 @@ private fun OverlapBadge(
 }
 
 @Composable
-private fun CourseTodoBadge(
+private fun CourseStickyNoteTab(
     count: Int,
-    fg: Color,
-    compact: Boolean,
+    colors: MintColors,
+    finished: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val desc = stringResource(R.string.course_card_todos_desc, count)
-    if (compact) {
-        Box(
-            modifier
-                .size(7.dp)
-                .clip(CircleShape)
-                .background(fg.copy(alpha = 0.85f))
-                .semantics { contentDescription = desc },
+    Row(
+        modifier
+            .graphicsLayer {
+                rotationZ = -4f
+                alpha = if (finished) 0.78f else 1f
+                shadowElevation = 2.5.dp.toPx()
+                shape = StickyTabShape
+                clip = false
+            }.background(colors.stickyBg, StickyTabShape)
+            .border(0.75.dp, colors.stickyBorder, StickyTabShape)
+            .semantics { contentDescription = desc }
+            .padding(horizontal = 4.dp, vertical = 1.5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(1.5.dp),
+    ) {
+        Icon(
+            Icons.Rounded.StickyNote2,
+            null,
+            tint = colors.stickyFg,
+            modifier = Modifier.size(10.dp),
         )
-    } else {
-        Row(
-            modifier
-                .clip(RoundedCornerShape(999.dp))
-                .background(fg.copy(alpha = 0.16f))
-                .semantics { contentDescription = desc }
-                .padding(horizontal = 4.dp, vertical = 1.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Icon(
-                Icons.Rounded.Checklist,
-                null,
-                tint = fg,
-                modifier = Modifier.size(10.dp),
-            )
-            Text(
-                "$count",
-                color = fg,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 11.sp, fontFeatureSettings = "tnum"),
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Clip,
-            )
-        }
+        Text(
+            "$count",
+            color = colors.stickyFg,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, lineHeight = 10.sp, fontFeatureSettings = "tnum"),
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip,
+        )
     }
 }
 
@@ -2324,104 +2326,104 @@ private fun CourseBlock(
             else -> null
         }
     Box(
-        modifier
-            .mintPressable(pressedScale = 0.97f) { onClick() }
-            .then(if (isRemoved) Modifier.graphicsLayer { alpha = 0.6f } else Modifier)
-            .clip(CourseBlockShape)
-            .then(bgMod)
-            .then(if (stateDesc != null) Modifier.semantics { stateDescription = stateDesc } else Modifier)
-            .then(if (resolvedBorder != null) Modifier.border(resolvedBorder.first, resolvedBorder.second, CourseBlockShape) else Modifier),
+        modifier.mintPressable(pressedScale = 0.97f) { onClick() },
     ) {
-        // 一列就 40dp 出头：教室 / 老师照样要显示，靠换行和省略号交代；
-        // 把信息藏起来比截断更糟。宽卡片（平板 / 横屏）才加「@」前缀区分教室，窄列里多这一个字符就没地方了。
-        Column(Modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 6.dp)) {
-            val strike = if (isRemoved) TextDecoration.LineThrough else null
-            val hasFooter = overlap > 1 || todoCount > 0
-            Column(Modifier.weight(1f)) {
-                // 字号统一由 WeekGrid 记住传入；时间/教室数字用 tnum
-                Text(
-                    o.course.name,
-                    color = textFg,
-                    style = titleStyle,
-                    fontWeight = FontWeight.Bold,
-                    maxLines =
-                        when {
-                            rows >= 3 -> 4
-                            rows == 2 -> if (hasFooter) 3 else 4
-                            else -> if (hasFooter) 1 else 2
-                        },
-                    overflow = TextOverflow.Ellipsis,
-                    textDecoration = strike,
-                )
-                // 多教室按 DESIGN 规则折叠（超过 2 处折叠为「首间 等 N 处」），完整列表留在 CourseSheet 中查看。
-                if (o.room.isNotBlank()) {
-                    val ctx = LocalContext.current
-                    val roomText = remember(o.room, ctx) { ctx.formatRooms(o.room) }
-                    val teacherLine = if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) 1 else 0
-                    val roomMaxLines =
-                        (BaseRowH * rows - 16.dp - 26.dp - 12.dp * teacherLine).div(12.dp).toInt().coerceAtLeast(2)
-                    if (roomText.isNotEmpty()) {
-                        Text(
-                            if (wide) "@" + roomText else roomText,
-                            modifier = Modifier.weight(1f, fill = false),
-                            color = textFg.copy(alpha = 0.85f),
-                            // 窄卡与宽卡字号：至少 10sp，保证 TalkBack 及大字号无障碍要求
-                            style = roomStyle,
-                            maxLines = roomMaxLines,
-                            overflow = TextOverflow.Ellipsis,
-                            textDecoration = strike,
-                        )
-                    }
-                }
-                if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .then(if (isRemoved) Modifier.graphicsLayer { alpha = 0.6f } else Modifier)
+                .clip(CourseBlockShape)
+                .then(bgMod)
+                .then(if (stateDesc != null) Modifier.semantics { stateDescription = stateDesc } else Modifier)
+                .then(if (resolvedBorder != null) Modifier.border(resolvedBorder.first, resolvedBorder.second, CourseBlockShape) else Modifier),
+        ) {
+            // 一列就 40dp 出头：教室 / 老师照样要显示，靠换行和省略号交代；
+            // 把信息藏起来比截断更糟。宽卡片（平板 / 横屏）才加「@」前缀区分教室，窄列里多这一个字符就没地方了。
+            Column(Modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 6.dp)) {
+                val strike = if (isRemoved) TextDecoration.LineThrough else null
+                Column(Modifier.weight(1f)) {
+                    // 字号统一由 WeekGrid 记住传入；时间/教室数字用 tnum
                     Text(
-                        o.course.teacher,
-                        color = textFg.copy(alpha = 0.75f),
-                        style = roomStyle,
-                        maxLines = 1,
-                        softWrap = false,
+                        o.course.name,
+                        color = textFg,
+                        style = titleStyle,
+                        fontWeight = FontWeight.Bold,
+                        maxLines =
+                            when {
+                                rows >= 3 -> 4
+                                rows == 2 -> if (overlap > 1) 3 else 4
+                                else -> if (overlap > 1) 1 else 2
+                            },
                         overflow = TextOverflow.Ellipsis,
+                        textDecoration = strike,
                     )
+                    // 多教室按 DESIGN 规则折叠（超过 2 处折叠为「首间 等 N 处」），完整列表留在 CourseSheet 中查看。
+                    if (o.room.isNotBlank()) {
+                        val ctx = LocalContext.current
+                        val roomText = remember(o.room, ctx) { ctx.formatRooms(o.room) }
+                        val teacherLine = if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) 1 else 0
+                        val roomMaxLines =
+                            (BaseRowH * rows - 16.dp - 26.dp - 12.dp * teacherLine).div(12.dp).toInt().coerceAtLeast(2)
+                        if (roomText.isNotEmpty()) {
+                            Text(
+                                if (wide) "@" + roomText else roomText,
+                                modifier = Modifier.weight(1f, fill = false),
+                                color = textFg.copy(alpha = 0.85f),
+                                // 窄卡与宽卡字号：至少 10sp，保证 TalkBack 及大字号无障碍要求
+                                style = roomStyle,
+                                maxLines = roomMaxLines,
+                                overflow = TextOverflow.Ellipsis,
+                                textDecoration = strike,
+                            )
+                        }
+                    }
+                    if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) {
+                        Text(
+                            o.course.teacher,
+                            color = textFg.copy(alpha = 0.75f),
+                            style = roomStyle,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (o.course.isExam) {
+                        Text(
+                            stringResource(R.string.kind_exam),
+                            color = textFg,
+                            style = roomStyle,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                        )
+                    }
+                    if (o.rescheduled) {
+                        Text(
+                            stringResource(R.string.rescheduled),
+                            color = textFg,
+                            style = roomStyle,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
-                if (o.course.isExam) {
-                    Text(
-                        stringResource(R.string.kind_exam),
-                        color = textFg,
-                        style = roomStyle,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
-                }
-                if (o.rescheduled) {
-                    Text(
-                        stringResource(R.string.rescheduled),
-                        color = textFg,
-                        style = roomStyle,
-                        fontWeight = FontWeight.Bold,
+                if (overlap > 1) {
+                    OverlapBadge(
+                        overlap = overlap,
+                        fg = textFg,
+                        modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
                     )
                 }
             }
-            if (hasFooter) {
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (todoCount > 0) {
-                        CourseTodoBadge(
-                            count = todoCount,
-                            fg = textFg,
-                            compact = overlap > 1 && !wide,
-                        )
-                    }
-                    if (overlap > 1) {
-                        OverlapBadge(
-                            overlap = overlap,
-                            fg = textFg,
-                        )
-                    }
-                }
-            }
+        }
+        if (todoCount > 0) {
+            CourseStickyNoteTab(
+                count = todoCount,
+                colors = colors,
+                finished = phase == TimePhase.FINISHED,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 2.dp, y = (-2).dp),
+            )
         }
     }
 }
@@ -2477,6 +2479,7 @@ private fun CourseSheet(
     sem: Semester,
     snap: Snapshot,
     cal: SemesterCalendar,
+    now: LocalDateTime,
     today: LocalDate,
     onPickOnGrid: (CourseOccurrence) -> Unit,
     onJumpToWeek: (Int) -> Unit,
@@ -2485,17 +2488,20 @@ private fun CourseSheet(
     var lastCell by remember { mutableStateOf(cell) }
     var lastPrefill by remember { mutableStateOf(prefill) }
     var bindingTodos by remember { mutableStateOf(false) }
+    var showTodos by remember { mutableStateOf(true) }
     var bindQuery by remember { mutableStateOf("") }
     LaunchedEffect(cell, prefill) {
         if (cell != null) {
             lastCell = cell
             lastPrefill = null
             bindingTodos = false
+            showTodos = true
             bindQuery = ""
         } else if (prefill != null) {
             lastPrefill = prefill
             lastCell = null
             bindingTodos = false
+            showTodos = true
             bindQuery = ""
         }
     }
@@ -2553,6 +2559,7 @@ private fun CourseSheet(
                     remember(snap.tasks, snap.courses, liveCourse) {
                         TaskLogic.forCourse(snap.tasks, snap.courses, liveCourse)
                     }
+                val todoIndex = remember(snap, now) { todoIndexOf(snap, now) }
 
                 fun toggleBind(
                     task: Task,
@@ -2650,8 +2657,8 @@ private fun CourseSheet(
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f),
                                 )
-                                TextButton(enabled = canAct, onClick = ::openNewTodo) {
-                                    Text(stringResource(R.string.course_todos_add_short))
+                                IconButton(enabled = canAct, onClick = ::openNewTodo) {
+                                    Icon(Icons.Rounded.Add, stringResource(R.string.course_todos_add))
                                 }
                             }
                             if (allCandidates.size > 5) {
@@ -2717,7 +2724,7 @@ private fun CourseSheet(
                                             Column(Modifier.weight(1f).padding(start = 4.dp, end = 8.dp)) {
                                                 Text(
                                                     t.title,
-                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    style = MaterialTheme.typography.bodyLarge,
                                                     maxLines = 2,
                                                     overflow = TextOverflow.Ellipsis,
                                                 )
@@ -2817,6 +2824,112 @@ private fun CourseSheet(
                                 ValueRow(stringResource(R.string.label_teacher), liveCourse.teacher, onClick = ::openEdit)
                             }
                             ValueRow(stringResource(R.string.week_label), WeekSets.format(liveCourse.weeks), onClick = ::openEdit)
+                            if (activeCell.kind == CellKind.NORMAL) {
+                                Row(
+                                    Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Row(
+                                        Modifier
+                                            .weight(1f)
+                                            .heightIn(min = 48.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .mintClickable(enabled = relatedTodos.isNotEmpty(), pressedScale = 0.98f) {
+                                                showTodos = !showTodos
+                                            }.padding(end = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Text(
+                                            stringResource(R.string.tab_todo),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        if (relatedTodos.isNotEmpty()) {
+                                            Box(
+                                                Modifier
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                                    .padding(horizontal = 7.dp, vertical = 1.dp),
+                                            ) {
+                                                Text(
+                                                    "${relatedTodos.size}",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                )
+                                            }
+                                        }
+                                    }
+                                    IconButton(
+                                        enabled = canAct,
+                                        onClick = {
+                                            bindQuery = ""
+                                            bindingTodos = true
+                                        },
+                                        modifier = Modifier.size(40.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Link,
+                                            stringResource(R.string.course_todos_bind),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                    IconButton(
+                                        enabled = canAct,
+                                        onClick = ::openNewTodo,
+                                        modifier = Modifier.size(40.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Add,
+                                            stringResource(R.string.course_todos_add),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                    IconButton(
+                                        enabled = relatedTodos.isNotEmpty(),
+                                        onClick = { showTodos = !showTodos },
+                                        modifier = Modifier.size(40.dp),
+                                    ) {
+                                        Icon(
+                                            if (showTodos && relatedTodos.isNotEmpty()) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                            stringResource(if (showTodos && relatedTodos.isNotEmpty()) R.string.course_todos_hide else R.string.course_todos_show),
+                                            tint =
+                                                when {
+                                                    relatedTodos.isEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                                                    showTodos -> MaterialTheme.colorScheme.primary
+                                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                                },
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                }
+                                AnimatedVisibility(
+                                    visible = showTodos && relatedTodos.isNotEmpty(),
+                                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                                ) {
+                                    Column(Modifier.fillMaxWidth()) {
+                                        relatedTodos.forEach { t ->
+                                            TodoLine(
+                                                task = t,
+                                                snap = snap,
+                                                now = now,
+                                                index = todoIndex,
+                                                modifier = Modifier.padding(vertical = 1.dp),
+                                                onClick = {
+                                                    if (!visible || submitted) return@TodoLine
+                                                    submitted = true
+                                                    onDismiss()
+                                                    nav.openTask(t.id)
+                                                },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                             if (liveCourse.note.isNotBlank()) {
                                 CourseNoteBox(
                                     note = liveCourse.note,
@@ -2829,98 +2942,6 @@ private fun CourseSheet(
                                 )
                             }
                             if (activeCell.kind == CellKind.NORMAL) {
-                                Row(
-                                    Modifier.fillMaxWidth().padding(top = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        if (relatedTodos.isNotEmpty()) {
-                                            "${stringResource(R.string.course_todos)} · ${relatedTodos.size}"
-                                        } else {
-                                            stringResource(R.string.course_todos)
-                                        },
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    TextButton(
-                                        enabled = canAct,
-                                        onClick = {
-                                            bindQuery = ""
-                                            bindingTodos = true
-                                        },
-                                    ) { Text(stringResource(R.string.course_todos_bind)) }
-                                    TextButton(
-                                        enabled = canAct,
-                                        onClick = ::openNewTodo,
-                                    ) { Text(stringResource(R.string.course_todos_add_short)) }
-                                }
-                                relatedTodos.forEach { t ->
-                                    val sub =
-                                        when {
-                                            t.dueBeforeNextClass -> stringResource(R.string.course_link_before_class)
-                                            t.due != null -> ctx.dueLabel(t.due!!, t.dueHasTime, today)
-                                            t.blockStart != null -> ctx.dueLabel(t.blockStart!!, true, today)
-                                            else -> null
-                                        }
-                                    Row(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .heightIn(min = 48.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .mintClickable(enabled = canAct, pressedScale = 0.98f) {
-                                                if (!visible || submitted) return@mintClickable
-                                                submitted = true
-                                                onDismiss()
-                                                nav.openTask(t.id)
-                                            }.padding(start = 2.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        MintCheck(
-                                            checked = t.done,
-                                            onChange = { d ->
-                                                toggle(actions, snap, t, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, t.title))
-                                            },
-                                            size = 18.dp,
-                                        )
-                                        Column(Modifier.weight(1f).padding(start = 4.dp, end = 4.dp)) {
-                                            Text(
-                                                t.title,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            if (sub != null) {
-                                                Text(
-                                                    sub,
-                                                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                )
-                                            }
-                                        }
-                                        Box(
-                                            Modifier
-                                                .size(40.dp)
-                                                .clip(CircleShape)
-                                                .mintClickable(pressedScale = 0.95f, role = Role.Button) {
-                                                    toggleBind(t, false)
-                                                },
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Icon(
-                                                Icons.Rounded.Close,
-                                                stringResource(R.string.course_todos_unbind),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(16.dp),
-                                            )
-                                        }
-                                    }
-                                }
                                 Spacer(Modifier.height(10.dp))
                                 // 小屏放不下多个按钮就换行，主次不变：编辑 > 停课 > 调课
                                 val secondaryColors =

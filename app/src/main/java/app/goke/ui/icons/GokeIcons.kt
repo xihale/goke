@@ -2329,3 +2329,65 @@ private val waterDropIcon by gokeIcon("Rounded.WaterDrop") {
 
 val Icons.Rounded.WaterDrop: ImageVector
     get() = waterDropIcon
+
+private val linkIcon by gokeIcon("Rounded.Link") {
+    solidPath {
+        moveTo(3.9f, 12.0f)
+        curveTo(3.9f, 10.29f, 5.29f, 8.9f, 7.0f, 8.9f)
+        horizontalLineTo(11.0f)
+        verticalLineTo(7.0f)
+        horizontalLineTo(7.0f)
+        curveTo(4.24f, 7.0f, 2.0f, 9.24f, 2.0f, 12.0f)
+        reflectiveCurveTo(4.24f, 17.0f, 7.0f, 17.0f)
+        horizontalLineTo(11.0f)
+        verticalLineTo(15.1f)
+        horizontalLineTo(7.0f)
+        curveTo(5.29f, 15.1f, 3.9f, 13.71f, 3.9f, 12.0f)
+        close()
+        moveTo(8.0f, 13.0f)
+        horizontalLineTo(16.0f)
+        verticalLineTo(11.0f)
+        horizontalLineTo(8.0f)
+        verticalLineTo(13.0f)
+        close()
+        moveTo(17.0f, 7.0f)
+        horizontalLineTo(13.0f)
+        verticalLineTo(8.9f)
+        horizontalLineTo(17.0f)
+        curveTo(18.71f, 8.9f, 20.1f, 10.29f, 20.1f, 12.0f)
+        reflectiveCurveTo(18.71f, 15.1f, 17.0f, 15.1f)
+        horizontalLineTo(13.0f)
+        verticalLineTo(17.0f)
+        horizontalLineTo(17.0f)
+        curveTo(19.76f, 17.0f, 22.0f, 14.76f, 22.0f, 12.0f)
+        reflectiveCurveTo(19.76f, 7.0f, 17.0f, 7.0f)
+        close()
+    }
+}
+
+val Icons.Rounded.Link: ImageVector
+    get() = linkIcon
+
+private val stickyNote2Icon by gokeIcon("Rounded.StickyNote2") {
+    solidPath {
+        moveTo(19.0f, 3.0f)
+        horizontalLineTo(5.0f)
+        curveTo(3.9f, 3.0f, 3.0f, 3.9f, 3.0f, 5.0f)
+        verticalLineTo(19.0f)
+        curveTo(3.0f, 20.1f, 3.9f, 21.0f, 5.0f, 21.0f)
+        horizontalLineTo(13.0f)
+        lineTo(21.0f, 13.0f)
+        verticalLineTo(5.0f)
+        curveTo(21.0f, 3.9f, 20.1f, 3.0f, 19.0f, 3.0f)
+        close()
+        moveTo(12.0f, 19.5f)
+        verticalLineTo(14.0f)
+        curveTo(12.0f, 12.9f, 12.9f, 12.0f, 14.0f, 12.0f)
+        horizontalLineTo(19.5f)
+        lineTo(12.0f, 19.5f)
+        close()
+    }
+}
+
+val Icons.Rounded.StickyNote2: ImageVector
+    get() = stickyNote2Icon

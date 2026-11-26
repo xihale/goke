@@ -104,7 +104,6 @@ import app.goke.ui.components.AttachmentEditor
 import app.goke.ui.components.ChipPill
 import app.goke.ui.components.ConfirmDialog
 import app.goke.ui.components.ConflictCard
-import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.MintCheck
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.SegmentedPill
@@ -134,7 +133,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 
 /** 底栏上方就地展开的选择面板（不弹浮层，键盘不动）。 */
-private enum class BarPanel { LIST, PRIORITY }
+private enum class BarPanel { LIST, PRIORITY, COURSE }
 
 /**
  * 唯一的编辑页：新建和修改都是它。版式对齐 TickTick 详情：
@@ -270,7 +269,6 @@ fun TodoEditScreen(
     val initialBeforeClass = remember(existing, courseArg, initWhen) { existing?.dueBeforeNextClass ?: (courseArg != null && initWhen == null) }
     var linkedCourseId by remember { mutableStateOf(initialCourseId) }
     var dueBeforeNextClass by remember { mutableStateOf(initialBeforeClass) }
-    var courseSheet by remember { mutableStateOf(false) }
     val semesterCourses =
         remember(snap.courses, snap.currentSemester) {
             val semId = snap.currentSemester?.id
@@ -630,30 +628,31 @@ fun TodoEditScreen(
                     titleFocus,
                     done = existing?.done == true,
                 )
-                WhenRow(whenPick, today, remindList, freq, interval, until, byDays, byMonths, onClear = {
-                    picked = null
-                    cleared = true
-                    remindList = emptyList()
-                    persistent = false
-                    freq = null
-                    interval = 1
-                    until = null
-                    byDays = emptySet()
-                    byMonths = emptySet()
-                }) { timeSheet = true }
-                if (semesterCourses.isNotEmpty() || linkedCourse != null) {
-                    CourseLinkRow(
-                        course = linkedCourse,
-                        dueBeforeNextClass = dueBeforeNextClass,
-                        nextClassStart = nextCourseOcc?.start,
-                        today = today,
-                        onClear = {
-                            linkedCourseId = null
-                            dueBeforeNextClass = false
-                        },
-                        onClick = { courseSheet = true },
-                    )
-                }
+                WhenRow(
+                    whenPick = whenPick,
+                    today = today,
+                    remindList = remindList,
+                    freq = freq,
+                    interval = interval,
+                    until = until,
+                    byDays = byDays,
+                    byMonths = byMonths,
+                    linkedCourse = linkedCourse,
+                    dueBeforeNextClass = dueBeforeNextClass,
+                    nextClassStart = nextCourseOcc?.start,
+                    onClear = {
+                        picked = null
+                        cleared = true
+                        dueBeforeNextClass = false
+                        remindList = emptyList()
+                        persistent = false
+                        freq = null
+                        interval = 1
+                        until = null
+                        byDays = emptySet()
+                        byMonths = emptySet()
+                    },
+                ) { timeSheet = true }
                 if (extraDays.isNotEmpty()) {
                     // 周历框选带进来的其它日期：明说会建几条，不再静默生成
                     Text(
@@ -822,6 +821,126 @@ fun TodoEditScreen(
                     }
                 }
             }
+            AnimatedVisibility(
+                visible = barPanel == BarPanel.COURSE && (semesterCourses.isNotEmpty() || linkedCourse != null),
+                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+            ) {
+                val scheme = MaterialTheme.colorScheme
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            stringResource(R.string.quick_add_link_course),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = scheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (linkedCourse != null) {
+                            TextButton(
+                                onClick = {
+                                    linkedCourseId = null
+                                    dueBeforeNextClass = false
+                                    barPanel = null
+                                },
+                            ) {
+                                Text(stringResource(R.string.quick_add_unlink_course))
+                            }
+                        }
+                    }
+                    if (linkedCourse != null) {
+                        val sub =
+                            if (nextCourseOcc != null) {
+                                stringResource(R.string.course_link_before_class_desc_time, ctx.dueLabel(nextCourseOcc.start, true, today))
+                            } else {
+                                stringResource(R.string.course_link_before_class_desc)
+                            }
+                        SwitchRow(
+                            title = stringResource(R.string.course_link_before_class),
+                            subtitle = sub,
+                            checked = dueBeforeNextClass,
+                            onChange = { on ->
+                                dueBeforeNextClass = on
+                                if (on) {
+                                    picked = null
+                                    cleared = true
+                                    freq = null
+                                    until = null
+                                    byDays = emptySet()
+                                    byMonths = emptySet()
+                                }
+                            },
+                        )
+                    }
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 176.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        semesterCourses.forEach { c ->
+                            val selected =
+                                linkedCourse != null &&
+                                    (c.id == linkedCourse.id || (c.semesterId == linkedCourse.semesterId && c.name.trim() == linkedCourse.name.trim()))
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 42.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (selected) scheme.primaryContainer.copy(alpha = 0.45f) else Color.Transparent)
+                                    .semantics { this.selected = selected }
+                                    .mintClickable(pressedScale = 0.98f, role = Role.RadioButton) {
+                                        linkedCourseId = c.id
+                                        if (whenPick == null) dueBeforeNextClass = true
+                                        barPanel = null
+                                    }.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    Modifier
+                                        .width(4.dp)
+                                        .height(16.dp)
+                                        .clip(CircleShape)
+                                        .background(MintTheme.colors.fg(c.colorIndex)),
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        c.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (c.teacher.isNotBlank()) {
+                                        Text(
+                                            c.teacher,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = scheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                                if (selected) {
+                                    Icon(
+                                        Icons.Rounded.Check,
+                                        null,
+                                        tint = scheme.primary,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.background,
@@ -862,6 +981,27 @@ fun TodoEditScreen(
                                 stringResource(R.string.add_subtask),
                                 tint = if (subsOpen) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                             )
+                        }
+                    }
+                    if (semesterCourses.isNotEmpty() || linkedCourse != null) {
+                        val courseActive = linkedCourse != null || barPanel == BarPanel.COURSE
+                        IconButton(onClick = { barPanel = if (barPanel == BarPanel.COURSE) null else BarPanel.COURSE }) {
+                            Box {
+                                Icon(
+                                    Icons.Rounded.School,
+                                    stringResource(R.string.quick_add_link_course),
+                                    tint = if (courseActive) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                )
+                                if (linkedCourse != null) {
+                                    Box(
+                                        Modifier
+                                            .align(Alignment.TopEnd)
+                                            .size(7.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primary),
+                                    )
+                                }
+                            }
                         }
                     }
                     IconButton(onClick = { barPanel = if (barPanel == BarPanel.PRIORITY) null else BarPanel.PRIORITY }) {
@@ -913,37 +1053,6 @@ fun TodoEditScreen(
                 }
                 timeSheet = false
             },
-        )
-    }
-    if (courseSheet) {
-        CourseLinkSheet(
-            courses = semesterCourses,
-            linkedCourse = linkedCourse,
-            dueBeforeNextClass = dueBeforeNextClass,
-            nextClassStart = nextCourseOcc?.start,
-            today = today,
-            onSelectCourse = { c ->
-                linkedCourseId = c.id
-                if (whenPick == null) dueBeforeNextClass = true
-                courseSheet = false
-            },
-            onToggleBeforeClass = { on ->
-                dueBeforeNextClass = on
-                if (on) {
-                    picked = null
-                    cleared = true
-                    freq = null
-                    until = null
-                    byDays = emptySet()
-                    byMonths = emptySet()
-                }
-            },
-            onClear = {
-                linkedCourseId = null
-                dueBeforeNextClass = false
-                courseSheet = false
-            },
-            onDismiss = { courseSheet = false },
         )
     }
     if (confirmDiscard) {
@@ -1044,6 +1153,9 @@ private fun WhenRow(
     until: LocalDate?,
     byDays: Set<Int>,
     byMonths: Set<Int>,
+    linkedCourse: Course? = null,
+    dueBeforeNextClass: Boolean = false,
+    nextClassStart: LocalDateTime? = null,
     onClear: () -> Unit,
     onClick: () -> Unit,
 ) {
@@ -1070,19 +1182,27 @@ private fun WhenRow(
                 "${ctx.dueLabel(whenPick.date.atTime(start), true, today)} – $endLabel"
             }
         }
+    val courseBeforeLine =
+        if (dateLabel == null && linkedCourse != null && dueBeforeNextClass) {
+            stringResource(R.string.course_link_before_class_row, linkedCourse.name)
+        } else {
+            null
+        }
     val extras =
         buildList {
+            if (courseBeforeLine != null && nextClassStart != null) add(ctx.dueLabel(nextClassStart, true, today))
             if (freq != null) add(freqLabel(freq, until, interval, byDays, whenPick?.date, byMonths = byMonths))
             if (remindList.isNotEmpty()) add(remindSummaryLabel(remindList))
         }
-    val empty = dateLabel == null && extras.isEmpty()
+    val empty = dateLabel == null && courseBeforeLine == null && extras.isEmpty()
     val primaryLine =
         when {
             empty -> stringResource(R.string.date_and_repeat)
             dateLabel != null -> dateLabel
+            courseBeforeLine != null -> courseBeforeLine
             else -> extras.joinToString(" · ")
         }
-    val secondary = if (dateLabel != null && extras.isNotEmpty()) extras.joinToString(" · ") else null
+    val secondary = if ((dateLabel != null || courseBeforeLine != null) && extras.isNotEmpty()) extras.joinToString(" · ") else null
     val accent = MaterialTheme.colorScheme.primary
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1098,64 +1218,12 @@ private fun WhenRow(
                     style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
                     color = if (empty) muted else accent,
                     fontWeight = if (empty) FontWeight.Normal else FontWeight.Medium,
-                )
-                if (secondary != null) {
-                    Text(secondary, style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"), color = muted)
-                }
-            }
-        }
-        if (!empty) {
-            Box(
-                Modifier.size(48.dp).mintClickable(pressedScale = 0.95f, role = Role.Button, onClick = onClear),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                Icon(Icons.Rounded.Close, stringResource(R.string.detail_editor_clear_plan), tint = muted, modifier = Modifier.size(20.dp))
-            }
-        }
-    }
-}
-
-/** 与 [WhenRow] 同款的扁平关联课程行：选课、切换「下节课前截止」或清除关联。 */
-@Composable
-private fun CourseLinkRow(
-    course: Course?,
-    dueBeforeNextClass: Boolean,
-    nextClassStart: LocalDateTime?,
-    today: LocalDate,
-    onClear: () -> Unit,
-    onClick: () -> Unit,
-) {
-    val ctx = LocalContext.current
-    val empty = course == null
-    val accent = MaterialTheme.colorScheme.primary
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    val primaryLine = course?.name ?: stringResource(R.string.quick_add_link_course)
-    val secondaryLine =
-        when {
-            course == null -> null
-            dueBeforeNextClass && nextClassStart != null -> stringResource(R.string.course_link_before_class_time, ctx.dueLabel(nextClassStart, true, today))
-            dueBeforeNextClass -> stringResource(R.string.course_link_before_class)
-            else -> stringResource(R.string.course_link_only)
-        }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Row(
-            Modifier.weight(1f).heightIn(min = 48.dp).mintClickable(pressedScale = 0.98f, onClick = onClick),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Rounded.School, null, tint = if (empty) muted else accent, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    primaryLine,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (empty) muted else accent,
-                    fontWeight = if (empty) FontWeight.Normal else FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (secondaryLine != null) {
+                if (secondary != null) {
                     Text(
-                        secondaryLine,
+                        secondary,
                         style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
                         color = muted,
                         maxLines = 1,
@@ -1169,122 +1237,7 @@ private fun CourseLinkRow(
                 Modifier.size(48.dp).mintClickable(pressedScale = 0.95f, role = Role.Button, onClick = onClear),
                 contentAlignment = Alignment.CenterEnd,
             ) {
-                Icon(Icons.Rounded.Close, stringResource(R.string.detail_editor_clear_course), tint = muted, modifier = Modifier.size(20.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun CourseLinkSheet(
-    courses: List<Course>,
-    linkedCourse: Course?,
-    dueBeforeNextClass: Boolean,
-    nextClassStart: LocalDateTime?,
-    today: LocalDate,
-    onSelectCourse: (Course) -> Unit,
-    onToggleBeforeClass: (Boolean) -> Unit,
-    onClear: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val ctx = LocalContext.current
-    val scheme = MaterialTheme.colorScheme
-    MintBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 20.dp),
-        ) {
-            Row(
-                Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    stringResource(R.string.quick_add_link_course),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
-                if (linkedCourse != null) {
-                    TextButton(onClick = onClear) {
-                        Text(stringResource(R.string.quick_add_unlink_course))
-                    }
-                }
-            }
-            if (linkedCourse != null) {
-                val sub =
-                    if (nextClassStart != null) {
-                        stringResource(R.string.course_link_before_class_desc_time, ctx.dueLabel(nextClassStart, true, today))
-                    } else {
-                        stringResource(R.string.course_link_before_class_desc)
-                    }
-                SwitchRow(
-                    title = stringResource(R.string.course_link_before_class),
-                    subtitle = sub,
-                    checked = dueBeforeNextClass,
-                    onChange = onToggleBeforeClass,
-                )
-                Spacer(Modifier.height(4.dp))
-            }
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 320.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                courses.forEach { c ->
-                    val selected =
-                        linkedCourse != null &&
-                            (c.id == linkedCourse.id || (c.semesterId == linkedCourse.semesterId && c.name.trim() == linkedCourse.name.trim()))
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (selected) scheme.primaryContainer.copy(alpha = 0.45f) else Color.Transparent)
-                            .semantics { this.selected = selected }
-                            .mintClickable(pressedScale = 0.98f, role = Role.RadioButton) { onSelectCourse(c) }
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            Modifier
-                                .width(4.dp)
-                                .height(20.dp)
-                                .clip(CircleShape)
-                                .background(MintTheme.colors.fg(c.colorIndex)),
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                c.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            if (c.teacher.isNotBlank()) {
-                                Text(
-                                    c.teacher,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = scheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                        if (selected) {
-                            Icon(
-                                Icons.Rounded.Check,
-                                null,
-                                tint = scheme.primary,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    }
-                }
+                Icon(Icons.Rounded.Close, stringResource(R.string.detail_editor_clear_plan), tint = muted, modifier = Modifier.size(20.dp))
             }
         }
     }
