@@ -23,6 +23,8 @@ import app.goke.core.model.Course
 import app.goke.core.model.Source
 import app.goke.core.util.Ids
 import app.goke.ui.theme.GokeTheme
+import app.goke.widget.OverlayTarget
+import app.goke.widget.WidgetOverlayRoot
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -311,5 +313,224 @@ class AllRoutesNavigationTest {
             0,
             rule.onAllNodesWithContentDescription(app.getString(R.string.back)).fetchSemanticsNodes().size,
         )
+    }
+
+    @Test
+    fun predictiveBackFromRightEdgePopsNestedStackCleanly() {
+        val nav = Nav(initialTab = Tab.ME)
+        val backDesc = app.getString(R.string.back)
+
+        rule.setContent {
+            val st by app.settings.flow.collectAsState()
+            GokeTheme(st) {
+                GokeRoot(app, null, initialTab = Tab.ME, nav = nav) {}
+            }
+        }
+        rule.waitForIdle()
+
+        rule.runOnUiThread {
+            nav.push(Route.Grades)
+            nav.push(Route.Jxfw)
+        }
+        rule.waitForIdle()
+        assertEquals(listOf(Route.Grades, Route.Jxfw), nav.stack.map { it.route })
+
+        // Right-edge predictive back cancel must keep Jxfw on top
+        rule.runOnUiThread {
+            val d = rule.activity.onBackPressedDispatcher
+            d.dispatchOnBackStarted(BackEventCompat(400f, 300f, 0.0f, BackEventCompat.EDGE_RIGHT))
+            d.dispatchOnBackProgressed(BackEventCompat(320f, 310f, 0.4f, BackEventCompat.EDGE_RIGHT))
+            d.dispatchOnBackCancelled()
+        }
+        rule.waitForIdle()
+        assertEquals(listOf(Route.Grades, Route.Jxfw), nav.stack.map { it.route })
+
+        // Right-edge predictive back commit pops only Jxfw -> Grades remains
+        rule.runOnUiThread {
+            val d = rule.activity.onBackPressedDispatcher
+            d.dispatchOnBackStarted(BackEventCompat(400f, 300f, 0.0f, BackEventCompat.EDGE_RIGHT))
+            d.dispatchOnBackProgressed(BackEventCompat(250f, 315f, 0.65f, BackEventCompat.EDGE_RIGHT))
+            d.onBackPressed()
+        }
+        rule.waitForIdle()
+        assertEquals(listOf(Route.Grades), nav.stack.map { it.route })
+        assertEquals(1, rule.onAllNodesWithContentDescription(backDesc).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun nonDefaultTabPredictiveBackReturnsToTimetableOnCommitOnly() {
+        val nav = Nav(initialTab = Tab.ME)
+
+        rule.setContent {
+            val st by app.settings.flow.collectAsState()
+            GokeTheme(st) {
+                GokeRoot(app, null, initialTab = Tab.ME, nav = nav) {}
+            }
+        }
+        rule.waitForIdle()
+        assertEquals(Tab.ME, nav.tab)
+
+        // Cancelled predictive back keeps Tab.ME
+        rule.runOnUiThread {
+            val d = rule.activity.onBackPressedDispatcher
+            d.dispatchOnBackStarted(BackEventCompat(0f, 200f, 0.0f, BackEventCompat.EDGE_LEFT))
+            d.dispatchOnBackProgressed(BackEventCompat(80f, 205f, 0.35f, BackEventCompat.EDGE_LEFT))
+            d.dispatchOnBackCancelled()
+        }
+        rule.waitForIdle()
+        assertEquals(Tab.ME, nav.tab)
+
+        // Committed predictive back returns to Tab.TIMETABLE
+        rule.runOnUiThread {
+            val d = rule.activity.onBackPressedDispatcher
+            d.dispatchOnBackStarted(BackEventCompat(0f, 200f, 0.0f, BackEventCompat.EDGE_LEFT))
+            d.dispatchOnBackProgressed(BackEventCompat(160f, 210f, 0.7f, BackEventCompat.EDGE_LEFT))
+            d.onBackPressed()
+        }
+        rule.waitForIdle()
+        assertEquals(Tab.TIMETABLE, nav.tab)
+    }
+
+    @Test
+    fun dirtyExistingCourseEditAutoSavesOnPredictiveBackCommitNotCancel() {
+        val sem = app.repo.snapshot.value.currentSemester!!
+        val course =
+            Course(
+                id = Ids.next(),
+                semesterId = sem.id,
+                name = "编译原理",
+                room = "教1-303",
+                dayOfWeek = 2,
+                startPeriod = 1,
+                endPeriod = 2,
+                weeks = setOf(1, 2, 3),
+                source = Source.MANUAL,
+            )
+        runBlocking {
+            app.repo.commit(
+                ChangeSet(
+                    Ids.next(),
+                    "seed-valid-course",
+                    Source.MANUAL,
+                    System.currentTimeMillis(),
+                    listOf(Change.Add(course)),
+                ),
+            )
+        }
+
+        val nav = Nav(initialTab = Tab.TIMETABLE)
+        rule.setContent {
+            val st by app.settings.flow.collectAsState()
+            GokeTheme(st) {
+                GokeRoot(app, null, initialTab = Tab.TIMETABLE, nav = nav) {}
+            }
+        }
+        rule.waitForIdle()
+
+        rule.runOnUiThread { nav.push(Route.CourseEdit(id = course.id)) }
+        rule.waitForIdle()
+        rule.onAllNodes(hasSetTextAction()).onFirst().performTextInput("实验")
+        rule.waitForIdle()
+
+        // Cancelled predictive back must not commit or exit
+        rule.runOnUiThread {
+            val d = rule.activity.onBackPressedDispatcher
+            d.dispatchOnBackStarted(BackEventCompat(0f, 200f, 0.0f, BackEventCompat.EDGE_LEFT))
+            d.dispatchOnBackProgressed(BackEventCompat(60f, 200f, 0.3f, BackEventCompat.EDGE_LEFT))
+            d.dispatchOnBackCancelled()
+        }
+        rule.waitForIdle()
+        assertTrue(nav.onRoute)
+        assertEquals(
+            "编译原理",
+            app.repo.snapshot.value.courses
+                .first { it.id == course.id }
+                .name,
+        )
+
+        // Committed predictive back auto-saves edit and pops route
+        rule.runOnUiThread {
+            val d = rule.activity.onBackPressedDispatcher
+            d.dispatchOnBackStarted(BackEventCompat(0f, 200f, 0.0f, BackEventCompat.EDGE_LEFT))
+            d.dispatchOnBackProgressed(BackEventCompat(140f, 200f, 0.7f, BackEventCompat.EDGE_LEFT))
+            d.onBackPressed()
+        }
+        rule.waitForIdle()
+        assertFalse(nav.onRoute)
+        rule.waitUntil(3_000) {
+            app.repo.snapshot.value.courses
+                .first { it.id == course.id }
+                .name != "编译原理"
+        }
+    }
+
+    @Test
+    fun widgetOverlayPredictiveBackCancelsCleanlyAndCommitsAnimatedDismiss() {
+        val sem = app.repo.snapshot.value.currentSemester!!
+        val course =
+            app.repo.snapshot.value.courses
+                .firstOrNull()
+                ?: Course(
+                    id = Ids.next(),
+                    semesterId = sem.id,
+                    name = "操作系统",
+                    room = "教1-102",
+                    dayOfWeek = 1,
+                    startPeriod = 1,
+                    endPeriod = 2,
+                    weeks = setOf(1, 2, 3),
+                    source = Source.MANUAL,
+                ).also { c ->
+                    runBlocking {
+                        app.repo.commit(
+                            ChangeSet(Ids.next(), "seed-overlay-course", Source.MANUAL, System.currentTimeMillis(), listOf(Change.Add(c))),
+                        )
+                    }
+                }
+        val visible = androidx.compose.runtime.mutableStateOf(true)
+        var exited = false
+
+        rule.setContent {
+            val st by app.settings.flow.collectAsState()
+            val curSnap by app.repo.snapshot.collectAsState()
+            GokeTheme(st, transparentBackground = true) {
+                WidgetOverlayRoot(
+                    app = app,
+                    ready = true,
+                    snap = curSnap,
+                    target = OverlayTarget.CourseDetail(course.id),
+                    onChangeTarget = {},
+                    onOpenInApp = {},
+                    onDismiss = { visible.value = false },
+                    visible = visible.value,
+                    onExited = { if (!visible.value) exited = true },
+                )
+            }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithText(course.name).assertIsDisplayed()
+
+        // Cancelled predictive back keeps widget overlay open
+        rule.runOnUiThread {
+            val d = rule.activity.onBackPressedDispatcher
+            d.dispatchOnBackStarted(BackEventCompat(0f, 400f, 0.0f, BackEventCompat.EDGE_LEFT))
+            d.dispatchOnBackProgressed(BackEventCompat(80f, 400f, 0.35f, BackEventCompat.EDGE_LEFT))
+            d.dispatchOnBackCancelled()
+        }
+        rule.waitForIdle()
+        assertTrue(visible.value)
+        assertFalse(exited)
+        rule.onNodeWithText(course.name).assertIsDisplayed()
+
+        // Committed predictive back animates out and invokes onExited
+        rule.runOnUiThread {
+            val d = rule.activity.onBackPressedDispatcher
+            d.dispatchOnBackStarted(BackEventCompat(0f, 400f, 0.0f, BackEventCompat.EDGE_RIGHT))
+            d.dispatchOnBackProgressed(BackEventCompat(320f, 400f, 0.7f, BackEventCompat.EDGE_RIGHT))
+            d.onBackPressed()
+        }
+        rule.waitUntil(3_000) { exited }
+        assertFalse(visible.value)
+        assertTrue(exited)
     }
 }

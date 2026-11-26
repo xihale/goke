@@ -1,10 +1,20 @@
 package app.goke.ui.components
 
+import androidx.activity.BackEventCompat
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +31,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,13 +45,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,9 +66,17 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -65,10 +89,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import app.goke.ui.icons.Visibility
 import app.goke.ui.icons.VisibilityOff
+import app.goke.ui.theme.LocalReduceMotion
 import app.goke.ui.theme.MintTheme
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 /**
  * 圆角微色阶输入容器（12dp surfaceContainerHighest）：取代底边横线输入，
@@ -456,4 +485,303 @@ fun MintBottomSheet(
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         content = content,
     )
+}
+
+/**
+ * 窗口内 / 桌面悬浮层通用底部抽屉物理容器（参考 Apple Sheet 与 Google M3 预测性返回规范）：
+ * - 入场/退场使用无回弹阻尼弹簧，遮罩透明度与抽屉位移/手势进度连续同步，无闪烁与 0ms 截断；
+ * - 支持 1:1 下拉关闭手势与上拉橡皮筋阻力，释放或快速甩动时从当前位置丝滑退场；
+ * - 内置 [PredictiveBackHandler]：边缘返回手势跟手微缩下沉并淡出遮罩，取消平滑回弹，提交连续退场。
+ */
+@Composable
+fun MintSheetOverlay(
+    visible: Boolean,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    scrimAlpha: Float = 0.28f,
+    canDragDismiss: Boolean = true,
+    handlePredictiveBack: Boolean = true,
+    predictiveBackEnabled: Boolean = visible,
+    needsConfirmOnDismiss: Boolean = false,
+    onDismissConfirmRequest: (() -> Unit)? = null,
+    onExited: () -> Unit = {},
+    sheetModifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    tonalElevation: Dp = 0.dp,
+    shadowElevation: Dp = 0.dp,
+    maxWidth: Dp = Dp.Unspecified,
+    dragHandle: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val reduce = LocalReduceMotion.current
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val scrimColor = MaterialTheme.colorScheme.scrim
+
+    var isPresented by remember { mutableStateOf(visible) }
+    if (visible && !isPresented) isPresented = true
+    if (!visible && !isPresented) return
+
+    val progress = remember { Animatable(0f) }
+    val dragOffsetY = remember { Animatable(0f) }
+    val predictiveProgress = remember { Animatable(0f) }
+    var swipeEdge by remember { mutableIntStateOf(BackEventCompat.EDGE_LEFT) }
+    var sheetHeightPx by remember { mutableFloatStateOf(0f) }
+
+    val currentOnDismiss by rememberUpdatedState(onDismissRequest)
+    val currentOnConfirm by rememberUpdatedState(onDismissConfirmRequest ?: onDismissRequest)
+    val currentOnExited by rememberUpdatedState(onExited)
+    val currentNeedsConfirm by rememberUpdatedState(needsConfirmOnDismiss)
+    val currentCanDrag by rememberUpdatedState(canDragDismiss)
+
+    LaunchedEffect(visible, reduce) {
+        if (visible) {
+            dragOffsetY.snapTo(0f)
+            predictiveProgress.snapTo(0f)
+            if (reduce) {
+                progress.snapTo(1f)
+            } else {
+                progress.animateTo(
+                    1f,
+                    spring(
+                        dampingRatio = 0.92f,
+                        stiffness = 620f,
+                        visibilityThreshold = 0.001f,
+                    ),
+                )
+            }
+        } else {
+            if (!reduce && progress.value > 0.001f) {
+                progress.animateTo(
+                    0f,
+                    spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = 920f,
+                        visibilityThreshold = 0.002f,
+                    ),
+                )
+            } else {
+                progress.snapTo(0f)
+            }
+            dragOffsetY.snapTo(0f)
+            predictiveProgress.snapTo(0f)
+            isPresented = false
+            currentOnExited()
+        }
+    }
+
+    if (handlePredictiveBack) {
+        if (needsConfirmOnDismiss) {
+            BackHandler(enabled = predictiveBackEnabled) {
+                currentOnConfirm()
+            }
+        } else {
+            PredictiveBackHandler(enabled = predictiveBackEnabled) { flow ->
+                try {
+                    flow.collect { event ->
+                        swipeEdge = event.swipeEdge
+                        predictiveProgress.snapTo(event.progress.coerceIn(0f, 1f))
+                    }
+                    currentOnDismiss()
+                } catch (e: CancellationException) {
+                    scope.launch {
+                        if (predictiveProgress.value > 0f && !reduce) {
+                            predictiveProgress.animateTo(
+                                0f,
+                                spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = 1400f,
+                                    visibilityThreshold = 0.001f,
+                                ),
+                            )
+                        } else {
+                            predictiveProgress.snapTo(0f)
+                        }
+                    }
+                    throw e
+                }
+            }
+        }
+    }
+
+    val dismissThresholdPx = with(density) { 96.dp.toPx() }
+    val flingVelocityPx = with(density) { 800.dp.toPx() }
+    val maxRubberUpPx = with(density) { 26.dp.toPx() }
+    val fallbackSlidePx = with(density) { 320.dp.toPx() }
+
+    fun applyDragDelta(dy: Float): Float {
+        if (!currentCanDrag || !visible) return 0f
+        val cur = dragOffsetY.value
+        val next =
+            if (cur + dy >= 0f) {
+                cur + dy
+            } else {
+                (cur + dy * 0.18f).coerceAtLeast(-maxRubberUpPx)
+            }
+        scope.launch { dragOffsetY.snapTo(next) }
+        return dy
+    }
+
+    fun finishDrag(velocityY: Float) {
+        val cur = dragOffsetY.value
+        if (cur == 0f) return
+        val shouldDismiss = currentCanDrag && (cur > dismissThresholdPx || (cur > 0f && velocityY > flingVelocityPx))
+        if (shouldDismiss) {
+            if (currentNeedsConfirm) {
+                scope.launch {
+                    dragOffsetY.animateTo(0f, spring(dampingRatio = 0.88f, stiffness = 750f))
+                }
+                currentOnConfirm()
+            } else {
+                currentOnDismiss()
+            }
+        } else {
+            scope.launch {
+                if (reduce) {
+                    dragOffsetY.snapTo(0f)
+                } else {
+                    dragOffsetY.animateTo(0f, spring(dampingRatio = 0.88f, stiffness = 750f))
+                }
+            }
+        }
+    }
+
+    val nestedScrollConnection =
+        remember {
+            object : NestedScrollConnection {
+                override fun onPreScroll(
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (!currentCanDrag || !visible || source != NestedScrollSource.UserInput) return Offset.Zero
+                    val cur = dragOffsetY.value
+                    if (cur > 0f && available.y < 0f) {
+                        val next = (cur + available.y).coerceAtLeast(0f)
+                        val consumed = next - cur
+                        scope.launch { dragOffsetY.snapTo(next) }
+                        return Offset(0f, consumed)
+                    }
+                    return Offset.Zero
+                }
+
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (!currentCanDrag || !visible || source != NestedScrollSource.UserInput || available.y == 0f) {
+                        return Offset.Zero
+                    }
+                    return Offset(0f, applyDragDelta(available.y))
+                }
+
+                override suspend fun onPreFling(available: Velocity): Velocity {
+                    if (dragOffsetY.value != 0f) {
+                        finishDrag(available.y)
+                        return available
+                    }
+                    return Velocity.Zero
+                }
+
+                override suspend fun onPostFling(
+                    consumed: Velocity,
+                    available: Velocity,
+                ): Velocity {
+                    if (dragOffsetY.value != 0f) {
+                        finishDrag(available.y)
+                    }
+                    return Velocity.Zero
+                }
+            }
+        }
+
+    fun requestTapDismiss() {
+        if (!visible) return
+        if (currentNeedsConfirm) currentOnConfirm() else currentOnDismiss()
+    }
+
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Box(
+            Modifier
+                .matchParentSize()
+                .graphicsLayer {
+                    val p = progress.value.coerceIn(0f, 1f)
+                    val pred = predictiveProgress.value.coerceIn(0f, 1f)
+                    val slidePx = if (sheetHeightPx > 0f) sheetHeightPx else fallbackSlidePx
+                    val dragFrac = (dragOffsetY.value / slidePx).coerceIn(0f, 1f)
+                    alpha = p * (1f - dragFrac * 0.85f) * (1f - pred * 0.65f)
+                }.background(scrimColor.copy(alpha = scrimAlpha))
+                .pointerInput(Unit) { detectTapGestures { requestTapDismiss() } },
+        )
+
+        val surfaceModifier =
+            sheetModifier
+                .let { if (maxWidth != Dp.Unspecified) it.widthIn(max = maxWidth) else it }
+                .fillMaxWidth()
+                .onSizeChanged { sheetHeightPx = it.height.toFloat() }
+                .nestedScroll(nestedScrollConnection)
+                .graphicsLayer {
+                    val p = progress.value.coerceIn(0f, 1f)
+                    val pred = predictiveProgress.value.coerceIn(0f, 1f)
+                    val slidePx = if (sheetHeightPx > 0f) sheetHeightPx else fallbackSlidePx
+                    val dir = if (swipeEdge == BackEventCompat.EDGE_RIGHT) -1f else 1f
+                    val predTx = dir * 16.dp.toPx() * pred
+                    val predTy = 24.dp.toPx() * pred
+                    val sc =
+                        if (pred > 0.001f) {
+                            (1f - 0.08f * pred) - (1f - p) * 0.05f
+                        } else {
+                            1f - (1f - p) * 0.02f
+                        }
+                    scaleX = sc
+                    scaleY = sc
+                    translationX = predTx
+                    translationY = (1f - p) * slidePx + dragOffsetY.value + predTy
+                    alpha =
+                        if (pred > 0.01f && !visible) {
+                            p
+                        } else {
+                            (p * 3.5f).coerceIn(0f, 1f)
+                        }
+                }.pointerInput(Unit) { detectTapGestures {} }
+
+        Surface(
+            modifier = surfaceModifier,
+            shape = shape,
+            color = containerColor,
+            tonalElevation = tonalElevation,
+            shadowElevation = shadowElevation,
+        ) {
+            Column(Modifier.fillMaxWidth()) {
+                if (dragHandle) {
+                    val dragState = rememberDraggableState { applyDragDelta(it) }
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .draggable(
+                                    state = dragState,
+                                    orientation = Orientation.Vertical,
+                                    enabled = canDragDismiss && visible,
+                                    onDragStopped = { finishDrag(it) },
+                                ).padding(top = 12.dp, bottom = 6.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .size(width = 36.dp, height = 4.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.36f)),
+                        )
+                    }
+                }
+                content()
+            }
+        }
+    }
 }

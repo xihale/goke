@@ -2,9 +2,12 @@ package app.goke.ui.components
 
 import android.content.Context
 import android.content.Intent
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
@@ -15,6 +18,7 @@ import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,12 +81,15 @@ import app.goke.ui.LocalActions
 import app.goke.ui.icons.DeleteOutline
 import app.goke.ui.icons.Download
 import app.goke.ui.icons.IosShare
+import app.goke.ui.theme.LocalReduceMotion
 import app.goke.ui.theme.MintTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
+import kotlin.math.abs
 
 /**
  * 全屏图片附件查看器：支持左右翻页、双指缩放/平移、双击放大、显隐控制栏，以及保存到相册、分享与删除。
@@ -114,19 +121,77 @@ internal fun ImageViewerDialog(
     val currentImage = images.getOrNull(pagerState.currentPage) ?: images.first()
     val currentScale = pageScales[currentImage.file] ?: 1f
 
+    val scope = rememberCoroutineScope()
+    val reduce = LocalReduceMotion.current
+    val dragDismissY = remember { Animatable(0f) }
+    val predictiveProgress = remember { Animatable(0f) }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
+        PredictiveBackHandler { progress ->
+            try {
+                progress.collect { event ->
+                    predictiveProgress.snapTo(event.progress.coerceIn(0f, 1f))
+                }
+                onDismiss()
+            } catch (e: CancellationException) {
+                scope.launch {
+                    if (predictiveProgress.value > 0f && !reduce) {
+                        predictiveProgress.animateTo(0f, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 1400f))
+                    } else {
+                        predictiveProgress.snapTo(0f)
+                    }
+                }
+                throw e
+            }
+        }
+        val dismissThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) { 110.dp.toPx() }
+        val maxPullScalePx = with(androidx.compose.ui.platform.LocalDensity.current) { 360.dp.toPx() }
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black),
+                .graphicsLayer {
+                    val dragFrac = (abs(dragDismissY.value) / maxPullScalePx).coerceIn(0f, 1f)
+                    val pred = predictiveProgress.value.coerceIn(0f, 1f)
+                    alpha = (1f - dragFrac * 0.65f) * (1f - pred * 0.45f)
+                }.background(Color.Black),
         ) {
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-                userScrollEnabled = currentScale <= 1.01f,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(currentScale <= 1.02f) {
+                            if (currentScale > 1.02f) return@pointerInput
+                            detectVerticalDragGestures(
+                                onDragCancel = {
+                                    scope.launch {
+                                        if (reduce) dragDismissY.snapTo(0f) else dragDismissY.animateTo(0f, spring(0.88f, 750f))
+                                    }
+                                },
+                                onDragEnd = {
+                                    if (abs(dragDismissY.value) > dismissThresholdPx) {
+                                        onDismiss()
+                                    } else {
+                                        scope.launch {
+                                            if (reduce) dragDismissY.snapTo(0f) else dragDismissY.animateTo(0f, spring(0.88f, 750f))
+                                        }
+                                    }
+                                },
+                            ) { _, dragAmount ->
+                                scope.launch { dragDismissY.snapTo(dragDismissY.value + dragAmount) }
+                            }
+                        }.graphicsLayer {
+                            val dragFrac = (abs(dragDismissY.value) / maxPullScalePx).coerceIn(0f, 1f)
+                            val pred = predictiveProgress.value.coerceIn(0f, 1f)
+                            val sc = (1f - dragFrac * 0.18f) * (1f - pred * 0.10f)
+                            scaleX = sc
+                            scaleY = sc
+                            translationY = dragDismissY.value
+                        },
+                userScrollEnabled = currentScale <= 1.01f && abs(dragDismissY.value) < 4f,
                 key = { idx -> images[idx].file },
             ) { page ->
                 val item = images[page]

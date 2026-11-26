@@ -13,19 +13,21 @@ import android.os.Looper
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -133,6 +135,7 @@ import app.goke.ui.components.ConfirmDialog
 import app.goke.ui.components.CourseNoteBox
 import app.goke.ui.components.ErrorReportDialog
 import app.goke.ui.components.MintCheck
+import app.goke.ui.components.MintSheetOverlay
 import app.goke.ui.components.Tag
 import app.goke.ui.components.mintClickable
 import app.goke.ui.components.mintPressScale
@@ -159,6 +162,7 @@ import app.goke.ui.screens.freqLabel
 import app.goke.ui.screens.remindSummaryLabel
 import app.goke.ui.screens.tokenRanges
 import app.goke.ui.theme.GokeTheme
+import app.goke.ui.theme.LocalReduceMotion
 import app.goke.ui.theme.MintTheme
 import app.goke.ui.theme.priorityColor
 import app.goke.ui.weekdayShort
@@ -201,6 +205,7 @@ internal sealed interface OverlayTarget {
  */
 class WidgetOverlayActivity : ComponentActivity() {
     private val targetState = mutableStateOf<OverlayTarget>(OverlayTarget.Add())
+    private val visibleState = mutableStateOf(true)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -208,6 +213,7 @@ class WidgetOverlayActivity : ComponentActivity() {
         window.setFormat(PixelFormat.TRANSLUCENT)
         window.setBackgroundDrawable(ColorDrawable(AndroidColor.TRANSPARENT))
         targetState.value = parseTarget(intent)
+        visibleState.value = true
         val app = gokeApp
         setContent {
             val settings by app.settings.flow.collectAsState()
@@ -234,6 +240,7 @@ class WidgetOverlayActivity : ComponentActivity() {
                     ready = ready,
                     snap = snap,
                     target = targetState.value,
+                    visible = visibleState.value,
                     onChangeTarget = { targetState.value = it },
                     onOpenInApp = { uri ->
                         startActivity(
@@ -242,7 +249,8 @@ class WidgetOverlayActivity : ComponentActivity() {
                         )
                         finishNoAnim()
                     },
-                    onDismiss = { finishNoAnim() },
+                    onDismiss = { visibleState.value = false },
+                    onExited = { if (!visibleState.value) finishNoAnim() },
                 )
             }
         }
@@ -252,6 +260,7 @@ class WidgetOverlayActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         targetState.value = parseTarget(intent)
+        visibleState.value = true
     }
 
     private fun finishNoAnim() {
@@ -367,28 +376,23 @@ internal fun WidgetOverlayRoot(
     onChangeTarget: (OverlayTarget) -> Unit,
     onOpenInApp: (Uri) -> Unit,
     onDismiss: () -> Unit,
+    visible: Boolean = true,
+    onExited: () -> Unit = {},
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val scheme = MaterialTheme.colorScheme
     val settings by app.settings.flow.collectAsState()
+    val reduce = LocalReduceMotion.current
     var shown by remember { mutableStateOf(false) }
     var closing by remember { mutableStateOf(false) }
-    var externalDismissHook by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var dismissHook by remember { mutableStateOf<Pair<Boolean, () -> Unit>?>(null) }
 
     LaunchedEffect(Unit) { shown = true }
     LaunchedEffect(target) {
-        externalDismissHook = null
+        dismissHook = null
         closing = false
     }
-
-    fun handleBackdropDismiss() {
-        if (closing) return
-        val hook = externalDismissHook
-        if (hook != null) hook() else onDismiss()
-    }
-
-    BackHandler { handleBackdropDismiss() }
 
     fun commitAndRefresh(
         cs: ChangeSet,
@@ -425,188 +429,199 @@ internal fun WidgetOverlayRoot(
 
     val isAdd = target is OverlayTarget.Add
     val sheetShape = RoundedCornerShape(topStart = if (isAdd) 24.dp else 28.dp, topEnd = if (isAdd) 24.dp else 28.dp)
+    val slideSpec = MintTheme.spec<androidx.compose.ui.unit.IntOffset>()
+    val fadeSpec = MintTheme.spec<Float>()
 
-    Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.22f))
-                .pointerInput(target) { detectTapGestures { handleBackdropDismiss() } },
-        contentAlignment = Alignment.BottomCenter,
-    ) {
-        AnimatedVisibility(
-            visible = shown && ready,
-            enter = fadeIn(tween(140)) + slideInVertically(MintTheme.spec()) { it / 4 },
-            exit = fadeOut(tween(100)) + slideOutVertically(MintTheme.spec()) { it / 4 },
+    Box(Modifier.fillMaxSize()) {
+        MintSheetOverlay(
+            visible = shown && ready && visible,
+            onDismissRequest = {
+                if (!closing) {
+                    val hook = dismissHook
+                    if (hook != null && !hook.first) {
+                        hook.second()
+                    } else {
+                        onDismiss()
+                    }
+                }
+            },
+            scrimAlpha = 0.26f,
+            canDragDismiss = !closing,
+            needsConfirmOnDismiss = dismissHook?.first == true,
+            onDismissConfirmRequest = { dismissHook?.second?.invoke() },
+            onExited = onExited,
+            sheetModifier =
+                Modifier
+                    .statusBarsPadding()
+                    .padding(top = 16.dp)
+                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
+            shape = sheetShape,
+            containerColor = scheme.surfaceContainerLow,
+            maxWidth = 560.dp,
+            dragHandle = !isAdd,
         ) {
             val live = remember(snap) { snap.live() }
-            Surface(
-                modifier =
-                    Modifier
-                        .widthIn(max = 560.dp)
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(top = 16.dp)
-                        .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
-                        .pointerInput(Unit) { detectTapGestures {} },
-                shape = sheetShape,
-                color = scheme.surfaceContainerLow,
-                tonalElevation = 0.dp,
-                shadowElevation = 0.dp,
-            ) {
-                Column(Modifier.fillMaxWidth()) {
-                    HorizontalDivider(
-                        thickness = 0.5.dp,
-                        color = scheme.outlineVariant.copy(alpha = 0.45f),
-                    )
-                    if (!isAdd) {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .size(width = 36.dp, height = 4.dp)
-                                        .clip(CircleShape)
-                                        .background(scheme.outlineVariant.copy(alpha = 0.65f)),
+            if (isAdd) {
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = scheme.outlineVariant.copy(alpha = 0.45f),
+                )
+            }
+            AnimatedContent(
+                targetState = target,
+                contentKey = { t ->
+                    when (t) {
+                        is OverlayTarget.Add -> "add:${t.initialCourseId}:${t.initialText}"
+                        is OverlayTarget.CourseDetail -> "course:${t.courseId}:${t.dateStr}:${t.startPeriod}:${t.endPeriod}"
+                        is OverlayTarget.TaskDetail -> "task:${t.taskId}"
+                        is OverlayTarget.EventDetail -> "event:${t.eventId}"
+                    }
+                },
+                transitionSpec = {
+                    if (reduce) {
+                        fadeIn(fadeSpec) togetherWith fadeOut(fadeSpec)
+                    } else {
+                        (slideInHorizontally(slideSpec) { it / 6 } + fadeIn(fadeSpec)) togetherWith
+                            (slideOutHorizontally(slideSpec) { -it / 6 } + fadeOut(fadeSpec)) using
+                            SizeTransform(clip = false)
+                    }
+                },
+                label = "overlay-target",
+            ) { activeTarget ->
+                val targetIsAdd = activeTarget is OverlayTarget.Add
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = if (targetIsAdd) 10.dp else 6.dp,
+                                bottom = if (targetIsAdd) 10.dp else 16.dp,
+                            ),
+                ) {
+                    when (activeTarget) {
+                        is OverlayTarget.Add -> {
+                            OverlayQuickAddCard(
+                                snap = live,
+                                defaultBlockMinutes = settings.defaultBlockMinutes,
+                                initialCourseId = activeTarget.initialCourseId,
+                                initialText = activeTarget.initialText,
+                                registerDismissHook = { dismissHook = it },
+                                onExpand = { draft ->
+                                    onOpenInApp(DeepLinks.addUri(draft.ifBlank { null }, activeTarget.initialCourseId))
+                                },
+                                onCommit = { cs, msg -> commitAndRefresh(cs, msg, closeAfter = true) },
+                                onDismiss = onDismiss,
                             )
                         }
-                    }
-                    Column(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .verticalScroll(rememberScrollState())
-                                .padding(
-                                    start = 16.dp,
-                                    end = 16.dp,
-                                    top = if (isAdd) 10.dp else 8.dp,
-                                    bottom = if (isAdd) 10.dp else 16.dp,
-                                ),
-                    ) {
-                        when (target) {
-                            is OverlayTarget.Add -> {
-                                OverlayQuickAddCard(
+
+                        is OverlayTarget.CourseDetail -> {
+                            val course = live.courses.firstOrNull { it.id == activeTarget.courseId }
+                            if (course == null) {
+                                LaunchedEffect(Unit) { onOpenInApp(DeepLinks.timetableUri()) }
+                            } else {
+                                OverlayCourseCard(
+                                    snap = live,
+                                    course = course,
+                                    dateStr = activeTarget.dateStr,
+                                    startPeriod = activeTarget.startPeriod,
+                                    endPeriod = activeTarget.endPeriod,
+                                    onToggleTask = { task, done ->
+                                        val nowDt = LocalDateTime.now()
+                                        val desc = ctx.getString(R.string.edit_task_desc, task.title)
+                                        val toast =
+                                            if (done) ctx.getString(R.string.widget_overlay_task_done_toast, task.title) else null
+                                        commitAndRefresh(
+                                            Edits.toggleTask(live, task, done, System.currentTimeMillis(), nowDt, desc),
+                                            toast = toast,
+                                            closeAfter = false,
+                                        )
+                                    },
+                                    onOpenTask = { task ->
+                                        onChangeTarget(OverlayTarget.TaskDetail(task.id))
+                                    },
+                                    onAddCourseTask = {
+                                        onChangeTarget(OverlayTarget.Add(initialCourseId = course.id))
+                                    },
+                                    onExpand = { onOpenInApp(DeepLinks.courseUri(course.id)) },
+                                )
+                            }
+                        }
+
+                        is OverlayTarget.TaskDetail -> {
+                            val task = live.tasks.firstOrNull { it.id == activeTarget.taskId }
+                            if (task == null) {
+                                LaunchedEffect(Unit) { onDismiss() }
+                            } else if (WidgetKit.isParcel(task)) {
+                                OverlayParcelCard(
                                     snap = live,
                                     defaultBlockMinutes = settings.defaultBlockMinutes,
-                                    initialCourseId = target.initialCourseId,
-                                    initialText = target.initialText,
-                                    registerDismissHook = { externalDismissHook = it },
-                                    onExpand = { draft ->
-                                        onOpenInApp(DeepLinks.addUri(draft.ifBlank { null }, target.initialCourseId))
+                                    task = task,
+                                    onMarkDone = {
+                                        val msg = ctx.getString(R.string.widget_overlay_parcel_done_toast, task.title)
+                                        commitAndRefresh(
+                                            Edits.toggleTask(live, task, true, System.currentTimeMillis(), LocalDateTime.now(), task.title),
+                                            toast = msg,
+                                            closeAfter = true,
+                                        )
                                     },
-                                    onCommit = { cs, msg -> commitAndRefresh(cs, msg, closeAfter = true) },
+                                    onCommit = { cs, msg -> commitAndRefresh(cs, msg, closeAfter = false) },
+                                    onExpand = { onOpenInApp(DeepLinks.taskUri(task.id)) },
+                                )
+                            } else {
+                                OverlayTaskCard(
+                                    snap = live,
+                                    defaultBlockMinutes = settings.defaultBlockMinutes,
+                                    task = task,
+                                    registerDismissHook = { dismissHook = it },
+                                    onToggleDone = { t, done, closeAfter ->
+                                        val desc = ctx.getString(R.string.edit_task_desc, t.title)
+                                        val msg =
+                                            if (done) ctx.getString(R.string.widget_overlay_task_done_toast, t.title) else null
+                                        commitAndRefresh(
+                                            Edits.toggleTask(live, t, done, System.currentTimeMillis(), LocalDateTime.now(), desc),
+                                            toast = msg,
+                                            closeAfter = closeAfter,
+                                        )
+                                    },
+                                    onCommitEdit = { updated, msg, closeAfter, thenOpenUri ->
+                                        val desc = ctx.getString(R.string.edit_task_desc, updated.title)
+                                        commitAndRefresh(
+                                            Edits.save(live, updated, desc, System.currentTimeMillis()),
+                                            toast = msg,
+                                            closeAfter = closeAfter,
+                                            thenOpenUri = thenOpenUri,
+                                        )
+                                    },
+                                    onDelete = {
+                                        commitAndRefresh(
+                                            Edits.delete(
+                                                live,
+                                                task,
+                                                ctx.getString(R.string.delete_desc, task.title),
+                                                System.currentTimeMillis(),
+                                            ),
+                                            toast = ctx.getString(R.string.widget_overlay_deleted_toast, task.title),
+                                            closeAfter = true,
+                                        )
+                                    },
+                                    onOpenInApp = { onOpenInApp(DeepLinks.taskUri(task.id)) },
                                     onDismiss = onDismiss,
                                 )
                             }
+                        }
 
-                            is OverlayTarget.CourseDetail -> {
-                                val course = live.courses.firstOrNull { it.id == target.courseId }
-                                if (course == null) {
-                                    LaunchedEffect(Unit) { onOpenInApp(DeepLinks.timetableUri()) }
-                                } else {
-                                    OverlayCourseCard(
-                                        snap = live,
-                                        course = course,
-                                        dateStr = target.dateStr,
-                                        startPeriod = target.startPeriod,
-                                        endPeriod = target.endPeriod,
-                                        onToggleTask = { task, done ->
-                                            val nowDt = LocalDateTime.now()
-                                            val desc = ctx.getString(R.string.edit_task_desc, task.title)
-                                            val toast =
-                                                if (done) ctx.getString(R.string.widget_overlay_task_done_toast, task.title) else null
-                                            commitAndRefresh(
-                                                Edits.toggleTask(live, task, done, System.currentTimeMillis(), nowDt, desc),
-                                                toast = toast,
-                                                closeAfter = false,
-                                            )
-                                        },
-                                        onOpenTask = { task ->
-                                            onChangeTarget(OverlayTarget.TaskDetail(task.id))
-                                        },
-                                        onAddCourseTask = {
-                                            onChangeTarget(OverlayTarget.Add(initialCourseId = course.id))
-                                        },
-                                        onExpand = { onOpenInApp(DeepLinks.courseUri(course.id)) },
-                                    )
-                                }
-                            }
-
-                            is OverlayTarget.TaskDetail -> {
-                                val task = live.tasks.firstOrNull { it.id == target.taskId }
-                                if (task == null) {
-                                    LaunchedEffect(Unit) { onDismiss() }
-                                } else if (WidgetKit.isParcel(task)) {
-                                    OverlayParcelCard(
-                                        snap = live,
-                                        defaultBlockMinutes = settings.defaultBlockMinutes,
-                                        task = task,
-                                        onMarkDone = {
-                                            val msg = ctx.getString(R.string.widget_overlay_parcel_done_toast, task.title)
-                                            commitAndRefresh(
-                                                Edits.toggleTask(live, task, true, System.currentTimeMillis(), LocalDateTime.now(), task.title),
-                                                toast = msg,
-                                                closeAfter = true,
-                                            )
-                                        },
-                                        onCommit = { cs, msg -> commitAndRefresh(cs, msg, closeAfter = false) },
-                                        onExpand = { onOpenInApp(DeepLinks.taskUri(task.id)) },
-                                    )
-                                } else {
-                                    OverlayTaskCard(
-                                        snap = live,
-                                        defaultBlockMinutes = settings.defaultBlockMinutes,
-                                        task = task,
-                                        registerDismissHook = { externalDismissHook = it },
-                                        onToggleDone = { t, done, closeAfter ->
-                                            val desc = ctx.getString(R.string.edit_task_desc, t.title)
-                                            val msg =
-                                                if (done) ctx.getString(R.string.widget_overlay_task_done_toast, t.title) else null
-                                            commitAndRefresh(
-                                                Edits.toggleTask(live, t, done, System.currentTimeMillis(), LocalDateTime.now(), desc),
-                                                toast = msg,
-                                                closeAfter = closeAfter,
-                                            )
-                                        },
-                                        onCommitEdit = { updated, msg, closeAfter, thenOpenUri ->
-                                            val desc = ctx.getString(R.string.edit_task_desc, updated.title)
-                                            commitAndRefresh(
-                                                Edits.save(live, updated, desc, System.currentTimeMillis()),
-                                                toast = msg,
-                                                closeAfter = closeAfter,
-                                                thenOpenUri = thenOpenUri,
-                                            )
-                                        },
-                                        onDelete = {
-                                            commitAndRefresh(
-                                                Edits.delete(
-                                                    live,
-                                                    task,
-                                                    ctx.getString(R.string.delete_desc, task.title),
-                                                    System.currentTimeMillis(),
-                                                ),
-                                                toast = ctx.getString(R.string.widget_overlay_deleted_toast, task.title),
-                                                closeAfter = true,
-                                            )
-                                        },
-                                        onOpenInApp = { onOpenInApp(DeepLinks.taskUri(task.id)) },
-                                        onDismiss = onDismiss,
-                                    )
-                                }
-                            }
-
-                            is OverlayTarget.EventDetail -> {
-                                val event = live.events.firstOrNull { it.id == target.eventId }
-                                if (event == null) {
-                                    LaunchedEffect(Unit) { onDismiss() }
-                                } else {
-                                    OverlayEventCard(
-                                        event = event,
-                                        onOpenInApp = { onOpenInApp(DeepLinks.todayUri()) },
-                                    )
-                                }
+                        is OverlayTarget.EventDetail -> {
+                            val event = live.events.firstOrNull { it.id == activeTarget.eventId }
+                            if (event == null) {
+                                LaunchedEffect(Unit) { onDismiss() }
+                            } else {
+                                OverlayEventCard(
+                                    event = event,
+                                    onOpenInApp = { onOpenInApp(DeepLinks.todayUri()) },
+                                )
                             }
                         }
                     }
@@ -631,7 +646,7 @@ private fun OverlayQuickAddCard(
     defaultBlockMinutes: Int,
     initialCourseId: String?,
     initialText: String,
-    registerDismissHook: ((() -> Unit)?) -> Unit,
+    registerDismissHook: ((Pair<Boolean, () -> Unit>?) -> Unit),
     onExpand: (String) -> Unit,
     onCommit: (ChangeSet, String) -> Unit,
     onDismiss: () -> Unit,
@@ -671,9 +686,7 @@ private fun OverlayQuickAddCard(
 
     val hasDraft = text.isNotBlank() || panelWhen != null || panelRemindList.isNotEmpty() || panelFreq != null
     LaunchedEffect(hasDraft) {
-        registerDismissHook {
-            if (hasDraft) confirmDiscard = true else onDismiss()
-        }
+        registerDismissHook(if (hasDraft) (true to { confirmDiscard = true }) else null)
     }
 
     fun rewriteToken(
@@ -1225,7 +1238,7 @@ private fun OverlayTaskCard(
     snap: Snapshot,
     defaultBlockMinutes: Int,
     task: Task,
-    registerDismissHook: ((() -> Unit)?) -> Unit,
+    registerDismissHook: ((Pair<Boolean, () -> Unit>?) -> Unit),
     onToggleDone: (Task, Boolean, Boolean) -> Unit,
     onCommitEdit: (Task, String?, Boolean, Uri?) -> Unit,
     onDelete: () -> Unit,
@@ -1383,9 +1396,13 @@ private fun OverlayTaskCard(
         byDays,
         byMonths,
     ) {
-        registerDismissHook {
-            if (isDirty && title.trim().isNotEmpty()) saveAndMaybe(closeAfter = true) else onDismiss()
-        }
+        registerDismissHook(
+            if (isDirty && title.trim().isNotEmpty()) {
+                false to { saveAndMaybe(closeAfter = true) }
+            } else {
+                null
+            },
+        )
     }
 
     val whenText =

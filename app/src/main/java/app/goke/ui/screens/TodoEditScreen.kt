@@ -43,7 +43,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -91,6 +93,7 @@ import app.goke.core.todo.TaskLogic
 import app.goke.core.util.Ids
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalNav
+import app.goke.ui.LocalRouteBackHolder
 import app.goke.ui.Tab
 import app.goke.ui.components.AttachmentEditor
 import app.goke.ui.components.ChipPill
@@ -523,7 +526,15 @@ fun TodoEditScreen(
             else -> confirmDiscard = true
         }
     }
-    BackHandler(enabled = !committed) { requestBack() }
+    val needsDiscardConfirm = existing == null && title.isNotBlank()
+    BackHandler(enabled = !committed && needsDiscardConfirm) { requestBack() }
+    val backHolder = LocalRouteBackHolder.current
+    SideEffect {
+        backHolder?.onCommitBack = if (!committed && !needsDiscardConfirm) ::requestBack else null
+    }
+    DisposableEffect(backHolder) {
+        onDispose { backHolder?.onCommitBack = null }
+    }
 
     var pageMenu by remember { mutableStateOf(false) }
     MintScreen(

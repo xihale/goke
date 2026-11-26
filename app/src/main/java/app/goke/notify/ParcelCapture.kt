@@ -112,8 +112,7 @@ object ParcelCapture {
                     val t = raw.trim()
                     if (t.isEmpty()) continue
                     if (noteIfRedacted(t)) continue
-                    info = app.parcelRules.value.parse(t, now)
-                    if (info != null) break
+                    if (info == null) info = app.parcelRules.value.parse(t, now)
                 }
                 val parsed = info ?: return@withContext false
                 mutex.withLock {

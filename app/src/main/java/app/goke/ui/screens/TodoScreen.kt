@@ -1,6 +1,11 @@
 package app.goke.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -704,8 +709,14 @@ private fun TodoFilterBar(
     val typography = MaterialTheme.typography
     val onSurfaceVariant = scheme.onSurfaceVariant
     val cardColor = MintTheme.card
+    val panelEnter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec())
+    val panelExit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec())
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (searching) {
+        AnimatedVisibility(
+            visible = searching,
+            enter = panelEnter,
+            exit = panelExit,
+        ) {
             // 无框搜索：柔色胶囊 + 搜索图标，唯一的描边输入框已经拆掉
             Row(
                 Modifier
@@ -790,7 +801,11 @@ private fun TodoFilterBar(
             }
         }
         // 同窗口内轻量展开筛选条，彻底消除弹窗 Window 的 Binder 阻塞
-        if (listMenu) {
+        AnimatedVisibility(
+            visible = listMenu,
+            enter = panelEnter,
+            exit = panelExit,
+        ) {
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -817,7 +832,11 @@ private fun TodoFilterBar(
                 }
             }
         }
-        if (priorityMenu) {
+        AnimatedVisibility(
+            visible = priorityMenu,
+            enter = panelEnter,
+            exit = panelExit,
+        ) {
             Row(
                 Modifier
                     .fillMaxWidth()

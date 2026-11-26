@@ -47,7 +47,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -85,6 +87,7 @@ import app.goke.core.time.WeekSets
 import app.goke.core.util.Ids
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalNav
+import app.goke.ui.LocalRouteBackHolder
 import app.goke.ui.Route
 import app.goke.ui.components.ChipChoice
 import app.goke.ui.components.ConfirmDialog
@@ -426,7 +429,15 @@ fun CourseEditScreen(
             }
         }
     }
-    BackHandler(enabled = !committed) { requestBack() }
+    val needsDiscardConfirm = (name.isBlank() && dirty) || (origin == null && dirty) || (origin != null && dirty && !valid)
+    BackHandler(enabled = !committed && needsDiscardConfirm) { requestBack() }
+    val backHolder = LocalRouteBackHolder.current
+    SideEffect {
+        backHolder?.onCommitBack = if (!committed && !needsDiscardConfirm) ::requestBack else null
+    }
+    DisposableEffect(backHolder) {
+        onDispose { backHolder?.onCommitBack = null }
+    }
 
     val defaultRemindSummary =
         stringResource(

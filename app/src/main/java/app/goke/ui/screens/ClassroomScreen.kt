@@ -1,13 +1,16 @@
 package app.goke.ui.screens
 
-import androidx.activity.compose.BackHandler
+import androidx.activity.BackEventCompat
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -138,6 +141,7 @@ import app.goke.ui.reduceMotion
 import app.goke.ui.rememberToday
 import app.goke.ui.theme.MintTheme
 import app.goke.ui.weekdayShort
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import kotlin.math.roundToInt
@@ -482,8 +486,32 @@ fun ClassroomScreen(
         }
     }
 
-    BackHandler(enabled = selectedRoom != null) {
-        selectedRoomCode = null
+    val roomBackScope = rememberCoroutineScope()
+    val roomReduce = reduceMotion()
+    val roomPredictiveProgress = remember { Animatable(0f) }
+    var roomSwipeEdge by remember { mutableIntStateOf(BackEventCompat.EDGE_LEFT) }
+
+    LaunchedEffect(selectedRoom != null) {
+        roomPredictiveProgress.snapTo(0f)
+    }
+
+    PredictiveBackHandler(enabled = selectedRoom != null) { progress ->
+        try {
+            progress.collect { event ->
+                roomSwipeEdge = event.swipeEdge
+                roomPredictiveProgress.snapTo(event.progress.coerceIn(0f, 1f))
+            }
+            selectedRoomCode = null
+        } catch (e: CancellationException) {
+            roomBackScope.launch {
+                if (roomPredictiveProgress.value > 0f && !roomReduce) {
+                    roomPredictiveProgress.animateTo(0f, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 1400f))
+                } else {
+                    roomPredictiveProgress.snapTo(0f)
+                }
+            }
+            throw e
+        }
     }
 
     val screenTitle =
@@ -532,7 +560,27 @@ fun ClassroomScreen(
         val slideSpec = MintTheme.spec<IntOffset>()
         val fadeSpec = MintTheme.spec<Float>()
 
-        Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val p = roomPredictiveProgress.value.coerceIn(0f, 1f)
+                    if (p > 0.001f && selectedRoom != null) {
+                        val dir = if (roomSwipeEdge == BackEventCompat.EDGE_RIGHT) -1f else 1f
+                        val sc = 1f - 0.06f * p
+                        scaleX = sc
+                        scaleY = sc
+                        translationX = dir * 16.dp.toPx() * p
+                        clip = true
+                        shape = RoundedCornerShape((20f * p).dp)
+                    } else {
+                        scaleX = 1f
+                        scaleY = 1f
+                        translationX = 0f
+                        clip = false
+                    }
+                },
+        ) {
             AnimatedContent(
                 targetState = selectedRoom != null && activeBuilding != null,
                 transitionSpec = {

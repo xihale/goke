@@ -184,9 +184,12 @@ internal fun QuickAddSheet(
         }
     }
 
-    // 未展开时真正早退：跳过内部 UI、BackHandler 与焦点逻辑，
+    var sheetAlive by remember { mutableStateOf(visible) }
+    if (visible && !sheetAlive) sheetAlive = true
+
+    // 未展开且已完全退场时真正早退：跳过内部 UI、BackHandler 与焦点逻辑，
     // 避免今日/日历/待办 3 个 Tab 重复空转与常驻监听。
-    if (!visible) return
+    if (!visible && !sheetAlive) return
 
     val ctx = LocalContext.current
     val actions = LocalActions.current
@@ -217,9 +220,10 @@ internal fun QuickAddSheet(
         }
     }
 
-    // 只有可见时向外报状态
+    LaunchedEffect(visible) {
+        nav.composerOpen = visible
+    }
     DisposableEffect(Unit) {
-        nav.composerOpen = true
         onDispose { nav.composerOpen = false }
     }
     val focus = remember { FocusRequester() }
@@ -236,9 +240,9 @@ internal fun QuickAddSheet(
             }
         }
 
-    LaunchedEffect(focusSignal) { if (focusSignal > 0) focus.requestFocus() }
+    LaunchedEffect(focusSignal) { if (visible && focusSignal > 0) focus.requestFocus() }
     // 打开即弹键盘。日期不写进输入框，避免「今天」占掉标题。
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    LaunchedEffect(visible) { if (visible) focus.requestFocus() }
 
     /** 去掉某类片段后（可选）追加一个新片段，用于快捷条点按。 */
     fun rewrite(
@@ -328,9 +332,6 @@ internal fun QuickAddSheet(
 
     val currentRequestDiscard by rememberUpdatedState(::requestDiscard)
 
-    // 返回 = 空白直接收起，有草稿先确认放弃
-    BackHandler(enabled = isTabVisible) { requestDiscard() }
-
     /** 点「确定」（或键盘完成键）：写了内容就落库，没写就是取消。 */
     fun finish() {
         if (submitted || !hasBodyText) return
@@ -401,67 +402,65 @@ internal fun QuickAddSheet(
         }
     val defaultListLabel = remember(snap.lists, listFilter) { listFilter?.let { id -> snap.lists.firstOrNull { it.id == id }?.name } }
 
-    Box(modifier.fillMaxSize()) {
-        // 遮罩：点空白 = 空白直接收起，有草稿先确认放弃。压浅一点，列表还看得见。
-        Box(
-            Modifier
-                .matchParentSize()
-                .background(Color.Black.copy(alpha = 0.2f))
-                .pointerInput(Unit) { detectTapGestures { currentRequestDiscard() } },
+    app.goke.ui.components.MintSheetOverlay(
+        visible = visible,
+        onDismissRequest = { discard() },
+        modifier = modifier,
+        scrimAlpha = 0.22f,
+        canDragDismiss = visible,
+        predictiveBackEnabled = visible && isTabVisible,
+        needsConfirmOnDismiss = hasDraft,
+        onDismissConfirmRequest = { currentRequestDiscard() },
+        onExited = { sheetAlive = false },
+        sheetModifier = Modifier.windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
         )
-        Surface(
-            modifier =
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            shadowElevation = 0.dp,
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
         ) {
-            Column(Modifier.fillMaxWidth()) {
-                HorizontalDivider(
-                    thickness = 0.5.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                )
-                Column(Modifier.padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 8.dp)) {
-                    QuickAddComposer(
-                        snap = snap,
-                        now = now,
-                        text = text,
-                        onTextChange = { text = it },
-                        parsed = parsed,
-                        highlight = highlight,
-                        focusRequester = focus,
-                        toolPanel = toolPanel,
-                        onToolPanelChange = { toolPanel = it },
-                        panelWhen = panelWhen,
-                        panelRemindList = panelRemindList,
-                        panelFreq = panelFreq,
-                        panelInterval = panelInterval,
-                        panelByDays = panelByDays,
-                        panelByMonths = panelByMonths,
-                        defaultDateLabel = defaultDateLabel,
-                        defaultListLabel = defaultListLabel,
-                        expandLabel = stringResource(R.string.detail_editor_full_edit),
-                        onExpand = { openDetail() },
-                        submitLabel = stringResource(R.string.confirm),
-                        canSubmit = hasBodyText && !submitted,
-                        onSubmit = { finish() },
-                        onOpenWhenPanel = { whenPanel = true },
-                        onClearWhenOverrides = {
-                            panelWhen = null
-                            panelRemindList = emptyList()
-                            panelPersistent = false
-                            panelFreq = null
-                            panelUntil = null
-                            panelByDays = emptySet()
-                            panelByMonths = emptySet()
-                        },
-                        onRewriteToken = ::rewrite,
-                    )
-                }
-            }
+            QuickAddComposer(
+                snap = snap,
+                now = now,
+                text = text,
+                onTextChange = { text = it },
+                parsed = parsed,
+                highlight = highlight,
+                focusRequester = focus,
+                toolPanel = toolPanel,
+                onToolPanelChange = { toolPanel = it },
+                panelWhen = panelWhen,
+                panelRemindList = panelRemindList,
+                panelFreq = panelFreq,
+                panelInterval = panelInterval,
+                panelByDays = panelByDays,
+                panelByMonths = panelByMonths,
+                defaultDateLabel = defaultDateLabel,
+                defaultListLabel = defaultListLabel,
+                expandLabel = stringResource(R.string.detail_editor_full_edit),
+                onExpand = { openDetail() },
+                submitLabel = stringResource(R.string.confirm),
+                canSubmit = hasBodyText && !submitted,
+                onSubmit = { finish() },
+                onOpenWhenPanel = { whenPanel = true },
+                onClearWhenOverrides = {
+                    panelWhen = null
+                    panelRemindList = emptyList()
+                    panelPersistent = false
+                    panelFreq = null
+                    panelUntil = null
+                    panelByDays = emptySet()
+                    panelByMonths = emptySet()
+                },
+                onRewriteToken = ::rewrite,
+            )
         }
     }
 

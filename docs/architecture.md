@@ -35,7 +35,7 @@ server/internal/server/web/app/   # Web 客户端（js/views + app.css）
 
 - **无 ViewModel**：状态经 `LocalApp` / `LocalActions` / `LocalNav` CompositionLocal 与参数下传，屏幕保持纯函数。
 - **写操作统一走变更集**：页面通过 `LocalActions.current.commit(cs, message, undoable)` 提交 `ChangeSet`，可撤销操作通过左下角撤销浮钮回滚，不可撤销操作退化为系统 Toast。
-- **路由表与返回栈**：`Route` 为 `@Serializable sealed interface`（`ui/Nav.kt`），`Nav.stack`（`SnapshotStateList<BackEntry>`）作为唯一返回栈真源；压栈页统一经 `ui/GokeRoot.kt` 的 `RouteStackHost`（`AnimatedContent` + `rememberSaveableStateHolder` + 穷尽 `when (route)`）渲染，新增路由缺漏即编译期报错。
+- **路由表与返回栈**：`Route` 为 `@Serializable sealed interface`（`ui/Nav.kt`），`Nav.stack`（`SnapshotStateList<BackEntry>`）作为唯一返回栈真源；压栈页统一经 `ui/GokeRoot.kt` 的 `RouteStackHost`（状态驱动转场 + `PredictiveBackHandler` 预测性返回 + `rememberSaveableStateHolder` + 穷尽 `when (route)`）渲染，新增路由缺漏即编译期报错。
 - **Tab 层常驻**：底层 `Tabs` 常驻承载 `Tab.TODAY` / `Tab.TIMETABLE` / `Tab.CALENDAR` / `Tab.TODO` / `Tab.ME` 五个 Tab，切换零重组，不参与压栈转场；压栈页覆盖其上，弹栈后底层 Tab 状态零重建。
 - **返回导航规范（Back-Navigation Best Practices）**：
   1. **单一真源**：所有二级页必须通过 `Route` + `RouteStackHost` 进出栈，禁止再引入 `NavHost`、`ModalHost` 或额外的根级 `BackHandler`；窗口内抽屉须挂载在所属 Tab/Route 子树内。
@@ -53,8 +53,7 @@ server/internal/server/web/app/   # Web 客户端（js/views + app.css）
   - 确认弹窗：`ConfirmDialog` / M3 `AlertDialog`。
 - **经审计保留的自定义组件与明确理由**：
   - `RouteStackHost` / `Nav`（`GokeRoot.kt` / `Nav.kt`）：替代 `NavHost`，避免 `navigation-compose` 内置 `PredictiveBackHandler` 与多 Tab/手势撤销组合导致返回锁死，且本工程无 ViewModel / SavedStateHandle。
-  - `InWindowSheet`（`TimetableScreen.kt`）：课表快速预览不直接用 `MintBottomSheet`/`ModalBottomSheet`，因新建独立 `DialogWindow` 会触发 14 次同步 Binder IPC 与窗口重排，导致课表点击延迟。
-  - `QuickAddSheet`（`QuickAddBar.kt`）：不直接用 `ModalBottomSheet`，因其独立 Window 会抢走或关闭软键盘焦点，无法与键盘顶部的内联筛选面板和 `rememberNoFocusPopup` 联动。
+  - `InWindowSheet` / `QuickAddSheet` / `WidgetOverlayRoot`（复用 `FormKit.kt` 的 `MintSheetOverlay`）：课表快速预览、快速添加及桌面悬浮层共用同一套窗口内物理抽屉容器，避免 `DialogWindow` Binder 阻塞与输入法抢焦点，同时统一弹簧入退场、1:1 下拉关闭与预测性返回手势。
   - `DatePickerDlg` + `MonthPager`（`Kit.kt` / `MonthPager.kt`）：复用 M3 `DatePickerDialog`，仅替换内容为 `MonthPager` 以保留「今天/明天」直达及农历/教学周标记（官方 `DatePicker` 高度过大且不支持教学周）。
   - `TimePickerDlg` + `TimeWheels` / `DialDialog`（`Kit.kt` / `DialPickers.kt`）：分别用双列滚轮与 24h 双环表盘替代 M3 时钟，优化手机单手选分钟与快速时长输入手感。
   - `MintCheck` & `mintClickable` / `mintPressable` & `FloatingNavBar`（`Kit.kt`）：基于 `Modifier.Node` / `Canvas` 自绘，保证 48dp 最小命中区、点击零振动、静止零协程及列表/底栏滑动零多余重组。

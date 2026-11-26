@@ -1629,66 +1629,27 @@ private fun InWindowSheet(
     onDismiss: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    BackHandler(enabled = visible && LocalTabVisible.current.value) { onDismiss() }
-    val reduce = reduceMotion()
-    val enterSpec = if (reduce) snap() else MintTheme.spec<IntOffset>()
-    val exitSpec = if (reduce) snap() else MintTheme.spec<IntOffset>()
-    val fadeSpec = if (reduce) snap() else MintTheme.spec<Float>()
-
-    AnimatedVisibility(
+    app.goke.ui.components.MintSheetOverlay(
         visible = visible,
-        enter = fadeIn(fadeSpec),
-        exit = fadeOut(fadeSpec),
-    ) {
-        Box(
+        onDismissRequest = onDismiss,
+        scrimAlpha = 0.35f,
+        canDragDismiss = true,
+        predictiveBackEnabled = visible && LocalTabVisible.current.value,
+        sheetModifier =
             Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.35f))
-                .pointerInput(Unit) {
-                    detectTapGestures { onDismiss() }
-                },
-        )
-    }
-
-    AnimatedVisibility(
-        visible = visible,
-        enter = slideInVertically(enterSpec) { it },
-        exit = slideOutVertically(exitSpec) { it },
-        modifier = Modifier.fillMaxSize(),
+                .statusBarsPadding()
+                .padding(top = 16.dp),
+        shape = SheetShape,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 2.dp,
+        dragHandle = true,
     ) {
-        Box(
-            Modifier.fillMaxSize(),
-            contentAlignment = Alignment.BottomCenter,
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding(),
         ) {
-            Surface(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(top = 16.dp)
-                        .pointerInput(Unit) {
-                            detectTapGestures {}
-                        },
-                shape = SheetShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                tonalElevation = 2.dp,
-            ) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding(),
-                ) {
-                    Box(
-                        Modifier
-                            .padding(top = 12.dp, bottom = 8.dp)
-                            .size(width = 32.dp, height = 4.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-                            .align(Alignment.CenterHorizontally),
-                    )
-                    content()
-                }
-            }
+            content()
         }
     }
 }
