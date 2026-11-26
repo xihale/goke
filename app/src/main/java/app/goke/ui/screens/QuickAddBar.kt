@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -70,12 +72,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -115,10 +120,10 @@ import app.goke.ui.icons.Event
 import app.goke.ui.icons.Flag
 import app.goke.ui.icons.Inbox
 import app.goke.ui.icons.LocalOffer
-import app.goke.ui.icons.MoreHoriz
 import app.goke.ui.icons.NotificationsNone
 import app.goke.ui.icons.OpenInFull
 import app.goke.ui.icons.Repeat
+import app.goke.ui.icons.School
 import app.goke.ui.settingsState
 import app.goke.ui.theme.MintTheme
 import app.goke.ui.theme.priorityColor
@@ -127,7 +132,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 
 /** 工具栏就地展开的选择面板（不弹浮层，键盘不动）。 */
-internal enum class QuickPanel { PRIORITY, LIST, TAG, MORE }
+internal enum class QuickPanel { PRIORITY, LIST, TAG, COURSE }
 
 /** 优先级档位的快捷语法文字：`!高` / `!中` / `!低`，与 [QuickAdd] 的解析口径一致。 */
 internal fun priorityToken(v: Int): Int =
@@ -137,10 +142,39 @@ internal fun priorityToken(v: Int): Int =
         else -> R.string.priority_1
     }
 
+/** 去掉某类片段后（可选）追加新片段，并把光标放到末尾；前缀引导（# / @ / /）后不加多余空格。 */
+internal fun rewriteQuickField(
+    current: String,
+    tokens: List<QuickToken>,
+    kinds: Set<QuickTokenKind>,
+    add: String?,
+): TextFieldValue {
+    val removeRanges =
+        tokenRanges(current, tokens)
+            .filter { it.first.kind in kinds }
+            .map { it.second }
+            .sortedByDescending { it.first }
+    var t = current
+    for (r in removeRanges) {
+        t = t.substring(0, r.first) + " " + t.substring(r.last + 1)
+    }
+    t = t.replace(Regex("\\s+"), " ").trim()
+    val isPrefixPrompt = add == "#" || add == "@" || add == "/"
+    val next =
+        when {
+            add == null -> t
+            isPrefixPrompt && (t == add || t.endsWith(" $add")) -> t
+            t.isEmpty() -> if (isPrefixPrompt) add else "$add "
+            isPrefixPrompt -> "$t $add"
+            else -> "$t $add "
+        }
+    return TextFieldValue(text = next, selection = TextRange(next.length))
+}
+
 /**
  * 快速添加：右下角加号打开，输入区贴在键盘上方。
  * 点「确定」（或键盘完成键）才落库；点空白 / 返回收起即丢弃草稿。
- * 日期、优先级、清单在工具条上；详细编辑、粘贴、课程收进更多。
+ * 日期、优先级、清单与关联课程在工具条上；点右上角可展开详细编辑。
  * [anchorDate] 不写进输入框，只在没写日期时作为这一天的默认落点。
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -193,7 +227,8 @@ internal fun QuickAddSheet(
 
     val ctx = LocalContext.current
     val actions = LocalActions.current
-    var text by rememberSaveable { mutableStateOf("") }
+    var field by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
+    val text = field.text
     // 工具栏的优先级 / 清单同样就地展开，不弹浮层（浮层在键盘上方会留一条空、还遮住输入）
     var toolPanel by remember { mutableStateOf<QuickPanel?>(null) }
     // 日期面板：日期/时间段 + 提醒 + 重复一次选好；设了就压过文本里识别出的日期
@@ -249,24 +284,7 @@ internal fun QuickAddSheet(
         kinds: Set<QuickTokenKind>,
         add: String?,
     ) {
-        val removeRanges =
-            tokenRanges(text, parsed?.tokens.orEmpty())
-                .filter { it.first.kind in kinds }
-                .map { it.second }
-                .sortedByDescending { it.first }
-        var t = text
-        for (r in removeRanges) {
-            t = t.substring(0, r.first) + " " + t.substring(r.last + 1)
-        }
-        t = t.replace(Regex("\\s+"), " ").trim()
-        text =
-            if (add == null) {
-                t
-            } else if (t.isEmpty()) {
-                "$add "
-            } else {
-                "$t $add"
-            }
+        field = rewriteQuickField(field.text, parsed?.tokens.orEmpty(), kinds, add)
         focus.requestFocus()
     }
 
@@ -305,7 +323,7 @@ internal fun QuickAddSheet(
     }
 
     fun clearDraft() {
-        text = ""
+        field = TextFieldValue("")
         panelWhen = null
         panelRemindList = emptyList()
         panelPersistent = false
@@ -429,8 +447,8 @@ internal fun QuickAddSheet(
             QuickAddComposer(
                 snap = snap,
                 now = now,
-                text = text,
-                onTextChange = { text = it },
+                field = field,
+                onFieldChange = { field = it },
                 parsed = parsed,
                 highlight = highlight,
                 focusRequester = focus,
@@ -450,15 +468,6 @@ internal fun QuickAddSheet(
                 canSubmit = hasBodyText && !submitted,
                 onSubmit = { finish() },
                 onOpenWhenPanel = { whenPanel = true },
-                onClearWhenOverrides = {
-                    panelWhen = null
-                    panelRemindList = emptyList()
-                    panelPersistent = false
-                    panelFreq = null
-                    panelUntil = null
-                    panelByDays = emptySet()
-                    panelByMonths = emptySet()
-                },
                 onRewriteToken = ::rewrite,
             )
         }
@@ -490,6 +499,9 @@ internal fun QuickAddSheet(
                 panelUntil = r.until
                 panelByDays = r.byDays
                 panelByMonths = r.byMonths
+                if (r.whenPick == null && r.remindMinutesList.isEmpty() && r.freq == null) {
+                    rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME), null)
+                }
                 whenPanel = false
             },
         )
@@ -508,7 +520,7 @@ internal fun QuickAddSheet(
 
 /**
  * 快速添加的统一输入体 + 工具栏（应用内浮层与桌面小组件悬浮层共用）：
- * 右上角展开全屏编辑，中部留白输入区带行内语法着色，底栏单行呈现日期/优先级/标签/清单/更多与发送，
+ * 右上角展开全屏编辑，中部留白输入区带行内语法着色，底栏左侧可横向滑动容纳日期/优先级/标签/清单/课程，右侧固定发送，
  * 选中属性直接体现在底栏图标或文案上，不再在下方堆砌胶囊。
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -516,8 +528,8 @@ internal fun QuickAddSheet(
 internal fun QuickAddComposer(
     snap: Snapshot,
     now: LocalDateTime,
-    text: String,
-    onTextChange: (String) -> Unit,
+    field: TextFieldValue,
+    onFieldChange: (TextFieldValue) -> Unit,
     parsed: QuickAddResult?,
     highlight: VisualTransformation,
     focusRequester: FocusRequester,
@@ -535,7 +547,6 @@ internal fun QuickAddComposer(
     canSubmit: Boolean,
     onSubmit: () -> Unit,
     onOpenWhenPanel: () -> Unit,
-    onClearWhenOverrides: () -> Unit,
     onRewriteToken: (Set<QuickTokenKind>, String?) -> Unit,
     defaultDateLabel: String? = null,
     defaultListLabel: String? = null,
@@ -545,6 +556,7 @@ internal fun QuickAddComposer(
     val scheme = MaterialTheme.colorScheme
     val colors = MintTheme.colors
     val today = now.toLocalDate()
+    val text = field.text
 
     val existingTags =
         remember(snap.tasks) {
@@ -559,8 +571,13 @@ internal fun QuickAddComposer(
                 .toList()
         }
     val activeCourses =
-        remember(snap.courses) {
-            snap.courses.filter { it.deletedAt == null }.take(10)
+        remember(snap.courses, snap.currentSemester) {
+            val semId = snap.currentSemester?.id
+            val base = snap.courses.filter { it.deletedAt == null && !it.isExam }
+            val scoped = if (semId != null) base.filter { it.semesterId == semId }.ifEmpty { base } else base
+            scoped
+                .sortedWith(compareBy({ it.dayOfWeek }, { it.startPeriod }, { it.name }))
+                .distinctBy { it.name.trim() }
         }
 
     val parsedDue = parsed?.due
@@ -594,7 +611,7 @@ internal fun QuickAddComposer(
     val listActive = parsed?.listName != null || defaultListLabel != null
 
     val tagActive = parsed?.tags?.isNotEmpty() == true
-    val moreActive = toolPanel == QuickPanel.MORE || parsed?.courseName != null
+    val courseActive = toolPanel == QuickPanel.COURSE || parsed?.courseName != null
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         Column(Modifier.weight(1f)) {
@@ -612,8 +629,8 @@ internal fun QuickAddComposer(
                     .heightIn(min = 60.dp),
             ) {
                 BasicTextField(
-                    value = text,
-                    onValueChange = onTextChange,
+                    value = field,
+                    onValueChange = onFieldChange,
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -734,7 +751,7 @@ internal fun QuickAddComposer(
                 ChipPill("@$tag", on = selected) {
                     if (selected) {
                         val cleaned = text.replace(Regex("@${Regex.escape(tag)}\\s*"), "").replace(Regex("\\s+"), " ").trimStart()
-                        onTextChange(cleaned)
+                        onFieldChange(TextFieldValue(cleaned, TextRange(cleaned.length)))
                     } else {
                         onRewriteToken(emptySet(), "@$tag")
                     }
@@ -749,36 +766,83 @@ internal fun QuickAddComposer(
     }
 
     AnimatedVisibility(
-        visible = toolPanel == QuickPanel.MORE,
+        visible = toolPanel == QuickPanel.COURSE && linkedCourse == null && activeCourses.isNotEmpty(),
         enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
         exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
     ) {
-        FlowRow(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(max = 132.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            ChipPill(stringResource(R.string.date_and_repeat), on = panelRemindList.isNotEmpty() || panelFreq != null) {
-                onToolPanelChange(null)
-                onOpenWhenPanel()
-            }
-            if (panelWhen != null || panelRemindList.isNotEmpty() || panelFreq != null) {
-                ChipPill(stringResource(R.string.clear_time), on = false) {
-                    onClearWhenOverrides()
-                    onToolPanelChange(null)
+        Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.quick_add_course_hint),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                if (parsed?.courseName != null) {
+                    Box(
+                        Modifier
+                            .clip(CircleShape)
+                            .mintClickable(pressedScale = 0.96f, role = Role.Button) {
+                                onRewriteToken(setOf(QuickTokenKind.COURSE), null)
+                                onToolPanelChange(null)
+                            }.padding(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            stringResource(R.string.quick_add_unlink_course),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = scheme.primary,
+                        )
+                    }
                 }
             }
-            if (linkedCourse == null) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 176.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
                 activeCourses.forEach { c ->
                     val shortName = c.name.replace(" ", "")
                     val selected = parsed?.courseName?.equals(shortName, ignoreCase = true) == true
-                    ChipPill("/$shortName", on = selected) {
-                        onRewriteToken(setOf(QuickTokenKind.COURSE), if (selected) null else "/$shortName")
-                        onToolPanelChange(null)
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (selected) scheme.primaryContainer.copy(alpha = 0.55f) else Color.Transparent)
+                            .semantics { this.selected = selected }
+                            .mintClickable(pressedScale = 0.98f, role = Role.RadioButton) {
+                                onRewriteToken(setOf(QuickTokenKind.COURSE), if (selected) null else "/$shortName")
+                                onToolPanelChange(null)
+                            }.padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            Modifier
+                                .width(4.dp)
+                                .height(16.dp)
+                                .clip(CircleShape)
+                                .background(colors.fg(c.colorIndex)),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            c.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (selected) scheme.onPrimaryContainer else scheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (selected) {
+                            Icon(Icons.Rounded.Check, null, tint = scheme.primary, modifier = Modifier.size(18.dp))
+                        }
                     }
                 }
             }
@@ -786,105 +850,114 @@ internal fun QuickAddComposer(
     }
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        val pickDateDesc = stringResource(R.string.detail_editor_pick_date)
         Row(
-            modifier =
-                Modifier
-                    .heightIn(min = 44.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .mintClickable(pressedScale = 0.96f, role = Role.Button) { onOpenWhenPanel() }
-                    .semantics { if (whenLabel == null) contentDescription = pickDateDesc }
-                    .padding(horizontal = 6.dp, vertical = 8.dp),
+            Modifier
+                .weight(1f)
+                .horizontalScroll(rememberScrollState())
+                .padding(end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Icon(
-                Icons.Rounded.Event,
-                null,
-                tint = if (whenActive) scheme.primary else scheme.onSurfaceVariant,
-                modifier = Modifier.size(19.dp),
+            val pickDateDesc = stringResource(R.string.detail_editor_pick_date)
+            Row(
+                modifier =
+                    Modifier
+                        .heightIn(min = 44.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .mintClickable(pressedScale = 0.96f, role = Role.Button) { onOpenWhenPanel() }
+                        .semantics { if (whenLabel == null) contentDescription = pickDateDesc }
+                        .padding(horizontal = 6.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Icon(
+                    Icons.Rounded.Event,
+                    null,
+                    tint = if (whenActive) scheme.primary else scheme.onSurfaceVariant,
+                    modifier = Modifier.size(19.dp),
+                )
+                if (whenLabel != null) {
+                    Text(
+                        whenLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (whenActive) scheme.primary else scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 96.dp),
+                    )
+                }
+                if (panelFreq != null && panelWhen != null) {
+                    Icon(Icons.Rounded.Repeat, null, tint = scheme.primary, modifier = Modifier.size(14.dp))
+                }
+                if (panelRemindList.isNotEmpty() && (panelWhen != null || panelFreq != null)) {
+                    Icon(Icons.Rounded.NotificationsNone, null, tint = scheme.primary, modifier = Modifier.size(14.dp))
+                }
+            }
+
+            QuickComposerIconBtn(
+                icon = Icons.Rounded.Flag,
+                contentDescription = stringResource(R.string.label_priority),
+                tint = colors.priorityColor(parsed?.priority ?: 0) ?: scheme.onSurfaceVariant,
+                onClick = { onToolPanelChange(if (toolPanel == QuickPanel.PRIORITY) null else QuickPanel.PRIORITY) },
             )
-            if (whenLabel != null) {
+
+            QuickComposerIconBtn(
+                icon = Icons.Outlined.LocalOffer,
+                contentDescription = stringResource(R.string.field_tags),
+                tint = if (tagActive) scheme.secondary else scheme.onSurfaceVariant,
+                onClick = {
+                    if (existingTags.isEmpty()) {
+                        onRewriteToken(emptySet(), "@")
+                        onToolPanelChange(null)
+                    } else {
+                        onToolPanelChange(if (toolPanel == QuickPanel.TAG) null else QuickPanel.TAG)
+                    }
+                },
+            )
+
+            val listDesc = stringResource(R.string.label_list)
+            Row(
+                modifier =
+                    Modifier
+                        .heightIn(min = 44.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .mintClickable(pressedScale = 0.96f, role = Role.Button) {
+                            if (snap.lists.isEmpty()) {
+                                onRewriteToken(setOf(QuickTokenKind.LIST), "#")
+                                onToolPanelChange(null)
+                            } else {
+                                onToolPanelChange(if (toolPanel == QuickPanel.LIST) null else QuickPanel.LIST)
+                            }
+                        }.semantics { contentDescription = listDesc }
+                        .padding(horizontal = 6.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Icon(
+                    Icons.Rounded.Inbox,
+                    null,
+                    tint = if (listActive) scheme.primary else scheme.onSurfaceVariant,
+                    modifier = Modifier.size(19.dp),
+                )
                 Text(
-                    whenLabel,
+                    listLabel,
                     style = MaterialTheme.typography.labelLarge,
-                    color = if (whenActive) scheme.primary else scheme.onSurfaceVariant,
+                    color = if (listActive) scheme.primary else scheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 96.dp),
+                    modifier = Modifier.widthIn(max = 76.dp),
                 )
             }
-            if (panelFreq != null && panelWhen != null) {
-                Icon(Icons.Rounded.Repeat, null, tint = scheme.primary, modifier = Modifier.size(14.dp))
-            }
-            if (panelRemindList.isNotEmpty() && (panelWhen != null || panelFreq != null)) {
-                Icon(Icons.Rounded.NotificationsNone, null, tint = scheme.primary, modifier = Modifier.size(14.dp))
+
+            if (linkedCourse == null && activeCourses.isNotEmpty()) {
+                QuickComposerIconBtn(
+                    icon = Icons.Rounded.School,
+                    contentDescription = stringResource(R.string.quick_add_link_course),
+                    tint = if (courseActive) scheme.primary else scheme.onSurfaceVariant,
+                    onClick = { onToolPanelChange(if (toolPanel == QuickPanel.COURSE) null else QuickPanel.COURSE) },
+                )
             }
         }
-
-        QuickComposerIconBtn(
-            icon = Icons.Rounded.Flag,
-            contentDescription = stringResource(R.string.label_priority),
-            tint = colors.priorityColor(parsed?.priority ?: 0) ?: scheme.onSurfaceVariant,
-            onClick = { onToolPanelChange(if (toolPanel == QuickPanel.PRIORITY) null else QuickPanel.PRIORITY) },
-        )
-
-        QuickComposerIconBtn(
-            icon = Icons.Outlined.LocalOffer,
-            contentDescription = stringResource(R.string.field_tags),
-            tint = if (tagActive) scheme.secondary else scheme.onSurfaceVariant,
-            onClick = {
-                if (existingTags.isEmpty()) {
-                    onRewriteToken(emptySet(), "@")
-                    onToolPanelChange(null)
-                } else {
-                    onToolPanelChange(if (toolPanel == QuickPanel.TAG) null else QuickPanel.TAG)
-                }
-            },
-        )
-
-        val listDesc = stringResource(R.string.label_list)
-        Row(
-            modifier =
-                Modifier
-                    .heightIn(min = 44.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .mintClickable(pressedScale = 0.96f, role = Role.Button) {
-                        if (snap.lists.isEmpty()) {
-                            onRewriteToken(emptySet(), "#")
-                            onToolPanelChange(null)
-                        } else {
-                            onToolPanelChange(if (toolPanel == QuickPanel.LIST) null else QuickPanel.LIST)
-                        }
-                    }.semantics { contentDescription = listDesc }
-                    .padding(horizontal = 6.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            Icon(
-                Icons.Rounded.Inbox,
-                null,
-                tint = if (listActive) scheme.primary else scheme.onSurfaceVariant,
-                modifier = Modifier.size(19.dp),
-            )
-            Text(
-                listLabel,
-                style = MaterialTheme.typography.labelLarge,
-                color = if (listActive) scheme.primary else scheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 76.dp),
-            )
-        }
-
-        QuickComposerIconBtn(
-            icon = Icons.Rounded.MoreHoriz,
-            contentDescription = stringResource(R.string.more_options),
-            tint = if (moreActive) scheme.primary else scheme.onSurfaceVariant,
-            onClick = { onToolPanelChange(if (toolPanel == QuickPanel.MORE) null else QuickPanel.MORE) },
-        )
-
-        Spacer(Modifier.weight(1f))
 
         Box(
             modifier =
@@ -1061,13 +1134,20 @@ internal class TokenHighlight(
     }
 }
 
-/** 「/课名」匹配已有课程：先全名，再包含。 */
+/** 「/课名」匹配已有课程：优先当前学期非考试课，先全名再包含。 */
 internal fun matchCourse(
     snap: Snapshot,
     name: String?,
-) = name?.takeIf { it.isNotBlank() }?.let { n ->
-    snap.courses.firstOrNull { it.name.replace(" ", "") == n } ?: snap.courses.firstOrNull { it.name.contains(n, ignoreCase = true) }
-}
+): Course? =
+    name?.takeIf { it.isNotBlank() }?.let { n ->
+        val semId = snap.currentSemester?.id
+        val base = snap.courses.filter { it.deletedAt == null && !it.isExam }
+        val scoped = if (semId != null) base.filter { it.semesterId == semId }.ifEmpty { base } else base
+        scoped.firstOrNull { it.name.replace(" ", "") == n }
+            ?: scoped.firstOrNull { it.name.contains(n, ignoreCase = true) }
+            ?: snap.courses.firstOrNull { it.deletedAt == null && it.name.replace(" ", "") == n }
+            ?: snap.courses.firstOrNull { it.deletedAt == null && it.name.contains(n, ignoreCase = true) }
+    }
 
 /** 面板给出的覆盖值：时间/时间段 + 提醒 + 重复，只落在第一条顶层任务上。 */
 internal data class QuickOverride(

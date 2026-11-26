@@ -101,8 +101,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -171,6 +173,7 @@ import app.goke.ui.screens.WhenPick
 import app.goke.ui.screens.buildQuickTasks
 import app.goke.ui.screens.freqLabel
 import app.goke.ui.screens.remindSummaryLabel
+import app.goke.ui.screens.rewriteQuickField
 import app.goke.ui.screens.tokenRanges
 import app.goke.ui.theme.GokeTheme
 import app.goke.ui.theme.LocalReduceMotion
@@ -773,7 +776,8 @@ private fun OverlayQuickAddCard(
     val now = remember { LocalDateTime.now() }
     val linkedCourse = remember(snap, initialCourseId) { initialCourseId?.let { id -> snap.courses.firstOrNull { it.id == id } } }
 
-    var text by remember(initialText) { mutableStateOf(initialText) }
+    var field by remember(initialText) { mutableStateOf(TextFieldValue(initialText, TextRange(initialText.length))) }
+    val text = field.text
     var toolPanel by remember { mutableStateOf<QuickPanel?>(null) }
     var whenPanel by remember { mutableStateOf(false) }
     var panelWhen by remember { mutableStateOf<WhenPick?>(null) }
@@ -809,22 +813,7 @@ private fun OverlayQuickAddCard(
         kinds: Set<QuickTokenKind>,
         add: String?,
     ) {
-        val removeRanges =
-            tokenRanges(text, parsed?.tokens.orEmpty())
-                .filter { it.first.kind in kinds }
-                .map { it.second }
-                .sortedByDescending { it.first }
-        var t = text
-        for (r in removeRanges) {
-            t = t.substring(0, r.first) + " " + t.substring(r.last + 1)
-        }
-        t = t.replace(Regex("\\s+"), " ").trim()
-        text =
-            when {
-                add == null -> t
-                t.isEmpty() -> "$add "
-                else -> "$t $add"
-            }
+        field = rewriteQuickField(field.text, parsed?.tokens.orEmpty(), kinds, add)
         focusRequester.requestFocus()
     }
 
@@ -893,8 +882,8 @@ private fun OverlayQuickAddCard(
     QuickAddComposer(
         snap = snap,
         now = now,
-        text = text,
-        onTextChange = { text = it },
+        field = field,
+        onFieldChange = { field = it },
         parsed = parsed,
         highlight = highlight,
         focusRequester = focusRequester,
@@ -913,15 +902,6 @@ private fun OverlayQuickAddCard(
         canSubmit = hasBodyText,
         onSubmit = { submit() },
         onOpenWhenPanel = { whenPanel = true },
-        onClearWhenOverrides = {
-            panelWhen = null
-            panelRemindList = emptyList()
-            panelPersistent = false
-            panelFreq = null
-            panelUntil = null
-            panelByDays = emptySet()
-            panelByMonths = emptySet()
-        },
         onRewriteToken = ::rewriteToken,
     )
 
@@ -951,6 +931,9 @@ private fun OverlayQuickAddCard(
                 panelUntil = r.until
                 panelByDays = r.byDays
                 panelByMonths = r.byMonths
+                if (r.whenPick == null && r.remindMinutesList.isEmpty() && r.freq == null) {
+                    rewriteToken(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME), null)
+                }
                 whenPanel = false
             },
         )
