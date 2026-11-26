@@ -52,10 +52,12 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -139,6 +141,8 @@ import app.goke.core.time.SemesterCalendar
 import app.goke.core.time.TimePhase
 import app.goke.core.time.WeekSets
 import app.goke.core.util.Ids
+import app.goke.data.Settings
+import app.goke.share.Sharing
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
@@ -150,8 +154,10 @@ import app.goke.ui.components.CourseNoteBox
 import app.goke.ui.components.CourseProgressAxis
 import app.goke.ui.components.EmptyState
 import app.goke.ui.components.FieldText
+import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.NavListInset
+import app.goke.ui.components.NavRow
 import app.goke.ui.components.Tag
 import app.goke.ui.components.TaskRow
 import app.goke.ui.components.TonalField
@@ -165,8 +171,11 @@ import app.goke.ui.dueLabel
 import app.goke.ui.formatRooms
 import app.goke.ui.hm
 import app.goke.ui.icons.CalendarViewWeek
+import app.goke.ui.icons.Cloud
 import app.goke.ui.icons.GridView
+import app.goke.ui.icons.Image
 import app.goke.ui.icons.Inventory2
+import app.goke.ui.icons.IosShare
 import app.goke.ui.liveSnapshot
 import app.goke.ui.monthDay
 import app.goke.ui.monthDayWeekday
@@ -371,6 +380,7 @@ fun TimetableScreen() {
     // 同一时段多条安排：先列出让人挑，再进各自的详情
     var slotPick by remember { mutableStateOf<List<SlotEntry>?>(null) }
     var parcelSheet by remember { mutableStateOf<Pair<LocalDate, List<Task>>?>(null) }
+    var showExportSheet by remember { mutableStateOf(false) }
     var emptyBannerDismissed by rememberSaveable { mutableStateOf(false) }
 
     // 启动后延迟开放预加载：初始为 0 避免冷/温启同步测量相邻周导致 TTID 回退；首屏稳定后切为 1 保障切周流畅度
@@ -385,7 +395,7 @@ fun TimetableScreen() {
     val afterSnap = remember(previewCs, snap) { previewCs?.let { snap.apply(it, 0).live() } }
 
     // 抽屉展开时隐藏底栏与撤销条，避免与应用内轻量抽屉重叠
-    val sheetOpen = selected != null || slotPick != null || parcelSheet != null || reschedulePrefill != null
+    val sheetOpen = selected != null || slotPick != null || parcelSheet != null || reschedulePrefill != null || showExportSheet
     DisposableEffect(sheetOpen) {
         if (sheetOpen) nav.composerOpen = true
         onDispose { if (sheetOpen) nav.composerOpen = false }
@@ -483,6 +493,7 @@ fun TimetableScreen() {
                     }
                 }
                 IconButton(onClick = { nav.push(Route.CourseEdit(null)) }) { Icon(Icons.Rounded.Add, stringResource(R.string.new_course)) }
+                IconButton(onClick = { showExportSheet = true }) { Icon(Icons.Rounded.IosShare, stringResource(R.string.timetable_export_sheet_title)) }
                 IconButton(onClick = { nav.push(Route.EditTimetable) }) { Icon(Icons.Rounded.Edit, stringResource(R.string.edit_timetable)) }
             }
 
@@ -710,6 +721,17 @@ fun TimetableScreen() {
             onDismiss = {
                 selected = null
                 reschedulePrefill = null
+            },
+        )
+        TimetableExportSheet(
+            visible = showExportSheet,
+            onDismiss = { showExportSheet = false },
+            snap = snap,
+            st = settings,
+            week = pager.currentPage + 1,
+            onQuickShare = {
+                showExportSheet = false
+                nav.push(Route.TimetableShare)
             },
         )
         SlotSheet(
@@ -2687,6 +2709,129 @@ private fun StepperCircleButton(
                 fontWeight = FontWeight.Medium,
                 color = scheme.onSurface,
             )
+        }
+    }
+}
+
+@Composable
+private fun TimetableExportSheet(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    snap: Snapshot,
+    st: Settings,
+    week: Int,
+    onQuickShare: () -> Unit,
+) {
+    if (!visible) return
+    val ctx = LocalContext.current
+    val app = LocalApp.current
+    val actions = LocalActions.current
+    val scope = rememberCoroutineScope()
+    val shareState by app.timetableShare.state.collectAsState()
+    var busy by remember { mutableStateOf(false) }
+
+    fun exportAndShare(
+        mime: String,
+        buildFile: suspend () -> java.io.File?,
+    ) {
+        if (busy) return
+        if (snap.live().currentSemester == null) {
+            actions.toast(ctx.getString(R.string.timetable_export_no_semester))
+            return
+        }
+        scope.launch {
+            busy = true
+            try {
+                val f = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { buildFile() }
+                if (f != null) {
+                    onDismiss()
+                    Sharing.share(ctx, f, mime)
+                } else {
+                    actions.toast(ctx.getString(R.string.export_failed))
+                }
+            } catch (_: Throwable) {
+                actions.toast(ctx.getString(R.string.export_failed))
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    MintBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                stringResource(R.string.timetable_export_sheet_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            NavRow(
+                title = stringResource(R.string.timetable_export_quick_share),
+                subtitle = stringResource(R.string.timetable_export_quick_share_desc),
+                icon = Icons.Rounded.Cloud,
+                enabled = !busy,
+                onClick = onQuickShare,
+            )
+            HorizontalDivider(Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
+            NavRow(
+                title = stringResource(R.string.timetable_export_xlsx),
+                subtitle = stringResource(R.string.timetable_export_xlsx_desc),
+                icon = Icons.Rounded.GridView,
+                enabled = !busy,
+            ) {
+                exportAndShare(Sharing.MIME_XLSX) {
+                    Sharing.exportTimetableXlsx(
+                        ctx,
+                        snap,
+                        showTeacher = st.showTeacher,
+                        displayName = shareState.displayName.takeIf { it.isNotBlank() },
+                    )
+                }
+            }
+            NavRow(
+                title = stringResource(R.string.timetable_export_ics),
+                subtitle = stringResource(R.string.timetable_export_ics_desc),
+                icon = Icons.Rounded.DateRange,
+                enabled = !busy,
+            ) {
+                exportAndShare(Sharing.MIME_ICS) {
+                    Sharing.exportTimetableIcs(
+                        ctx,
+                        snap,
+                        displayName = shareState.displayName.takeIf { it.isNotBlank() },
+                    )
+                }
+            }
+            NavRow(
+                title = stringResource(R.string.timetable_export_json),
+                subtitle = stringResource(R.string.timetable_export_json_desc),
+                icon = Icons.Rounded.IosShare,
+                enabled = !busy,
+            ) {
+                exportAndShare(Sharing.MIME_JSON) {
+                    Sharing.exportTimetableJson(
+                        ctx,
+                        snap,
+                        displayName = shareState.displayName.ifBlank { "goke-timetable" },
+                    )
+                }
+            }
+            NavRow(
+                title = stringResource(R.string.timetable_export_png),
+                subtitle = stringResource(R.string.timetable_export_png_desc),
+                icon = Icons.Rounded.Image,
+                enabled = !busy,
+            ) {
+                exportAndShare(Sharing.MIME_PNG) {
+                    Sharing.exportTimetableImage(ctx, snap, st, week)
+                }
+            }
         }
     }
 }

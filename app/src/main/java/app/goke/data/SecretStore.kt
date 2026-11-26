@@ -25,11 +25,19 @@ interface McpTokenVault {
     fun setMcpToken(plain: String)
 }
 
+/** 课表快速分享管理密钥的保管处。 */
+interface ShareTokenVault {
+    fun shareManageToken(): String?
+
+    fun setShareManageToken(plain: String)
+}
+
 /** 用 Android Keystore 里的 AES-GCM 密钥加密保存同步令牌、本地 MCP 令牌与教务密码；明文永远不落盘、不进备份与日志。 */
 class SecretStore(
     context: Context,
 ) : SyncTokenVault,
     McpTokenVault,
+    ShareTokenVault,
     CampusVault {
     private val sp = context.getSharedPreferences("secrets", Context.MODE_PRIVATE)
 
@@ -134,6 +142,11 @@ class SecretStore(
     override fun setMcpToken(plain: String) = put("mcp_token", plain)
 
     override fun mcpToken(): String? = get("mcp_token")
+
+    /** 课表快速分享的管理密钥：加密落盘，仅用于更新或删除云端课表。 */
+    override fun setShareManageToken(plain: String) = put("share_manage_token", plain)
+
+    override fun shareManageToken(): String? = get("share_manage_token")
 
     /** 智慧热水 UserID 与 UUID：加密落盘，解绑时清除。 */
     override fun hotWaterUserId(): String? = get("hw_user_id")

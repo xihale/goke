@@ -155,6 +155,39 @@ fun DataScreen(onBack: () -> Unit) {
             }
             item(key = "export") {
                 FormSection(stringResource(R.string.section_export)) {
+                    NavRow(
+                        stringResource(R.string.timetable_export_quick_share),
+                        stringResource(R.string.timetable_export_quick_share_desc),
+                        Icons.Rounded.IosShare,
+                        enabled = !busy,
+                    ) {
+                        nav.push(Route.TimetableShare)
+                    }
+                    NavRow(
+                        stringResource(R.string.timetable_export_xlsx),
+                        stringResource(R.string.timetable_export_xlsx_desc),
+                        Icons.Rounded.IosShare,
+                        enabled = !busy,
+                    ) {
+                        scope.launch {
+                            busy = true
+                            try {
+                                val curSnap = app.repo.snapshot.value
+                                val shareName =
+                                    app.timetableShare.state.value.displayName
+                                        .takeIf { it.isNotBlank() }
+                                val f =
+                                    withContext(Dispatchers.IO) {
+                                        Sharing.exportTimetableXlsx(ctx, curSnap, showTeacher = st.showTeacher, displayName = shareName)
+                                    }
+                                Sharing.share(ctx, f, Sharing.MIME_XLSX)
+                            } catch (_: Throwable) {
+                                actions.toast(ctx.getString(R.string.export_failed))
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    }
                     NavRow(stringResource(R.string.export_ics), null, Icons.Rounded.IosShare, enabled = !busy) {
                         scope.launch {
                             busy = true

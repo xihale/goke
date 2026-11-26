@@ -65,6 +65,8 @@ sealed interface Route {
 
     @Serializable data object Data : Route
 
+    @Serializable data object TimetableShare : Route
+
     @Serializable data object Sync : Route
 
     @Serializable data object CalendarSync : Route

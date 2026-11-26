@@ -42,7 +42,10 @@ import app.goke.notify.Notifications
 import app.goke.notify.ParcelCapture
 import app.goke.notify.ParcelListenerService
 import app.goke.notify.ReminderScheduler
+import app.goke.share.TimetableShareManager
+import app.goke.share.TimetableShareStore
 import app.goke.sync.PeriodicSync
+import app.goke.sync.SyncStore
 import app.goke.widget.HotWaterWidgetProvider
 import app.goke.widget.NextWidgetProvider
 import app.goke.widget.ParcelWidgetProvider
@@ -92,6 +95,8 @@ open class GokeApp : Application() {
         private set
     lateinit var hotWater: HotWaterAdapter
         private set
+    lateinit var timetableShare: TimetableShareManager
+        private set
     lateinit var updateChecker: UpdateChecker
         private set
 
@@ -133,6 +138,21 @@ open class GokeApp : Application() {
         jxfw = adapterFactory.createJxfw(this, campusHost)
         tzcs = adapterFactory.createTzcs(this, campusHost)
         hotWater = adapterFactory.createHotWater(this, campusHost)
+
+        val syncStore = SyncStore(this, secrets)
+        timetableShare =
+            TimetableShareManager(
+                repo = repo,
+                store = TimetableShareStore(this, secrets),
+                jxfw = jxfw,
+                defaultServerUrlProvider = {
+                    syncStore.account.value
+                        ?.serverUrl
+                        ?.takeIf { it.isNotBlank() }
+                        ?: syncStore.lastServerUrl.takeIf { it.isNotBlank() }
+                },
+                errors = errors,
+            )
 
         updateChecker = UpdateChecker(settings)
         scope.launch {

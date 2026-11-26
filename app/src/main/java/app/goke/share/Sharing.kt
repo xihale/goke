@@ -5,6 +5,8 @@ import android.content.Intent
 import androidx.core.content.FileProvider
 import app.goke.R
 import app.goke.core.export.ExportBundle
+import app.goke.core.export.SharedTimetable
+import app.goke.core.export.XlsxTimetableWriter
 import app.goke.core.importer.IcsWriter
 import app.goke.core.model.Snapshot
 import app.goke.data.Settings
@@ -12,7 +14,23 @@ import java.io.File
 
 /** 导出与分享：文件写入缓存目录，经 FileProvider 交给系统分享面板（用户可存到文件、发给他人）。 */
 object Sharing {
+    const val MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    const val MIME_ICS = "text/calendar"
+    const val MIME_JSON = "application/json"
+    const val MIME_PNG = "image/png"
+
     private fun dir(ctx: Context) = File(ctx.cacheDir, "share").apply { mkdirs() }
+
+    internal fun sanitizeFilenamePrefix(displayName: String?): String {
+        val cleaned =
+            displayName
+                ?.trim()
+                ?.replace(Regex("[\\\\/:*?\"<>|\\x00-\\x1F]"), "_")
+                ?.replace(Regex("\\s+"), " ")
+                ?.trim('.', ' ', '_')
+                .orEmpty()
+        return cleaned.ifBlank { "goke-timetable" }
+    }
 
     fun exportIcs(
         ctx: Context,
@@ -26,6 +44,40 @@ object Sharing {
         File(dir(ctx), "goke-backup.json").also {
             it.writeText(ExportBundle(exportedAt = System.currentTimeMillis(), snapshot = snap).toJson(), Charsets.UTF_8)
         }
+
+    fun exportTimetableXlsx(
+        ctx: Context,
+        snap: Snapshot,
+        showTeacher: Boolean = true,
+        displayName: String? = null,
+    ): File {
+        val prefix = sanitizeFilenamePrefix(displayName)
+        val bytes = XlsxTimetableWriter.write(snap, includeTeacher = showTeacher)
+        return File(dir(ctx), "$prefix.xlsx").also { it.writeBytes(bytes) }
+    }
+
+    fun exportTimetableIcs(
+        ctx: Context,
+        snap: Snapshot,
+        displayName: String? = null,
+    ): File {
+        val live = snap.live()
+        val sem = live.currentSemester ?: error("no_current_semester")
+        val prefix = sanitizeFilenamePrefix(displayName)
+        val content = IcsWriter.writeTimetable(sem, live.courses, live.exceptions)
+        return File(dir(ctx), "$prefix.ics").also { it.writeText(content, Charsets.UTF_8) }
+    }
+
+    fun exportTimetableJson(
+        ctx: Context,
+        snap: Snapshot,
+        displayName: String,
+    ): File {
+        val prefix = sanitizeFilenamePrefix(displayName)
+        val name = displayName.trim().ifBlank { prefix }
+        val json = SharedTimetable.fromSnapshot(snap, name).toJson()
+        return File(dir(ctx), "$prefix.json").also { it.writeText(json, Charsets.UTF_8) }
+    }
 
     fun exportTimetableImage(
         ctx: Context,
