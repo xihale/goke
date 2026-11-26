@@ -290,6 +290,24 @@ func TestShareExpiryAndValidation(t *testing.T) {
 		t.Fatalf("recreate after expiry failed: %d %v", c, out2)
 	}
 
+	// Past semester clamps capBySem to at least now + 24h
+	if c, _, _ := e.reqJSON("PUT", "/api/v1/share", map[string]any{
+		"studentId": "s-old-ok",
+		"name":      "往期课表",
+		"expiresAt": e.now.Add(12 * time.Hour).UnixMilli(),
+		"timetable": sampleTimetable("2020-02-24", 16),
+	}); c != 200 {
+		t.Fatalf("past semester within 24h clamp want 200 got %d", c)
+	}
+	if c, _, _ := e.reqJSON("PUT", "/api/v1/share", map[string]any{
+		"studentId": "s-old-over",
+		"name":      "往期课表超限",
+		"expiresAt": e.now.Add(25 * time.Hour).UnixMilli(),
+		"timetable": sampleTimetable("2020-02-24", 16),
+	}); c != 400 {
+		t.Fatalf("past semester > 24h clamp want 400 got %d", c)
+	}
+
 	// Oversized courses (>300)
 	manyCourses := make([]map[string]any, 301)
 	for i := range manyCourses {
@@ -358,10 +376,14 @@ func TestShareContentNegotiationAndViewer(t *testing.T) {
 		t.Fatalf("?format=json want 200 got %d", rFmt.Code)
 	}
 
-	// OPTIONS CORS
+	// OPTIONS CORS & 404 CORS on /s/{code}
 	rOpt := e.req("OPTIONS", "/s/"+code, nil, nil)
 	if rOpt.Code != 204 || rOpt.Header().Get("Access-Control-Allow-Origin") != "*" {
 		t.Fatalf("OPTIONS failed: %d", rOpt.Code)
+	}
+	r404 := e.req("GET", "/s/99999999", map[string]string{"Accept": "application/json"}, nil)
+	if r404.Code != 404 || r404.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Fatalf("404 CORS failed: %d %q", r404.Code, r404.Header().Get("Access-Control-Allow-Origin"))
 	}
 
 	// /s/view HTML & assets
@@ -388,8 +410,8 @@ func TestShareDisabled(t *testing.T) {
 	if r := e.req("GET", "/api/v1/share/12345678", nil, nil); r.Code != 503 {
 		t.Fatalf("disabled GET API want 503 got %d", r.Code)
 	}
-	if r := e.req("GET", "/s/12345678", nil, nil); r.Code != 503 {
-		t.Fatalf("disabled GET /s/ want 503 got %d", r.Code)
+	if r := e.req("GET", "/s/12345678", nil, nil); r.Code != 503 || r.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Fatalf("disabled GET /s/ want 503 + CORS got %d %q", r.Code, r.Header().Get("Access-Control-Allow-Origin"))
 	}
 	if r := e.req("GET", "/s/view?code=12345678", nil, nil); r.Code != 503 {
 		t.Fatalf("disabled GET /s/view want 503 got %d", r.Code)
