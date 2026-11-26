@@ -163,16 +163,18 @@ function semesterCalendar(sem) {
 
 function expandCourses(sem, courses, exceptions, from, to) {
   const cal = semesterCalendar(sem);
-  const exByKey = new Map();
+  const exByIdx = new Map();
+  const exById = new Map();
   for (const e of exceptions || []) {
     if (e.deletedAt != null) continue;
-    exByKey.set(`${e.courseId}|${e.week}`, e);
+    if (e.courseIndex != null) exByIdx.set(`${e.courseIndex}|${e.week}`, e);
+    else if (e.courseId != null) exById.set(`${e.courseId}|${e.week}`, e);
   }
   const out = [];
-  for (const c of courses || []) {
-    if (c.deletedAt != null) continue;
+  (courses || []).forEach((c, idx) => {
+    if (c.deletedAt != null) return;
     for (const w of [...(c.weeks || [])].sort((a, b) => a - b)) {
-      const ex = exByKey.get(`${c.id}|${w}`);
+      const ex = exByIdx.get(`${idx}|${w}`) ?? (c.id != null ? exById.get(`${c.id}|${w}`) : undefined);
       if (ex && ex.type === 'CANCEL') continue;
       const re = ex && ex.type === 'RESCHEDULE' ? ex : null;
       const week = re?.newWeek ?? w;
@@ -189,7 +191,7 @@ function expandCourses(sem, courses, exceptions, from, to) {
         startMin: s, endMin: e, room: re?.newRoom ?? c.room, rescheduled: !!re,
       });
     }
-  }
+  });
   return out.sort((a, b) => a.day - b.day || a.startMin - b.startMin || a.course.name.localeCompare(b.course.name));
 }
 
@@ -270,15 +272,17 @@ function buildICS(data) {
   if (sem.week1Monday) push(`X-GOKE-WEEK1-MONDAY:${sem.week1Monday}`);
 
   const exceptions = data.exceptions || [];
-  for (const c of data.courses || []) {
-    if (c.deletedAt != null) continue;
+  (data.courses || []).forEach((c, idx) => {
+    if (c.deletedAt != null) return;
     const exByWeek = new Map();
     for (const ex of exceptions) {
-      if (ex.deletedAt == null && ex.courseId === c.id) exByWeek.set(ex.week, ex);
+      if (ex.deletedAt != null) continue;
+      const matched = ex.courseIndex != null ? ex.courseIndex === idx : (c.id != null && ex.courseId === c.id);
+      if (matched) exByWeek.set(ex.week, ex);
     }
     const sMin = cal.startMin(c.startPeriod);
     const eMin = cal.endMin(c.endPeriod);
-    if (sMin == null || eMin == null) continue;
+    if (sMin == null || eMin == null) return;
     const desc = [`第${c.startPeriod} - ${c.endPeriod}节`, c.room, c.teacher].filter(Boolean).join('\n');
     const loc = [c.room, c.teacher].filter(Boolean).join(' ');
 
@@ -294,10 +298,11 @@ function buildICS(data) {
     }
     if (cur.length) runs.push(cur);
 
-    runs.forEach((run, idx) => {
+    const courseUid = c.id != null ? c.id : `c${idx}`;
+    runs.forEach((run, runIdx) => {
       const firstDay = cal.dateOf(run[0], c.dayOfWeek);
       push('BEGIN:VEVENT');
-      push(`UID:${c.id || c.name}-${idx}@goke-share`);
+      push(`UID:${courseUid}-${runIdx}@goke-share`);
       push(`DTSTAMP:${stamp}`);
       push(`DTSTART:${toIcsUtc(firstDay, sMin)}`);
       push(`DTEND:${toIcsUtc(firstDay, eMin)}`);
@@ -321,7 +326,7 @@ function buildICS(data) {
       if (st == null || et == null) continue;
       const d = cal.dateOf(nw, nd);
       push('BEGIN:VEVENT');
-      push(`UID:${ex.id || `${c.id}-${w}`}@goke-share`);
+      push(`UID:${ex.id || `${courseUid}-${w}`}@goke-share`);
       push(`DTSTAMP:${stamp}`);
       push(`DTSTART:${toIcsUtc(d, st)}`);
       push(`DTEND:${toIcsUtc(d, et)}`);
@@ -329,7 +334,7 @@ function buildICS(data) {
       if (ex.newRoom || c.room) push(`LOCATION:${icsEscape(ex.newRoom || c.room)}`);
       push('END:VEVENT');
     }
-  }
+  });
   push('END:VCALENDAR');
   return lines.join('\r\n') + '\r\n';
 }

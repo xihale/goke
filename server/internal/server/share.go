@@ -223,6 +223,10 @@ func (s *Server) handleShareUpsert(w http.ResponseWriter, r *http.Request) {
 		nextSemStart = semEnd.AddDate(0, 0, 6*7)
 	}
 	capBySem := nextSemStart.AddDate(0, 0, 1).UnixMilli()
+	minCap := nowT.Add(24 * time.Hour).UnixMilli()
+	if capBySem < minCap {
+		capBySem = minCap
+	}
 	capByDays := nowT.Add(time.Duration(s.shareMaxDays) * 24 * time.Hour).UnixMilli()
 	maxAllowed := capBySem
 	if capByDays < maxAllowed {
@@ -494,6 +498,7 @@ func (s *Server) handleShareOptions(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleShareShortURL(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Vary", "Accept")
+	setShareCORS(w)
 	if !s.shareEnabledOr503(w) {
 		return
 	}
