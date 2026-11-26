@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -30,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -37,6 +39,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -45,10 +48,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -64,14 +70,18 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -107,6 +117,7 @@ import app.goke.ui.LocalTabVisible
 import app.goke.ui.Route
 import app.goke.ui.Tab
 import app.goke.ui.components.ChipChoice
+import app.goke.ui.components.EmptyState
 import app.goke.ui.components.ErrorLogListDialog
 import app.goke.ui.components.FormSection
 import app.goke.ui.components.MintCard
@@ -166,6 +177,27 @@ fun SettingsScreen() {
     val reduce = reduceMotion()
     val listState = rememberLazyListState()
     val tabVisibleState = LocalTabVisible.current
+    val focusManager = LocalFocusManager.current
+    val searchFocus = remember { FocusRequester() }
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var queryText by rememberSaveable { mutableStateOf("") }
+    val searchCatalog = remember(ctx) { buildSettingsSearchCatalog(ctx) }
+    val searchMatches =
+        remember(queryText, searching, searchCatalog) {
+            if (searching && queryText.isNotBlank()) searchSettings(queryText, searchCatalog) else emptyList()
+        }
+
+    BackHandler(enabled = tabVisibleState.value && searching) {
+        searching = false
+        queryText = ""
+        focusManager.clearFocus()
+    }
+    LaunchedEffect(searching, tabVisibleState.value) {
+        if (searching && tabVisibleState.value) searchFocus.requestFocus()
+    }
+    LaunchedEffect(searching, queryText) {
+        if (searching && queryText.isNotBlank()) listState.scrollToItem(0)
+    }
 
     // 权限入口行与桌面小组件行需要实时状态：切到本 Tab 或从子页/系统设置回来后在异步协程中重算
     var permOkCount by remember { mutableIntStateOf(4) }
@@ -202,155 +234,218 @@ fun SettingsScreen() {
             .statusBarsPadding(),
         contentAlignment = Alignment.TopCenter,
     ) {
-        LazyColumn(
-            state = listState,
-            modifier =
-                Modifier
-                    .fillMaxHeight()
-                    .widthIn(max = 680.dp)
-                    .fillMaxWidth(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = NavListInset),
+        Column(
+            Modifier
+                .fillMaxHeight()
+                .widthIn(max = 680.dp)
+                .fillMaxWidth()
+                .imePadding(),
         ) {
-            item(key = "header", contentType = "header") {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(64.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.tab_me),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                IconButton(
+                    onClick = {
+                        val next = !searching
+                        searching = next
+                        if (!next) {
+                            queryText = ""
+                            focusManager.clearFocus()
+                        }
+                    },
+                    modifier = Modifier.testTag("settings_search_toggle"),
                 ) {
-                    Text(
-                        stringResource(R.string.tab_me),
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    Icon(
+                        imageVector = if (searching) Icons.Rounded.Close else Icons.Rounded.Search,
+                        contentDescription =
+                            stringResource(
+                                if (searching) R.string.settings_search_close_cd else R.string.settings_search_cd,
+                            ),
                     )
                 }
             }
-            item(key = "campus_hub_card", contentType = "campus_card") {
-                CampusHubCard { nav.push(Route.Jxfw) }
-            }
-            item(key = "campus_section", contentType = "form_section") {
-                FormSection(stringResource(R.string.me_hub_campus_section)) {
-                    GradesNavRow { nav.push(Route.Grades) }
-                    PhysicalTestNavRow { nav.push(Route.PhysicalTest) }
-                    NavRow(
-                        stringResource(R.string.classroom_title),
-                        null,
-                        Icons.Rounded.MeetingRoom,
-                    ) { nav.push(Route.Classroom) }
-                    NavRow(
-                        stringResource(R.string.xk_title),
-                        null,
-                        Icons.Rounded.Checklist,
-                    ) { nav.push(Route.CourseSelection) }
-                    val hwState by app.hotWater.state.collectAsState()
-                    val hwTrailing =
-                        when {
-                            !hwState.isBound -> {
-                                stringResource(R.string.hotwater_status_unbound)
-                            }
-
-                            hwState.phase == HotWaterPhase.VALVE_OPEN -> {
-                                stringResource(R.string.hotwater_status_open)
-                            }
-
-                            hwState.lastCheckAt > 0L -> {
-                                stringResource(R.string.hotwater_can_use_amount, hwState.canUseAmount / 100.0)
-                            }
-
-                            else -> {
-                                stringResource(R.string.hotwater_status_bound)
-                            }
+            SettingsSearchBar(
+                visible = searching,
+                queryText = queryText,
+                searchFocus = searchFocus,
+                onQueryChange = { queryText = it },
+                onClearQuery = { queryText = "" },
+                onSearchSubmit = { focusManager.clearFocus() },
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+            )
+            LazyColumn(
+                state = listState,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 0.dp, bottom = NavListInset),
+            ) {
+                if (searching && queryText.isNotBlank()) {
+                    if (searchMatches.isEmpty()) {
+                        item(key = "search_empty", contentType = "search_empty") {
+                            EmptyState(
+                                title = stringResource(R.string.settings_search_empty_title),
+                                modifier = Modifier.testTag("settings_search_empty"),
+                                hint = stringResource(R.string.settings_search_empty_hint),
+                                icon = Icons.Rounded.Search,
+                                actionLabel = stringResource(R.string.settings_search_clear_action),
+                                onAction = { queryText = "" },
+                            )
                         }
-                    NavRow(
-                        stringResource(R.string.hotwater_title),
-                        null,
-                        Icons.Rounded.WaterDrop,
-                        trailing = hwTrailing,
-                    ) { nav.push(Route.HotWater) }
-                    NavRow(
-                        stringResource(R.string.parcel_title),
-                        null,
-                        Icons.Rounded.LocalShipping,
-                        trailing = stringResource(if (st.parcelEnabled) R.string.parcel_status_on else R.string.parcel_status_off),
-                    ) { nav.push(Route.Parcel) }
-                }
-            }
-            item(key = "prefs_section", contentType = "form_section") {
-                val themeSource =
-                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && st.themeSource == ThemeSource.DYNAMIC) {
-                        ThemeSource.PRESET
                     } else {
-                        st.themeSource
+                        item(key = "search_header", contentType = "search_header") {
+                            SectionLabel(stringResource(R.string.settings_search_results_header, searchMatches.size))
+                        }
+                        items(searchMatches, key = { it.item.id }, contentType = { "search_result" }) { match ->
+                            SettingsSearchResultRow(
+                                match = match,
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    nav.push(match.item.route)
+                                },
+                            )
+                        }
                     }
-                val sourceLabel =
-                    when (themeSource) {
-                        ThemeSource.DYNAMIC -> stringResource(R.string.theme_dynamic)
-                        ThemeSource.PRESET -> stringResource(Preset.entries.firstOrNull { it.key == st.preset }?.label ?: R.string.theme_preset)
-                        ThemeSource.CUSTOM -> stringResource(R.string.theme_custom)
+                } else {
+                    item(key = "campus_hub_card", contentType = "campus_card") {
+                        CampusHubCard { nav.push(Route.Jxfw) }
                     }
-                val enabledReminders =
-                    listOf(st.remindCourse, st.remindExam, st.remindTask, st.remindEvent, st.dailyDigest).count { it }
-                val anyNotifFeature = enabledReminders > 0 || st.quickAddNotif || st.autoMute
-                val remindersTrailing =
-                    when {
-                        anyNotifFeature && permOkCount < 4 -> permStatusDesc(permOkCount)
-                        enabledReminders > 0 -> stringResource(R.string.reminders_enabled_count, enabledReminders)
-                        else -> stringResource(R.string.reminders_status_off)
+                    item(key = "campus_section", contentType = "form_section") {
+                        FormSection(stringResource(R.string.me_hub_campus_section)) {
+                            GradesNavRow { nav.push(Route.Grades) }
+                            PhysicalTestNavRow { nav.push(Route.PhysicalTest) }
+                            NavRow(
+                                stringResource(R.string.classroom_title),
+                                null,
+                                Icons.Rounded.MeetingRoom,
+                            ) { nav.push(Route.Classroom) }
+                            NavRow(
+                                stringResource(R.string.xk_title),
+                                null,
+                                Icons.Rounded.Checklist,
+                            ) { nav.push(Route.CourseSelection) }
+                            val hwState by app.hotWater.state.collectAsState()
+                            val hwTrailing =
+                                when {
+                                    !hwState.isBound -> {
+                                        stringResource(R.string.hotwater_status_unbound)
+                                    }
+
+                                    hwState.phase == HotWaterPhase.VALVE_OPEN -> {
+                                        stringResource(R.string.hotwater_status_open)
+                                    }
+
+                                    hwState.lastCheckAt > 0L -> {
+                                        stringResource(R.string.hotwater_can_use_amount, hwState.canUseAmount / 100.0)
+                                    }
+
+                                    else -> {
+                                        stringResource(R.string.hotwater_status_bound)
+                                    }
+                                }
+                            NavRow(
+                                stringResource(R.string.hotwater_title),
+                                null,
+                                Icons.Rounded.WaterDrop,
+                                trailing = hwTrailing,
+                            ) { nav.push(Route.HotWater) }
+                            NavRow(
+                                stringResource(R.string.parcel_title),
+                                null,
+                                Icons.Rounded.LocalShipping,
+                                trailing = stringResource(if (st.parcelEnabled) R.string.parcel_status_on else R.string.parcel_status_off),
+                            ) { nav.push(Route.Parcel) }
+                        }
                     }
-                FormSection(stringResource(R.string.me_hub_prefs_section)) {
-                    NavRow(stringResource(R.string.appearance), null, Icons.Rounded.Palette, trailing = sourceLabel) { nav.push(Route.Appearance) }
-                    NavRow(
-                        stringResource(R.string.widgets_title),
-                        null,
-                        Icons.Rounded.Widgets,
-                        trailing =
-                            if (widgetAddedCount > 0) {
-                                stringResource(R.string.widgets_added_count, widgetAddedCount)
+                    item(key = "prefs_section", contentType = "form_section") {
+                        val themeSource =
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && st.themeSource == ThemeSource.DYNAMIC) {
+                                ThemeSource.PRESET
                             } else {
-                                stringResource(R.string.widgets_available_count, WidgetSpec.entries.size)
-                            },
-                    ) { nav.push(Route.Widgets) }
-                    NavRow(stringResource(R.string.prefs_title), null, Icons.Rounded.Tune) { nav.push(Route.Preferences) }
-                    NavRow(
-                        stringResource(R.string.reminders_title),
-                        null,
-                        Icons.Rounded.NotificationsActive,
-                        trailing = remindersTrailing,
-                    ) { nav.push(Route.Reminders) }
+                                st.themeSource
+                            }
+                        val sourceLabel =
+                            when (themeSource) {
+                                ThemeSource.DYNAMIC -> stringResource(R.string.theme_dynamic)
+                                ThemeSource.PRESET -> stringResource(Preset.entries.firstOrNull { it.key == st.preset }?.label ?: R.string.theme_preset)
+                                ThemeSource.CUSTOM -> stringResource(R.string.theme_custom)
+                            }
+                        val enabledReminders =
+                            listOf(st.remindCourse, st.remindExam, st.remindTask, st.remindEvent, st.dailyDigest).count { it }
+                        val anyNotifFeature = enabledReminders > 0 || st.quickAddNotif || st.autoMute
+                        val remindersTrailing =
+                            when {
+                                anyNotifFeature && permOkCount < 4 -> permStatusDesc(permOkCount)
+                                enabledReminders > 0 -> stringResource(R.string.reminders_enabled_count, enabledReminders)
+                                else -> stringResource(R.string.reminders_status_off)
+                            }
+                        FormSection(stringResource(R.string.me_hub_prefs_section)) {
+                            NavRow(stringResource(R.string.appearance), null, Icons.Rounded.Palette, trailing = sourceLabel) { nav.push(Route.Appearance) }
+                            NavRow(
+                                stringResource(R.string.widgets_title),
+                                null,
+                                Icons.Rounded.Widgets,
+                                trailing =
+                                    if (widgetAddedCount > 0) {
+                                        stringResource(R.string.widgets_added_count, widgetAddedCount)
+                                    } else {
+                                        stringResource(R.string.widgets_available_count, WidgetSpec.entries.size)
+                                    },
+                            ) { nav.push(Route.Widgets) }
+                            NavRow(stringResource(R.string.prefs_title), null, Icons.Rounded.Tune) { nav.push(Route.Preferences) }
+                            NavRow(
+                                stringResource(R.string.reminders_title),
+                                null,
+                                Icons.Rounded.NotificationsActive,
+                                trailing = remindersTrailing,
+                            ) { nav.push(Route.Reminders) }
+                        }
+                    }
+                    item(key = "sync_data_section", contentType = "form_section") {
+                        FormSection(stringResource(R.string.me_hub_sync_section)) {
+                            SyncNavRow { nav.push(Route.Sync) }
+                            CalendarSyncNavRow { nav.push(Route.CalendarSync) }
+                            NavRow(stringResource(R.string.data_title), null, Icons.Rounded.SwapVert) { nav.push(Route.Data) }
+                            TrashNavRow { nav.push(Route.Trash) }
+                            NavRow(stringResource(R.string.history_title), null, Icons.Rounded.History) { nav.push(Route.History) }
+                        }
+                    }
+                    item(key = "more_section", contentType = "form_section") {
+                        val hasPendingUpdate =
+                            st.pendingUpdateVersion.isNotBlank() &&
+                                app.updateChecker.isNewerThanCurrent(st.pendingUpdateVersion)
+                        FormSection(stringResource(R.string.section_more)) {
+                            LanWebNavRow { nav.push(Route.LanWeb) }
+                            McpNavRow { nav.push(Route.Mcp) }
+                            NavRow(
+                                stringResource(R.string.about_title),
+                                null,
+                                Icons.Rounded.Info,
+                                trailing =
+                                    if (hasPendingUpdate) {
+                                        stringResource(R.string.update_new_badge_with_version, st.pendingUpdateVersion)
+                                    } else {
+                                        null
+                                    },
+                            ) { nav.push(Route.About) }
+                        }
+                    }
+                    item(key = "debug_mock_section") {
+                        DebugHooks.SettingsDebugSection()
+                    }
                 }
-            }
-            item(key = "sync_data_section", contentType = "form_section") {
-                FormSection(stringResource(R.string.me_hub_sync_section)) {
-                    SyncNavRow { nav.push(Route.Sync) }
-                    CalendarSyncNavRow { nav.push(Route.CalendarSync) }
-                    NavRow(stringResource(R.string.data_title), null, Icons.Rounded.SwapVert) { nav.push(Route.Data) }
-                    TrashNavRow { nav.push(Route.Trash) }
-                    NavRow(stringResource(R.string.history_title), null, Icons.Rounded.History) { nav.push(Route.History) }
-                }
-            }
-            item(key = "more_section", contentType = "form_section") {
-                val hasPendingUpdate =
-                    st.pendingUpdateVersion.isNotBlank() &&
-                        app.updateChecker.isNewerThanCurrent(st.pendingUpdateVersion)
-                FormSection(stringResource(R.string.section_more)) {
-                    LanWebNavRow { nav.push(Route.LanWeb) }
-                    McpNavRow { nav.push(Route.Mcp) }
-                    NavRow(
-                        stringResource(R.string.about_title),
-                        null,
-                        Icons.Rounded.Info,
-                        trailing =
-                            if (hasPendingUpdate) {
-                                stringResource(R.string.update_new_badge_with_version, st.pendingUpdateVersion)
-                            } else {
-                                null
-                            },
-                    ) { nav.push(Route.About) }
-                }
-            }
-            item(key = "debug_mock_section") {
-                DebugHooks.SettingsDebugSection()
             }
         }
     }
