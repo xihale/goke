@@ -804,7 +804,8 @@
     <string name="timetable_empty_gesture_hint">点按空白格新建课程，长按并拖动可框选时段建待办。</string>
     <string name="parcel_notif_captured_title">已识别取件待办</string>
     <string name="parcel_notif_captured_text">%1$s · %2$s</string>
-    <string name="parcel_restricted_settings_hint">若系统开关无法开启，可前往应用详情允许受限设置。</string>
+    <string name="parcel_restricted_settings_hint">息屏隐藏通知或 Android 15+ 脱敏时，需授予「短信权限」才能直接读取取件短信；若系统开关无法开启，可前往应用详情允许受限设置。</string>
+    <string name="parcel_redacted_sms_hint">检测到系统在锁屏或敏感通知保护下隐藏了短信内容，建议授予「短信权限」以便息屏时直接读取取件短信。</string>
     <string name="parcel_sms_perm">短信权限</string>
     <string name="parcel_open_app_details">应用详情</string>
     <string name="auto_mute_rule_name">工课上课静音</string>

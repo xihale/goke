@@ -3,8 +3,12 @@ package app.goke
 import android.app.AlarmManager
 import android.app.Application
 import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.service.notification.NotificationListenerService
+import androidx.core.app.NotificationManagerCompat
 import app.goke.advanced.AdvancedController
 import app.goke.calendar.CalendarSyncStore
 import app.goke.calendar.SystemCalendarSync
@@ -35,6 +39,8 @@ import app.goke.hotwater.HotWaterShowerRecord
 import app.goke.hotwater.HotWaterTaskCopy
 import app.goke.jxfw.JxfwReceiver
 import app.goke.notify.Notifications
+import app.goke.notify.ParcelCapture
+import app.goke.notify.ParcelListenerService
 import app.goke.notify.ReminderScheduler
 import app.goke.sync.PeriodicSync
 import app.goke.widget.HotWaterWidgetProvider
@@ -155,6 +161,21 @@ open class GokeApp : Application() {
                     if (active) {
                         calendarSync.requestSync(1200)
                         launch { jxfw.catchUp() }
+                        if (settings.value.parcelEnabled) {
+                            launch(Dispatchers.IO) {
+                                ParcelCapture.scanRecentSmsInbox(this@GokeApp)
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+                                    !ParcelListenerService.isConnected &&
+                                    NotificationManagerCompat.getEnabledListenerPackages(this@GokeApp).contains(packageName)
+                                ) {
+                                    runCatching {
+                                        NotificationListenerService.requestRebind(
+                                            ComponentName(this@GokeApp, ParcelListenerService::class.java),
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

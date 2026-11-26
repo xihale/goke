@@ -5,10 +5,17 @@ import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ContentProvider
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.database.Cursor
+import android.database.MatrixCursor
 import android.media.AudioManager
+import android.net.Uri
+import android.provider.Telephony
 import androidx.core.app.NotificationCompat
+import androidx.core.app.Person
 import androidx.test.core.app.ApplicationProvider
 import app.goke.GokeApp
 import app.goke.R
@@ -33,6 +40,7 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowContentResolver
 import java.time.DayOfWeek
 import java.time.LocalDateTime
 
@@ -505,5 +513,122 @@ class NotifyFixesTest {
         assertEquals(ReminderScheduler.MuteSlot(now.toLocalDate().atTime(8, 30), now.toLocalDate().atTime(9, 0), silent = false), slots[0])
         assertEquals(ReminderScheduler.MuteSlot(now.toLocalDate().atTime(9, 0), now.toLocalDate().atTime(11, 0), silent = true), slots[1])
         assertEquals(ReminderScheduler.MuteSlot(now.toLocalDate().atTime(11, 0), now.toLocalDate().atTime(12, 0), silent = false), slots[2])
+    }
+
+    @Test
+    fun parcelListenerExtractsInboxAndMessagingStyleCandidates() {
+        app.settings.update { it.copy(parcelEnabled = true) }
+
+        val inboxNotif =
+            NotificationCompat
+                .Builder(app, Notifications.CHANNEL_PARCEL)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle("信息")
+                .setContentText("2 条新信息")
+                .setStyle(
+                    NotificationCompat
+                        .InboxStyle()
+                        .addLine("验证码 123456")
+                        .addLine("【菜鸟驿站】取件码 7-1-3021，请到南门菜鸟驿站领取。"),
+                ).build()
+        val inboxCandidates = ParcelListenerService.extractCandidates(inboxNotif)
+        assertTrue(runBlocking { ParcelCapture.ingestCandidates(app, inboxCandidates) })
+
+        val msgPerson = Person.Builder().setName("菜鸟驿站").build()
+        val msgNotif =
+            NotificationCompat
+                .Builder(app, Notifications.CHANNEL_PARCEL)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setStyle(
+                    NotificationCompat
+                        .MessagingStyle(msgPerson)
+                        .addMessage("敏感通知内容已隐藏", System.currentTimeMillis(), msgPerson)
+                        .addMessage("您的快递已到西门菜鸟驿站，凭取件码 8-3-9012 领取。", System.currentTimeMillis(), msgPerson),
+                ).build()
+        val msgCandidates = ParcelListenerService.extractCandidates(msgNotif)
+        assertTrue(runBlocking { ParcelCapture.ingestCandidates(app, msgCandidates) })
+        assertTrue(ParcelCapture.redactedDetected.value)
+
+        val tasks =
+            app.repo.snapshot.value.tasks
+                .filter { it.source == Source.PARCEL }
+        assertTrue(tasks.any { it.extra["code"] == "7-1-3021" })
+        assertTrue(tasks.any { it.extra["code"] == "8-3-9012" })
+    }
+
+    @Test
+    fun parcelScanRecentSmsInboxCatchesMissedSmsAndDoesNotResurrectDoneTask() {
+        app.settings.update { it.copy(parcelEnabled = true) }
+        app
+            .getSharedPreferences("parcel_sms_scan", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .commit()
+        shadowOf(app).grantPermissions(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS)
+
+        val nowMs = System.currentTimeMillis()
+        val smsBody = "【菜鸟驿站】您的快递已到东门菜鸟驿站，凭取件码 5-4-2288 领取。"
+        val provider =
+            object : ContentProvider() {
+                override fun onCreate(): Boolean = true
+
+                override fun query(
+                    uri: Uri,
+                    projection: Array<out String>?,
+                    selection: String?,
+                    selectionArgs: Array<out String>?,
+                    sortOrder: String?,
+                ): Cursor {
+                    val cursor = MatrixCursor(arrayOf(Telephony.Sms._ID, Telephony.Sms.BODY, Telephony.Sms.DATE))
+                    cursor.addRow(arrayOf<Any>(101L, smsBody, nowMs - 5_000L))
+                    return cursor
+                }
+
+                override fun getType(uri: Uri): String? = null
+
+                override fun insert(
+                    uri: Uri,
+                    values: ContentValues?,
+                ): Uri? = null
+
+                override fun delete(
+                    uri: Uri,
+                    selection: String?,
+                    selectionArgs: Array<out String>?,
+                ): Int = 0
+
+                override fun update(
+                    uri: Uri,
+                    values: ContentValues?,
+                    selection: String?,
+                    selectionArgs: Array<out String>?,
+                ): Int = 0
+            }
+        ShadowContentResolver.registerProviderInternal("sms", provider)
+
+        val captured1 = runBlocking { ParcelCapture.scanRecentSmsInbox(app) }
+        assertEquals(1, captured1)
+        val created =
+            app.repo.snapshot.value.tasks
+                .firstOrNull { it.source == Source.PARCEL && it.extra["code"] == "5-4-2288" }
+        assertNotNull(created)
+
+        // 标记已完成并清空扫描游标：再次扫描同一条短信也不能复活已完成待办
+        runBlocking {
+            app.repo.commit(Edits.save(app.repo.snapshot.value, created!!.copy(done = true), "done", nowMs))
+        }
+        app
+            .getSharedPreferences("parcel_sms_scan", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .commit()
+
+        val captured2 = runBlocking { ParcelCapture.scanRecentSmsInbox(app) }
+        assertEquals(0, captured2)
+        val allMatches =
+            app.repo.snapshot.value.tasks
+                .filter { it.source == Source.PARCEL && it.extra["code"] == "5-4-2288" }
+        assertEquals(1, allMatches.size)
+        assertTrue(allMatches.single().done)
     }
 }

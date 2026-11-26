@@ -31,9 +31,7 @@ class ParcelSmsReceiver : BroadcastReceiver() {
         val pending = goAsync()
         app.scope.launch {
             try {
-                for (body in grouped) {
-                    ParcelCapture.ingest(context.applicationContext, body)
-                }
+                ParcelCapture.ingestCandidates(context.applicationContext, grouped)
             } finally {
                 pending.finish()
             }
