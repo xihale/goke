@@ -75,7 +75,7 @@ object CourseExpander {
         return occurrences(semester, courses, exceptions, cal.weekStart(week), cal.weekEnd(week))
     }
 
-    /** 某课程下一次上课（严格晚于 after）。 */
+    /** 某课程下一次上课（严格晚于 after），自动归并同学期同名的多时段课程。 */
     fun nextOccurrence(
         semester: Semester,
         courses: List<Course>,
@@ -84,10 +84,16 @@ object CourseExpander {
         after: LocalDateTime,
     ): CourseOccurrence? {
         val cal = SemesterCalendar(semester)
+        val anchor = courses.firstOrNull { it.id == courseId && it.deletedAt == null }
+        val matching =
+            courses.filter { c ->
+                c.id == courseId ||
+                    (anchor != null && c.deletedAt == null && c.semesterId == anchor.semesterId && c.name.trim() == anchor.name.trim())
+            }
         val list =
             occurrences(
                 semester,
-                courses.filter { it.id == courseId },
+                matching,
                 exceptions,
                 after.toLocalDate(),
                 cal.weekEnd(cal.totalWeeks),

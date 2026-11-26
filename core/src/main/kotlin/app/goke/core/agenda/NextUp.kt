@@ -4,6 +4,7 @@ import app.goke.core.model.Snapshot
 import app.goke.core.model.Task
 import app.goke.core.recurrence.CourseExpander
 import app.goke.core.recurrence.CourseOccurrence
+import app.goke.core.todo.TaskLogic
 import java.time.LocalDateTime
 
 /** 「下一件事」：下一节课，以及要在这节课之前交的待办。 */
@@ -27,11 +28,7 @@ object NextUps {
             CourseExpander
                 .occurrences(sem, s.courses, s.exceptions, from, from.plusDays(horizonDays))
                 .firstOrNull { it.end.isAfter(now) } ?: return null
-        val related =
-            s.tasks.filter {
-                it.parentId == null && !it.done && it.courseId != null &&
-                    (it.courseId == occ.course.id || s.courses.firstOrNull { c -> c.id == it.courseId }?.name == occ.course.name)
-            }
+        val related = TaskLogic.forCourse(s.tasks, s.courses, occ.course)
         return NextUp(occ, related)
     }
 }

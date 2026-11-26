@@ -184,6 +184,7 @@ fun buildTodoRowModel(
     val meta =
         buildList {
             if (task.dropped) add(context.getString(R.string.todo_dropped_mark))
+            if (course != null && !(task.dueBeforeNextClass && due != null)) add(course.name)
             list?.let { add(it.name) }
             if (total > 0) add(context.getString(R.string.subtasks_progress, done, total))
             task.tags.take(2).forEach { add("#$it") }

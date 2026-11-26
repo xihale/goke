@@ -48,6 +48,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
@@ -85,11 +86,15 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -140,6 +145,7 @@ import app.goke.core.time.CourseProgress
 import app.goke.core.time.SemesterCalendar
 import app.goke.core.time.TimePhase
 import app.goke.core.time.WeekSets
+import app.goke.core.todo.TaskLogic
 import app.goke.core.util.Ids
 import app.goke.data.Settings
 import app.goke.share.Sharing
@@ -156,12 +162,14 @@ import app.goke.ui.components.EmptyState
 import app.goke.ui.components.FieldText
 import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.MintCard
+import app.goke.ui.components.MintCheck
 import app.goke.ui.components.NavListInset
 import app.goke.ui.components.NavRow
 import app.goke.ui.components.Tag
 import app.goke.ui.components.TaskRow
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.ValueRow
+import app.goke.ui.components.courseMutedBg
 import app.goke.ui.components.courseProgressBackground
 import app.goke.ui.components.mintClickable
 import app.goke.ui.components.mintPressable
@@ -171,6 +179,7 @@ import app.goke.ui.dueLabel
 import app.goke.ui.formatRooms
 import app.goke.ui.hm
 import app.goke.ui.icons.CalendarViewWeek
+import app.goke.ui.icons.Checklist
 import app.goke.ui.icons.Cloud
 import app.goke.ui.icons.GridView
 import app.goke.ui.icons.Image
@@ -203,9 +212,25 @@ private val HeaderH = 46.dp
 /** 并排分道时每道至少要这么宽（两个 11sp 汉字 + 内边距），再窄就不并排了。 */
 private val MinLaneW = 30.dp
 
-/** 叠放簇右侧露出的那道边：宽度，以及和正面卡之间的缝。 */
-private val PeekW = 4.dp
-private val PeekGap = 1.5.dp
+/** 叠放时最多在背面露出两层卡片（加正面共 3 层）。 */
+private const val MAX_STACK_BACK_LAYERS = 2
+
+/** 叠放正面卡稍微左移，保持完整列宽（零宽度牺牲）同时让背面层自然向右下方错位。 */
+private val StackFrontShiftX = 1.dp
+
+/** 计算叠放背面第 [depth] 层相对正面卡左上角的 3D 偏移 `(dx, dy)`。 */
+internal fun stackPeekOffset(
+    depth: Int,
+    maxDepth: Int,
+): Pair<Dp, Dp> =
+    if (maxDepth <= 1) {
+        2.5.dp to 2.25.dp
+    } else {
+        when {
+            depth <= 1 -> 1.5.dp to 1.75.dp
+            else -> 2.75.dp to 3.25.dp
+        }
+    }
 
 private val BlockCornerRadius = 12.dp
 private val BlockOuterInset = 1.5.dp
@@ -405,6 +430,23 @@ fun TimetableScreen() {
     val weekDiffCache = remember(snap, afterSnap) { mutableMapOf<Int, List<TimetableCell>>() }
     val listColor = remember(snap) { snap.lists.associate { it.id to it.colorIndex } }
     val weekBlocksCache = remember(snap, listColor, sem) { mutableMapOf<Int, List<BlockRow>>() }
+    val courseTodoCounts =
+        remember(snap.tasks, snap.courses) {
+            val courseById = snap.courses.filter { it.deletedAt == null }.associateBy { it.id }
+            val byKey = HashMap<Pair<String, String>, Int>()
+            val byId = HashMap<String, Int>()
+            snap.tasks.forEach { t ->
+                if (t.deletedAt == null && t.parentId == null && !t.done && t.courseId != null) {
+                    val cid = t.courseId!!
+                    byId[cid] = (byId[cid] ?: 0) + 1
+                    courseById[cid]?.let { c ->
+                        val key = c.semesterId to c.name.trim()
+                        byKey[key] = (byKey[key] ?: 0) + 1
+                    }
+                }
+            }
+            byKey to byId
+        }
 
     // 预览开启时跳到第一个有变化的周
     val reduce = reduceMotion()
@@ -636,6 +678,9 @@ fun TimetableScreen() {
                             },
                         periods = periods,
                         reschedulePicking = pickingRescheduleFor != null,
+                        courseTodoCount = { c ->
+                            courseTodoCounts.first[c.semesterId to c.name.trim()] ?: courseTodoCounts.second[c.id] ?: 0
+                        },
                         onClick = { cell ->
                             val picking = pickingRescheduleFor
                             if (picking != null) {
@@ -706,6 +751,7 @@ fun TimetableScreen() {
             sem = sem,
             snap = snap,
             cal = cal,
+            today = today,
             onPickOnGrid = { occ ->
                 selected = null
                 reschedulePrefill = null
@@ -909,6 +955,7 @@ private fun WeekGrid(
     modifier: Modifier = Modifier,
     periods: List<PeriodTime> = remember(sem) { sem.periods.sortedBy { it.index } },
     reschedulePicking: Boolean = false,
+    courseTodoCount: (Course) -> Int = { 0 },
     onClick: (TimetableCell) -> Unit,
     onOpenTask: (String) -> Unit,
     /** 叠放的正面卡被点开：同一时段的全部安排，由调用方列出让用户挑。 */
@@ -1110,6 +1157,13 @@ private fun WeekGrid(
             }
         }
         // 和「今日」一样：网格铺满，底栏浮在上面，末尾留一段空白让最后一节也能滚到岛上方。
+        val peekPath = remember { Path() }
+        val peeksByDepth = remember(slotLayout) { slotLayout.peeks.sortedByDescending { it.depth } }
+        val currentSlotLayout by rememberUpdatedState(slotLayout)
+        val currentSlotEntries by rememberUpdatedState(slotEntries)
+        val currentWeekRef by rememberUpdatedState(week)
+        val currentCurrentWeek by rememberUpdatedState(currentWeek)
+        val currentNow by rememberUpdatedState(now)
         Box(
             Modifier
                 .weight(1f)
@@ -1123,7 +1177,7 @@ private fun WeekGrid(
                     .fillMaxWidth()
                     .height(totalH)
                     .drawBehind {
-                        // 组间分隔线 + 冲突叠放簇右侧露边一次画在网格底板上，省掉额外 Box 布局节点
+                        // 组间分隔线 + 冲突叠放簇 3D 背面层及投影一次画在网格底板上，省掉额外 Box 布局节点
                         val startX = timeColW.toPx()
                         val lineW = (size.width - startX).coerceAtLeast(0f)
                         val lineH = 1.dp.toPx()
@@ -1135,29 +1189,118 @@ private fun WeekGrid(
                                 size = Size(lineW, lineH),
                             )
                         }
-                        if (slotLayout.peeks.isNotEmpty()) {
+                        if (peeksByDepth.isNotEmpty()) {
                             val peekCorner = CornerRadius(BlockCornerRadius.toPx())
                             val blockInsetPx = BlockOuterInset.toPx()
+                            val shiftXPx = StackFrontShiftX.toPx()
                             val cardW = (colW - BlockOuterInset * 2).toPx()
-                            val backOverlapOffset = 10.dp.toPx().coerceAtMost(cardW * 0.4f)
-                            slotLayout.peeks.forEach { p ->
-                                val colLeft = (timeColW + colW * (p.day - 1)).toPx() + blockInsetPx
-                                val x = colLeft + backOverlapOffset
-                                val w = (cardW - backOverlapOffset).coerceAtLeast(PeekW.toPx())
-                                val y = p.top.toPx()
-                                val h = (p.bottom - p.top).toPx()
+                            val scrimColor = scheme.scrim
+                            val courseCount = cells.size
+                            val wk = currentWeekRef
+                            val curWk = currentCurrentWeek
+                            val nowDt = currentNow
+
+                            fun isPeekFinished(itemIdx: Int): Boolean =
+                                if (itemIdx < courseCount) {
+                                    val o = cells[itemIdx].occ
+                                    wk < curWk || (wk == curWk && nowDt != null && CourseProgress.phase(o.start, o.end, nowDt) == TimePhase.FINISHED)
+                                } else {
+                                    val b = geoms.second[itemIdx - courseCount].first
+                                    val s = b.start
+                                    val e = s.plusMinutes(b.minutes.toLong())
+                                    b.task.done || wk < curWk || (wk == curWk && nowDt != null && CourseProgress.phase(s, e, nowDt) == TimePhase.FINISHED)
+                                }
+
+                            peeksByDepth.forEach { p ->
+                                val colLeftPx = (timeColW + colW * (p.day - 1)).toPx()
+                                val frontLeft = colLeftPx + blockInsetPx - shiftXPx
+                                val frontTop = p.frontTop.toPx()
+                                val frontH = (p.frontBottom - p.frontTop).toPx().coerceAtLeast(0f)
+                                val (dxDp, dyDp) = stackPeekOffset(p.depth, p.clusterMaxDepth)
+                                val peekLeft = frontLeft + dxDp.toPx()
+                                val peekTop = p.top.toPx() + dyDp.toPx()
+                                val peekBottom = (p.bottom.toPx() + dyDp.toPx()).coerceAtMost(size.height)
+                                val peekH = (peekBottom - peekTop).coerceAtLeast(0f)
+                                if (peekH <= 0f) return@forEach
+
+                                val rawBg = mintColors.bg(p.colorIndex)
+                                val finished = isPeekFinished(p.itemIndex)
+                                val baseBg = if (finished) courseMutedBg(rawBg, scheme) else rawBg
+                                val depthBg =
+                                    if (mintColors.dark) {
+                                        lerp(baseBg, scheme.surface, (0.16f * p.depth).coerceAtMost(0.36f))
+                                    } else {
+                                        lerp(
+                                            baseBg,
+                                            if (finished) scheme.onSurfaceVariant else mintColors.fg(p.colorIndex),
+                                            (0.09f * p.depth).coerceAtMost(0.20f),
+                                        )
+                                    }
                                 drawRoundRect(
-                                    color = mintColors.bg(p.colorIndex),
-                                    topLeft = Offset(x, y),
-                                    size = Size(w, h),
+                                    color = depthBg,
+                                    topLeft = Offset(peekLeft, peekTop),
+                                    size = Size(cardW, peekH),
                                     cornerRadius = peekCorner,
                                 )
+
+                                // 投影裁剪在背面卡轮廓内，绝不外溢到空白网格
+                                peekPath.reset()
+                                peekPath.addRoundRect(
+                                    RoundRect(
+                                        left = peekLeft,
+                                        top = peekTop,
+                                        right = peekLeft + cardW,
+                                        bottom = peekBottom,
+                                        cornerRadius = peekCorner,
+                                    ),
+                                )
+                                clipPath(peekPath) {
+                                    if (p.depth >= 2) {
+                                        val midAlpha = if (mintColors.dark) 0.20f else 0.11f
+                                        val (midDxDp, midDyDp) = stackPeekOffset(1, p.clusterMaxDepth)
+                                        val midShift = 0.75.dp.toPx()
+                                        val midLeft = frontLeft + midDxDp.toPx()
+                                        val midDyPx = midDyDp.toPx()
+                                        currentSlotLayout.peeks.forEach { mid ->
+                                            if (mid.frontIndex == p.frontIndex && mid.depth == 1) {
+                                                val midTop = mid.top.toPx() + midDyPx
+                                                val midBottom = (mid.bottom.toPx() + midDyPx).coerceAtMost(size.height)
+                                                val midH = (midBottom - midTop).coerceAtLeast(0f)
+                                                if (midH > 0f) {
+                                                    drawRoundRect(
+                                                        color = scrimColor.copy(alpha = midAlpha),
+                                                        topLeft = Offset(midLeft + midShift, midTop + midShift),
+                                                        size = Size(cardW, midH),
+                                                        cornerRadius = peekCorner,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (frontH > 0f) {
+                                        drawRoundRect(
+                                            color = scrimColor.copy(alpha = if (mintColors.dark) 0.14f else 0.07f),
+                                            topLeft = Offset(frontLeft + 1.5.dp.toPx(), frontTop + 1.75.dp.toPx()),
+                                            size = Size(cardW, frontH),
+                                            cornerRadius = peekCorner,
+                                        )
+                                        drawRoundRect(
+                                            color = scrimColor.copy(alpha = if (mintColors.dark) 0.28f else 0.14f),
+                                            topLeft = Offset(frontLeft + 0.6.dp.toPx(), frontTop + 0.8.dp.toPx()),
+                                            size = Size(cardW, frontH),
+                                            cornerRadius = peekCorner,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }.pointerInput(n, timeColW, rowH, cells, gridBlocks) {
                         val timeColPx = timeColW.toPx()
                         val colPx = (size.width - timeColPx) / 7f
                         val rowPx = rowH.toPx()
+                        val blockInsetPx = BlockOuterInset.toPx()
+                        val shiftXPx = StackFrontShiftX.toPx()
+                        val cardWPx = colPx - blockInsetPx * 2f
 
                         fun colOf(x: Float): Int = (((x - timeColPx) / colPx).toInt().coerceIn(0, 6)) + 1
 
@@ -1174,6 +1317,24 @@ private fun WeekGrid(
                                 if (box == null && off.x >= timeColPx) {
                                     val d = colOf(off.x)
                                     val p = slotOf(off.y)
+                                    val hitPeek =
+                                        currentSlotLayout.peeks
+                                            .filter { pk ->
+                                                val frontLeft = timeColPx + colPx * (pk.day - 1) + blockInsetPx - shiftXPx
+                                                val (dxDp, dyDp) = stackPeekOffset(pk.depth, pk.clusterMaxDepth)
+                                                val peekLeft = frontLeft + dxDp.toPx()
+                                                val peekTop = pk.top.toPx() + dyDp.toPx()
+                                                val peekBottom = (pk.bottom.toPx() + dyDp.toPx()).coerceAtMost(size.height.toFloat())
+                                                off.x in peekLeft..(peekLeft + cardWPx) && off.y in peekTop..peekBottom
+                                            }.minByOrNull { it.depth }
+                                    if (hitPeek != null) {
+                                        if (currentReschedulePicking) {
+                                            onEmptySlotClick(d, p)
+                                        } else {
+                                            onSlotClick(currentSlotEntries[hitPeek.frontIndex].orEmpty())
+                                        }
+                                        return@detectTapGestures
+                                    }
                                     val hasCourse = cells.any { it.occ.date.dayOfWeek.value == d && p in it.occ.startPeriod..it.occ.endPeriod }
                                     val hasTask =
                                         gridBlocks.any { b ->
@@ -1284,14 +1445,13 @@ private fun WeekGrid(
                         }
                     }
                 val todayNowBlocks =
-                    remember(geoms, slotLayout, todayColIndex, timeColW, colW, gridDensity) {
+                    remember(geoms, slotLayout, todayColIndex, timeColW, colW, gridDensity, totalH) {
                         if (todayColIndex == null) {
                             emptyList()
                         } else {
                             with(gridDensity) {
                                 val colLeftDp = timeColW + colW * (todayColIndex - 1)
                                 val cardW = colW - BlockOuterInset * 2
-                                val backOverlapOffset = 10.dp.coerceAtMost(cardW * 0.4f)
                                 val cornerPx = BlockCornerRadius.toPx()
                                 buildList {
                                     val allBoxes = geoms.first + geoms.second.map { it.second }
@@ -1314,17 +1474,21 @@ private fun WeekGrid(
                                     }
                                     slotLayout.peeks.forEach { p ->
                                         if (p.day == todayColIndex) {
-                                            val left = colLeftDp + BlockOuterInset + backOverlapOffset
-                                            val w = (cardW - backOverlapOffset).coerceAtLeast(PeekW)
-                                            add(
-                                                NowBarBlock(
-                                                    left = left.toPx(),
-                                                    top = p.top.toPx(),
-                                                    right = (left + w).toPx(),
-                                                    bottom = p.bottom.toPx(),
-                                                    cornerRadius = cornerPx,
-                                                ),
-                                            )
+                                            val (dx, dy) = stackPeekOffset(p.depth, p.clusterMaxDepth)
+                                            val left = colLeftDp + BlockOuterInset - StackFrontShiftX + dx
+                                            val top = p.top + dy
+                                            val bottom = (p.bottom + dy).coerceAtMost(totalH)
+                                            if (bottom > top) {
+                                                add(
+                                                    NowBarBlock(
+                                                        left = left.toPx(),
+                                                        top = top.toPx(),
+                                                        right = (left + cardW).toPx(),
+                                                        bottom = bottom.toPx(),
+                                                        cornerRadius = cornerPx,
+                                                    ),
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -1366,10 +1530,18 @@ private fun WeekGrid(
                                 }
                             }
                         }
+                    val todoCount =
+                        if (cell.kind == CellKind.REMOVED || week < currentWeek) {
+                            0
+                        } else {
+                            courseTodoCount(o.course)
+                        }
                     CourseBlock(
                         cell,
                         showTeacher,
                         slot.overlap,
+                        slot.stacked,
+                        todoCount,
                         isWide,
                         phase,
                         progress,
@@ -1433,6 +1605,7 @@ private fun WeekGrid(
                         timeStyle,
                         onCommit = { ns, nm -> onMoveTask(t, ns, nm) },
                         allowDrag = !reschedulePicking,
+                        stacked = slot.stacked,
                         modifier =
                             Modifier
                                 .absoluteOffset(timeColW + colW * (s.dayOfWeek.value - 1) + offsetX, tbox.top)
@@ -1524,7 +1697,7 @@ private data class BoxSel(
 )
 
 /** 一周网格里的占位矩形：并排 / 叠放计算用（day 1-7，top/bottom 为格内纵坐标，colorIndex 是这条的底色）。 */
-private data class LaneBox(
+internal data class LaneBox(
     val day: Int,
     val top: Dp,
     val bottom: Dp,
@@ -1534,52 +1707,63 @@ private data class LaneBox(
 )
 
 /** 同时段里一条块怎么摆。 */
-private data class Slot(
+internal data class Slot(
     /** 并排时第几道。 */
     val lane: Int = 0,
     /** 一共几道；1 = 整宽。 */
     val lanes: Int = 1,
-    /** 列太窄、放不下两道：整簇改叠放，正面卡右侧留出 PeekW 的露边。 */
+    /** 列太窄、放不下两道：整簇改叠放，正面卡保持完整列宽并向右下错位露出背面卡。 */
     val stacked: Boolean = false,
     /** 叠放时被压住的成员不单独画。 */
     val hidden: Boolean = false,
-    /** 同时段的块数；>1 就是冲突，底栏写「N 项」。 */
+    /** 同时段的块数；>1 就是冲突，底栏显示叠放计数。 */
     val overlap: Int = 1,
 )
 
-private class SlotLayout(
+/** 叠放簇里背面露出的成员几何：保留自身实际起止时间 [top]..[bottom]，[depth] 为 1..[MAX_STACK_BACK_LAYERS]。 */
+internal data class StackPeek(
+    val day: Int,
+    val top: Dp,
+    val bottom: Dp,
+    val colorIndex: Int,
+    val depth: Int,
+    val clusterMaxDepth: Int,
+    val itemIndex: Int,
+    val frontIndex: Int,
+    val frontTop: Dp,
+    val frontBottom: Dp,
+)
+
+internal class SlotLayout(
     val slots: List<Slot>,
-    /** 叠放簇右侧露出的那道边：纵向取整簇并集，颜色取被压住那条的底色。 */
-    val peeks: List<LaneBox>,
+    /** 叠放簇背面按各自真实时间段错位露出的层次列表。 */
+    val peeks: List<StackPeek>,
     /** 冲突簇的成员下标（只有 ≥2 条重叠的才收进来）。 */
     val groups: List<List<Int>>,
 )
 
-private fun slotBlockSpan(
+internal fun slotBlockSpan(
     colW: Dp,
     slot: Slot,
 ): Pair<Dp, Dp> {
     val laneW = (colW - BlockOuterInset * 2) / slot.lanes
-    val offsetX = BlockOuterInset + laneW * slot.lane
-    val blockW =
-        when {
-            slot.lanes > 1 -> laneW - 2.dp
-            slot.stacked -> laneW - PeekW - PeekGap
-            else -> laneW
-        }
-    return offsetX to blockW
+    return when {
+        slot.lanes > 1 -> (BlockOuterInset + laneW * slot.lane) to (laneW - 2.dp)
+        slot.stacked -> (BlockOuterInset - StackFrontShiftX) to laneW
+        else -> BlockOuterInset to laneW
+    }
 }
 
 /**
  * 冲突摆放：按天把重叠的块聚成一簇。每道宽度够（≥ [MinLaneW]）就并排各占一道；
- * 不够就叠放——最早开始的那条正面整宽，其余只在右侧露一道边。两条路都保证谁也不压住谁的字。
+ * 不够就叠放——正面卡保持完整列宽，其余成员按各自实际时间段排入最多两层背面卡片向右下错位露出。
  */
-private fun layoutSlots(
+internal fun layoutSlots(
     boxes: List<LaneBox>,
     colW: Dp,
 ): SlotLayout {
     val slots = Array(boxes.size) { Slot() }
-    val peeks = ArrayList<LaneBox>()
+    val peeks = ArrayList<StackPeek>()
     val groups = ArrayList<List<Int>>()
     for (day in 1..7) {
         val dayBoxes =
@@ -1610,15 +1794,36 @@ private fun layoutSlots(
                     ordered.forEachIndexed { lane, i -> slots[i] = Slot(lane = lane, lanes = cluster.size, overlap = cluster.size) }
                 } else {
                     ordered.forEachIndexed { idx, i -> slots[i] = Slot(stacked = true, hidden = idx > 0, overlap = cluster.size) }
-                    val front = boxes[ordered.first()]
-                    val inset = if (front.bottom - front.top > 20.dp) 3.dp else 0.dp
-                    peeks +=
-                        LaneBox(
-                            front.day,
-                            front.top + inset,
-                            front.bottom - inset,
-                            boxes[ordered[1]].colorIndex,
-                        )
+                    val frontIdx = ordered.first()
+                    val front = boxes[frontIdx]
+                    val backOrdered =
+                        ordered
+                            .drop(1)
+                            .sortedWith(compareBy({ boxes[it].top }, { boxes[it].bottom }))
+                    val layerEnds = Array(MAX_STACK_BACK_LAYERS) { (-1).dp }
+                    val pending = ArrayList<StackPeek>(backOrdered.size)
+                    for (itemIdx in backOrdered) {
+                        val b = boxes[itemIdx]
+                        val layer = layerEnds.indexOfFirst { it <= b.top }
+                        if (layer >= 0) {
+                            layerEnds[layer] = maxOf(layerEnds[layer], b.bottom)
+                            pending +=
+                                StackPeek(
+                                    day = b.day,
+                                    top = b.top,
+                                    bottom = b.bottom,
+                                    colorIndex = b.colorIndex,
+                                    depth = layer + 1,
+                                    clusterMaxDepth = 1,
+                                    itemIndex = itemIdx,
+                                    frontIndex = frontIdx,
+                                    frontTop = front.top,
+                                    frontBottom = front.bottom,
+                                )
+                        }
+                    }
+                    val maxDepth = pending.maxOfOrNull { it.depth } ?: 1
+                    pending.forEach { peeks += it.copy(clusterMaxDepth = maxDepth) }
                 }
             }
             cluster = ArrayList(2)
@@ -1752,6 +1957,7 @@ internal fun TaskBlock(
     timeStyle: TextStyle,
     onCommit: (LocalDateTime, Int) -> Unit,
     allowDrag: Boolean = true,
+    stacked: Boolean = false,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
@@ -1810,6 +2016,12 @@ internal fun TaskBlock(
             TimePhase.UPCOMING -> null
         }
 
+    val blockBorder =
+        when {
+            active -> 2.dp to dragBorder
+            stacked -> 0.75.dp to textFg.copy(alpha = 0.14f)
+            else -> null
+        }
     Box(
         modifier
             .zIndex(if (active) 3f else 0f)
@@ -1897,36 +2109,46 @@ internal fun TaskBlock(
                     phase = effectivePhase,
                     progress = effectiveProgress,
                     axis = CourseProgressAxis.VERTICAL,
-                ).then(if (active) Modifier.border(2.dp, dragBorder, TaskBlockShape) else Modifier)
+                ).then(if (blockBorder != null) Modifier.border(blockBorder.first, blockBorder.second, TaskBlockShape) else Modifier)
                 .padding(horizontal = 5.dp, vertical = 5.dp),
         ) {
-            Text(
-                task.title,
-                // 时间那行必须留得下：标题吃掉剩余空间，短块里自动收成省略号
-                modifier = Modifier.weight(1f, fill = false),
-                color = textFg,
-                style = titleStyle,
-                fontWeight = FontWeight.Bold,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (task.isExam && overlap <= 1 && !active) {
-                Text(
-                    stringResource(R.string.kind_exam),
-                    color = textFg,
-                    style = timeStyle,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                )
-            }
-            // 一格只有 40 来 dp 宽，放不下「10:15–11:15」；拖动时只报正在变的那一头。
-            // 同时段还有别的安排时，这行改成「N 项」——冲突比几点更要紧，点开就能看全部。
             if (overlap > 1 && !active) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        task.title,
+                        modifier = Modifier.weight(1f, fill = false),
+                        color = textFg,
+                        style = titleStyle,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 OverlapBadge(
                     overlap = overlap,
                     fg = textFg,
+                    modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
                 )
             } else {
+                Text(
+                    task.title,
+                    // 时间那行必须留得下：标题吃掉剩余空间，短块里自动收成省略号
+                    modifier = Modifier.weight(1f, fill = false),
+                    color = textFg,
+                    style = titleStyle,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (task.isExam && !active) {
+                    Text(
+                        stringResource(R.string.kind_exam),
+                        color = textFg,
+                        style = timeStyle,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
                 val label =
                     when {
                         !active -> start.hm()
@@ -1977,17 +2199,18 @@ private fun OverlapBadge(
     fg: Color,
     modifier: Modifier = Modifier,
 ) {
+    val desc = stringResource(R.string.conflict_count, overlap)
     Box(
         modifier
-            .padding(top = 2.dp)
             .clip(RoundedCornerShape(999.dp))
-            .background(fg.copy(alpha = 0.14f))
-            .padding(horizontal = 5.dp, vertical = 1.dp),
+            .background(fg.copy(alpha = 0.16f))
+            .semantics { contentDescription = desc }
+            .padding(horizontal = 4.5.dp, vertical = 1.dp),
     ) {
         Text(
-            stringResource(R.string.conflict_count, overlap),
+            "+${overlap - 1}",
             color = fg,
-            style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 11.sp, fontFeatureSettings = "tnum"),
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             softWrap = false,
@@ -1997,11 +2220,58 @@ private fun OverlapBadge(
 }
 
 @Composable
+private fun CourseTodoBadge(
+    count: Int,
+    fg: Color,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val desc = stringResource(R.string.course_card_todos_desc, count)
+    if (compact) {
+        Box(
+            modifier
+                .size(7.dp)
+                .clip(CircleShape)
+                .background(fg.copy(alpha = 0.85f))
+                .semantics { contentDescription = desc },
+        )
+    } else {
+        Row(
+            modifier
+                .clip(RoundedCornerShape(999.dp))
+                .background(fg.copy(alpha = 0.16f))
+                .semantics { contentDescription = desc }
+                .padding(horizontal = 4.dp, vertical = 1.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Icon(
+                Icons.Rounded.Checklist,
+                null,
+                tint = fg,
+                modifier = Modifier.size(10.dp),
+            )
+            Text(
+                "$count",
+                color = fg,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 11.sp, fontFeatureSettings = "tnum"),
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
+            )
+        }
+    }
+}
+
+@Composable
 private fun CourseBlock(
     cell: TimetableCell,
     showTeacher: Boolean,
-    /** 同时段块数；>1 时卡片底部写「N 项」，点开由这张正面卡列出全部。 */
+    /** 同时段块数；>1 时卡片底角显示叠放计数，点开由这张正面卡列出全部。 */
     overlap: Int,
+    stacked: Boolean = false,
+    todoCount: Int = 0,
     /** 块宽是否 ≥64dp（宽列加「@」前缀区分教室）。由调用方按已知的块宽传入，
      *  不再每个块起一个 BoxWithConstraints 子组合（一页 30 块 = 30 次 subcompose）。 */
     wide: Boolean,
@@ -2047,6 +2317,12 @@ private fun CourseBlock(
                 axis = CourseProgressAxis.VERTICAL,
             )
         }
+    val resolvedBorder =
+        when {
+            borderColor != Color.Transparent -> 2.dp to borderColor
+            stacked -> 0.75.dp to textFg.copy(alpha = 0.14f)
+            else -> null
+        }
     Box(
         modifier
             .mintPressable(pressedScale = 0.97f) { onClick() }
@@ -2054,83 +2330,97 @@ private fun CourseBlock(
             .clip(CourseBlockShape)
             .then(bgMod)
             .then(if (stateDesc != null) Modifier.semantics { stateDescription = stateDesc } else Modifier)
-            .then(if (borderColor != Color.Transparent) Modifier.border(2.dp, borderColor, CourseBlockShape) else Modifier),
+            .then(if (resolvedBorder != null) Modifier.border(resolvedBorder.first, resolvedBorder.second, CourseBlockShape) else Modifier),
     ) {
         // 一列就 40dp 出头：教室 / 老师照样要显示，靠换行和省略号交代；
         // 把信息藏起来比截断更糟。宽卡片（平板 / 横屏）才加「@」前缀区分教室，窄列里多这一个字符就没地方了。
         Column(Modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 6.dp)) {
             val strike = if (isRemoved) TextDecoration.LineThrough else null
-            // 字号统一由 WeekGrid 记住传入；时间/教室数字用 tnum
-            Text(
-                o.course.name,
-                color = textFg,
-                style = titleStyle,
-                fontWeight = FontWeight.Bold,
-                maxLines =
-                    when {
-                        // 冲突时得给底部的「N 项」留一行，标题少排一行也够认
-                        overlap > 1 -> 2
-
-                        // 教室占一行（两行内截断），标题剩几行按块高算
-                        rows >= 2 -> 4
-
-                        else -> 2
-                    },
-                overflow = TextOverflow.Ellipsis,
-                textDecoration = strike,
-            )
-            // 多教室按 DESIGN 规则折叠（超过 2 处折叠为「首间 等 N 处」），完整列表留在 CourseSheet 中查看。
-            if (o.room.isNotBlank()) {
-                val ctx = LocalContext.current
-                val roomText = remember(o.room, ctx) { ctx.formatRooms(o.room) }
-                val teacherLine = if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) 1 else 0
-                val roomMaxLines =
-                    (BaseRowH * rows - 16.dp - 26.dp - 12.dp * teacherLine).div(12.dp).toInt().coerceAtLeast(2)
-                if (roomText.isNotEmpty()) {
+            val hasFooter = overlap > 1 || todoCount > 0
+            Column(Modifier.weight(1f)) {
+                // 字号统一由 WeekGrid 记住传入；时间/教室数字用 tnum
+                Text(
+                    o.course.name,
+                    color = textFg,
+                    style = titleStyle,
+                    fontWeight = FontWeight.Bold,
+                    maxLines =
+                        when {
+                            rows >= 3 -> 4
+                            rows == 2 -> if (hasFooter) 3 else 4
+                            else -> if (hasFooter) 1 else 2
+                        },
+                    overflow = TextOverflow.Ellipsis,
+                    textDecoration = strike,
+                )
+                // 多教室按 DESIGN 规则折叠（超过 2 处折叠为「首间 等 N 处」），完整列表留在 CourseSheet 中查看。
+                if (o.room.isNotBlank()) {
+                    val ctx = LocalContext.current
+                    val roomText = remember(o.room, ctx) { ctx.formatRooms(o.room) }
+                    val teacherLine = if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) 1 else 0
+                    val roomMaxLines =
+                        (BaseRowH * rows - 16.dp - 26.dp - 12.dp * teacherLine).div(12.dp).toInt().coerceAtLeast(2)
+                    if (roomText.isNotEmpty()) {
+                        Text(
+                            if (wide) "@" + roomText else roomText,
+                            modifier = Modifier.weight(1f, fill = false),
+                            color = textFg.copy(alpha = 0.85f),
+                            // 窄卡与宽卡字号：至少 10sp，保证 TalkBack 及大字号无障碍要求
+                            style = roomStyle,
+                            maxLines = roomMaxLines,
+                            overflow = TextOverflow.Ellipsis,
+                            textDecoration = strike,
+                        )
+                    }
+                }
+                if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) {
                     Text(
-                        if (wide) "@" + roomText else roomText,
-                        modifier = Modifier.weight(1f, fill = false),
-                        color = textFg.copy(alpha = 0.85f),
-                        // 窄卡与宽卡字号：至少 10sp，保证 TalkBack 及大字号无障碍要求
+                        o.course.teacher,
+                        color = textFg.copy(alpha = 0.75f),
                         style = roomStyle,
-                        maxLines = roomMaxLines,
+                        maxLines = 1,
+                        softWrap = false,
                         overflow = TextOverflow.Ellipsis,
-                        textDecoration = strike,
+                    )
+                }
+                if (o.course.isExam) {
+                    Text(
+                        stringResource(R.string.kind_exam),
+                        color = textFg,
+                        style = roomStyle,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
+                if (o.rescheduled) {
+                    Text(
+                        stringResource(R.string.rescheduled),
+                        color = textFg,
+                        style = roomStyle,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }
-            if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) {
-                Text(
-                    o.course.teacher,
-                    color = textFg.copy(alpha = 0.75f),
-                    style = roomStyle,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (o.course.isExam) {
-                Text(
-                    stringResource(R.string.kind_exam),
-                    color = textFg,
-                    style = roomStyle,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                )
-            }
-            if (o.rescheduled) {
-                Text(
-                    stringResource(R.string.rescheduled),
-                    color = textFg,
-                    style = roomStyle,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-            if (overlap > 1) {
-                OverlapBadge(
-                    overlap = overlap,
-                    fg = textFg,
-                )
+            if (hasFooter) {
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (todoCount > 0) {
+                        CourseTodoBadge(
+                            count = todoCount,
+                            fg = textFg,
+                            compact = overlap > 1 && !wide,
+                        )
+                    }
+                    if (overlap > 1) {
+                        OverlapBadge(
+                            overlap = overlap,
+                            fg = textFg,
+                        )
+                    }
+                }
             }
         }
     }
@@ -2187,19 +2477,26 @@ private fun CourseSheet(
     sem: Semester,
     snap: Snapshot,
     cal: SemesterCalendar,
+    today: LocalDate,
     onPickOnGrid: (CourseOccurrence) -> Unit,
     onJumpToWeek: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var lastCell by remember { mutableStateOf(cell) }
     var lastPrefill by remember { mutableStateOf(prefill) }
+    var bindingTodos by remember { mutableStateOf(false) }
+    var bindQuery by remember { mutableStateOf("") }
     LaunchedEffect(cell, prefill) {
         if (cell != null) {
             lastCell = cell
             lastPrefill = null
+            bindingTodos = false
+            bindQuery = ""
         } else if (prefill != null) {
             lastPrefill = prefill
             lastCell = null
+            bindingTodos = false
+            bindQuery = ""
         }
     }
     val visible = cell != null || prefill != null
@@ -2220,6 +2517,9 @@ private fun CourseSheet(
         onDismiss = onDismiss,
     ) {
         if (activeOcc == null) return@InWindowSheet
+        BackHandler(enabled = visible && activePrefill == null && bindingTodos) {
+            bindingTodos = false
+        }
         val ctx = LocalContext.current
         val nav = LocalNav.current
         val actions = LocalActions.current
@@ -2235,173 +2535,463 @@ private fun CourseSheet(
             nav.push(Route.CourseEdit(liveCourse.id))
         }
 
+        fun openNewTodo() {
+            if (!visible || submitted) return
+            submitted = true
+            onDismiss()
+            nav.push(Route.TodoEdit(courseId = liveCourse.id))
+        }
+
         AnimatedContent(
             targetState = activePrefill != null,
             transitionSpec = { fadeIn(fadeSpec) togetherWith fadeOut(fadeSpec) },
             label = "course-sheet-mode",
         ) { editing ->
             if (!editing && activeCell != null) {
-                val noteState =
-                    remember(liveCourse.note, o.originalWeek, o.week) {
-                        val byOrig = CourseNotes.parse(liveCourse.note, o.originalWeek)
-                        if (byOrig.currentWeekNotes.isNotEmpty() || o.week == o.originalWeek) {
-                            o.originalWeek to byOrig
-                        } else {
-                            o.week to CourseNotes.parse(liveCourse.note, o.week)
-                        }
+                val courseById = remember(snap.courses) { snap.courses.filter { it.deletedAt == null }.associateBy { it.id } }
+                val relatedTodos =
+                    remember(snap.tasks, snap.courses, liveCourse) {
+                        TaskLogic.forCourse(snap.tasks, snap.courses, liveCourse)
                     }
-                val noteWeek = noteState.first
-                val parsedNote = noteState.second
 
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp)
-                        .padding(bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                fun toggleBind(
+                    task: Task,
+                    bind: Boolean,
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier
-                                .width(4.dp)
-                                .height(22.dp)
-                                .clip(CircleShape)
-                                .background(MintTheme.colors.fg(liveCourse.colorIndex)),
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            liveCourse.name,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (liveCourse.isExam) {
-                            Spacer(Modifier.width(8.dp))
-                            Tag(
-                                stringResource(R.string.kind_exam),
-                                MaterialTheme.colorScheme.tertiaryContainer,
-                                MaterialTheme.colorScheme.onTertiaryContainer,
+                    if (!visible) return
+                    val ms = System.currentTimeMillis()
+                    val updated =
+                        if (bind) {
+                            task.copy(
+                                courseId = liveCourse.id,
+                                dueBeforeNextClass = task.due == null && task.blockStart == null,
+                            )
+                        } else {
+                            task.copy(
+                                courseId = null,
+                                dueBeforeNextClass = false,
                             )
                         }
-                    }
-                    Text(
-                        "${ctx.weekdayShort(o.date.dayOfWeek.value).let { stringResource(R.string.weekday_prefix, it) }} ${cal.startTime(o.startPeriod)?.hm().orEmpty()}–${cal.endTime(o.endPeriod)?.hm().orEmpty()} · ${stringResource(R.string.periods_range, o.startPeriod, o.endPeriod)}",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 14.dp, bottom = if (o.rescheduled) 2.dp else 8.dp),
-                    )
-                    if (o.rescheduled) {
-                        val origDow = ctx.getString(R.string.weekday_prefix, ctx.weekdayShort(liveCourse.dayOfWeek))
-                        val origHint =
-                            if (liveCourse.startPeriod == liveCourse.endPeriod) {
-                                stringResource(R.string.reschedule_from_hint_single, o.originalWeek, origDow, liveCourse.startPeriod)
-                            } else {
-                                stringResource(R.string.reschedule_from_hint, o.originalWeek, origDow, liveCourse.startPeriod, liveCourse.endPeriod)
-                            }
-                        Text(
-                            origHint,
-                            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 14.dp, bottom = 8.dp),
-                        )
-                    }
-                    if (o.room.isNotBlank()) {
-                        val fullRoom =
-                            remember(o.room) {
-                                o.room
-                                    .split(RoomSplitRegex)
-                                    .filter { it.isNotBlank() }
-                                    .joinToString(" / ")
-                                    .ifBlank { o.room }
-                            }
-                        ValueRow(stringResource(R.string.label_room), fullRoom, onClick = ::openEdit)
-                    }
-                    if (liveCourse.teacher.isNotBlank()) {
-                        ValueRow(stringResource(R.string.label_teacher), liveCourse.teacher, onClick = ::openEdit)
-                    }
-                    ValueRow(stringResource(R.string.week_label), WeekSets.format(liveCourse.weeks), onClick = ::openEdit)
-                    if (liveCourse.note.isNotBlank()) {
-                        CourseNoteBox(
-                            note = liveCourse.note,
-                            week = noteWeek,
-                            parsedNote = parsedNote,
-                            textStyle = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(top = 6.dp),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
-                            onCopied = actions::toast,
-                        )
-                    }
-                    if (activeCell.kind == CellKind.NORMAL) {
-                        Spacer(Modifier.height(10.dp))
-                        // 小屏放不下多个按钮就换行，主次不变：编辑 > 停课 > 调课
-                        val secondaryColors =
-                            ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                contentColor = MaterialTheme.colorScheme.onSurface,
-                            )
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Button(
-                                enabled = canAct,
-                                onClick = ::openEdit,
-                                modifier = Modifier.heightIn(min = 48.dp),
-                            ) { Text(stringResource(R.string.edit)) }
-                            FilledTonalButton(
-                                enabled = canAct,
-                                onClick = {
-                                    if (!visible || submitted) return@FilledTonalButton
-                                    submitted = true
-                                    val origW = o.originalWeek
-                                    val ex = CourseException(Ids.next(), liveCourse.id, origW, ExceptionType.CANCEL)
-                                    val old = snap.exceptions.firstOrNull { it.deletedAt == null && it.courseId == liveCourse.id && it.week == origW }
-                                    val cs = Edits.save(snap, if (old != null) ex.copy(id = old.id) else ex, ctx.getString(R.string.cancel_class_desc, liveCourse.name), System.currentTimeMillis())
-                                    actions.commit(cs, ctx.getString(R.string.cancel_class_toast, liveCourse.name))
-                                    onDismiss()
-                                },
-                                modifier = Modifier.heightIn(min = 48.dp),
-                                colors = secondaryColors,
-                            ) { Text(stringResource(R.string.cancel_class_this_week)) }
-                            FilledTonalButton(
-                                enabled = canAct,
-                                onClick = {
-                                    if (!visible || submitted) return@FilledTonalButton
-                                    submitted = true
-                                    onPickOnGrid(o)
-                                },
-                                modifier = Modifier.heightIn(min = 48.dp),
-                                colors = secondaryColors,
-                            ) { Text(stringResource(R.string.reschedule)) }
+                    val msg =
+                        if (bind) {
+                            ctx.getString(R.string.course_todos_bound_toast, liveCourse.name)
+                        } else {
+                            ctx.getString(R.string.course_todos_unbound_toast, task.title)
                         }
-                        if (o.rescheduled) {
-                            TextButton(
-                                enabled = canAct,
-                                onClick = {
-                                    if (!visible || submitted) return@TextButton
-                                    submitted = true
-                                    val origW = o.originalWeek
-                                    val changes =
-                                        snap.exceptions
-                                            .filter { it.deletedAt == null && it.courseId == liveCourse.id && it.week == origW }
-                                            .map { Change.Remove(it) }
-                                    if (changes.isNotEmpty()) {
-                                        actions.commit(
-                                            ChangeSet(
-                                                Ids.next(),
-                                                ctx.getString(R.string.restore_class_desc, liveCourse.name),
-                                                Source.MANUAL,
-                                                System.currentTimeMillis(),
-                                                changes,
+                    actions.commit(Edits.save(snap, updated, msg, ms), msg, undoable = true)
+                }
+
+                AnimatedContent(
+                    targetState = bindingTodos,
+                    transitionSpec = { fadeIn(fadeSpec) togetherWith fadeOut(fadeSpec) },
+                    label = "course-sheet-todos",
+                ) { isBinding ->
+                    if (isBinding) {
+                        val initialOrder =
+                            remember(liveCourse.id, isBinding) {
+                                if (!isBinding) {
+                                    emptyMap()
+                                } else {
+                                    snap.tasks
+                                        .asSequence()
+                                        .filter { it.deletedAt == null && it.parentId == null && !it.done && it.parcelCode() == null }
+                                        .sortedWith(
+                                            compareBy<Task>(
+                                                {
+                                                    when {
+                                                        TaskLogic.matchesCourse(it, liveCourse, courseById) -> 0
+                                                        it.courseId == null -> 1
+                                                        else -> 2
+                                                    }
+                                                },
+                                                { it.due ?: it.blockStart ?: LocalDateTime.MAX },
+                                                { -it.updatedAt },
                                             ),
-                                            ctx.getString(R.string.restore_class_toast),
-                                        )
-                                        onJumpToWeek(origW)
+                                        ).mapIndexed { idx, t -> t.id to idx }
+                                        .toMap()
+                                }
+                            }
+                        val allCandidates =
+                            remember(snap.tasks, initialOrder) {
+                                snap.tasks
+                                    .asSequence()
+                                    .filter { it.deletedAt == null && it.parentId == null && !it.done && it.parcelCode() == null }
+                                    .sortedWith(compareBy({ initialOrder[it.id] ?: Int.MAX_VALUE }, { -it.updatedAt }))
+                                    .toList()
+                            }
+                        val q = bindQuery.trim()
+                        val filtered =
+                            if (q.isEmpty()) {
+                                allCandidates
+                            } else {
+                                allCandidates.filter { t ->
+                                    t.title.contains(q, ignoreCase = true) || t.note.contains(q, ignoreCase = true)
+                                }
+                            }
+
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp)
+                                .padding(bottom = 24.dp),
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                IconButton(onClick = { bindingTodos = false }) {
+                                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back))
+                                }
+                                Text(
+                                    stringResource(R.string.course_todos_bind_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                TextButton(enabled = canAct, onClick = ::openNewTodo) {
+                                    Text(stringResource(R.string.course_todos_add_short))
+                                }
+                            }
+                            if (allCandidates.size > 5) {
+                                TonalField(
+                                    label = stringResource(R.string.course_todos_bind_search),
+                                    value = bindQuery,
+                                    onChange = { bindQuery = it },
+                                    modifier = Modifier.padding(bottom = 8.dp),
+                                )
+                            }
+                            if (filtered.isEmpty()) {
+                                Column(
+                                    Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Text(
+                                        stringResource(R.string.course_todos_bind_empty),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    FilledTonalButton(enabled = canAct, onClick = ::openNewTodo) {
+                                        Text(stringResource(R.string.course_todos_add))
                                     }
-                                    onDismiss()
-                                },
-                            ) { Text(stringResource(R.string.restore_class)) }
+                                }
+                            } else {
+                                Column(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 320.dp)
+                                        .verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                                ) {
+                                    filtered.forEach { t ->
+                                        val isBound = TaskLogic.matchesCourse(t, liveCourse, courseById)
+                                        val otherCourse = if (!isBound) courseById[t.courseId] else null
+                                        val timeMeta =
+                                            when {
+                                                t.dueBeforeNextClass -> stringResource(R.string.course_link_before_class)
+                                                t.due != null -> ctx.dueLabel(t.due!!, t.dueHasTime, today)
+                                                t.blockStart != null -> ctx.dueLabel(t.blockStart!!, true, today)
+                                                else -> null
+                                            }
+                                        val sub =
+                                            listOfNotNull(
+                                                timeMeta,
+                                                otherCourse?.let { stringResource(R.string.course_todos_bound_other, it.name) },
+                                            ).joinToString(" · ")
+                                        Row(
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(min = 48.dp)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .mintClickable(pressedScale = 0.98f) { toggleBind(t, !isBound) }
+                                                .padding(horizontal = 4.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            MintCheck(
+                                                checked = isBound,
+                                                onChange = { toggleBind(t, !isBound) },
+                                                size = 18.dp,
+                                            )
+                                            Column(Modifier.weight(1f).padding(start = 4.dp, end = 8.dp)) {
+                                                Text(
+                                                    t.title,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                                if (sub.isNotEmpty()) {
+                                                    Text(
+                                                        sub,
+                                                        style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        val noteState =
+                            remember(liveCourse.note, o.originalWeek, o.week) {
+                                val byOrig = CourseNotes.parse(liveCourse.note, o.originalWeek)
+                                if (byOrig.currentWeekNotes.isNotEmpty() || o.week == o.originalWeek) {
+                                    o.originalWeek to byOrig
+                                } else {
+                                    o.week to CourseNotes.parse(liveCourse.note, o.week)
+                                }
+                            }
+                        val noteWeek = noteState.first
+                        val parsedNote = noteState.second
+
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 20.dp)
+                                .padding(bottom = 24.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier
+                                        .width(4.dp)
+                                        .height(22.dp)
+                                        .clip(CircleShape)
+                                        .background(MintTheme.colors.fg(liveCourse.colorIndex)),
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    liveCourse.name,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                if (liveCourse.isExam) {
+                                    Spacer(Modifier.width(8.dp))
+                                    Tag(
+                                        stringResource(R.string.kind_exam),
+                                        MaterialTheme.colorScheme.tertiaryContainer,
+                                        MaterialTheme.colorScheme.onTertiaryContainer,
+                                    )
+                                }
+                            }
+                            Text(
+                                "${ctx.weekdayShort(o.date.dayOfWeek.value).let { stringResource(R.string.weekday_prefix, it) }} ${cal.startTime(o.startPeriod)?.hm().orEmpty()}–${cal.endTime(o.endPeriod)?.hm().orEmpty()} · ${stringResource(R.string.periods_range, o.startPeriod, o.endPeriod)}",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 14.dp, bottom = if (o.rescheduled) 2.dp else 8.dp),
+                            )
+                            if (o.rescheduled) {
+                                val origDow = ctx.getString(R.string.weekday_prefix, ctx.weekdayShort(liveCourse.dayOfWeek))
+                                val origHint =
+                                    if (liveCourse.startPeriod == liveCourse.endPeriod) {
+                                        stringResource(R.string.reschedule_from_hint_single, o.originalWeek, origDow, liveCourse.startPeriod)
+                                    } else {
+                                        stringResource(R.string.reschedule_from_hint, o.originalWeek, origDow, liveCourse.startPeriod, liveCourse.endPeriod)
+                                    }
+                                Text(
+                                    origHint,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(start = 14.dp, bottom = 8.dp),
+                                )
+                            }
+                            if (o.room.isNotBlank()) {
+                                val fullRoom =
+                                    remember(o.room) {
+                                        o.room
+                                            .split(RoomSplitRegex)
+                                            .filter { it.isNotBlank() }
+                                            .joinToString(" / ")
+                                            .ifBlank { o.room }
+                                    }
+                                ValueRow(stringResource(R.string.label_room), fullRoom, onClick = ::openEdit)
+                            }
+                            if (liveCourse.teacher.isNotBlank()) {
+                                ValueRow(stringResource(R.string.label_teacher), liveCourse.teacher, onClick = ::openEdit)
+                            }
+                            ValueRow(stringResource(R.string.week_label), WeekSets.format(liveCourse.weeks), onClick = ::openEdit)
+                            if (liveCourse.note.isNotBlank()) {
+                                CourseNoteBox(
+                                    note = liveCourse.note,
+                                    week = noteWeek,
+                                    parsedNote = parsedNote,
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(top = 6.dp),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+                                    onCopied = actions::toast,
+                                )
+                            }
+                            if (activeCell.kind == CellKind.NORMAL) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(top = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        if (relatedTodos.isNotEmpty()) {
+                                            "${stringResource(R.string.course_todos)} · ${relatedTodos.size}"
+                                        } else {
+                                            stringResource(R.string.course_todos)
+                                        },
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    TextButton(
+                                        enabled = canAct,
+                                        onClick = {
+                                            bindQuery = ""
+                                            bindingTodos = true
+                                        },
+                                    ) { Text(stringResource(R.string.course_todos_bind)) }
+                                    TextButton(
+                                        enabled = canAct,
+                                        onClick = ::openNewTodo,
+                                    ) { Text(stringResource(R.string.course_todos_add_short)) }
+                                }
+                                relatedTodos.forEach { t ->
+                                    val sub =
+                                        when {
+                                            t.dueBeforeNextClass -> stringResource(R.string.course_link_before_class)
+                                            t.due != null -> ctx.dueLabel(t.due!!, t.dueHasTime, today)
+                                            t.blockStart != null -> ctx.dueLabel(t.blockStart!!, true, today)
+                                            else -> null
+                                        }
+                                    Row(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 48.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .mintClickable(enabled = canAct, pressedScale = 0.98f) {
+                                                if (!visible || submitted) return@mintClickable
+                                                submitted = true
+                                                onDismiss()
+                                                nav.openTask(t.id)
+                                            }.padding(start = 2.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        MintCheck(
+                                            checked = t.done,
+                                            onChange = { d ->
+                                                toggle(actions, snap, t, d, LocalDateTime.now(), ctx.getString(R.string.done_toast, t.title))
+                                            },
+                                            size = 18.dp,
+                                        )
+                                        Column(Modifier.weight(1f).padding(start = 4.dp, end = 4.dp)) {
+                                            Text(
+                                                t.title,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            if (sub != null) {
+                                                Text(
+                                                    sub,
+                                                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                        }
+                                        Box(
+                                            Modifier
+                                                .size(40.dp)
+                                                .clip(CircleShape)
+                                                .mintClickable(pressedScale = 0.95f, role = Role.Button) {
+                                                    toggleBind(t, false)
+                                                },
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                Icons.Rounded.Close,
+                                                stringResource(R.string.course_todos_unbind),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.height(10.dp))
+                                // 小屏放不下多个按钮就换行，主次不变：编辑 > 停课 > 调课
+                                val secondaryColors =
+                                    ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                        contentColor = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Button(
+                                        enabled = canAct,
+                                        onClick = ::openEdit,
+                                        modifier = Modifier.heightIn(min = 48.dp),
+                                    ) { Text(stringResource(R.string.edit)) }
+                                    FilledTonalButton(
+                                        enabled = canAct,
+                                        onClick = {
+                                            if (!visible || submitted) return@FilledTonalButton
+                                            submitted = true
+                                            val origW = o.originalWeek
+                                            val ex = CourseException(Ids.next(), liveCourse.id, origW, ExceptionType.CANCEL)
+                                            val old = snap.exceptions.firstOrNull { it.deletedAt == null && it.courseId == liveCourse.id && it.week == origW }
+                                            val cs = Edits.save(snap, if (old != null) ex.copy(id = old.id) else ex, ctx.getString(R.string.cancel_class_desc, liveCourse.name), System.currentTimeMillis())
+                                            actions.commit(cs, ctx.getString(R.string.cancel_class_toast, liveCourse.name))
+                                            onDismiss()
+                                        },
+                                        modifier = Modifier.heightIn(min = 48.dp),
+                                        colors = secondaryColors,
+                                    ) { Text(stringResource(R.string.cancel_class_this_week)) }
+                                    FilledTonalButton(
+                                        enabled = canAct,
+                                        onClick = {
+                                            if (!visible || submitted) return@FilledTonalButton
+                                            submitted = true
+                                            onPickOnGrid(o)
+                                        },
+                                        modifier = Modifier.heightIn(min = 48.dp),
+                                        colors = secondaryColors,
+                                    ) { Text(stringResource(R.string.reschedule)) }
+                                }
+                                if (o.rescheduled) {
+                                    TextButton(
+                                        enabled = canAct,
+                                        onClick = {
+                                            if (!visible || submitted) return@TextButton
+                                            submitted = true
+                                            val origW = o.originalWeek
+                                            val changes =
+                                                snap.exceptions
+                                                    .filter { it.deletedAt == null && it.courseId == liveCourse.id && it.week == origW }
+                                                    .map { Change.Remove(it) }
+                                            if (changes.isNotEmpty()) {
+                                                actions.commit(
+                                                    ChangeSet(
+                                                        Ids.next(),
+                                                        ctx.getString(R.string.restore_class_desc, liveCourse.name),
+                                                        Source.MANUAL,
+                                                        System.currentTimeMillis(),
+                                                        changes,
+                                                    ),
+                                                    ctx.getString(R.string.restore_class_toast),
+                                                )
+                                                onJumpToWeek(origW)
+                                            }
+                                            onDismiss()
+                                        },
+                                    ) { Text(stringResource(R.string.restore_class)) }
+                                }
+                            }
                         }
                     }
                 }

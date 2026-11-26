@@ -186,6 +186,34 @@ object TaskLogic {
         nowMillis: Long,
     ): Task = task.copy(done = false, doneAt = null, dropped = false, updatedAt = nowMillis)
 
+    /** 判断任务 [task] 是否关联到课程 [target]（按同 ID 或同学期同名多时段课程归并）。 */
+    fun matchesCourse(
+        task: Task,
+        target: Course,
+        courseById: Map<String, Course>,
+    ): Boolean {
+        val cid = task.courseId ?: return false
+        if (cid == target.id) return true
+        val linked = courseById[cid] ?: return false
+        return linked.semesterId == target.semesterId && linked.name.trim() == target.name.trim()
+    }
+
+    /** 列出关联到课程 [target] 的顶层任务（默认仅未完成）。 */
+    fun forCourse(
+        tasks: List<Task>,
+        courses: List<Course>,
+        target: Course,
+        includeDone: Boolean = false,
+    ): List<Task> {
+        val byId = courses.filter { it.deletedAt == null }.associateBy { it.id }
+        return tasks.filter { t ->
+            t.deletedAt == null &&
+                t.parentId == null &&
+                (includeDone || !t.done) &&
+                matchesCourse(t, target, byId)
+        }
+    }
+
     /** 关联课程且「下节课前」的任务，截止为该课程下一次上课的开始时间。 */
     fun effectiveDue(
         task: Task,

@@ -84,6 +84,7 @@ import app.goke.core.model.PeriodTime
 import app.goke.core.model.Reminders
 import app.goke.core.model.Source
 import app.goke.core.time.WeekSets
+import app.goke.core.todo.TaskLogic
 import app.goke.core.util.Ids
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalNav
@@ -706,10 +707,7 @@ fun CourseEditScreen(
                 }
                 val related =
                     remember(snap.tasks, snap.courses, origin) {
-                        snap.tasks.filter { t ->
-                            t.deletedAt == null && t.parentId == null && !t.done && t.courseId != null &&
-                                (t.courseId == origin.id || snap.courses.firstOrNull { it.id == t.courseId }?.name == origin.name)
-                        }
+                        TaskLogic.forCourse(snap.tasks, snap.courses, origin)
                     }
                 SectionLabel(
                     stringResource(R.string.course_todos),
