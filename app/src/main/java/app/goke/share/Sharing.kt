@@ -74,7 +74,7 @@ object Sharing {
         displayName: String,
     ): File {
         val prefix = sanitizeFilenamePrefix(displayName)
-        val name = displayName.trim().ifBlank { prefix }
+        val name = displayName.trim()
         val json = SharedTimetable.fromSnapshot(snap, name).toJson()
         return File(dir(ctx), "$prefix.json").also { it.writeText(json, Charsets.UTF_8) }
     }

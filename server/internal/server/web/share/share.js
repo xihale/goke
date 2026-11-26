@@ -268,7 +268,9 @@ function buildICS(data) {
   push('VERSION:2.0');
   push('PRODID:-//Goke//Goke Share 1.0//ZH');
   push('CALSCALE:GREGORIAN');
-  push(`X-WR-CALNAME:${icsEscape(`${data.name} · ${sem.name || '课表'}`)}`);
+  const displayName = (data.name || '').trim();
+  const calName = [displayName, sem.name || '课表'].filter(Boolean).join(' · ');
+  push(`X-WR-CALNAME:${icsEscape(calName)}`);
   if (sem.week1Monday) push(`X-GOKE-WEEK1-MONDAY:${sem.week1Monday}`);
 
   const exceptions = data.exceptions || [];
@@ -439,15 +441,16 @@ function renderViewer(root, data) {
   }, icon(isDark ? 'sun' : 'moon'));
 
   const shareUrl = `${location.origin}/s/${data.code}`;
+  const displayName = (data.name || '').trim();
+  const headingText = displayName || sem.name || '课表';
   const header = h('section', { class: 'header-card' },
     h('div', { class: 'header-top' },
       h('div', { class: 'title-wrap' },
         h('div', { class: 'title-row' },
-          h('h1', {}, data.name),
-          h('span', { class: 'badge' }, '实验性分享')),
+          h('h1', {}, headingText),
+          h('span', { class: 'badge' }, '实验性')),
         h('div', { class: 'meta-line' },
-          sem.name ? h('span', {}, sem.name) : null,
-          h('span', {}, `分享码 ${data.code}`),
+          displayName && sem.name ? h('span', {}, sem.name) : null,
           h('span', {}, `有效期至 ${formatExpiry(data.expiresAt)}`))),
       themeBtn),
     h('div', { class: 'header-actions' },
@@ -567,7 +570,7 @@ function renderViewer(root, data) {
     });
   }
 
-  document.title = `${data.name} · Goke 课表分享`;
+  document.title = displayName ? `${displayName} · Goke 课表` : `${sem.name ? `${sem.name} · ` : ''}Goke 课表`;
   renderWeek();
   page.append(header, gridContainer);
   root.replaceChildren(page);

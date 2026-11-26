@@ -3384,15 +3384,14 @@ private fun TimetableExportSheet(
             )
             NavRow(
                 title = stringResource(R.string.timetable_export_quick_share),
-                subtitle = stringResource(R.string.timetable_export_quick_share_desc),
                 icon = Icons.Rounded.Cloud,
+                trailing = stringResource(R.string.share_experimental_tag),
                 enabled = !busy,
                 onClick = onQuickShare,
             )
             HorizontalDivider(Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
             NavRow(
                 title = stringResource(R.string.timetable_export_xlsx),
-                subtitle = stringResource(R.string.timetable_export_xlsx_desc),
                 icon = Icons.Rounded.GridView,
                 enabled = !busy,
             ) {
@@ -3407,7 +3406,6 @@ private fun TimetableExportSheet(
             }
             NavRow(
                 title = stringResource(R.string.timetable_export_ics),
-                subtitle = stringResource(R.string.timetable_export_ics_desc),
                 icon = Icons.Rounded.DateRange,
                 enabled = !busy,
             ) {
@@ -3421,7 +3419,6 @@ private fun TimetableExportSheet(
             }
             NavRow(
                 title = stringResource(R.string.timetable_export_json),
-                subtitle = stringResource(R.string.timetable_export_json_desc),
                 icon = Icons.Rounded.IosShare,
                 enabled = !busy,
             ) {
@@ -3429,13 +3426,12 @@ private fun TimetableExportSheet(
                     Sharing.exportTimetableJson(
                         ctx,
                         snap,
-                        displayName = shareState.displayName.ifBlank { "goke-timetable" },
+                        displayName = shareState.displayName,
                     )
                 }
             }
             NavRow(
                 title = stringResource(R.string.timetable_export_png),
-                subtitle = stringResource(R.string.timetable_export_png_desc),
                 icon = Icons.Rounded.Image,
                 enabled = !busy,
             ) {

@@ -30,6 +30,7 @@ data class TimetableShareUiState(
     val hasActiveShare: Boolean get() = !code.isNullOrBlank() && !shareUrl.isNullOrBlank()
     val effectiveStudentId: String get() = jxfwStudentId?.takeIf { it.isNotBlank() } ?: manualStudentId
     val effectiveServerUrl: String get() = serverUrl.ifBlank { defaultServerUrl }
+    val isCustomServer: Boolean get() = serverUrl.isNotBlank() && serverUrl != defaultServerUrl
 }
 
 /** 课表快速分享（实验性）状态与云端操作管理。 */
@@ -37,9 +38,13 @@ class TimetableShareManager(
     private val repo: Repository,
     private val store: TimetableShareStore,
     private val jxfw: JxfwAdapter,
-    private val defaultServerUrlProvider: () -> String? = { null },
+    private val defaultServerUrlProvider: () -> String? = { DEFAULT_SERVER_URL },
     private val errors: ErrorReporter? = null,
 ) {
+    companion object {
+        const val DEFAULT_SERVER_URL = "https://goke.xeed.ink"
+    }
+
     private val mutex = Mutex()
     private val _state = MutableStateFlow(snapshotState(busy = false, lastError = null))
     val state: StateFlow<TimetableShareUiState> = _state.asStateFlow()
@@ -71,6 +76,10 @@ class TimetableShareManager(
         )
     }
 
+    private fun normalizedDefaultUrl(): String? = defaultServerUrlProvider()?.let { SyncClient.normalizeUrl(it) }
+
+    private fun persistServerUrl(normalizedUrl: String): String = if (normalizedUrl == normalizedDefaultUrl()) "" else normalizedUrl
+
     fun syncFromEnvironment() {
         _state.value = snapshotState(busy = _state.value.busy, lastError = _state.value.lastError)
     }
@@ -83,7 +92,16 @@ class TimetableShareManager(
     ) {
         if (displayName != null) store.displayName = displayName
         if (manualStudentId != null) store.manualStudentId = manualStudentId
-        if (serverUrl != null) store.serverUrl = serverUrl
+        if (serverUrl != null) {
+            val trimmed = serverUrl.trim()
+            val normalized = SyncClient.normalizeUrl(trimmed)
+            store.serverUrl =
+                when {
+                    trimmed.isEmpty() -> ""
+                    normalized != null && normalized == normalizedDefaultUrl() -> ""
+                    else -> trimmed
+                }
+        }
         if (expiryPresetDays != null) store.expiryPresetDays = expiryPresetDays
         _state.value = snapshotState(busy = _state.value.busy, lastError = null)
     }
@@ -96,7 +114,6 @@ class TimetableShareManager(
     ): PutShareResponse =
         mutex.withLock {
             val trimmedName = displayName.trim()
-            if (trimmedName.isEmpty()) throw ShareException("请填写展示名称")
             val effectiveId =
                 (
                     jxfw.state.value.username
@@ -105,10 +122,10 @@ class TimetableShareManager(
                         ?: studentIdOverride?.trim()?.takeIf { it.isNotEmpty() }
                         ?: store.manualStudentId.trim()
                 )
-            if (effectiveId.isEmpty()) throw ShareException("请填写学号")
+            if (effectiveId.isEmpty()) throw ShareException("请先填写学号")
 
             val rawUrl = (serverUrlOverride ?: store.serverUrl).ifBlank { defaultServerUrlProvider().orEmpty() }
-            val normalizedUrl = SyncClient.normalizeUrl(rawUrl) ?: throw ShareException("请填写正确的分享服务地址")
+            val normalizedUrl = SyncClient.normalizeUrl(rawUrl) ?: throw ShareException("请填写正确的服务器地址")
 
             store.displayName = trimmedName
             if (jxfw.state.value.username
@@ -116,7 +133,8 @@ class TimetableShareManager(
             ) {
                 store.manualStudentId = studentIdOverride.trim()
             }
-            store.serverUrl = normalizedUrl
+            val persistedServerUrl = persistServerUrl(normalizedUrl)
+            store.serverUrl = persistedServerUrl
 
             _state.value = snapshotState(busy = true, lastError = null)
             try {
@@ -139,8 +157,8 @@ class TimetableShareManager(
                         ),
                     )
                 store.saveActive(
-                    serverUrl = normalizedUrl,
-                    displayName = res.name.ifBlank { trimmedName },
+                    serverUrl = persistedServerUrl,
+                    displayName = res.name,
                     boundStudentId = effectiveId,
                     code = res.code,
                     shareUrl = res.shareUrl,
@@ -188,7 +206,7 @@ class TimetableShareManager(
                 val shareUrl = res.shareUrl ?: store.shareUrl
                 if (code != null && shareUrl != null) {
                     store.saveActive(
-                        serverUrl = normalizedUrl,
+                        serverUrl = persistServerUrl(normalizedUrl),
                         displayName = res.name ?: store.displayName,
                         boundStudentId = studentId,
                         code = code,
@@ -230,7 +248,7 @@ class TimetableShareManager(
             }
 
             val rawUrl = (serverUrlOverride ?: store.serverUrl).ifBlank { defaultServerUrlProvider().orEmpty() }
-            val normalizedUrl = SyncClient.normalizeUrl(rawUrl) ?: throw ShareException("请填写正确的分享服务地址")
+            val normalizedUrl = SyncClient.normalizeUrl(rawUrl) ?: throw ShareException("请填写正确的服务器地址")
 
             _state.value = snapshotState(busy = true, lastError = null)
             try {

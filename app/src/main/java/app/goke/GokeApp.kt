@@ -45,7 +45,6 @@ import app.goke.notify.ReminderScheduler
 import app.goke.share.TimetableShareManager
 import app.goke.share.TimetableShareStore
 import app.goke.sync.PeriodicSync
-import app.goke.sync.SyncStore
 import app.goke.widget.HotWaterWidgetProvider
 import app.goke.widget.NextWidgetProvider
 import app.goke.widget.ParcelWidgetProvider
@@ -139,18 +138,12 @@ open class GokeApp : Application() {
         tzcs = adapterFactory.createTzcs(this, campusHost)
         hotWater = adapterFactory.createHotWater(this, campusHost)
 
-        val syncStore = SyncStore(this, secrets)
         timetableShare =
             TimetableShareManager(
                 repo = repo,
                 store = TimetableShareStore(this, secrets),
                 jxfw = jxfw,
-                defaultServerUrlProvider = {
-                    syncStore.account.value
-                        ?.serverUrl
-                        ?.takeIf { it.isNotBlank() }
-                        ?: syncStore.lastServerUrl.takeIf { it.isNotBlank() }
-                },
+                defaultServerUrlProvider = { TimetableShareManager.DEFAULT_SERVER_URL },
                 errors = errors,
             )
 

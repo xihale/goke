@@ -324,6 +324,35 @@ func TestShareExpiryAndValidation(t *testing.T) {
 	}); c != 400 {
 		t.Fatalf("courses > 300 want 400 got %d", c)
 	}
+
+	// Empty display name is allowed, while >64 runes is rejected
+	cEmpty, outEmpty, _ := e.reqJSON("PUT", "/api/v1/share", map[string]any{
+		"studentId": "s-empty-name",
+		"name":      "   ",
+		"expiresAt": e.now.Add(24 * time.Hour).UnixMilli(),
+		"timetable": sampleTimetable("2026-08-31", 18),
+	})
+	if cEmpty != 200 || outEmpty["name"] != "" {
+		t.Fatalf("empty name want 200 and empty name got %d %v", cEmpty, outEmpty)
+	}
+	emptyCode := outEmpty["code"].(string)
+	rEmpty := e.req("GET", "/api/v1/share/"+emptyCode, nil, nil)
+	if rEmpty.Code != 200 {
+		t.Fatalf("GET empty name share want 200 got %d", rEmpty.Code)
+	}
+	var gotEmpty map[string]any
+	if err := json.Unmarshal(rEmpty.Body.Bytes(), &gotEmpty); err != nil || gotEmpty["name"] != "" {
+		t.Fatalf("GET empty name share want empty name got %v (%v)", gotEmpty, err)
+	}
+
+	if cLong, _, _ := e.reqJSON("PUT", "/api/v1/share", map[string]any{
+		"studentId": "s-long-name",
+		"name":      strings.Repeat("课", 65),
+		"expiresAt": e.now.Add(24 * time.Hour).UnixMilli(),
+		"timetable": sampleTimetable("2026-08-31", 18),
+	}); cLong != 400 {
+		t.Fatalf("name > 64 runes want 400 got %d", cLong)
+	}
 }
 
 func TestShareContentNegotiationAndViewer(t *testing.T) {

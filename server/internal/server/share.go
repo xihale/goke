@@ -170,9 +170,8 @@ func (s *Server) handleShareUpsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(req.Name)
-	nameLen := utf8.RuneCountInString(name)
-	if nameLen < 1 || nameLen > 64 {
-		writeErr(w, http.StatusBadRequest, "invalid_name", "展示名称长度需为 1 到 64 个字符")
+	if utf8.RuneCountInString(name) > 64 {
+		writeErr(w, http.StatusBadRequest, "invalid_name", "展示名称长度不能超过 64 个字符")
 		return
 	}
 

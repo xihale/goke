@@ -157,15 +157,16 @@ fun DataScreen(onBack: () -> Unit) {
                 FormSection(stringResource(R.string.section_export)) {
                     NavRow(
                         stringResource(R.string.timetable_export_quick_share),
-                        stringResource(R.string.timetable_export_quick_share_desc),
+                        null,
                         Icons.Rounded.IosShare,
+                        trailing = stringResource(R.string.share_experimental_tag),
                         enabled = !busy,
                     ) {
                         nav.push(Route.TimetableShare)
                     }
                     NavRow(
                         stringResource(R.string.timetable_export_xlsx),
-                        stringResource(R.string.timetable_export_xlsx_desc),
+                        null,
                         Icons.Rounded.IosShare,
                         enabled = !busy,
                     ) {

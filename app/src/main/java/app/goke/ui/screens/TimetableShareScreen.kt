@@ -10,35 +10,29 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -59,12 +53,18 @@ import app.goke.R
 import app.goke.core.export.ShareExpiry
 import app.goke.core.export.ShareExpiryPreset
 import app.goke.share.ShareException
+import app.goke.share.TimetableShareManager
+import app.goke.sync.SyncClient
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
+import app.goke.ui.components.ChipChoice
 import app.goke.ui.components.ConfirmDialog
 import app.goke.ui.components.CuteQrCode
-import app.goke.ui.components.FormSection
+import app.goke.ui.components.MintAlertDialog
+import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
+import app.goke.ui.components.TonalField
+import app.goke.ui.components.ValueRow
 import app.goke.ui.icons.ContentCopy
 import app.goke.ui.icons.DeleteOutline
 import app.goke.ui.icons.GridView
@@ -78,11 +78,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val SHARE_DATE_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-private val SHARE_TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("M月d日 HH:mm")
 
 private fun formatShareDate(ms: Long): String = LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault()).format(SHARE_DATE_FMT)
-
-private fun formatShareTime(ms: Long): String = LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault()).format(SHARE_TIME_FMT)
 
 @Composable
 private fun presetLabel(key: String): String =
@@ -94,8 +91,7 @@ private fun presetLabel(key: String): String =
         else -> stringResource(R.string.share_expiry_next_sem_start)
     }
 
-/** 「课表快速分享（实验性）」：生成/更新/删除在线课表分享链接与二维码。 */
-@OptIn(ExperimentalLayoutApi::class)
+/** 「课表快速分享」：生成/更新/删除在线课表分享链接与二维码。 */
 @Composable
 fun TimetableShareScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
@@ -108,18 +104,26 @@ fun TimetableShareScreen(onBack: () -> Unit) {
     val state by app.timetableShare.state.collectAsState()
     val jxfwState by app.jxfw.state.collectAsState()
 
-    var displayName by remember(state.displayName) { mutableStateOf(state.displayName) }
-    var manualId by remember(state.manualStudentId) { mutableStateOf(state.manualStudentId) }
-    var serverUrl by remember(state.effectiveServerUrl) { mutableStateOf(state.effectiveServerUrl) }
+    var displayName by remember { mutableStateOf(state.displayName) }
+    var manualId by remember { mutableStateOf(state.manualStudentId) }
+    LaunchedEffect(state.displayName) {
+        if (state.displayName != displayName) displayName = state.displayName
+    }
+    LaunchedEffect(state.manualStudentId) {
+        if (state.manualStudentId != manualId) manualId = state.manualStudentId
+    }
+
     var showQr by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var showServerDialog by remember { mutableStateOf(false) }
+    var serverDraft by remember { mutableStateOf("") }
 
     val presets: List<ShareExpiryPreset> =
         remember(sem?.id, sem?.week1Monday, sem?.totalWeeks) {
             if (sem == null) emptyList() else ShareExpiry.presets(sem, LocalDate.now())
         }
     var selectedExpiresAt by remember(presets) {
-        val defaultPreset = presets.firstOrNull { it.key == "30d" } ?: presets.lastOrNull()
+        val defaultPreset = presets.firstOrNull { it.key == "semesterEnd" } ?: presets.lastOrNull()
         mutableLongStateOf(defaultPreset?.expiresAt ?: 0L)
     }
 
@@ -137,16 +141,13 @@ fun TimetableShareScreen(onBack: () -> Unit) {
             actions.toast(ctx.getString(R.string.share_no_semester))
             return
         }
-        if (displayName.isBlank()) {
-            actions.toast(ctx.getString(R.string.share_empty_name_err))
-            return
-        }
         val effectiveId = jxfwState.username?.takeIf { it.isNotBlank() } ?: manualId.trim()
         if (effectiveId.isBlank()) {
             actions.toast(ctx.getString(R.string.share_empty_id_err))
             return
         }
-        if (serverUrl.isBlank()) {
+        val effectiveServerUrl = state.effectiveServerUrl
+        if (effectiveServerUrl.isBlank()) {
             actions.toast(ctx.getString(R.string.share_empty_server_err))
             return
         }
@@ -157,7 +158,7 @@ fun TimetableShareScreen(onBack: () -> Unit) {
                     displayName = displayName,
                     studentIdOverride = manualId,
                     expiresAt = expiresAt,
-                    serverUrlOverride = serverUrl,
+                    serverUrlOverride = effectiveServerUrl,
                 )
                 actions.toast(ctx.getString(if (isUpdate) R.string.share_updated_toast else R.string.share_published_toast))
             } catch (e: ShareException) {
@@ -171,325 +172,290 @@ fun TimetableShareScreen(onBack: () -> Unit) {
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 20.dp)
                 .navigationBarsPadding()
-                .padding(bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(top = 4.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            // 实验性功能提示卡片
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    Icon(
-                        Icons.Rounded.Warning,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            stringResource(R.string.share_experimental_badge),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                        Text(
-                            stringResource(R.string.share_experimental_notice),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                    }
-                }
-            }
-
             if (state.hasActiveShare) {
                 val activeUrl = state.shareUrl.orEmpty()
-                val activeCode = state.code.orEmpty()
-                FormSection(stringResource(R.string.share_active_section)) {
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
-                    ) {
-                        Column(
-                            Modifier.fillMaxWidth().padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    stringResource(R.string.share_url_label),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                )
-                                Text(
-                                    stringResource(R.string.share_code_label, activeCode),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                )
-                            }
+                MintCard(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            activeUrl,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        state.expiresAt?.let { exp ->
                             Text(
-                                activeUrl,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                stringResource(R.string.share_expires_at, formatShareDate(exp)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            FilledTonalButton(
+                                onClick = {
+                                    val cm = ctx.getSystemService(ClipboardManager::class.java)
+                                    cm?.setPrimaryClip(ClipData.newPlainText("goke-share", activeUrl))
+                                    actions.toast(ctx.getString(R.string.share_copied_toast))
+                                },
                             ) {
-                                state.expiresAt?.let { exp ->
-                                    Text(
-                                        stringResource(R.string.share_expires_at, formatShareDate(exp)),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
-                                    )
-                                }
-                                state.updatedAt?.let { upd ->
-                                    Text(
-                                        stringResource(R.string.share_updated_at, formatShareTime(upd)),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
-                                    )
-                                }
+                                Icon(Icons.Rounded.ContentCopy, null, Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(stringResource(R.string.share_copy_link))
                             }
-
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            FilledTonalButton(
+                                onClick = {
+                                    val send =
+                                        Intent(Intent.ACTION_SEND)
+                                            .setType("text/plain")
+                                            .putExtra(Intent.EXTRA_TEXT, activeUrl)
+                                    val chooser =
+                                        Intent
+                                            .createChooser(send, ctx.getString(R.string.share_send_chooser))
+                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    ctx.startActivity(chooser)
+                                },
                             ) {
-                                FilledTonalButton(
-                                    onClick = {
-                                        val cm = ctx.getSystemService(ClipboardManager::class.java)
-                                        cm?.setPrimaryClip(ClipData.newPlainText("goke-share", activeUrl))
-                                        actions.toast(ctx.getString(R.string.share_copied_toast))
-                                    },
-                                ) {
-                                    Icon(Icons.Rounded.ContentCopy, null, Modifier.size(16.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(stringResource(R.string.share_copy_link))
-                                }
-                                FilledTonalButton(
-                                    onClick = {
-                                        val send =
-                                            Intent(Intent.ACTION_SEND)
-                                                .setType("text/plain")
-                                                .putExtra(Intent.EXTRA_TEXT, activeUrl)
-                                        val chooser =
-                                            Intent
-                                                .createChooser(send, ctx.getString(R.string.share_send_chooser))
-                                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        ctx.startActivity(chooser)
-                                    },
-                                ) {
-                                    Icon(Icons.Rounded.Share, null, Modifier.size(16.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(stringResource(R.string.share_system_share))
-                                }
-                                OutlinedButton(onClick = { showQr = !showQr }) {
-                                    Icon(Icons.Rounded.GridView, null, Modifier.size(16.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(stringResource(if (showQr) R.string.share_qr_hide else R.string.share_qr_show))
-                                }
+                                Icon(Icons.Rounded.Share, null, Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(stringResource(R.string.share_system_share))
                             }
-
-                            AnimatedVisibility(
-                                visible = showQr,
-                                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-                            ) {
-                                Column(
-                                    Modifier.fillMaxWidth().padding(top = 4.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    CuteQrCode(
-                                        payload = activeUrl,
-                                        contentDesc = stringResource(R.string.share_qr_desc),
-                                        modifier = Modifier.widthIn(max = 220.dp).fillMaxWidth(),
-                                    )
-                                }
+                            OutlinedButton(onClick = { showQr = !showQr }) {
+                                Icon(Icons.Rounded.GridView, null, Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(stringResource(if (showQr) R.string.share_qr_hide else R.string.share_qr_show))
                             }
+                        }
 
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        AnimatedVisibility(
+                            visible = showQr,
+                            enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                            exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                        ) {
+                            Column(
+                                Modifier.fillMaxWidth().padding(top = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                Button(
-                                    onClick = { submitPublish(isUpdate = true) },
-                                    enabled = !state.busy && sem != null,
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Text(
-                                        stringResource(R.string.share_update_cloud),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                                OutlinedButton(
-                                    onClick = { confirmDelete = true },
-                                    enabled = !state.busy,
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                ) {
-                                    Icon(Icons.Rounded.DeleteOutline, null, Modifier.size(18.dp))
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(stringResource(R.string.share_delete_cloud))
-                                }
+                                CuteQrCode(
+                                    payload = activeUrl,
+                                    contentDesc = stringResource(R.string.share_qr_desc),
+                                    modifier = Modifier.widthIn(max = 200.dp).fillMaxWidth(),
+                                )
+                            }
+                        }
+
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Button(
+                                onClick = { submitPublish(isUpdate = true) },
+                                enabled = !state.busy && sem != null,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    stringResource(R.string.share_update_cloud),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = { confirmDelete = true },
+                                enabled = !state.busy,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            ) {
+                                Icon(Icons.Rounded.DeleteOutline, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(stringResource(R.string.share_delete_cloud))
                             }
                         }
                     }
                 }
             }
 
-            FormSection(stringResource(R.string.share_config_section)) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = displayName,
-                        onValueChange = {
-                            displayName = it
-                            app.timetableShare.updateDraft(displayName = it)
-                        },
-                        label = { Text(stringResource(R.string.share_display_name)) },
-                        placeholder = { Text(stringResource(R.string.share_display_name_placeholder)) },
-                        supportingText = { Text(stringResource(R.string.share_display_name_note)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+            TonalField(
+                label = stringResource(R.string.share_display_name),
+                value = displayName,
+                onChange = {
+                    displayName = it
+                    app.timetableShare.updateDraft(displayName = it)
+                },
+                placeholder = stringResource(R.string.share_display_name_placeholder),
+            )
+
+            val boundJxfwId = jxfwState.username?.takeIf { it.isNotBlank() }
+            if (boundJxfwId != null) {
+                Column(
+                    Modifier.padding(horizontal = 2.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.share_student_id_bound, boundJxfwId),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
+                    Text(
+                        stringResource(R.string.share_anon_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TonalField(
+                        label = stringResource(R.string.share_student_id),
+                        value = manualId,
+                        onChange = {
+                            manualId = it
+                            app.timetableShare.updateDraft(manualStudentId = it)
+                        },
+                        placeholder = stringResource(R.string.share_student_id_placeholder),
+                    )
+                    Text(
+                        stringResource(R.string.share_anon_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 2.dp),
+                    )
+                }
+            }
 
-                    val boundJxfwId = jxfwState.username?.takeIf { it.isNotBlank() }
-                    if (boundJxfwId != null) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        ) {
-                            Column(
-                                Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalArrangement = Arrangement.spacedBy(2.dp),
-                            ) {
-                                Text(
-                                    stringResource(R.string.share_student_id),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Text(
-                                    stringResource(R.string.share_student_id_bound, boundJxfwId),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                                Text(
-                                    stringResource(R.string.share_student_id_note),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    } else {
-                        OutlinedTextField(
-                            value = manualId,
-                            onValueChange = {
-                                manualId = it
-                                app.timetableShare.updateDraft(manualStudentId = it)
-                            },
-                            label = { Text(stringResource(R.string.share_student_id)) },
-                            placeholder = { Text(stringResource(R.string.share_student_id_placeholder)) },
-                            supportingText = { Text(stringResource(R.string.share_student_id_note)) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
+            if (presets.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            stringResource(R.string.share_expiry_label),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                    }
-
-                    if (presets.isNotEmpty()) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (selectedExpiresAt > 0L) {
                             Text(
-                                stringResource(R.string.share_expiry_label),
-                                style = MaterialTheme.typography.labelLarge,
+                                stringResource(R.string.share_expiry_until, formatShareDate(selectedExpiresAt)),
+                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                presets.forEach { preset ->
-                                    FilterChip(
-                                        selected = selectedExpiresAt == preset.expiresAt,
-                                        onClick = { selectedExpiresAt = preset.expiresAt },
-                                        label = { Text(presetLabel(preset.key)) },
-                                    )
-                                }
-                            }
-                            if (selectedExpiresAt > 0L) {
-                                Text(
-                                    stringResource(R.string.share_expiry_selected_date, formatShareDate(selectedExpiresAt)),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
                         }
-                    } else {
-                        Text(
-                            stringResource(R.string.share_no_semester),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
                     }
-
-                    OutlinedTextField(
-                        value = serverUrl,
-                        onValueChange = {
-                            serverUrl = it
-                            app.timetableShare.updateDraft(serverUrl = it)
-                        },
-                        label = { Text(stringResource(R.string.share_server_url)) },
-                        placeholder = { Text(stringResource(R.string.share_server_url_placeholder)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+                    ChipChoice(
+                        options = presets.map { it.expiresAt to presetLabel(it.key) },
+                        selected = selectedExpiresAt,
+                        onSelect = { selectedExpiresAt = it },
                     )
+                }
+            } else {
+                Text(
+                    stringResource(R.string.share_no_semester),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
 
-                    state.lastError?.let { err ->
-                        Text(
-                            err,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
+            val serverValueText =
+                if (state.isCustomServer) {
+                    state.serverUrl.removePrefix("https://").removePrefix("http://")
+                } else {
+                    stringResource(R.string.share_server_default)
+                }
+            ValueRow(
+                label = stringResource(R.string.share_server),
+                value = serverValueText,
+                onClick = {
+                    serverDraft = if (state.isCustomServer) state.serverUrl else ""
+                    showServerDialog = true
+                },
+            )
+
+            state.lastError?.let { err ->
+                Text(
+                    err,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            if (!state.hasActiveShare) {
+                Button(
+                    onClick = { submitPublish(isUpdate = false) },
+                    enabled = !state.busy && sem != null,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp),
+                ) {
+                    if (state.busy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
                         )
+                        Spacer(Modifier.width(8.dp))
                     }
-
-                    if (!state.hasActiveShare) {
-                        Button(
-                            onClick = { submitPublish(isUpdate = false) },
-                            enabled = !state.busy && sem != null,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            if (state.busy) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                )
-                                Spacer(Modifier.width(8.dp))
-                            }
-                            Text(stringResource(R.string.share_publish_action))
-                        }
-                    } else if (state.busy) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                        ) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        }
-                    }
+                    Text(stringResource(R.string.share_publish_action))
+                }
+            } else if (state.busy) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 }
             }
         }
+    }
+
+    if (showServerDialog) {
+        MintAlertDialog(
+            onDismissRequest = { showServerDialog = false },
+            title = { Text(stringResource(R.string.share_server_dialog_title)) },
+            text = {
+                TonalField(
+                    label = "",
+                    value = serverDraft,
+                    onChange = { serverDraft = it },
+                    placeholder = TimetableShareManager.DEFAULT_SERVER_URL,
+                )
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        app.timetableShare.updateDraft(serverUrl = "")
+                        showServerDialog = false
+                    },
+                ) {
+                    Text(stringResource(R.string.share_server_reset))
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val trimmed = serverDraft.trim()
+                        if (trimmed.isEmpty()) {
+                            app.timetableShare.updateDraft(serverUrl = "")
+                            showServerDialog = false
+                        } else {
+                            val normalized = SyncClient.normalizeUrl(trimmed)
+                            if (normalized == null) {
+                                actions.toast(ctx.getString(R.string.share_empty_server_err))
+                            } else {
+                                app.timetableShare.updateDraft(serverUrl = normalized)
+                                showServerDialog = false
+                            }
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.save))
+                }
+            },
+        )
     }
 
     if (confirmDelete) {
@@ -501,7 +467,7 @@ fun TimetableShareScreen(onBack: () -> Unit) {
             onConfirm = {
                 scope.launch {
                     try {
-                        app.timetableShare.deleteCloud(serverUrlOverride = serverUrl)
+                        app.timetableShare.deleteCloud(serverUrlOverride = state.effectiveServerUrl)
                         showQr = false
                         actions.toast(ctx.getString(R.string.share_deleted_toast))
                     } catch (e: ShareException) {
