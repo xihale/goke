@@ -143,7 +143,14 @@ object XlsxTimetableImporter {
             val cols = LinkedHashMap<Int, Int>()
             for (c in 1..sheet.maxCol) {
                 val t = sheet.text(r, c).trim()
-                val idx = DAY_NAMES.indexOfFirst { t == it || t == it.replace("周", "星期") || t.endsWith(it) }
+                val idx =
+                    DAY_NAMES.indexOfFirst {
+                        t == it ||
+                            t == it.replace("周", "星期") ||
+                            t.startsWith(it) ||
+                            t.startsWith(it.replace("周", "星期")) ||
+                            t.endsWith(it)
+                    }
                 if (idx >= 0) cols[idx + 1] = c
             }
             if (cols.size >= 5) return cols to r
