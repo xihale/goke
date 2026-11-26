@@ -14,6 +14,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -149,8 +150,10 @@ class AttachmentEditorTest {
                 Attachment("drag3.png", "image/png", img3.name),
             )
         var recordedCols: Int? = 1
+        var minDecodedWidthPx = 0f
 
         rule.setContent {
+            minDecodedWidthPx = with(LocalDensity.current) { 100.dp.toPx() }
             val nav = rememberNav()
             val scope = rememberCoroutineScope()
             val actions = remember { Actions(app, scope, nav) }
@@ -178,6 +181,18 @@ class AttachmentEditorTest {
                         )
                     }
                 }
+            }
+        }
+        rule.waitForIdle()
+        // ExpandedImageTile decodes on Dispatchers.IO; wait for full Image tiles before measuring bounds
+        rule.waitUntil(timeoutMillis = 5_000L) {
+            listOf("drag1.png", "drag2.png", "drag3.png").all { desc ->
+                runCatching {
+                    rule
+                        .onNodeWithContentDescription(desc)
+                        .fetchSemanticsNode()
+                        .boundsInRoot.width > minDecodedWidthPx
+                }.getOrDefault(false)
             }
         }
         rule.waitForIdle()
