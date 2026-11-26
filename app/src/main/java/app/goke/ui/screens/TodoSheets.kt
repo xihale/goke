@@ -55,7 +55,6 @@ import app.goke.ui.LocalActions
 import app.goke.ui.components.DatePickerDlg
 import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.mintClickable
-import app.goke.ui.components.rememberModalSheetState
 import app.goke.ui.components.rememberNoFocusPopup
 import app.goke.ui.dueLabel
 import app.goke.ui.icons.Block
@@ -86,8 +85,6 @@ internal fun RescheduleSheet(
 ) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
-    val sheet = rememberModalSheetState()
-    val scope = rememberCoroutineScope()
     val today = LocalDate.now()
     var pickDate by remember { mutableStateOf(false) }
     var submitting by remember { mutableStateOf(false) }
@@ -101,13 +98,7 @@ internal fun RescheduleSheet(
         submitting = true
         actions.commit(cs, msg)
         onDone()
-        scope.launch {
-            try {
-                sheet.hide()
-            } finally {
-                onDismiss()
-            }
-        }
+        onDismiss()
     }
 
     fun moveTo(d: LocalDate?) {
@@ -126,7 +117,6 @@ internal fun RescheduleSheet(
 
     MintBottomSheet(
         onDismissRequest = { if (!submitting) onDismiss() },
-        sheetState = sheet,
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
             Column(Modifier.padding(horizontal = 8.dp).padding(bottom = 8.dp)) {
@@ -208,7 +198,6 @@ internal fun MorningSheet(
 ) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
-    val sheet = rememberModalSheetState()
     val today = now.toLocalDate()
     var lastTasks by remember { mutableStateOf(tasks) }
     var handledIds by remember { mutableStateOf(emptySet<String>()) }
@@ -221,11 +210,7 @@ internal fun MorningSheet(
     // 全部处理完就自动收起
     LaunchedEffect(tasks.isEmpty()) {
         if (tasks.isEmpty()) {
-            try {
-                sheet.hide()
-            } finally {
-                onDismiss()
-            }
+            onDismiss()
         }
     }
 
@@ -275,7 +260,6 @@ internal fun MorningSheet(
 
     MintBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheet,
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
             Text(

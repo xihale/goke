@@ -39,7 +39,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -106,6 +105,7 @@ import app.goke.ui.LocalTabVisible
 import app.goke.ui.Route
 import app.goke.ui.components.ChipPill
 import app.goke.ui.components.ConfirmDialog
+import app.goke.ui.components.MintAlertDialog
 import app.goke.ui.components.SegmentedPill
 import app.goke.ui.components.Tag
 import app.goke.ui.components.mintClickable
@@ -407,8 +407,8 @@ internal fun QuickAddSheet(
         onDismissRequest = { discard() },
         modifier = modifier,
         scrimAlpha = 0.22f,
-        canDragDismiss = visible,
-        predictiveBackEnabled = visible && isTabVisible,
+        canDragDismiss = visible && !whenPanel && !confirmDiscard,
+        predictiveBackEnabled = visible && isTabVisible && !whenPanel && !confirmDiscard,
         needsConfirmOnDismiss = hasDraft,
         onDismissConfirmRequest = { currentRequestDiscard() },
         onExited = { sheetAlive = false },
@@ -981,8 +981,10 @@ private fun BatchPreviewDialog(
 ) {
     val ctx = LocalContext.current
     var submitted by remember(items) { mutableStateOf(false) }
-    AlertDialog(
+    MintAlertDialog(
         onDismissRequest = { if (!submitted) onDismiss() },
+        dismissOnClickOutside = !submitted,
+        dismissOnBackPress = !submitted,
         title = { Text(stringResource(R.string.todo_batch_title, items.size)) },
         text = {
             LazyColumn(Modifier.fillMaxWidth()) {

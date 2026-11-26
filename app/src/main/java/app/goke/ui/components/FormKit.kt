@@ -21,17 +21,27 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,18 +51,24 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetState
-import androidx.compose.material3.SheetValue
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -458,33 +474,454 @@ fun FormSection(
     }
 }
 
-/** 跳过半展开态的模态底部抽屉状态（隐藏初态，展开即完整高度）。 */
+internal enum class MintModalKind { SHEET, DIALOG }
+
+@Stable
+internal class MintModalEntry(
+    val id: Long,
+    val kind: MintModalKind,
+    val sheetShape: Shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    val maxWidth: Dp = Dp.Unspecified,
+) {
+    var visible by mutableStateOf(true)
+    var disposed by mutableStateOf(false)
+    var dismissNotified by mutableStateOf(false)
+    var onDismissRequest by mutableStateOf<() -> Unit>({})
+    var modifier by mutableStateOf<Modifier>(Modifier)
+    var dismissOnClickOutside by mutableStateOf(true)
+    var dismissOnBackPress by mutableStateOf(true)
+    var sheetContent by mutableStateOf<@Composable ColumnScope.() -> Unit>({})
+    var dialogContent by mutableStateOf<@Composable () -> Unit>({})
+}
+
+/** 当前所属 Tab / Route / 悬浮层子树内的模态弹层容器：保证同窗弹簧动效、预测性返回与焦点隔离。 */
+@Stable
+internal class MintModalScope {
+    val entries = mutableStateListOf<MintModalEntry>()
+    private var nextId = 1L
+
+    fun pushSheet(
+        shape: Shape,
+        maxWidth: Dp,
+    ): MintModalEntry =
+        MintModalEntry(
+            id = nextId++,
+            kind = MintModalKind.SHEET,
+            sheetShape = shape,
+            maxWidth = maxWidth,
+        ).also { entries += it }
+
+    fun pushDialog(maxWidth: Dp): MintModalEntry =
+        MintModalEntry(
+            id = nextId++,
+            kind = MintModalKind.DIALOG,
+            maxWidth = maxWidth,
+        ).also { entries += it }
+
+    fun dismiss(id: Long) {
+        entries.firstOrNull { it.id == id }?.let { it.visible = false }
+    }
+
+    fun remove(id: Long) {
+        entries.removeAll { it.id == id }
+    }
+}
+
+internal val LocalMintModalScope = compositionLocalOf<MintModalScope?> { null }
+internal val LocalMintModalDismiss = compositionLocalOf<(() -> Unit)?> { null }
+
+/** 为所属 Tab / Route / 悬浮层提供同窗模态弹层层，统一弹簧入退场、拖拽与预测性返回。 */
 @Composable
-fun rememberModalSheetState(): SheetState =
-    rememberBottomSheetState(
-        initialValue = SheetValue.Hidden,
-        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
-    )
+internal fun ProvideMintModalScope(
+    active: Boolean = true,
+    onSheetOpenChange: (Boolean) -> Unit = {},
+    onModalOpenChange: (Boolean) -> Unit = {},
+    content: @Composable () -> Unit,
+) {
+    val scope = remember { MintModalScope() }
+    val hasVisibleSheet by remember {
+        derivedStateOf { scope.entries.any { it.kind == MintModalKind.SHEET && it.visible } }
+    }
+    val hasVisibleModal by remember {
+        derivedStateOf { scope.entries.any { it.visible } }
+    }
+    LaunchedEffect(hasVisibleSheet) { onSheetOpenChange(hasVisibleSheet) }
+    LaunchedEffect(hasVisibleModal) { onModalOpenChange(hasVisibleModal) }
+    DisposableEffect(Unit) {
+        onDispose {
+            onSheetOpenChange(false)
+            onModalOpenChange(false)
+        }
+    }
+
+    CompositionLocalProvider(LocalMintModalScope provides scope) {
+        Box(Modifier.fillMaxSize()) {
+            content()
+            val topVisibleId = scope.entries.lastOrNull { it.visible }?.id
+            scope.entries.forEach { entry ->
+                key(entry.id) {
+                    val isTopModal = active && entry.visible && entry.id == topVisibleId
+                    when (entry.kind) {
+                        MintModalKind.SHEET -> {
+                            MintSheetOverlay(
+                                visible = entry.visible,
+                                onDismissRequest = { entry.visible = false },
+                                modifier = entry.modifier,
+                                scrimAlpha = 0.32f,
+                                canDragDismiss = entry.visible,
+                                predictiveBackEnabled = isTopModal,
+                                onExited = {
+                                    scope.remove(entry.id)
+                                    if (!entry.disposed && !entry.dismissNotified) {
+                                        entry.dismissNotified = true
+                                        entry.onDismissRequest()
+                                    }
+                                },
+                                sheetModifier =
+                                    Modifier
+                                        .statusBarsPadding()
+                                        .padding(top = 16.dp)
+                                        .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
+                                shape = entry.sheetShape,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                maxWidth = entry.maxWidth,
+                                dragHandle = true,
+                            ) {
+                                CompositionLocalProvider(LocalMintModalDismiss provides { entry.visible = false }) {
+                                    entry.sheetContent(this)
+                                }
+                            }
+                        }
+
+                        MintModalKind.DIALOG -> {
+                            MintDialogOverlay(
+                                visible = entry.visible,
+                                onDismissRequest = { entry.visible = false },
+                                modifier = entry.modifier,
+                                dismissOnClickOutside = entry.dismissOnClickOutside,
+                                dismissOnBackPress = entry.dismissOnBackPress,
+                                predictiveBackEnabled = isTopModal,
+                                maxWidth = entry.maxWidth,
+                                onExited = {
+                                    scope.remove(entry.id)
+                                    if (!entry.disposed && !entry.dismissNotified) {
+                                        entry.dismissNotified = true
+                                        entry.onDismissRequest()
+                                    }
+                                },
+                            ) {
+                                CompositionLocalProvider(LocalMintModalDismiss provides { entry.visible = false }) {
+                                    entry.dialogContent()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 /**
- * 应用统一底部模态抽屉：基于 M3 [ModalBottomSheet]（28dp 顶角、跳过半展开态、系统返回隔离）。
- * 除高频切换课表需避免独立 Dialog Window 重排的 `InWindowSheet`，及需与软键盘共焦点的 `QuickAddSheet` 外，
- * 所有底部抽屉统一使用此入口。
+ * 应用统一底部模态抽屉：基于窗口内 [MintSheetOverlay]（28dp 顶角、弹簧入退场、1:1 下拉关闭与预测性返回）。
+ * 在当前所属 Tab / Route / 悬浮层的 [ProvideMintModalScope] 中按栈顺序弹出，避免跨窗体 Binder 卡顿与返回失灵。
  */
 @Composable
 fun MintBottomSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
-    sheetState: SheetState = rememberModalSheetState(),
+    maxWidth: Dp = Dp.Unspecified,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    ModalBottomSheet(
+    val modalScope = LocalMintModalScope.current
+    val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    if (modalScope == null) {
+        var shown by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { shown = true }
+        MintSheetOverlay(
+            visible = shown,
+            onDismissRequest = onDismissRequest,
+            modifier = modifier,
+            scrimAlpha = 0.32f,
+            canDragDismiss = true,
+            dragHandle = true,
+            shape = shape,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            maxWidth = maxWidth,
+            sheetModifier =
+                Modifier
+                    .statusBarsPadding()
+                    .padding(top = 16.dp)
+                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
+            content = content,
+        )
+        return
+    }
+
+    val entry =
+        remember(modalScope) {
+            modalScope.pushSheet(shape = shape, maxWidth = maxWidth)
+        }
+    SideEffect {
+        entry.onDismissRequest = onDismissRequest
+        entry.modifier = modifier
+        entry.sheetContent = content
+    }
+    DisposableEffect(modalScope, entry.id) {
+        onDispose {
+            entry.disposed = true
+            modalScope.dismiss(entry.id)
+        }
+    }
+}
+
+/**
+ * 居中模态弹窗容器：同窗渲染，提供弹簧缩放+淡入退场、点击遮罩关闭及 1:1 预测性返回手势。
+ */
+@Composable
+fun MintDialog(
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    dismissOnClickOutside: Boolean = true,
+    dismissOnBackPress: Boolean = true,
+    maxWidth: Dp = 420.dp,
+    content: @Composable () -> Unit,
+) {
+    val modalScope = LocalMintModalScope.current
+    if (modalScope == null) {
+        var shown by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { shown = true }
+        MintDialogOverlay(
+            visible = shown,
+            onDismissRequest = onDismissRequest,
+            modifier = modifier,
+            dismissOnClickOutside = dismissOnClickOutside,
+            dismissOnBackPress = dismissOnBackPress,
+            maxWidth = maxWidth,
+            content = content,
+        )
+        return
+    }
+
+    val entry = remember(modalScope, maxWidth) { modalScope.pushDialog(maxWidth = maxWidth) }
+    SideEffect {
+        entry.onDismissRequest = onDismissRequest
+        entry.modifier = modifier
+        entry.dismissOnClickOutside = dismissOnClickOutside
+        entry.dismissOnBackPress = dismissOnBackPress
+        entry.dialogContent = content
+    }
+    DisposableEffect(modalScope, entry.id) {
+        onDispose {
+            entry.disposed = true
+            modalScope.dismiss(entry.id)
+        }
+    }
+}
+
+/** 统一居中提醒 / 确认弹窗：28dp 圆角、surfaceContainerHigh 色阶与 [MintDialog] 一致动效和返回手势。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun MintAlertDialog(
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    dismissButton: (@Composable () -> Unit)? = null,
+    icon: (@Composable () -> Unit)? = null,
+    title: (@Composable () -> Unit)? = null,
+    text: (@Composable () -> Unit)? = null,
+    shape: Shape = RoundedCornerShape(28.dp),
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    dismissOnClickOutside: Boolean = true,
+    dismissOnBackPress: Boolean = true,
+) {
+    val scheme = MaterialTheme.colorScheme
+    MintDialog(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        content = content,
-    )
+        dismissOnClickOutside = dismissOnClickOutside,
+        dismissOnBackPress = dismissOnBackPress,
+        maxWidth = 420.dp,
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = shape,
+            color = containerColor,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(24.dp)) {
+                if (icon != null) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CompositionLocalProvider(LocalContentColor provides scheme.secondary) {
+                            icon()
+                        }
+                    }
+                }
+                if (title != null) {
+                    Box(Modifier.fillMaxWidth().padding(bottom = if (text != null) 16.dp else 24.dp)) {
+                        ProvideTextStyle(MaterialTheme.typography.headlineSmall.copy(color = scheme.onSurface)) {
+                            title()
+                        }
+                    }
+                }
+                if (text != null) {
+                    Box(Modifier.weight(1f, fill = false).padding(bottom = 24.dp)) {
+                        ProvideTextStyle(MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurfaceVariant)) {
+                            text()
+                        }
+                    }
+                }
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    dismissButton?.invoke()
+                    confirmButton()
+                }
+            }
+        }
+    }
+}
+
+/** 同窗居中弹窗物理动效容器：弹簧缩放淡入退场 + 遮罩同步 + 预测性返回手势。 */
+@Composable
+fun MintDialogOverlay(
+    visible: Boolean,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    scrimAlpha: Float = 0.36f,
+    dismissOnClickOutside: Boolean = true,
+    dismissOnBackPress: Boolean = true,
+    predictiveBackEnabled: Boolean = visible,
+    onExited: () -> Unit = {},
+    maxWidth: Dp = 420.dp,
+    content: @Composable () -> Unit,
+) {
+    val reduce = LocalReduceMotion.current
+    val scope = rememberCoroutineScope()
+    val scrimColor = MaterialTheme.colorScheme.scrim
+
+    var isPresented by remember { mutableStateOf(visible) }
+    if (visible && !isPresented) isPresented = true
+    if (!visible && !isPresented) return
+
+    val progress = remember { Animatable(0f) }
+    val predictiveProgress = remember { Animatable(0f) }
+    var swipeEdge by remember { mutableIntStateOf(BackEventCompat.EDGE_LEFT) }
+
+    val currentOnDismiss by rememberUpdatedState(onDismissRequest)
+    val currentOnExited by rememberUpdatedState(onExited)
+    val currentCanClickOutside by rememberUpdatedState(dismissOnClickOutside)
+
+    LaunchedEffect(visible, reduce) {
+        if (visible) {
+            predictiveProgress.snapTo(0f)
+            if (reduce) {
+                progress.snapTo(1f)
+            } else {
+                progress.animateTo(
+                    1f,
+                    spring(
+                        dampingRatio = 0.90f,
+                        stiffness = 680f,
+                        visibilityThreshold = 0.001f,
+                    ),
+                )
+            }
+        } else {
+            if (!reduce && progress.value > 0.001f) {
+                progress.animateTo(
+                    0f,
+                    spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = 980f,
+                        visibilityThreshold = 0.002f,
+                    ),
+                )
+            } else {
+                progress.snapTo(0f)
+            }
+            predictiveProgress.snapTo(0f)
+            isPresented = false
+            currentOnExited()
+        }
+    }
+
+    if (dismissOnBackPress) {
+        PredictiveBackHandler(enabled = predictiveBackEnabled) { flow ->
+            try {
+                flow.collect { event ->
+                    swipeEdge = event.swipeEdge
+                    predictiveProgress.snapTo(event.progress.coerceIn(0f, 1f))
+                }
+                currentOnDismiss()
+            } catch (e: CancellationException) {
+                scope.launch {
+                    if (predictiveProgress.value > 0f && !reduce) {
+                        predictiveProgress.animateTo(
+                            0f,
+                            spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = 1400f,
+                                visibilityThreshold = 0.001f,
+                            ),
+                        )
+                    } else {
+                        predictiveProgress.snapTo(0f)
+                    }
+                }
+                throw e
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .matchParentSize()
+                .graphicsLayer {
+                    val p = progress.value.coerceIn(0f, 1f)
+                    val pred = predictiveProgress.value.coerceIn(0f, 1f)
+                    alpha = p * (1f - pred * 0.65f)
+                }.background(scrimColor.copy(alpha = scrimAlpha))
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        if (visible && currentCanClickOutside) currentOnDismiss()
+                    }
+                },
+        )
+        Box(
+            modifier =
+                Modifier
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .widthIn(min = 280.dp, max = maxWidth)
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        val p = progress.value.coerceIn(0f, 1f)
+                        val pred = predictiveProgress.value.coerceIn(0f, 1f)
+                        val dir = if (swipeEdge == BackEventCompat.EDGE_RIGHT) -1f else 1f
+                        val sc = (0.90f + 0.10f * p) * (1f - 0.10f * pred)
+                        scaleX = sc
+                        scaleY = sc
+                        translationX = dir * 14.dp.toPx() * pred
+                        translationY = 12.dp.toPx() * (1f - p) + 12.dp.toPx() * pred
+                        alpha = (p * 1.4f).coerceIn(0f, 1f) * (1f - 0.2f * pred)
+                    }.pointerInput(Unit) { detectTapGestures {} },
+        ) {
+            content()
+        }
+    }
 }
 
 /**

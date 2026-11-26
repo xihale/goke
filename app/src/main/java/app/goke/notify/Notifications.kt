@@ -21,6 +21,7 @@ import app.goke.DeepLinks
 import app.goke.MainActivity
 import app.goke.R
 import app.goke.hotwater.HotWaterShowerRecord
+import app.goke.widget.WidgetOverlayActivity
 
 /** 通知渠道与发送。 */
 object Notifications {
@@ -265,15 +266,36 @@ object Notifications {
         important: Boolean = false,
         courseId: String? = null,
         silentForService: Boolean = false,
+        targetAtMs: Long? = null,
     ): Notification {
         ensureChannels(ctx)
         val openIntent =
             when {
-                taskId != null -> Intent(Intent.ACTION_VIEW, DeepLinks.taskUri(taskId), ctx, MainActivity::class.java)
-                courseId != null -> Intent(Intent.ACTION_VIEW, DeepLinks.courseUri(courseId), ctx, MainActivity::class.java)
-                else -> Intent(ctx, MainActivity::class.java)
-            }.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                .putExtra(ReminderAlertService.EXTRA_STOP_ALERT_ID, id)
+                taskId != null -> {
+                    WidgetOverlayActivity
+                        .reminderTaskIntent(
+                            ctx = ctx,
+                            taskId = taskId,
+                            notifId = id,
+                            title = title,
+                            text = text,
+                            persistent = insistent,
+                            important = important,
+                            targetAtMs = targetAtMs,
+                        ).setData(Uri.parse("goke://notif/$id/open"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+
+                courseId != null -> {
+                    Intent(Intent.ACTION_VIEW, DeepLinks.courseUri(courseId), ctx, MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+
+                else -> {
+                    Intent(ctx, MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+            }.putExtra(ReminderAlertService.EXTRA_STOP_ALERT_ID, id)
         val open =
             PendingIntent.getActivity(
                 ctx,
@@ -292,6 +314,11 @@ object Notifications {
                 .putExtra(ReminderReceiver.EXTRA_TEXT, text)
                 .putExtra(ReminderReceiver.EXTRA_PERSISTENT, insistent)
                 .putExtra(ReminderReceiver.EXTRA_IMPORTANT, important)
+                .apply {
+                    if (targetAtMs != null && targetAtMs > 0L) {
+                        putExtra(ReminderReceiver.EXTRA_TARGET_AT_MS, targetAtMs)
+                    }
+                }
 
         fun actionPi(op: String): PendingIntent = PendingIntent.getBroadcast(ctx, id, actionIntent(op), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
@@ -340,6 +367,7 @@ object Notifications {
         insistent: Boolean = false,
         important: Boolean = false,
         courseId: String? = null,
+        targetAtMs: Long? = null,
     ) {
         if (!canPost(ctx)) return
         val now = System.currentTimeMillis()
@@ -360,6 +388,7 @@ object Notifications {
                 important = important,
                 courseId = courseId,
                 silentForService = throttled,
+                targetAtMs = targetAtMs,
             )
         runCatching { NotificationManagerCompat.from(ctx).notify(id, built) }
         if (!insistent && !throttled) {

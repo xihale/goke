@@ -38,7 +38,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -78,6 +77,7 @@ import app.goke.core.model.Task
 import app.goke.core.todo.SmartList
 import app.goke.core.todo.TaskLogic
 import app.goke.data.Settings
+import app.goke.ui.components.MintAlertDialog
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.Tag
@@ -395,7 +395,7 @@ fun WidgetsScreen(onBack: () -> Unit) {
 
     when (fallbackReason) {
         PinFallbackReason.UNSUPPORTED -> {
-            AlertDialog(
+            MintAlertDialog(
                 onDismissRequest = { fallbackReason = null },
                 shape = MaterialTheme.shapes.extraLarge,
                 title = { Text(stringResource(R.string.widgets_unsupported_title)) },
@@ -423,7 +423,7 @@ fun WidgetsScreen(onBack: () -> Unit) {
         }
 
         PinFallbackReason.SILENTLY_BLOCKED -> {
-            AlertDialog(
+            MintAlertDialog(
                 onDismissRequest = { fallbackReason = null },
                 shape = MaterialTheme.shapes.extraLarge,
                 title = { Text(stringResource(R.string.widgets_blocked_title)) },

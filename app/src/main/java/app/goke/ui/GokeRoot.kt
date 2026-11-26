@@ -82,6 +82,7 @@ import app.goke.data.UpdateChecker
 import app.goke.ui.components.ErrorReportDialog
 import app.goke.ui.components.FloatingNavBar
 import app.goke.ui.components.NavClearance
+import app.goke.ui.components.ProvideMintModalScope
 import app.goke.ui.components.mintClickable
 import app.goke.ui.icons.Undo
 import app.goke.ui.screens.AboutScreen
@@ -261,52 +262,52 @@ fun GokeRoot(
         LocalNav provides nav,
     ) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            // 系统 SplashScreen 负责退场动画；ready 翻真后直接挂载常驻 Tabs，
-            // 二级页由 RouteStackHost 从右侧推入覆盖，返回时底层 Tabs 零重建、状态完全保留。
-            Box(Modifier.fillMaxSize()) {
-                if (ready) {
-                    Tabs(nav, onRoute, motion)
+            ProvideMintModalScope(active = true) {
+                Box(Modifier.fillMaxSize()) {
+                    if (ready) {
+                        Tabs(nav, onRoute, motion)
+                    }
+                    RouteStackHost(nav = nav, modifier = Modifier.fillMaxSize(), motion = motion)
                 }
-                RouteStackHost(nav = nav, modifier = Modifier.fillMaxSize(), motion = motion)
-            }
 
-            // 撤销：左下角一个圆钮，3 秒后自己消失。放左边就不和右下角的添加键打架，
-            // 也不用一条通栏横条去盖列表内容。
-            AnimatedVisibility(
-                visible = undoPrompt != null && !nav.composerOpen,
-                enter = fadeIn(MintTheme.spec()) + scaleIn(initialScale = 0.8f, animationSpec = MintTheme.spec()),
-                exit = fadeOut(MintTheme.spec()) + scaleOut(targetScale = 0.8f, animationSpec = MintTheme.spec()),
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .zIndex(3f)
-                        .imePadding()
-                        .navigationBarsPadding()
-                        .padding(start = 16.dp)
-                        .padding(bottom = if (!onRoute) NavClearance else 16.dp),
-            ) {
-                val prompt = undoShown
-                if (prompt != null) {
-                    UndoButton(prompt.text, prompt.seq, onUndo = { actions.undoNow() }, onTimeout = { actions.dismissUndo() })
+                // 撤销：左下角一个圆钮，3 秒后自己消失。放左边就不和右下角的添加键打架，
+                // 也不用一条通栏横条去盖列表内容。
+                AnimatedVisibility(
+                    visible = undoPrompt != null && !nav.composerOpen && !nav.sheetOpen,
+                    enter = fadeIn(MintTheme.spec()) + scaleIn(initialScale = 0.8f, animationSpec = MintTheme.spec()),
+                    exit = fadeOut(MintTheme.spec()) + scaleOut(targetScale = 0.8f, animationSpec = MintTheme.spec()),
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .zIndex(3f)
+                            .imePadding()
+                            .navigationBarsPadding()
+                            .padding(start = 16.dp)
+                            .padding(bottom = if (!onRoute) NavClearance else 16.dp),
+                ) {
+                    val prompt = undoShown
+                    if (prompt != null) {
+                        UndoButton(prompt.text, prompt.seq, onUndo = { actions.undoNow() }, onTimeout = { actions.dismissUndo() })
+                    }
                 }
-            }
 
-            val pendingError by app.errors.pendingModal.collectAsState()
-            val activeError = pendingError
-            if (activeError != null) {
-                ErrorReportDialog(
-                    report = activeError,
-                    onDismiss = { app.errors.dismissPending() },
-                )
-            } else if (pendingUpdate != null) {
-                val context = LocalContext.current
-                UpdateAvailableDialog(
-                    info = pendingUpdate,
-                    updateChecker = app.updateChecker,
-                    downloadScope = app.scope,
-                    onDismiss = { app.updateChecker.dismissUpdatePrompt(pendingUpdate.version) },
-                    onOpenUrl = { url -> openExternalUrl(context, url) },
-                )
+                val pendingError by app.errors.pendingModal.collectAsState()
+                val activeError = pendingError
+                if (activeError != null) {
+                    ErrorReportDialog(
+                        report = activeError,
+                        onDismiss = { app.errors.dismissPending() },
+                    )
+                } else if (pendingUpdate != null) {
+                    val context = LocalContext.current
+                    UpdateAvailableDialog(
+                        info = pendingUpdate,
+                        updateChecker = app.updateChecker,
+                        downloadScope = app.scope,
+                        onDismiss = { app.updateChecker.dismissUpdatePrompt(pendingUpdate.version) },
+                        onOpenUrl = { url -> openExternalUrl(context, url) },
+                    )
+                }
             }
         }
     }
@@ -762,7 +763,9 @@ private fun RouteHost(
                 throw e
             }
         }
-        content(onBack)
+        ProvideMintModalScope(active = isTop) {
+            content(onBack)
+        }
     }
 }
 
@@ -1099,6 +1102,14 @@ private fun Tabs(
             }.tabSemantics(notOnRouteState)
             .blockPointer(onRouteState),
     ) {
+        val tabSheetOpen = remember { mutableStateMapOf<Tab, Boolean>() }
+        val activeSheetOpen = !onRoute && tabSheetOpen[nav.tab] == true
+        LaunchedEffect(activeSheetOpen) {
+            nav.sheetOpen = activeSheetOpen
+        }
+        DisposableEffect(Unit) {
+            onDispose { nav.sheetOpen = false }
+        }
         Box(
             Modifier
                 .fillMaxSize()
@@ -1154,12 +1165,17 @@ private fun Tabs(
                                 LocalTabVisible provides visibleState,
                                 LocalNavigationEventDispatcherOwner provides tabNavEventOwner,
                             ) {
-                                when (tab) {
-                                    Tab.TODAY -> TodayScreen()
-                                    Tab.TIMETABLE -> TimetableScreen()
-                                    Tab.CALENDAR -> CalendarScreen()
-                                    Tab.TODO -> TodoScreen()
-                                    Tab.ME -> SettingsScreen()
+                                ProvideMintModalScope(
+                                    active = isTabActive,
+                                    onSheetOpenChange = { open -> tabSheetOpen[tab] = open },
+                                ) {
+                                    when (tab) {
+                                        Tab.TODAY -> TodayScreen()
+                                        Tab.TIMETABLE -> TimetableScreen()
+                                        Tab.CALENDAR -> CalendarScreen()
+                                        Tab.TODO -> TodoScreen()
+                                        Tab.ME -> SettingsScreen()
+                                    }
                                 }
                             }
                         }
@@ -1169,9 +1185,9 @@ private fun Tabs(
         }
 
         // zIndex(2f)：底栏必须压在所有 Tab 绘制层之上，否则被全屏 Tab 层挡住点击。
-        // 仅在快速添加模态层展开时让位，路由推入/返回时随底层 Tabs 一起平顺视差移动。
+        // 仅在快速添加或底部抽屉模态层展开时让位，路由推入/返回时随底层 Tabs 一起平顺视差移动。
         AnimatedVisibility(
-            visible = !nav.composerOpen,
+            visible = !nav.composerOpen && !nav.sheetOpen,
             enter = fadeIn(MintTheme.spec()) + slideInVertically(MintTheme.spec()) { it / 2 },
             exit = fadeOut(MintTheme.spec()) + slideOutVertically(MintTheme.spec()) { it / 2 },
             modifier = Modifier.align(Alignment.BottomCenter).zIndex(2f),

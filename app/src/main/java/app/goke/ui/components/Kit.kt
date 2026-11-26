@@ -56,10 +56,8 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Warning
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -142,35 +140,43 @@ fun MintScreen(
     actions: @Composable RowScope.() -> Unit = {},
     content: @Composable () -> Unit,
 ) {
-    Column(
-        modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
-            .imePadding(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Row(
-                Modifier
-                    .widthIn(max = 680.dp)
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (onBack != null) {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
-                } else {
-                    Spacer(Modifier.width(8.dp))
+    val existingScope = LocalMintModalScope.current
+    val body: @Composable () -> Unit = {
+        Column(
+            modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .statusBarsPadding()
+                .imePadding(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Row(
+                    Modifier
+                        .widthIn(max = 680.dp)
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.back)) }
+                    } else {
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    actions()
                 }
-                Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                actions()
+            }
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                Box(Modifier.fillMaxHeight().widthIn(max = 680.dp).fillMaxWidth()) { content() }
             }
         }
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-            Box(Modifier.fillMaxHeight().widthIn(max = 680.dp).fillMaxWidth()) { content() }
-        }
+    }
+    if (existingScope == null) {
+        ProvideMintModalScope { body() }
+    } else {
+        body()
     }
 }
 
@@ -687,7 +693,7 @@ fun ConfirmDialog(
     danger: Boolean = false,
 ) {
     var handled by remember { mutableStateOf(false) }
-    AlertDialog(
+    MintAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { Text(text) },
@@ -710,8 +716,8 @@ fun ConfirmDialog(
 }
 
 /**
- * 日期选择弹窗：用 M3 [DatePickerDialog] 包裹精简 [MonthPager]，提供「今天/明天」单手直达且展示农历/周次标记；
- * 不用 M3 内置 DatePicker——其高度固定偏大、切换年份冗余且无法内嵌教学周徽标。
+ * 日期选择弹窗：用 [MintDialog] 包裹精简 [MonthPager]，提供「今天/明天」单手直达且展示农历/周次标记，
+ * 同时统一弹簧入退场动效与预测性返回手势。
  */
 @Composable
 fun DatePickerDlg(
@@ -728,19 +734,27 @@ fun DatePickerDlg(
         onPick(date)
         onDismiss()
     }
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(enabled = !handled, onClick = { confirm(picked) }) { Text(stringResource(R.string.ok)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-    ) {
-        Column {
-            Row(Modifier.padding(start = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(enabled = !handled, onClick = { confirm(LocalDate.now()) }) { Text(stringResource(R.string.today)) }
-                TextButton(enabled = !handled, onClick = { confirm(LocalDate.now().plusDays(1)) }) { Text(stringResource(R.string.tomorrow)) }
+    MintDialog(onDismissRequest = onDismiss, maxWidth = 380.dp) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 10.dp)) {
+                Row(Modifier.padding(start = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(enabled = !handled, onClick = { confirm(LocalDate.now()) }) { Text(stringResource(R.string.today)) }
+                    TextButton(enabled = !handled, onClick = { confirm(LocalDate.now().plusDays(1)) }) { Text(stringResource(R.string.tomorrow)) }
+                }
+                Box(Modifier.padding(horizontal = 8.dp)) {
+                    MonthPager(selected = picked, initial = YearMonth.from(initial ?: LocalDate.now()), onPick = { picked = it })
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+                    TextButton(enabled = !handled, onClick = { confirm(picked) }) { Text(stringResource(R.string.ok)) }
+                }
             }
-            MonthPager(selected = picked, initial = YearMonth.from(initial ?: LocalDate.now()), onPick = { picked = it })
         }
     }
 }
@@ -754,7 +768,7 @@ fun TimePickerDlg(
     var hour by remember { mutableIntStateOf(initial.hour) }
     var minute by remember { mutableIntStateOf(initial.minute) }
     var handled by remember { mutableStateOf(false) }
-    AlertDialog(
+    MintAlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(

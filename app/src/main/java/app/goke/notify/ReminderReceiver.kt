@@ -17,6 +17,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val insistent = intent.getBooleanExtra(EXTRA_PERSISTENT, false)
         val important = intent.getBooleanExtra(EXTRA_IMPORTANT, false)
         val digest = intent.getBooleanExtra(EXTRA_DIGEST, false)
+        val targetAtMs = intent.getLongExtra(EXTRA_TARGET_AT_MS, 0L).takeIf { it > 0L }
         Notifications.ensureChannels(context)
         if (insistent && Notifications.canPost(context)) {
             val started =
@@ -28,6 +29,7 @@ class ReminderReceiver : BroadcastReceiver() {
                     taskId = taskId,
                     important = important,
                     courseId = courseId,
+                    targetAtMs = targetAtMs,
                 )
             if (started) return
         }
@@ -47,6 +49,7 @@ class ReminderReceiver : BroadcastReceiver() {
             insistent = insistent,
             important = important,
             courseId = courseId,
+            targetAtMs = targetAtMs,
         )
     }
 
@@ -59,5 +62,6 @@ class ReminderReceiver : BroadcastReceiver() {
         const val EXTRA_PERSISTENT = "persistent"
         const val EXTRA_IMPORTANT = "important"
         const val EXTRA_DIGEST = "digest"
+        const val EXTRA_TARGET_AT_MS = "target_at_ms"
     }
 }

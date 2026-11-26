@@ -45,6 +45,8 @@ data class Reminder(
     val courseId: String? = null,
     /** 每日摘要：走温和的晨间提示音渠道。 */
     val digest: Boolean = false,
+    /** 目标开始节点（用于通知点击后快速稍后提醒的分段计算）。 */
+    val targetAt: LocalDateTime? = null,
 )
 
 /**
@@ -116,6 +118,9 @@ class ReminderScheduler(
                     .putExtra(ReminderReceiver.EXTRA_PERSISTENT, r.persistent)
                     .putExtra(ReminderReceiver.EXTRA_IMPORTANT, r.important)
                     .putExtra(ReminderReceiver.EXTRA_DIGEST, r.digest)
+                    .apply {
+                        r.targetAt?.let { putExtra(ReminderReceiver.EXTRA_TARGET_AT_MS, it.atZone(zone).toInstant().toEpochMilli()) }
+                    }
             val pi = PendingIntent.getBroadcast(ctx, i, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             val at =
                 r.triggerAt
@@ -402,7 +407,7 @@ class ReminderScheduler(
                                 val text = if (isExam) examTaskText(ctx, t, if (item.hasTime) item.due else null) else ctx.getString(R.string.remind_task_text)
                                 for (minutes in minutesList) {
                                     val persistent = t.remindPersistent || (isExam && st.examRemindPersistent && minutes <= EXAM_PERSISTENT_MAX_MINUTES)
-                                    out += Reminder(base.minusMinutes(minutes.toLong()), t.title, text, "t${t.id}${item.due}:$minutes", t.id, persistent, important = isExam)
+                                    out += Reminder(base.minusMinutes(minutes.toLong()), t.title, text, "t${t.id}${item.due}:$minutes", t.id, persistent, important = isExam, targetAt = base)
                                 }
                             }
                         }
@@ -416,7 +421,7 @@ class ReminderScheduler(
                                 val text = if (isExam) examTaskText(ctx, t, item.start) else ctx.getString(R.string.remind_task_text)
                                 for (minutes in minutesList) {
                                     val persistent = t.remindPersistent || (isExam && st.examRemindPersistent && minutes <= EXAM_PERSISTENT_MAX_MINUTES)
-                                    out += Reminder(item.start.minusMinutes(minutes.toLong()), t.title, text, "b${t.id}${item.start}:$minutes", t.id, persistent, important = isExam)
+                                    out += Reminder(item.start.minusMinutes(minutes.toLong()), t.title, text, "b${t.id}${item.start}:$minutes", t.id, persistent, important = isExam, targetAt = item.start)
                                 }
                             }
                         }

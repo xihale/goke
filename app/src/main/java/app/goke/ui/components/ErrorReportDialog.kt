@@ -20,7 +20,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -57,7 +56,7 @@ fun ErrorReportDialog(
     var copied by remember(report.id) { mutableStateOf(false) }
     val copiedToast = stringResource(R.string.error_modal_copied)
 
-    AlertDialog(
+    MintAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         title = {
@@ -127,7 +126,7 @@ fun ErrorLogListDialog(
 
     val formatter = remember { SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()) }
 
-    AlertDialog(
+    MintAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.error_log_title)) },

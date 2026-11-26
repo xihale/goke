@@ -91,6 +91,7 @@ import app.goke.ui.Tab
 import app.goke.ui.components.AgendaRow
 import app.goke.ui.components.AttachmentEditor
 import app.goke.ui.components.CuteQrCode
+import app.goke.ui.components.ProvideMintModalScope
 import app.goke.ui.liveSnapshot
 import app.goke.ui.rememberNav
 import app.goke.ui.screens.AboutScreen
@@ -132,6 +133,7 @@ import app.goke.ui.screens.WidgetsScreen
 import app.goke.ui.theme.GokeTheme
 import app.goke.ui.theme.MintTheme
 import app.goke.widget.OverlayTarget
+import app.goke.widget.ReminderOverlayContext
 import app.goke.widget.WidgetKit
 import app.goke.widget.WidgetOverlayRoot
 import kotlinx.coroutines.runBlocking
@@ -243,11 +245,13 @@ class ScreensSmokeTest {
         val actions = remember { Actions(app, scope, nav) }
         GokeTheme(st) {
             CompositionLocalProvider(LocalApp provides app, LocalActions provides actions, LocalNav provides nav) {
-                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                    if (!nav.onRoute) {
-                        content()
+                ProvideMintModalScope {
+                    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                        if (!nav.onRoute) {
+                            content()
+                        }
+                        RouteStackHost(nav = nav, modifier = Modifier.fillMaxSize())
                     }
-                    RouteStackHost(nav = nav, modifier = Modifier.fillMaxSize())
                 }
             }
         }
@@ -474,15 +478,18 @@ class ScreensSmokeTest {
                 TodoEditScreen(null, textDraft = "交实验报告 明天 18:00") {}
             }
         }
-        // 新建草稿：点返回即丢弃，不落库
+        // 新建草稿：点返回弹出放弃确认，不落库；取消确认后点顶栏「确定」才落库
         rule.onNodeWithContentDescription("返回").performClick()
         rule.waitForIdle()
+        rule.onNodeWithText(app.getString(R.string.detail_editor_discard_title)).assertIsDisplayed()
         assertEquals(
             existingIds,
             app.repo.snapshot.value.tasks
                 .map { it.id }
                 .toSet(),
         )
+        rule.onNodeWithText(app.getString(R.string.cancel)).performClick()
+        rule.waitForIdle()
         // 点顶栏「确定」才落库
         rule.onNodeWithText(app.getString(R.string.confirm)).performClick()
         rule.waitUntil(5_000) {
@@ -1075,5 +1082,114 @@ class ScreensSmokeTest {
         } finally {
             app.settings.update { it.copy(darkMode = DarkMode.SYSTEM) }
         }
+    }
+
+    @Test
+    fun reminderNotificationOverlaySupportsQuickSnoozeLinearExponentialAndCustom() {
+        val snap = app.repo.snapshot.value
+        val todo = snap.tasks.first { !WidgetKit.isParcel(it) && !it.done && it.parentId == null }
+        val zone = java.time.ZoneId.systemDefault()
+        val closeTargetMs =
+            java.time.LocalDateTime
+                .now()
+                .plusMinutes(25)
+                .plusSeconds(20)
+                .atZone(zone)
+                .toInstant()
+                .toEpochMilli()
+        val farTargetMs =
+            java.time.LocalDateTime
+                .now()
+                .plusHours(6)
+                .atZone(zone)
+                .toInstant()
+                .toEpochMilli()
+
+        val target =
+            androidx.compose.runtime.mutableStateOf<OverlayTarget>(
+                OverlayTarget.TaskDetail(
+                    taskId = todo.id,
+                    reminder =
+                        ReminderOverlayContext(
+                            notifId = 9527,
+                            title = todo.title,
+                            text = app.getString(R.string.remind_task_text),
+                            targetAtEpochMs = closeTargetMs,
+                        ),
+                ),
+            )
+        var dismissed = false
+
+        rule.setContent {
+            val st by app.settings.flow.collectAsState()
+            val curSnap by app.repo.snapshot.collectAsState()
+            GokeTheme(st) {
+                WidgetOverlayRoot(
+                    app = app,
+                    ready = true,
+                    snap = curSnap,
+                    target = target.value,
+                    onChangeTarget = { target.value = it },
+                    onOpenInApp = {},
+                    onDismiss = { dismissed = true },
+                )
+            }
+        }
+        rule.waitForIdle()
+
+        // 1. 距离较近（25 分钟）：线性分段（5/10/15/20 分钟后 + 开始时 + 自定义）
+        rule.onNodeWithText(app.getString(R.string.notif_quick_snooze_title)).assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_minutes, 5)).assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_minutes, 10)).assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_minutes, 15)).assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_minutes, 20)).assertIsDisplayed()
+        shot("overlay_reminder_linear")
+
+        try {
+            app.settings.update { it.copy(darkMode = DarkMode.DARK) }
+            rule.waitForIdle()
+            shot("overlay_reminder_linear_dark")
+        } finally {
+            app.settings.update { it.copy(darkMode = DarkMode.SYSTEM) }
+        }
+        rule.waitForIdle()
+
+        // 2. 自定义稍后提醒：输入分钟数并确认调度闹钟
+        rule.onNodeWithText(app.getString(R.string.detail_editor_remind_custom)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription(app.getString(R.string.notif_snooze_custom_minutes_label)).performTextInput("12")
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(R.string.ok)).performClick()
+        rule.waitUntil(5_000) { dismissed }
+
+        val am = app.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+        assertTrue(
+            org.robolectric.Shadows
+                .shadowOf(am)
+                .scheduledAlarms
+                .isNotEmpty(),
+        )
+
+        // 3. 距离较远（6 小时）：指数分段（15分钟、30分钟、1小时、2小时、4小时）
+        dismissed = false
+        rule.runOnIdle {
+            target.value =
+                OverlayTarget.TaskDetail(
+                    taskId = todo.id,
+                    reminder =
+                        ReminderOverlayContext(
+                            notifId = 9528,
+                            title = todo.title,
+                            text = app.getString(R.string.remind_task_text),
+                            targetAtEpochMs = farTargetMs,
+                        ),
+                )
+        }
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_minutes, 15)).assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_hours, 1)).assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_hours, 4)).assertIsDisplayed()
+        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_hours, 1)).performClick()
+        rule.waitUntil(5_000) { dismissed }
     }
 }

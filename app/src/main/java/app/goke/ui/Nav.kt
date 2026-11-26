@@ -147,6 +147,9 @@ class Nav(
     /** 快速添加浮层展开中。浮层是模态层：底栏与撤销条都要让位，不能再叠在输入区上。 */
     var composerOpen by mutableStateOf(false)
 
+    /** 底部抽屉模态打开中（Tab 级）：底栏与撤销条同步让位。 */
+    var sheetOpen by mutableStateOf(false)
+
     fun openTask(id: String) {
         push(Route.TodoEdit(id = id))
     }

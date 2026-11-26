@@ -71,6 +71,7 @@ class ReminderAlertService : Service() {
         val taskId = intent?.getStringExtra(ReminderReceiver.EXTRA_TASK_ID)
         val courseId = intent?.getStringExtra(ReminderReceiver.EXTRA_COURSE_ID)
         val important = intent?.getBooleanExtra(ReminderReceiver.EXTRA_IMPORTANT, false) ?: false
+        val targetAtMs = intent?.getLongExtra(ReminderReceiver.EXTRA_TARGET_AT_MS, 0L)?.takeIf { it > 0L }
         val channel = if (important) Notifications.CHANNEL_EXAM else Notifications.CHANNEL_REMINDER
 
         val notification =
@@ -85,6 +86,7 @@ class ReminderAlertService : Service() {
                 important = important,
                 courseId = courseId,
                 silentForService = true,
+                targetAtMs = targetAtMs,
             )
 
         val fgsType =
@@ -420,6 +422,7 @@ class ReminderAlertService : Service() {
             taskId: String?,
             important: Boolean,
             courseId: String?,
+            targetAtMs: Long? = null,
         ): Boolean {
             val intent =
                 Intent(ctx, ReminderAlertService::class.java)
@@ -430,6 +433,11 @@ class ReminderAlertService : Service() {
                     .putExtra(ReminderReceiver.EXTRA_TASK_ID, taskId)
                     .putExtra(ReminderReceiver.EXTRA_IMPORTANT, important)
                     .putExtra(ReminderReceiver.EXTRA_COURSE_ID, courseId)
+                    .apply {
+                        if (targetAtMs != null && targetAtMs > 0L) {
+                            putExtra(ReminderReceiver.EXTRA_TARGET_AT_MS, targetAtMs)
+                        }
+                    }
             return runCatching {
                 ContextCompat.startForegroundService(ctx, intent)
             }.isSuccess

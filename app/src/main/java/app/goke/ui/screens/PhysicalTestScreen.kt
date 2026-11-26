@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -73,6 +72,7 @@ import app.goke.ui.LocalApp
 import app.goke.ui.components.ChipPill
 import app.goke.ui.components.ConfirmDialog
 import app.goke.ui.components.EmptyState
+import app.goke.ui.components.MintAlertDialog
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.SectionLabel
@@ -753,8 +753,10 @@ private fun TzcsVerifyRefreshDialog(
 
     LaunchedEffect(Unit) { reloadCaptcha() }
 
-    AlertDialog(
+    MintAlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
+        dismissOnClickOutside = !busy,
+        dismissOnBackPress = !busy,
         shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.tzcs_verify_dialog_title)) },
         text = {

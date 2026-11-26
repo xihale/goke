@@ -54,7 +54,6 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -126,6 +125,7 @@ import app.goke.ui.LocalNav
 import app.goke.ui.Route
 import app.goke.ui.components.ChipPill
 import app.goke.ui.components.EmptyState
+import app.goke.ui.components.MintAlertDialog
 import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
@@ -2132,7 +2132,7 @@ private fun ClassroomOccupancyDialog(
         }
     val title = occ.courseName.ifBlank { occ.note.ifBlank { stringResource(typeLabelRes) } }
 
-    AlertDialog(
+    MintAlertDialog(
         onDismissRequest = onDismiss,
         shape = MaterialTheme.shapes.extraLarge,
         title = {

@@ -51,7 +51,6 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -120,6 +119,7 @@ import app.goke.ui.components.ChipChoice
 import app.goke.ui.components.EmptyState
 import app.goke.ui.components.ErrorLogListDialog
 import app.goke.ui.components.FormSection
+import app.goke.ui.components.MintAlertDialog
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.MinutesDialSheet
@@ -1409,7 +1409,7 @@ fun AboutScreen(onBack: () -> Unit) {
     }
 
     if (showIntervalDialog) {
-        AlertDialog(
+        MintAlertDialog(
             onDismissRequest = { showIntervalDialog = false },
             title = { Text(stringResource(R.string.update_auto_check_dialog_title)) },
             text = {
@@ -1534,7 +1534,7 @@ private fun OssLicensesDialog(onDismiss: () -> Unit) {
     var viewing by remember { mutableStateOf<OssLicenseEntry?>(null) }
     val entry = viewing
     if (entry == null) {
-        AlertDialog(
+        MintAlertDialog(
             onDismissRequest = onDismiss,
             title = { Text(stringResource(R.string.about_license_title)) },
             text = {
@@ -1588,7 +1588,7 @@ private fun LicenseTextDialog(
                 .bufferedReader()
                 .use { it.readText() }
         }
-    AlertDialog(
+    MintAlertDialog(
         onDismissRequest = onBack,
         title = {
             Column {
@@ -1673,7 +1673,7 @@ internal fun UpdateAvailableDialog(
             else -> UpdateDownloadState.Idle
         }
 
-    AlertDialog(
+    MintAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.update_new_version_title, info.version)) },
         text = {
@@ -1879,7 +1879,7 @@ private fun MinutesDialog(
     var text by remember { mutableStateOf(initial.toString()) }
     val parsed = text.toIntOrNull()
     val valid = parsed != null && parsed in range
-    AlertDialog(
+    MintAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
@@ -1924,7 +1924,7 @@ private fun HexColorDialog(
             ?.get(1)
             ?.toInt(16)
             ?.or(0xFF000000.toInt())
-    AlertDialog(
+    MintAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.theme_hex)) },
         text = {

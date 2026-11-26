@@ -75,6 +75,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -130,19 +131,29 @@ import app.goke.core.todo.QuickBatchItem
 import app.goke.core.todo.QuickTokenKind
 import app.goke.data.DarkMode
 import app.goke.gokeApp
+import app.goke.notify.ReminderAlertService
+import app.goke.notify.ReminderReceiver
+import app.goke.notify.SnoozeOption
+import app.goke.notify.SnoozePlan
+import app.goke.notify.SnoozePlanner
+import app.goke.notify.SnoozeScaleMode
 import app.goke.ui.components.ChipPill
 import app.goke.ui.components.ConfirmDialog
 import app.goke.ui.components.CourseNoteBox
 import app.goke.ui.components.ErrorReportDialog
 import app.goke.ui.components.MintCheck
 import app.goke.ui.components.MintSheetOverlay
+import app.goke.ui.components.ProvideMintModalScope
 import app.goke.ui.components.Tag
+import app.goke.ui.components.TimeDialSheet
+import app.goke.ui.components.TonalField
 import app.goke.ui.components.mintClickable
 import app.goke.ui.components.mintPressScale
 import app.goke.ui.components.rememberNoFocusPopup
 import app.goke.ui.dueLabel
 import app.goke.ui.formatAllRooms
 import app.goke.ui.hm
+import app.goke.ui.icons.Alarm
 import app.goke.ui.icons.ContentCopy
 import app.goke.ui.icons.DeleteOutline
 import app.goke.ui.icons.Flag
@@ -171,10 +182,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 import android.graphics.Color as AndroidColor
 
 private val OverlayLeadW = 48.dp
 private val OverlayRowMinH = 44.dp
+
+internal data class ReminderOverlayContext(
+    val notifId: Int = 0,
+    val title: String? = null,
+    val text: String? = null,
+    val persistent: Boolean = false,
+    val important: Boolean = false,
+    val targetAtEpochMs: Long? = null,
+)
 
 internal sealed interface OverlayTarget {
     data class Add(
@@ -191,6 +212,7 @@ internal sealed interface OverlayTarget {
 
     data class TaskDetail(
         val taskId: String,
+        val reminder: ReminderOverlayContext? = null,
     ) : OverlayTarget
 
     data class EventDetail(
@@ -212,6 +234,7 @@ class WidgetOverlayActivity : ComponentActivity() {
         enableEdgeToEdge()
         window.setFormat(PixelFormat.TRANSLUCENT)
         window.setBackgroundDrawable(ColorDrawable(AndroidColor.TRANSPARENT))
+        stopReminderAlertIfRequested(intent)
         targetState.value = parseTarget(intent)
         visibleState.value = true
         val app = gokeApp
@@ -259,8 +282,15 @@ class WidgetOverlayActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        stopReminderAlertIfRequested(intent)
         targetState.value = parseTarget(intent)
         visibleState.value = true
+    }
+
+    private fun stopReminderAlertIfRequested(intent: Intent?) {
+        if (intent?.hasExtra(ReminderAlertService.EXTRA_STOP_ALERT_ID) == true) {
+            ReminderAlertService.stop(this, intent.getIntExtra(ReminderAlertService.EXTRA_STOP_ALERT_ID, 0))
+        }
     }
 
     private fun finishNoAnim() {
@@ -276,6 +306,7 @@ class WidgetOverlayActivity : ComponentActivity() {
         private const val EXTRA_DATE = "date"
         private const val EXTRA_START_PERIOD = "start_period"
         private const val EXTRA_END_PERIOD = "end_period"
+        private const val EXTRA_FROM_REMINDER = "from_reminder"
         private const val MODE_ADD = "add"
         private const val MODE_COURSE = "course"
         private const val MODE_TASK = "task"
@@ -313,6 +344,29 @@ class WidgetOverlayActivity : ComponentActivity() {
                 .putExtra(EXTRA_MODE, MODE_TASK)
                 .putExtra(TodoWidgetProvider.EXTRA_TASK_ID, taskId)
 
+        fun reminderTaskIntent(
+            ctx: Context,
+            taskId: String,
+            notifId: Int,
+            title: String? = null,
+            text: String? = null,
+            persistent: Boolean = false,
+            important: Boolean = false,
+            targetAtMs: Long? = null,
+        ): Intent =
+            taskIntent(ctx, taskId)
+                .putExtra(EXTRA_FROM_REMINDER, true)
+                .putExtra(ReminderReceiver.EXTRA_ID, notifId)
+                .putExtra(ReminderReceiver.EXTRA_TITLE, title)
+                .putExtra(ReminderReceiver.EXTRA_TEXT, text)
+                .putExtra(ReminderReceiver.EXTRA_PERSISTENT, persistent)
+                .putExtra(ReminderReceiver.EXTRA_IMPORTANT, important)
+                .apply {
+                    if (targetAtMs != null && targetAtMs > 0L) {
+                        putExtra(ReminderReceiver.EXTRA_TARGET_AT_MS, targetAtMs)
+                    }
+                }
+
         fun eventIntent(
             ctx: Context,
             eventId: String,
@@ -327,6 +381,19 @@ class WidgetOverlayActivity : ComponentActivity() {
             val taskId = intent.getStringExtra(TodoWidgetProvider.EXTRA_TASK_ID)
             val courseId = intent.getStringExtra(EXTRA_COURSE_ID)
             val eventId = intent.getStringExtra(EXTRA_EVENT_ID)
+            val reminderCtx =
+                if (intent.getBooleanExtra(EXTRA_FROM_REMINDER, false)) {
+                    ReminderOverlayContext(
+                        notifId = intent.getIntExtra(ReminderReceiver.EXTRA_ID, 0),
+                        title = intent.getStringExtra(ReminderReceiver.EXTRA_TITLE),
+                        text = intent.getStringExtra(ReminderReceiver.EXTRA_TEXT),
+                        persistent = intent.getBooleanExtra(ReminderReceiver.EXTRA_PERSISTENT, false),
+                        important = intent.getBooleanExtra(ReminderReceiver.EXTRA_IMPORTANT, false),
+                        targetAtEpochMs = intent.getLongExtra(ReminderReceiver.EXTRA_TARGET_AT_MS, 0L).takeIf { it > 0L },
+                    )
+                } else {
+                    null
+                }
             return when {
                 mode == MODE_COURSE && !courseId.isNullOrBlank() -> {
                     val sp = intent.getIntExtra(EXTRA_START_PERIOD, -1).takeIf { it > 0 }
@@ -340,7 +407,7 @@ class WidgetOverlayActivity : ComponentActivity() {
                 }
 
                 mode == MODE_TASK && !taskId.isNullOrBlank() -> {
-                    OverlayTarget.TaskDetail(taskId)
+                    OverlayTarget.TaskDetail(taskId, reminderCtx)
                 }
 
                 mode == MODE_EVENT && !eventId.isNullOrBlank() -> {
@@ -348,7 +415,7 @@ class WidgetOverlayActivity : ComponentActivity() {
                 }
 
                 !taskId.isNullOrBlank() -> {
-                    OverlayTarget.TaskDetail(taskId)
+                    OverlayTarget.TaskDetail(taskId, reminderCtx)
                 }
 
                 !courseId.isNullOrBlank() && mode != MODE_ADD -> {
@@ -427,215 +494,264 @@ internal fun WidgetOverlayRoot(
         }
     }
 
+    fun scheduleReminderSnooze(
+        task: Task,
+        reminder: ReminderOverlayContext,
+        triggerAt: LocalDateTime,
+        targetAt: LocalDateTime?,
+    ) {
+        if (closing) return
+        closing = true
+        val title = reminder.title?.takeIf { it.isNotBlank() } ?: task.title
+        val text = reminder.text?.takeIf { it.isNotBlank() } ?: ctx.getString(R.string.remind_task_text)
+        SnoozePlanner.scheduleSnooze(
+            ctx = ctx,
+            taskId = task.id,
+            notifId = reminder.notifId,
+            title = title,
+            text = text,
+            persistent = reminder.persistent || task.remindPersistent,
+            important = reminder.important || task.isExam,
+            triggerAt = triggerAt,
+            targetAt = targetAt,
+        )
+        val today = LocalDate.now()
+        val whenText = ctx.dueLabel(triggerAt, true, today)
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(ctx, ctx.getString(R.string.notif_snooze_scheduled_toast, whenText), Toast.LENGTH_SHORT).show()
+        }
+        onDismiss()
+    }
+
     val isAdd = target is OverlayTarget.Add
     val sheetShape = RoundedCornerShape(topStart = if (isAdd) 24.dp else 28.dp, topEnd = if (isAdd) 24.dp else 28.dp)
     val slideSpec = MintTheme.spec<androidx.compose.ui.unit.IntOffset>()
     val fadeSpec = MintTheme.spec<Float>()
+    var hasNestedModal by remember { mutableStateOf(false) }
 
-    Box(Modifier.fillMaxSize()) {
-        MintSheetOverlay(
-            visible = shown && ready && visible,
-            onDismissRequest = {
-                if (!closing) {
-                    val hook = dismissHook
-                    if (hook != null && !hook.first) {
-                        hook.second()
-                    } else {
-                        onDismiss()
+    ProvideMintModalScope(
+        active = visible,
+        onModalOpenChange = { hasNestedModal = it },
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            MintSheetOverlay(
+                visible = shown && ready && visible,
+                onDismissRequest = {
+                    if (!closing) {
+                        val hook = dismissHook
+                        if (hook != null && !hook.first) {
+                            hook.second()
+                        } else {
+                            onDismiss()
+                        }
                     }
+                },
+                scrimAlpha = 0.26f,
+                canDragDismiss = !closing && !hasNestedModal,
+                predictiveBackEnabled = visible && !hasNestedModal,
+                needsConfirmOnDismiss = dismissHook?.first == true,
+                onDismissConfirmRequest = { dismissHook?.second?.invoke() },
+                onExited = onExited,
+                sheetModifier =
+                    Modifier
+                        .statusBarsPadding()
+                        .padding(top = 16.dp)
+                        .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
+                shape = sheetShape,
+                containerColor = scheme.surfaceContainerLow,
+                maxWidth = 560.dp,
+                dragHandle = !isAdd,
+            ) {
+                val live = remember(snap) { snap.live() }
+                if (isAdd) {
+                    HorizontalDivider(
+                        thickness = 0.5.dp,
+                        color = scheme.outlineVariant.copy(alpha = 0.45f),
+                    )
                 }
-            },
-            scrimAlpha = 0.26f,
-            canDragDismiss = !closing,
-            needsConfirmOnDismiss = dismissHook?.first == true,
-            onDismissConfirmRequest = { dismissHook?.second?.invoke() },
-            onExited = onExited,
-            sheetModifier =
-                Modifier
-                    .statusBarsPadding()
-                    .padding(top = 16.dp)
-                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
-            shape = sheetShape,
-            containerColor = scheme.surfaceContainerLow,
-            maxWidth = 560.dp,
-            dragHandle = !isAdd,
-        ) {
-            val live = remember(snap) { snap.live() }
-            if (isAdd) {
-                HorizontalDivider(
-                    thickness = 0.5.dp,
-                    color = scheme.outlineVariant.copy(alpha = 0.45f),
-                )
-            }
-            AnimatedContent(
-                targetState = target,
-                contentKey = { t ->
-                    when (t) {
-                        is OverlayTarget.Add -> "add:${t.initialCourseId}:${t.initialText}"
-                        is OverlayTarget.CourseDetail -> "course:${t.courseId}:${t.dateStr}:${t.startPeriod}:${t.endPeriod}"
-                        is OverlayTarget.TaskDetail -> "task:${t.taskId}"
-                        is OverlayTarget.EventDetail -> "event:${t.eventId}"
-                    }
-                },
-                transitionSpec = {
-                    if (reduce) {
-                        fadeIn(fadeSpec) togetherWith fadeOut(fadeSpec)
-                    } else {
-                        (slideInHorizontally(slideSpec) { it / 6 } + fadeIn(fadeSpec)) togetherWith
-                            (slideOutHorizontally(slideSpec) { -it / 6 } + fadeOut(fadeSpec)) using
-                            SizeTransform(clip = false)
-                    }
-                },
-                label = "overlay-target",
-            ) { activeTarget ->
-                val targetIsAdd = activeTarget is OverlayTarget.Add
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState())
-                            .padding(
-                                start = 16.dp,
-                                end = 16.dp,
-                                top = if (targetIsAdd) 10.dp else 6.dp,
-                                bottom = if (targetIsAdd) 10.dp else 16.dp,
-                            ),
-                ) {
-                    when (activeTarget) {
-                        is OverlayTarget.Add -> {
-                            OverlayQuickAddCard(
-                                snap = live,
-                                defaultBlockMinutes = settings.defaultBlockMinutes,
-                                initialCourseId = activeTarget.initialCourseId,
-                                initialText = activeTarget.initialText,
-                                registerDismissHook = { dismissHook = it },
-                                onExpand = { draft ->
-                                    onOpenInApp(DeepLinks.addUri(draft.ifBlank { null }, activeTarget.initialCourseId))
-                                },
-                                onCommit = { cs, msg -> commitAndRefresh(cs, msg, closeAfter = true) },
-                                onDismiss = onDismiss,
-                            )
+                AnimatedContent(
+                    targetState = target,
+                    contentKey = { t ->
+                        when (t) {
+                            is OverlayTarget.Add -> "add:${t.initialCourseId}:${t.initialText}"
+                            is OverlayTarget.CourseDetail -> "course:${t.courseId}:${t.dateStr}:${t.startPeriod}:${t.endPeriod}"
+                            is OverlayTarget.TaskDetail -> "task:${t.taskId}:${t.reminder?.notifId ?: 0}"
+                            is OverlayTarget.EventDetail -> "event:${t.eventId}"
                         }
-
-                        is OverlayTarget.CourseDetail -> {
-                            val course = live.courses.firstOrNull { it.id == activeTarget.courseId }
-                            if (course == null) {
-                                LaunchedEffect(Unit) { onOpenInApp(DeepLinks.timetableUri()) }
-                            } else {
-                                OverlayCourseCard(
-                                    snap = live,
-                                    course = course,
-                                    dateStr = activeTarget.dateStr,
-                                    startPeriod = activeTarget.startPeriod,
-                                    endPeriod = activeTarget.endPeriod,
-                                    onToggleTask = { task, done ->
-                                        val nowDt = LocalDateTime.now()
-                                        val desc = ctx.getString(R.string.edit_task_desc, task.title)
-                                        val toast =
-                                            if (done) ctx.getString(R.string.widget_overlay_task_done_toast, task.title) else null
-                                        commitAndRefresh(
-                                            Edits.toggleTask(live, task, done, System.currentTimeMillis(), nowDt, desc),
-                                            toast = toast,
-                                            closeAfter = false,
-                                        )
-                                    },
-                                    onOpenTask = { task ->
-                                        onChangeTarget(OverlayTarget.TaskDetail(task.id))
-                                    },
-                                    onAddCourseTask = {
-                                        onChangeTarget(OverlayTarget.Add(initialCourseId = course.id))
-                                    },
-                                    onExpand = { onOpenInApp(DeepLinks.courseUri(course.id)) },
-                                )
-                            }
+                    },
+                    transitionSpec = {
+                        if (reduce) {
+                            fadeIn(fadeSpec) togetherWith fadeOut(fadeSpec)
+                        } else {
+                            (slideInHorizontally(slideSpec) { it / 6 } + fadeIn(fadeSpec)) togetherWith
+                                (slideOutHorizontally(slideSpec) { -it / 6 } + fadeOut(fadeSpec)) using
+                                SizeTransform(clip = false)
                         }
-
-                        is OverlayTarget.TaskDetail -> {
-                            val task = live.tasks.firstOrNull { it.id == activeTarget.taskId }
-                            if (task == null) {
-                                LaunchedEffect(Unit) { onDismiss() }
-                            } else if (WidgetKit.isParcel(task)) {
-                                OverlayParcelCard(
+                    },
+                    label = "overlay-target",
+                ) { activeTarget ->
+                    val targetIsAdd = activeTarget is OverlayTarget.Add
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                                .padding(
+                                    start = 16.dp,
+                                    end = 16.dp,
+                                    top = if (targetIsAdd) 10.dp else 6.dp,
+                                    bottom = if (targetIsAdd) 10.dp else 16.dp,
+                                ),
+                    ) {
+                        when (activeTarget) {
+                            is OverlayTarget.Add -> {
+                                OverlayQuickAddCard(
                                     snap = live,
                                     defaultBlockMinutes = settings.defaultBlockMinutes,
-                                    task = task,
-                                    onMarkDone = {
-                                        val msg = ctx.getString(R.string.widget_overlay_parcel_done_toast, task.title)
-                                        commitAndRefresh(
-                                            Edits.toggleTask(live, task, true, System.currentTimeMillis(), LocalDateTime.now(), task.title),
-                                            toast = msg,
-                                            closeAfter = true,
-                                        )
-                                    },
-                                    onCommit = { cs, msg -> commitAndRefresh(cs, msg, closeAfter = false) },
-                                    onExpand = { onOpenInApp(DeepLinks.taskUri(task.id)) },
-                                )
-                            } else {
-                                OverlayTaskCard(
-                                    snap = live,
-                                    defaultBlockMinutes = settings.defaultBlockMinutes,
-                                    task = task,
+                                    initialCourseId = activeTarget.initialCourseId,
+                                    initialText = activeTarget.initialText,
                                     registerDismissHook = { dismissHook = it },
-                                    onToggleDone = { t, done, closeAfter ->
-                                        val desc = ctx.getString(R.string.edit_task_desc, t.title)
-                                        val msg =
-                                            if (done) ctx.getString(R.string.widget_overlay_task_done_toast, t.title) else null
-                                        commitAndRefresh(
-                                            Edits.toggleTask(live, t, done, System.currentTimeMillis(), LocalDateTime.now(), desc),
-                                            toast = msg,
-                                            closeAfter = closeAfter,
-                                        )
+                                    onExpand = { draft ->
+                                        onOpenInApp(DeepLinks.addUri(draft.ifBlank { null }, activeTarget.initialCourseId))
                                     },
-                                    onCommitEdit = { updated, msg, closeAfter, thenOpenUri ->
-                                        val desc = ctx.getString(R.string.edit_task_desc, updated.title)
-                                        commitAndRefresh(
-                                            Edits.save(live, updated, desc, System.currentTimeMillis()),
-                                            toast = msg,
-                                            closeAfter = closeAfter,
-                                            thenOpenUri = thenOpenUri,
-                                        )
-                                    },
-                                    onDelete = {
-                                        commitAndRefresh(
-                                            Edits.delete(
-                                                live,
-                                                task,
-                                                ctx.getString(R.string.delete_desc, task.title),
-                                                System.currentTimeMillis(),
-                                            ),
-                                            toast = ctx.getString(R.string.widget_overlay_deleted_toast, task.title),
-                                            closeAfter = true,
-                                        )
-                                    },
-                                    onOpenInApp = { onOpenInApp(DeepLinks.taskUri(task.id)) },
+                                    onCommit = { cs, msg -> commitAndRefresh(cs, msg, closeAfter = true) },
                                     onDismiss = onDismiss,
                                 )
                             }
-                        }
 
-                        is OverlayTarget.EventDetail -> {
-                            val event = live.events.firstOrNull { it.id == activeTarget.eventId }
-                            if (event == null) {
-                                LaunchedEffect(Unit) { onDismiss() }
-                            } else {
-                                OverlayEventCard(
-                                    event = event,
-                                    onOpenInApp = { onOpenInApp(DeepLinks.todayUri()) },
-                                )
+                            is OverlayTarget.CourseDetail -> {
+                                val course = live.courses.firstOrNull { it.id == activeTarget.courseId }
+                                if (course == null) {
+                                    LaunchedEffect(Unit) { onOpenInApp(DeepLinks.timetableUri()) }
+                                } else {
+                                    OverlayCourseCard(
+                                        snap = live,
+                                        course = course,
+                                        dateStr = activeTarget.dateStr,
+                                        startPeriod = activeTarget.startPeriod,
+                                        endPeriod = activeTarget.endPeriod,
+                                        onToggleTask = { task, done ->
+                                            val nowDt = LocalDateTime.now()
+                                            val desc = ctx.getString(R.string.edit_task_desc, task.title)
+                                            val toast =
+                                                if (done) ctx.getString(R.string.widget_overlay_task_done_toast, task.title) else null
+                                            commitAndRefresh(
+                                                Edits.toggleTask(live, task, done, System.currentTimeMillis(), nowDt, desc),
+                                                toast = toast,
+                                                closeAfter = false,
+                                            )
+                                        },
+                                        onOpenTask = { task ->
+                                            onChangeTarget(OverlayTarget.TaskDetail(task.id))
+                                        },
+                                        onAddCourseTask = {
+                                            onChangeTarget(OverlayTarget.Add(initialCourseId = course.id))
+                                        },
+                                        onExpand = { onOpenInApp(DeepLinks.courseUri(course.id)) },
+                                    )
+                                }
+                            }
+
+                            is OverlayTarget.TaskDetail -> {
+                                val task = live.tasks.firstOrNull { it.id == activeTarget.taskId }
+                                val reminder = activeTarget.reminder
+                                if (task == null) {
+                                    LaunchedEffect(Unit) { onDismiss() }
+                                } else if (WidgetKit.isParcel(task)) {
+                                    OverlayParcelCard(
+                                        snap = live,
+                                        defaultBlockMinutes = settings.defaultBlockMinutes,
+                                        task = task,
+                                        reminder = reminder,
+                                        onSnooze = { triggerAt, targetAt ->
+                                            if (reminder != null) {
+                                                scheduleReminderSnooze(task, reminder, triggerAt, targetAt)
+                                            }
+                                        },
+                                        onMarkDone = {
+                                            val msg = ctx.getString(R.string.widget_overlay_parcel_done_toast, task.title)
+                                            commitAndRefresh(
+                                                Edits.toggleTask(live, task, true, System.currentTimeMillis(), LocalDateTime.now(), task.title),
+                                                toast = msg,
+                                                closeAfter = true,
+                                            )
+                                        },
+                                        onCommit = { cs, msg -> commitAndRefresh(cs, msg, closeAfter = false) },
+                                        onExpand = { onOpenInApp(DeepLinks.taskUri(task.id)) },
+                                    )
+                                } else {
+                                    OverlayTaskCard(
+                                        snap = live,
+                                        defaultBlockMinutes = settings.defaultBlockMinutes,
+                                        task = task,
+                                        reminder = reminder,
+                                        onSnooze = { triggerAt, targetAt ->
+                                            if (reminder != null) {
+                                                scheduleReminderSnooze(task, reminder, triggerAt, targetAt)
+                                            }
+                                        },
+                                        registerDismissHook = { dismissHook = it },
+                                        onToggleDone = { t, done, closeAfter ->
+                                            val desc = ctx.getString(R.string.edit_task_desc, t.title)
+                                            val msg =
+                                                if (done) ctx.getString(R.string.widget_overlay_task_done_toast, t.title) else null
+                                            commitAndRefresh(
+                                                Edits.toggleTask(live, t, done, System.currentTimeMillis(), LocalDateTime.now(), desc),
+                                                toast = msg,
+                                                closeAfter = closeAfter,
+                                            )
+                                        },
+                                        onCommitEdit = { updated, msg, closeAfter, thenOpenUri ->
+                                            val desc = ctx.getString(R.string.edit_task_desc, updated.title)
+                                            commitAndRefresh(
+                                                Edits.save(live, updated, desc, System.currentTimeMillis()),
+                                                toast = msg,
+                                                closeAfter = closeAfter,
+                                                thenOpenUri = thenOpenUri,
+                                            )
+                                        },
+                                        onDelete = {
+                                            commitAndRefresh(
+                                                Edits.delete(
+                                                    live,
+                                                    task,
+                                                    ctx.getString(R.string.delete_desc, task.title),
+                                                    System.currentTimeMillis(),
+                                                ),
+                                                toast = ctx.getString(R.string.widget_overlay_deleted_toast, task.title),
+                                                closeAfter = true,
+                                            )
+                                        },
+                                        onOpenInApp = { onOpenInApp(DeepLinks.taskUri(task.id)) },
+                                        onDismiss = onDismiss,
+                                    )
+                                }
+                            }
+
+                            is OverlayTarget.EventDetail -> {
+                                val event = live.events.firstOrNull { it.id == activeTarget.eventId }
+                                if (event == null) {
+                                    LaunchedEffect(Unit) { onDismiss() }
+                                } else {
+                                    OverlayEventCard(
+                                        event = event,
+                                        onOpenInApp = { onOpenInApp(DeepLinks.todayUri()) },
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
-        }
 
-        val pendingError by app.errors.pendingModal.collectAsState()
-        val activeError = pendingError
-        if (activeError != null) {
-            ErrorReportDialog(
-                report = activeError,
-                onDismiss = { app.errors.dismissPending() },
-            )
+            val pendingError by app.errors.pendingModal.collectAsState()
+            val activeError = pendingError
+            if (activeError != null) {
+                ErrorReportDialog(
+                    report = activeError,
+                    onDismiss = { app.errors.dismissPending() },
+                )
+            }
         }
     }
 }
@@ -1030,6 +1146,8 @@ private fun OverlayParcelCard(
     snap: Snapshot,
     defaultBlockMinutes: Int,
     task: Task,
+    reminder: ReminderOverlayContext? = null,
+    onSnooze: (LocalDateTime, LocalDateTime?) -> Unit = { _, _ -> },
     onMarkDone: () -> Unit,
     onCommit: (ChangeSet, String) -> Unit,
     onExpand: () -> Unit,
@@ -1118,6 +1236,16 @@ private fun OverlayParcelCard(
             style = MaterialTheme.typography.bodySmall,
             color = scheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+
+    if (reminder != null && !task.done) {
+        Spacer(Modifier.height(10.dp))
+        QuickSnoozeSection(
+            snap = snap,
+            task = task,
+            reminder = reminder,
+            onSnooze = onSnooze,
         )
     }
 
@@ -1238,6 +1366,8 @@ private fun OverlayTaskCard(
     snap: Snapshot,
     defaultBlockMinutes: Int,
     task: Task,
+    reminder: ReminderOverlayContext? = null,
+    onSnooze: (LocalDateTime, LocalDateTime?) -> Unit = { _, _ -> },
     registerDismissHook: ((Pair<Boolean, () -> Unit>?) -> Unit),
     onToggleDone: (Task, Boolean, Boolean) -> Unit,
     onCommitEdit: (Task, String?, Boolean, Uri?) -> Unit,
@@ -1502,6 +1632,15 @@ private fun OverlayTaskCard(
                 scheme.onTertiaryContainer,
             )
         }
+    }
+
+    if (reminder != null && !done) {
+        QuickSnoozeSection(
+            snap = snap,
+            task = task,
+            reminder = reminder,
+            onSnooze = onSnooze,
+        )
     }
 
     OverlayFieldRow(
@@ -1792,6 +1931,239 @@ private fun OverlayTaskCard(
         )
     }
 }
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun QuickSnoozeSection(
+    snap: Snapshot,
+    task: Task,
+    reminder: ReminderOverlayContext,
+    onSnooze: (LocalDateTime, LocalDateTime?) -> Unit,
+) {
+    val ctx = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val today = remember { LocalDate.now() }
+    val openedAt = remember(task.id, reminder.notifId, reminder.targetAtEpochMs) { LocalDateTime.now() }
+    val targetAt =
+        remember(task, snap, openedAt, reminder.targetAtEpochMs) {
+            SnoozePlanner.resolveTargetAt(task, snap, openedAt, reminder.targetAtEpochMs)
+        }
+    val plan: SnoozePlan =
+        remember(openedAt, targetAt) {
+            SnoozePlanner.plan(openedAt, targetAt)
+        }
+    var customOpen by remember(task.id) { mutableStateOf(false) }
+    var customText by remember(task.id) { mutableStateOf("") }
+    var timeDialOpen by remember { mutableStateOf(false) }
+
+    val customMinutes = customText.toIntOrNull()
+    val customValid = customMinutes != null && customMinutes in 1..SnoozePlanner.MAX_CUSTOM_MINUTES
+
+    val modeCaption =
+        when (plan.mode) {
+            SnoozeScaleMode.LINEAR -> {
+                val span = formatSnoozeSpan(ctx, plan.remainingMinutes ?: 1)
+                stringResource(R.string.notif_snooze_mode_linear, span)
+            }
+
+            SnoozeScaleMode.EXPONENTIAL -> {
+                val span = formatSnoozeSpan(ctx, plan.remainingMinutes ?: 1)
+                stringResource(R.string.notif_snooze_mode_exp, span)
+            }
+
+            SnoozeScaleMode.STANDARD -> {
+                if (plan.targetAt != null) {
+                    stringResource(R.string.notif_snooze_mode_past)
+                } else {
+                    stringResource(R.string.notif_snooze_mode_standard)
+                }
+            }
+        }
+
+    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        OverlayFieldRow(
+            icon = Icons.Rounded.Alarm,
+            iconTint = scheme.primary,
+        ) {
+            Text(
+                stringResource(R.string.notif_quick_snooze_title),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = scheme.primary,
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                modeCaption,
+                style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(start = OverlayLeadW, top = 2.dp, bottom = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            plan.options.forEach { opt ->
+                val label = formatSnoozeOptionLabel(opt)
+                val desc = "$label（${ctx.dueLabel(opt.triggerAt, true, today)}）"
+                ChipPill(
+                    label = label,
+                    on = false,
+                    role = Role.Button,
+                    modifier = Modifier.semantics { contentDescription = desc },
+                ) {
+                    val liveNow = LocalDateTime.now()
+                    val fireAt =
+                        when {
+                            opt.isAtTarget || opt.isTomorrowMorning -> {
+                                if (opt.triggerAt.isAfter(liveNow)) opt.triggerAt else liveNow.plusMinutes(1)
+                            }
+
+                            else -> {
+                                liveNow.plusMinutes(opt.delayMinutes.toLong())
+                            }
+                        }
+                    onSnooze(fireAt, targetAt)
+                }
+            }
+            ChipPill(
+                label = stringResource(R.string.detail_editor_remind_custom),
+                on = customOpen,
+                role = Role.Button,
+            ) {
+                customOpen = !customOpen
+            }
+        }
+
+        AnimatedVisibility(
+            visible = customOpen,
+            enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+            exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+        ) {
+            val previewText =
+                if (customValid) {
+                    val previewAt = openedAt.plusMinutes(customMinutes.toLong())
+                    val whenStr = ctx.dueLabel(previewAt, true, today)
+                    val remainAfter = targetAt?.let { ChronoUnit.MINUTES.between(previewAt, it).toInt() }
+                    if (remainAfter != null && remainAfter > 0) {
+                        stringResource(R.string.notif_snooze_preview_before_start, whenStr, formatSnoozeSpan(ctx, remainAfter))
+                    } else {
+                        stringResource(R.string.notif_snooze_preview, whenStr)
+                    }
+                } else if (customText.isNotEmpty()) {
+                    stringResource(R.string.notif_snooze_custom_invalid, SnoozePlanner.MAX_CUSTOM_MINUTES)
+                } else {
+                    stringResource(R.string.notif_snooze_custom_hint, SnoozePlanner.MAX_CUSTOM_MINUTES)
+                }
+
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(start = OverlayLeadW, top = 6.dp, bottom = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TonalField(
+                    label = stringResource(R.string.notif_snooze_custom_minutes_label),
+                    value = customText,
+                    onChange = { customText = it.filter { ch -> ch.isDigit() }.take(5) },
+                    number = true,
+                    isError = customText.isNotEmpty() && !customValid,
+                    supporting = previewText,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    val timePickInteraction = remember { MutableInteractionSource() }
+                    FilledTonalButton(
+                        onClick = { timeDialOpen = true },
+                        interactionSource = timePickInteraction,
+                        modifier = Modifier.heightIn(min = 44.dp).mintPressScale(timePickInteraction, 0.96f),
+                        colors =
+                            ButtonDefaults.filledTonalButtonColors(
+                                containerColor = scheme.surfaceContainerHighest,
+                                contentColor = scheme.onSurface,
+                            ),
+                    ) {
+                        Icon(Icons.Rounded.Schedule, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.notif_snooze_pick_time))
+                    }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { customOpen = false }) {
+                        Text(stringResource(R.string.cancel), color = scheme.onSurfaceVariant)
+                    }
+                    val okInteraction = remember { MutableInteractionSource() }
+                    Button(
+                        onClick = {
+                            val m = customMinutes ?: return@Button
+                            onSnooze(LocalDateTime.now().plusMinutes(m.toLong()), targetAt)
+                        },
+                        enabled = customValid,
+                        interactionSource = okInteraction,
+                        modifier = Modifier.heightIn(min = 44.dp).mintPressScale(okInteraction, 0.96f, enabled = customValid),
+                    ) {
+                        Text(stringResource(R.string.ok))
+                    }
+                }
+            }
+        }
+
+        HorizontalDivider(
+            modifier = Modifier.padding(top = 8.dp),
+            thickness = 0.5.dp,
+            color = scheme.outlineVariant.copy(alpha = 0.45f),
+        )
+    }
+
+    if (timeDialOpen) {
+        TimeDialSheet(
+            initial = (targetAt ?: openedAt.plusMinutes(30)).toLocalTime(),
+            onDismiss = { timeDialOpen = false },
+        ) { picked ->
+            val liveNow = LocalDateTime.now()
+            val todayAt = liveNow.toLocalDate().atTime(picked)
+            val resolved = if (todayAt.isAfter(liveNow)) todayAt else todayAt.plusDays(1)
+            timeDialOpen = false
+            onSnooze(resolved, targetAt)
+        }
+    }
+}
+
+@Composable
+private fun formatSnoozeOptionLabel(opt: SnoozeOption): String =
+    when {
+        opt.isAtTarget -> stringResource(R.string.notif_snooze_at_target, opt.triggerAt.hm())
+        opt.isTomorrowMorning -> stringResource(R.string.notif_snooze_tomorrow_morning)
+        opt.delayMinutes < 60 -> stringResource(R.string.notif_snooze_after_minutes, opt.delayMinutes)
+        opt.delayMinutes % 1440 == 0 -> stringResource(R.string.notif_snooze_after_days, opt.delayMinutes / 1440)
+        opt.delayMinutes % 60 == 0 -> stringResource(R.string.notif_snooze_after_hours, opt.delayMinutes / 60)
+        else -> stringResource(R.string.notif_snooze_after_minutes, opt.delayMinutes)
+    }
+
+private fun formatSnoozeSpan(
+    ctx: Context,
+    minutes: Int,
+): String =
+    when {
+        minutes < 60 -> {
+            ctx.getString(R.string.dur_min, minutes)
+        }
+
+        minutes < 1440 -> {
+            val h = minutes / 60
+            val m = minutes % 60
+            if (m == 0) ctx.getString(R.string.dur_h, h) else ctx.getString(R.string.dur_h_m, h, m)
+        }
+
+        else -> {
+            val d = minutes / 1440
+            val h = (minutes % 1440) / 60
+            if (h == 0) ctx.getString(R.string.notif_snooze_span_days, d) else ctx.getString(R.string.notif_snooze_span_days_hours, d, h)
+        }
+    }
 
 @Composable
 private fun OverlayFieldRow(

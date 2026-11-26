@@ -1,12 +1,8 @@
 package app.goke.notify
 
-import android.app.AlarmManager
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
-import android.os.Build
 import app.goke.core.change.Edits
 import app.goke.gokeApp
 import kotlinx.coroutines.flow.first
@@ -47,25 +43,19 @@ class TaskActionReceiver : BroadcastReceiver() {
             ACTION_SNOOZE -> {
                 val title = intent.getStringExtra(ReminderReceiver.EXTRA_TITLE).orEmpty()
                 val text = intent.getStringExtra(ReminderReceiver.EXTRA_TEXT).orEmpty()
-                val again =
-                    Intent(context, ReminderReceiver::class.java)
-                        .setData(Uri.parse("goke://snooze/$nid"))
-                        .putExtra(ReminderReceiver.EXTRA_TITLE, title)
-                        .putExtra(ReminderReceiver.EXTRA_TEXT, text)
-                        .putExtra(ReminderReceiver.EXTRA_ID, nid)
-                        .putExtra(ReminderReceiver.EXTRA_TASK_ID, taskId)
-                        .putExtra(ReminderReceiver.EXTRA_PERSISTENT, intent.getBooleanExtra(ReminderReceiver.EXTRA_PERSISTENT, false))
-                        .putExtra(ReminderReceiver.EXTRA_IMPORTANT, intent.getBooleanExtra(ReminderReceiver.EXTRA_IMPORTANT, false))
-                val pi = PendingIntent.getBroadcast(context, taskId.hashCode(), again, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-                val am = context.getSystemService(AlarmManager::class.java)
-                val at = System.currentTimeMillis() + SNOOZE_MS
-                runCatching {
-                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()) {
-                        am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
-                    } else {
-                        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
-                    }
-                }
+                val targetAtMs = intent.getLongExtra(ReminderReceiver.EXTRA_TARGET_AT_MS, 0L).takeIf { it > 0L }
+                SnoozePlanner.scheduleSnoozeAtEpoch(
+                    ctx = context,
+                    taskId = taskId,
+                    notifId = nid,
+                    title = title,
+                    text = text,
+                    persistent = intent.getBooleanExtra(ReminderReceiver.EXTRA_PERSISTENT, false),
+                    important = intent.getBooleanExtra(ReminderReceiver.EXTRA_IMPORTANT, false),
+                    triggerAtMs = System.currentTimeMillis() + SNOOZE_MS,
+                    targetAtMs = targetAtMs,
+                )
+                return
             }
         }
         ReminderAlertService.stop(context, nid)
@@ -78,6 +68,6 @@ class TaskActionReceiver : BroadcastReceiver() {
         const val ACTION_DISMISS = "app.goke.action.TASK_DISMISS"
         const val EXTRA_TASK_ID = "task_id"
         const val EXTRA_NOTIFICATION_ID = "nid"
-        const val SNOOZE_MS = 60 * 60 * 1000L
+        const val SNOOZE_MS = SnoozePlanner.DEFAULT_ACTION_SNOOZE_MS
     }
 }

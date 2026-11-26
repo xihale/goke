@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +51,7 @@ import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
 import app.goke.ui.Route
 import app.goke.ui.components.ChipChoice
+import app.goke.ui.components.MintAlertDialog
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.NavRow
@@ -495,7 +495,7 @@ fun HotWaterScreen(onBack: () -> Unit) {
     }
 
     if (confirmUnbind) {
-        AlertDialog(
+        MintAlertDialog(
             onDismissRequest = { confirmUnbind = false },
             title = { Text(stringResource(R.string.hotwater_unbind_confirm_title)) },
             text = { Text(stringResource(R.string.hotwater_unbind_confirm_body)) },

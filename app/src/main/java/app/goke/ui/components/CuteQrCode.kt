@@ -56,7 +56,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
 import app.goke.R
 import app.goke.core.util.QrMatrix
@@ -214,7 +213,7 @@ fun QqGroupCardDialog(
     val savedToast = stringResource(R.string.about_qq_saved)
     val saveFailedToast = stringResource(R.string.about_qq_save_failed)
 
-    Dialog(onDismissRequest = onDismiss) {
+    MintDialog(onDismissRequest = onDismiss) {
         val cardColor = scheme.surfaceContainerHigh
         Surface(
             shape = RoundedCornerShape(28.dp),

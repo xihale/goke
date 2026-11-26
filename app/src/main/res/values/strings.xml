@@ -1386,4 +1386,23 @@
     <string name="settings_search_kw_error_log">异常 日志 崩溃 报错 诊断 log crash debug</string>
     <string name="settings_search_kw_edit_timetable">学期 开学 第一周 总周数 切换学期 复制课表 课表设置 semester timetable</string>
     <string name="settings_search_kw_periods">作息 节次 上课时间 下课时间 时间表 课时 period schedule</string>
+    <string name="notif_quick_snooze_title">稍后提醒</string>
+    <string name="notif_snooze_mode_linear">距开始 %1$s · 线性</string>
+    <string name="notif_snooze_mode_exp">距开始 %1$s · 指数</string>
+    <string name="notif_snooze_mode_past">已过目标时间</string>
+    <string name="notif_snooze_mode_standard">快捷延后</string>
+    <string name="notif_snooze_after_minutes">%1$d 分钟后</string>
+    <string name="notif_snooze_after_hours">%1$d 小时后</string>
+    <string name="notif_snooze_after_days">%1$d 天后</string>
+    <string name="notif_snooze_at_target">开始时 %1$s</string>
+    <string name="notif_snooze_tomorrow_morning">明天 09:00</string>
+    <string name="notif_snooze_custom_minutes_label">推迟分钟数</string>
+    <string name="notif_snooze_custom_hint">输入 1–%1$d 分钟，或点右侧选择具体时刻</string>
+    <string name="notif_snooze_custom_invalid">请输入 1 到 %1$d 之间的分钟数</string>
+    <string name="notif_snooze_pick_time">选时刻</string>
+    <string name="notif_snooze_preview">将于 %1$s 再次提醒</string>
+    <string name="notif_snooze_preview_before_start">将于 %1$s 提醒（开始前 %2$s）</string>
+    <string name="notif_snooze_scheduled_toast">将在 %1$s 再次提醒</string>
+    <string name="notif_snooze_span_days">%1$d 天</string>
+    <string name="notif_snooze_span_days_hours">%1$d 天 %2$d 小时</string>
 </resources>

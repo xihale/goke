@@ -23,7 +23,6 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -76,6 +75,7 @@ import app.goke.ui.components.ConfirmDialog
 import app.goke.ui.components.DatePickerDlg
 import app.goke.ui.components.FieldText
 import app.goke.ui.components.FormSection
+import app.goke.ui.components.MintAlertDialog
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.NavRow
@@ -272,7 +272,7 @@ fun EditTimetableScreen(onBack: () -> Unit) {
         var newName by remember { mutableStateOf("") }
         var newStart by remember { mutableStateOf(week1.plusWeeks(total.toLong() + 8)) }
         var pick by remember { mutableStateOf(false) }
-        AlertDialog(
+        MintAlertDialog(
             onDismissRequest = { copyDlg = false },
             title = { Text(stringResource(R.string.copy_next_semester)) },
             text = {
@@ -299,7 +299,7 @@ fun EditTimetableScreen(onBack: () -> Unit) {
     }
     if (switchDlg) {
         val allSemesters = remember(snap.semesters) { snap.semesters.sortedByDescending { it.week1Monday } }
-        AlertDialog(
+        MintAlertDialog(
             onDismissRequest = { switchDlg = false },
             title = { Text(stringResource(R.string.semester_switch_title)) },
             text = {
