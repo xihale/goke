@@ -303,15 +303,15 @@ class WidgetOverlayActivity : ComponentActivity() {
     }
 
     companion object {
-        private const val EXTRA_MODE = "overlay_mode"
-        private const val EXTRA_COURSE_ID = "course_id"
+        internal const val EXTRA_MODE = "overlay_mode"
+        internal const val EXTRA_COURSE_ID = "course_id"
         private const val EXTRA_EVENT_ID = "event_id"
-        private const val EXTRA_DATE = "date"
-        private const val EXTRA_START_PERIOD = "start_period"
-        private const val EXTRA_END_PERIOD = "end_period"
+        internal const val EXTRA_DATE = "date"
+        internal const val EXTRA_START_PERIOD = "start_period"
+        internal const val EXTRA_END_PERIOD = "end_period"
         private const val EXTRA_FROM_REMINDER = "from_reminder"
         private const val MODE_ADD = "add"
-        private const val MODE_COURSE = "course"
+        internal const val MODE_COURSE = "course"
         private const val MODE_TASK = "task"
         private const val MODE_EVENT = "event"
 

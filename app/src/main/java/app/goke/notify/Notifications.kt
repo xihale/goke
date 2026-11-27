@@ -265,6 +265,9 @@ object Notifications {
         insistent: Boolean = false,
         important: Boolean = false,
         courseId: String? = null,
+        courseDate: String? = null,
+        courseStartPeriod: Int? = null,
+        courseEndPeriod: Int? = null,
         silentForService: Boolean = false,
         targetAtMs: Long? = null,
     ): Notification {
@@ -287,8 +290,15 @@ object Notifications {
                 }
 
                 courseId != null -> {
-                    Intent(Intent.ACTION_VIEW, DeepLinks.courseUri(courseId), ctx, MainActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    WidgetOverlayActivity
+                        .courseIntent(
+                            ctx = ctx,
+                            courseId = courseId,
+                            dateStr = courseDate,
+                            startPeriod = courseStartPeriod,
+                            endPeriod = courseEndPeriod,
+                        ).setData(Uri.parse("goke://notif/$id/open"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 }
 
                 else -> {
@@ -367,6 +377,9 @@ object Notifications {
         insistent: Boolean = false,
         important: Boolean = false,
         courseId: String? = null,
+        courseDate: String? = null,
+        courseStartPeriod: Int? = null,
+        courseEndPeriod: Int? = null,
         targetAtMs: Long? = null,
     ) {
         if (!canPost(ctx)) return
@@ -387,6 +400,9 @@ object Notifications {
                 insistent = insistent,
                 important = important,
                 courseId = courseId,
+                courseDate = courseDate,
+                courseStartPeriod = courseStartPeriod,
+                courseEndPeriod = courseEndPeriod,
                 silentForService = throttled,
                 targetAtMs = targetAtMs,
             )

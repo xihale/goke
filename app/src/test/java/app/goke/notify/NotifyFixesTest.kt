@@ -27,6 +27,7 @@ import app.goke.core.model.EventKind
 import app.goke.core.model.Source
 import app.goke.core.model.Task
 import app.goke.data.Settings
+import app.goke.widget.WidgetOverlayActivity
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -200,6 +201,7 @@ class NotifyFixesTest {
                 startPeriod = 5,
                 endPeriod = 6,
                 weeks = (1..20).toSet(),
+                note = "第1周：第八章 假设检验\n带计算器",
             )
         runBlocking {
             app.repo.commit(Edits.saveAll(app.repo.snapshot.value, listOf(sem2, course), "seed", 1L))
@@ -209,13 +211,83 @@ class NotifyFixesTest {
         val withTeacher = ReminderScheduler.compute(app, snap, app.settings.value.copy(remindCourse = true, showTeacher = true), now)
         val r1 = withTeacher.first { it.title == "操作系统" }
         assertFalse(r1.text.contains("开课"))
+        assertFalse(r1.text.contains("假设检验"))
+        assertFalse(r1.text.contains("计算器"))
         assertTrue(r1.text.endsWith("· 实4-407A · 张老师"))
 
         val withoutTeacher = ReminderScheduler.compute(app, snap, app.settings.value.copy(remindCourse = true, showTeacher = false), now)
         val r2 = withoutTeacher.first { it.title == "操作系统" }
         assertFalse(r2.text.contains("开课"))
         assertFalse(r2.text.contains("张老师"))
+        assertFalse(r2.text.contains("假设检验"))
+        assertFalse(r2.text.contains("计算器"))
         assertTrue(r2.text.endsWith("· 实4-407A"))
+    }
+
+    @Test
+    fun courseReminderTapOpensWidgetOverlayCoursePreview() {
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val now =
+            LocalDateTime
+                .now()
+                .withHour(8)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0)
+        val sem = app.repo.snapshot.value.currentSemester!!
+        val monday = now.toLocalDate().with(DayOfWeek.MONDAY)
+        val sem2 = sem.copy(week1Monday = monday)
+        val course =
+            Course(
+                id = "c-overlay-1",
+                semesterId = sem.id,
+                name = "概率论与数理统计",
+                teacher = "涂钰青",
+                room = "教3-204",
+                dayOfWeek = now.dayOfWeek.value,
+                startPeriod = 5,
+                endPeriod = 6,
+                weeks = (1..20).toSet(),
+                note = "第1周：第八章 假设检验",
+            )
+        runBlocking {
+            app.repo.commit(Edits.saveAll(app.repo.snapshot.value, listOf(sem2, course), "seed", 1L))
+        }
+
+        val reminders =
+            ReminderScheduler.compute(
+                app,
+                app.repo.snapshot.value,
+                app.settings.value.copy(remindCourse = true),
+                now,
+            )
+        val reminder = reminders.first { it.courseId == course.id }
+        assertFalse(reminder.text.contains("假设检验"))
+        assertEquals(now.toLocalDate(), reminder.courseDate)
+        assertEquals(5, reminder.courseStartPeriod)
+        assertEquals(6, reminder.courseEndPeriod)
+
+        val notif =
+            Notifications.buildReminderNotification(
+                ctx = app,
+                id = 5151,
+                channel = Notifications.CHANNEL_REMINDER,
+                title = reminder.title,
+                text = reminder.text,
+                courseId = reminder.courseId,
+                courseDate = reminder.courseDate?.toString(),
+                courseStartPeriod = reminder.courseStartPeriod,
+                courseEndPeriod = reminder.courseEndPeriod,
+            )
+
+        val openIntent = shadowOf(notif.contentIntent).savedIntent
+        assertEquals(WidgetOverlayActivity::class.java.name, openIntent.component?.className)
+        assertEquals(WidgetOverlayActivity.MODE_COURSE, openIntent.getStringExtra(WidgetOverlayActivity.EXTRA_MODE))
+        assertEquals(course.id, openIntent.getStringExtra(WidgetOverlayActivity.EXTRA_COURSE_ID))
+        assertEquals(now.toLocalDate().toString(), openIntent.getStringExtra(WidgetOverlayActivity.EXTRA_DATE))
+        assertEquals(5, openIntent.getIntExtra(WidgetOverlayActivity.EXTRA_START_PERIOD, -1))
+        assertEquals(6, openIntent.getIntExtra(WidgetOverlayActivity.EXTRA_END_PERIOD, -1))
+        assertEquals(5151, openIntent.getIntExtra(ReminderAlertService.EXTRA_STOP_ALERT_ID, 0))
     }
 
     @Test
@@ -292,6 +364,9 @@ class NotifyFixesTest {
                 .putExtra(ReminderReceiver.EXTRA_TEXT, first.text)
                 .putExtra(ReminderReceiver.EXTRA_ID, 777)
                 .putExtra(ReminderReceiver.EXTRA_COURSE_ID, first.courseId)
+                .putExtra(ReminderReceiver.EXTRA_COURSE_DATE, first.courseDate?.toString())
+                .putExtra(ReminderReceiver.EXTRA_COURSE_START_PERIOD, first.courseStartPeriod)
+                .putExtra(ReminderReceiver.EXTRA_COURSE_END_PERIOD, first.courseEndPeriod)
                 .putExtra(ReminderReceiver.EXTRA_PERSISTENT, first.persistent)
                 .putExtra(ReminderReceiver.EXTRA_IMPORTANT, first.important),
         )
@@ -308,6 +383,13 @@ class NotifyFixesTest {
         assertEquals(NotificationCompat.CATEGORY_ALARM, posted.category)
         assertNotNull(posted.deleteIntent)
         assertTrue(posted.actions.any { it.title == app.getString(R.string.notif_action_stop) })
+        val postedOpenIntent = shadowOf(posted.contentIntent).savedIntent
+        assertEquals(WidgetOverlayActivity::class.java.name, postedOpenIntent.component?.className)
+        assertEquals(examCourse.id, postedOpenIntent.getStringExtra(WidgetOverlayActivity.EXTRA_COURSE_ID))
+        assertEquals(first.courseDate?.toString(), postedOpenIntent.getStringExtra(WidgetOverlayActivity.EXTRA_DATE))
+        assertEquals(first.courseStartPeriod, postedOpenIntent.getIntExtra(WidgetOverlayActivity.EXTRA_START_PERIOD, -1))
+        assertEquals(first.courseEndPeriod, postedOpenIntent.getIntExtra(WidgetOverlayActivity.EXTRA_END_PERIOD, -1))
+        assertEquals(777, postedOpenIntent.getIntExtra(ReminderAlertService.EXTRA_STOP_ALERT_ID, 0))
 
         TaskActionReceiver().onReceive(
             app,

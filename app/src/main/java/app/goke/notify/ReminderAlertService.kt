@@ -70,6 +70,9 @@ class ReminderAlertService : Service() {
         val text = intent?.getStringExtra(ReminderReceiver.EXTRA_TEXT).orEmpty()
         val taskId = intent?.getStringExtra(ReminderReceiver.EXTRA_TASK_ID)
         val courseId = intent?.getStringExtra(ReminderReceiver.EXTRA_COURSE_ID)
+        val courseDate = intent?.getStringExtra(ReminderReceiver.EXTRA_COURSE_DATE)
+        val courseStartPeriod = intent?.getIntExtra(ReminderReceiver.EXTRA_COURSE_START_PERIOD, -1)?.takeIf { it > 0 }
+        val courseEndPeriod = intent?.getIntExtra(ReminderReceiver.EXTRA_COURSE_END_PERIOD, -1)?.takeIf { it > 0 }
         val important = intent?.getBooleanExtra(ReminderReceiver.EXTRA_IMPORTANT, false) ?: false
         val targetAtMs = intent?.getLongExtra(ReminderReceiver.EXTRA_TARGET_AT_MS, 0L)?.takeIf { it > 0L }
         val channel = if (important) Notifications.CHANNEL_EXAM else Notifications.CHANNEL_REMINDER
@@ -85,6 +88,9 @@ class ReminderAlertService : Service() {
                 insistent = true,
                 important = important,
                 courseId = courseId,
+                courseDate = courseDate,
+                courseStartPeriod = courseStartPeriod,
+                courseEndPeriod = courseEndPeriod,
                 silentForService = true,
                 targetAtMs = targetAtMs,
             )
@@ -422,6 +428,9 @@ class ReminderAlertService : Service() {
             taskId: String?,
             important: Boolean,
             courseId: String?,
+            courseDate: String? = null,
+            courseStartPeriod: Int? = null,
+            courseEndPeriod: Int? = null,
             targetAtMs: Long? = null,
         ): Boolean {
             val intent =
@@ -434,6 +443,15 @@ class ReminderAlertService : Service() {
                     .putExtra(ReminderReceiver.EXTRA_IMPORTANT, important)
                     .putExtra(ReminderReceiver.EXTRA_COURSE_ID, courseId)
                     .apply {
+                        if (!courseDate.isNullOrBlank()) {
+                            putExtra(ReminderReceiver.EXTRA_COURSE_DATE, courseDate)
+                        }
+                        if (courseStartPeriod != null && courseStartPeriod > 0) {
+                            putExtra(ReminderReceiver.EXTRA_COURSE_START_PERIOD, courseStartPeriod)
+                        }
+                        if (courseEndPeriod != null && courseEndPeriod > 0) {
+                            putExtra(ReminderReceiver.EXTRA_COURSE_END_PERIOD, courseEndPeriod)
+                        }
                         if (targetAtMs != null && targetAtMs > 0L) {
                             putExtra(ReminderReceiver.EXTRA_TARGET_AT_MS, targetAtMs)
                         }

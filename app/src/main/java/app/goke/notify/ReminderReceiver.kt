@@ -14,6 +14,9 @@ class ReminderReceiver : BroadcastReceiver() {
         val id = intent.getIntExtra(EXTRA_ID, title.hashCode())
         val taskId = intent.getStringExtra(EXTRA_TASK_ID)
         val courseId = intent.getStringExtra(EXTRA_COURSE_ID)
+        val courseDate = intent.getStringExtra(EXTRA_COURSE_DATE)
+        val courseStartPeriod = intent.getIntExtra(EXTRA_COURSE_START_PERIOD, -1).takeIf { it > 0 }
+        val courseEndPeriod = intent.getIntExtra(EXTRA_COURSE_END_PERIOD, -1).takeIf { it > 0 }
         val insistent = intent.getBooleanExtra(EXTRA_PERSISTENT, false)
         val important = intent.getBooleanExtra(EXTRA_IMPORTANT, false)
         val digest = intent.getBooleanExtra(EXTRA_DIGEST, false)
@@ -29,6 +32,9 @@ class ReminderReceiver : BroadcastReceiver() {
                     taskId = taskId,
                     important = important,
                     courseId = courseId,
+                    courseDate = courseDate,
+                    courseStartPeriod = courseStartPeriod,
+                    courseEndPeriod = courseEndPeriod,
                     targetAtMs = targetAtMs,
                 )
             if (started) return
@@ -49,6 +55,9 @@ class ReminderReceiver : BroadcastReceiver() {
             insistent = insistent,
             important = important,
             courseId = courseId,
+            courseDate = courseDate,
+            courseStartPeriod = courseStartPeriod,
+            courseEndPeriod = courseEndPeriod,
             targetAtMs = targetAtMs,
         )
     }
@@ -59,6 +68,9 @@ class ReminderReceiver : BroadcastReceiver() {
         const val EXTRA_ID = "id"
         const val EXTRA_TASK_ID = "task_id"
         const val EXTRA_COURSE_ID = "course_id"
+        const val EXTRA_COURSE_DATE = "course_date"
+        const val EXTRA_COURSE_START_PERIOD = "course_start_period"
+        const val EXTRA_COURSE_END_PERIOD = "course_end_period"
         const val EXTRA_PERSISTENT = "persistent"
         const val EXTRA_IMPORTANT = "important"
         const val EXTRA_DIGEST = "digest"

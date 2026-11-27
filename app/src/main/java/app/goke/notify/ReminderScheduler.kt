@@ -41,8 +41,14 @@ data class Reminder(
     val persistent: Boolean = false,
     /** 重要提醒（如考试）：走独立高优通知渠道与最高优先级。 */
     val important: Boolean = false,
-    /** 课程提醒直达课程页。 */
+    /** 课程提醒直达悬浮课程快速预览。 */
     val courseId: String? = null,
+    /** 课程出现日期（用于悬浮课程快速预览定位周次与星期）。 */
+    val courseDate: LocalDate? = null,
+    /** 课程开始节次（调课时可能与课程默认节次不同）。 */
+    val courseStartPeriod: Int? = null,
+    /** 课程结束节次（调课时可能与课程默认节次不同）。 */
+    val courseEndPeriod: Int? = null,
     /** 每日摘要：走温和的晨间提示音渠道。 */
     val digest: Boolean = false,
     /** 目标开始节点（用于通知点击后快速稍后提醒的分段计算）。 */
@@ -119,6 +125,9 @@ class ReminderScheduler(
                     .putExtra(ReminderReceiver.EXTRA_IMPORTANT, r.important)
                     .putExtra(ReminderReceiver.EXTRA_DIGEST, r.digest)
                     .apply {
+                        r.courseDate?.let { putExtra(ReminderReceiver.EXTRA_COURSE_DATE, it.toString()) }
+                        r.courseStartPeriod?.let { putExtra(ReminderReceiver.EXTRA_COURSE_START_PERIOD, it) }
+                        r.courseEndPeriod?.let { putExtra(ReminderReceiver.EXTRA_COURSE_END_PERIOD, it) }
                         r.targetAt?.let { putExtra(ReminderReceiver.EXTRA_TARGET_AT_MS, it.atZone(zone).toInstant().toEpochMilli()) }
                     }
             val pi = PendingIntent.getBroadcast(ctx, i, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -337,11 +346,15 @@ class ReminderScheduler(
                                         .takeIf { it.isNotEmpty() }
                                 val teacher = c.teacher.trim().takeIf { st.showTeacher && it.isNotEmpty() }
                                 val weekDetail =
-                                    CourseNotes
-                                        .summaryForWeek(c.note, item.occ.originalWeek)
-                                        .replace("\n", " · ")
-                                        .trim()
-                                        .takeIf { it.isNotEmpty() }
+                                    if (isExam) {
+                                        CourseNotes
+                                            .summaryForWeek(c.note, item.occ.originalWeek)
+                                            .replace("\n", " · ")
+                                            .trim()
+                                            .takeIf { it.isNotEmpty() }
+                                    } else {
+                                        null
+                                    }
                                 // 「课前要交」的待办一并写进提醒：上课前最后一次想起来
                                 val due =
                                     snap.tasks
@@ -375,6 +388,9 @@ class ReminderScheduler(
                                             persistent = persistent,
                                             important = isExam,
                                             courseId = c.id,
+                                            courseDate = item.occ.date,
+                                            courseStartPeriod = item.occ.startPeriod,
+                                            courseEndPeriod = item.occ.endPeriod,
                                         )
                                 }
                             }
