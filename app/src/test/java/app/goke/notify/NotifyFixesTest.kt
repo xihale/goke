@@ -425,7 +425,7 @@ class NotifyFixesTest {
         assertEquals(NotificationManager.IMPORTANCE_HIGH, examChannel!!.importance)
         assertEquals(Notifications.urgentChimeUri(app), examChannel.sound)
         assertTrue(examChannel.shouldVibrate())
-        assertTrue(examChannel.canBypassDnd())
+        assertFalse(examChannel.canBypassDnd())
 
         ReminderReceiver().onReceive(
             app,
@@ -512,6 +512,63 @@ class NotifyFixesTest {
         assertTrue(night.startVolume < dayExam.startVolume)
         assertTrue(night.rampDurationMs > dayExam.rampDurationMs)
         assertEquals(1.0f, dayExam.maxVolume, 0.001f)
+    }
+
+    @Test
+    fun examReminderDefaultsAndAlertSafeguardsRespectSilentAndDnd() {
+        val defaults = Settings()
+        assertFalse(defaults.examRemindPersistent)
+        assertEquals(listOf(60, 1440), defaults.examRemindMinutesList)
+        assertEquals(listOf(60, 1440), defaults.effectiveExamRemindMinutes)
+
+        assertEquals(
+            ReminderAlertService.AlertOutput(playAudio = false, vibrate = false),
+            ReminderAlertService.resolveAlertOutput(
+                interruptionFilter = NotificationManager.INTERRUPTION_FILTER_NONE,
+                ringerMode = AudioManager.RINGER_MODE_NORMAL,
+                inCall = false,
+            ),
+        )
+        assertEquals(
+            ReminderAlertService.AlertOutput(playAudio = false, vibrate = false),
+            ReminderAlertService.resolveAlertOutput(
+                interruptionFilter = NotificationManager.INTERRUPTION_FILTER_PRIORITY,
+                ringerMode = AudioManager.RINGER_MODE_NORMAL,
+                inCall = false,
+            ),
+        )
+        assertEquals(
+            ReminderAlertService.AlertOutput(playAudio = false, vibrate = false),
+            ReminderAlertService.resolveAlertOutput(
+                interruptionFilter = NotificationManager.INTERRUPTION_FILTER_ALL,
+                ringerMode = AudioManager.RINGER_MODE_SILENT,
+                inCall = false,
+            ),
+        )
+        assertEquals(
+            ReminderAlertService.AlertOutput(playAudio = false, vibrate = true),
+            ReminderAlertService.resolveAlertOutput(
+                interruptionFilter = NotificationManager.INTERRUPTION_FILTER_ALL,
+                ringerMode = AudioManager.RINGER_MODE_VIBRATE,
+                inCall = false,
+            ),
+        )
+        assertEquals(
+            ReminderAlertService.AlertOutput(playAudio = false, vibrate = true),
+            ReminderAlertService.resolveAlertOutput(
+                interruptionFilter = NotificationManager.INTERRUPTION_FILTER_ALL,
+                ringerMode = AudioManager.RINGER_MODE_NORMAL,
+                inCall = true,
+            ),
+        )
+        assertEquals(
+            ReminderAlertService.AlertOutput(playAudio = true, vibrate = true),
+            ReminderAlertService.resolveAlertOutput(
+                interruptionFilter = NotificationManager.INTERRUPTION_FILTER_ALL,
+                ringerMode = AudioManager.RINGER_MODE_NORMAL,
+                inCall = false,
+            ),
+        )
     }
 
     @Test

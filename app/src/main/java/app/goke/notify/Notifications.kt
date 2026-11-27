@@ -27,8 +27,8 @@ import app.goke.widget.WidgetOverlayActivity
 object Notifications {
     const val CHANNEL_REMINDER = "reminder_v3"
     const val CHANNEL_DIGEST = "digest_reminder"
-    const val CHANNEL_EXAM = "exam_reminder_v3"
-    private val LEGACY_CHANNELS = listOf("reminder", "reminder_v2", "exam_reminder", "exam_reminder_v2")
+    const val CHANNEL_EXAM = "exam_reminder_v4"
+    private val LEGACY_CHANNELS = listOf("reminder", "reminder_v2", "exam_reminder", "exam_reminder_v2", "exam_reminder_v3")
     const val CHANNEL_PARCEL = "parcel"
     const val CHANNEL_HOT_WATER = "hot_water"
     const val CHANNEL_QUICK = "quickadd"
@@ -72,12 +72,11 @@ object Notifications {
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_EXAM, ctx.getString(R.string.channel_exam), NotificationManager.IMPORTANCE_HIGH).apply {
                 description = ctx.getString(R.string.channel_exam_desc)
-                setSound(urgentChimeUri(ctx), alarmAudioAttributes())
+                setSound(urgentChimeUri(ctx), notifAudioAttributes())
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0L, 500L, 250L, 500L)
                 enableLights(true)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                setBypassDnd(true)
             },
         )
         nm.createNotificationChannel(

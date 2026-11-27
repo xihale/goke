@@ -38,6 +38,12 @@ class ReminderAlertService : Service() {
         val rampDurationMs: Long,
     )
 
+    /** 根据系统静音/勿扰与通话状态解析出的实际提醒输出。 */
+    internal data class AlertOutput(
+        val playAudio: Boolean,
+        val vibrate: Boolean,
+    )
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private var mediaPlayer: MediaPlayer? = null
     private var audioFocusRequest: AudioFocusRequest? = null
@@ -135,11 +141,13 @@ class ReminderAlertService : Service() {
     private fun startLoopingAlert(important: Boolean) {
         val nm = getSystemService(NotificationManager::class.java)
         val am = getSystemService(AudioManager::class.java)
-        val inTotalSilence = nm?.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_NONE
-        if (inTotalSilence && !important) return
-
-        val inCall = am?.mode == AudioManager.MODE_IN_CALL
-        if (!inCall) {
+        val output =
+            resolveAlertOutput(
+                interruptionFilter = nm?.currentInterruptionFilter,
+                ringerMode = am?.ringerMode,
+                inCall = am?.mode == AudioManager.MODE_IN_CALL,
+            )
+        if (output.playAudio) {
             val profile =
                 computeRampProfile(
                     important = important,
@@ -149,7 +157,9 @@ class ReminderAlertService : Service() {
                 )
             startAlarmAudio(am, important, profile)
         }
-        startLoopingVibration()
+        if (output.vibrate) {
+            startLoopingVibration()
+        }
     }
 
     private fun startAlarmAudio(
@@ -342,7 +352,7 @@ class ReminderAlertService : Service() {
         const val ACTION_STOP = "app.goke.notify.ACTION_ALERT_STOP"
         const val EXTRA_STOP_ALERT_ID = "stop_alert_id"
         private const val FALLBACK_NOTIF_ID = 9004
-        private const val AUTO_STOP_MS = 180_000L
+        private const val AUTO_STOP_MS = 45_000L
         private const val RAMP_STEP_MS = 400L
         private val VIBRATION_TIMINGS = longArrayOf(0L, 140L, 160L, 260L, 220L, 480L, 340L, 560L, 560L)
         private val VIBRATION_AMPLITUDES = intArrayOf(0, 90, 0, 165, 0, 230, 0, 255, 0)
@@ -353,6 +363,24 @@ class ReminderAlertService : Service() {
             private set
 
         internal fun isQuietHours(time: LocalTime): Boolean = time.hour >= 23 || time.hour < 7
+
+        internal fun resolveAlertOutput(
+            interruptionFilter: Int?,
+            ringerMode: Int?,
+            inCall: Boolean,
+        ): AlertOutput {
+            val inDnd =
+                interruptionFilter != null &&
+                    interruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL &&
+                    interruptionFilter != NotificationManager.INTERRUPTION_FILTER_UNKNOWN
+            if (inDnd || ringerMode == AudioManager.RINGER_MODE_SILENT) {
+                return AlertOutput(playAudio = false, vibrate = false)
+            }
+            if (ringerMode == AudioManager.RINGER_MODE_VIBRATE) {
+                return AlertOutput(playAudio = false, vibrate = true)
+            }
+            return AlertOutput(playAudio = !inCall, vibrate = true)
+        }
 
         internal fun computeRampProfile(
             important: Boolean,

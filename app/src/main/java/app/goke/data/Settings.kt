@@ -25,8 +25,8 @@ data class Settings(
     val courseRemindMinutes: Int = 15,
     val courseRemindMinutesList: List<Int> = listOf(15),
     val remindExam: Boolean = true,
-    val examRemindMinutesList: List<Int> = listOf(30, 1440),
-    val examRemindPersistent: Boolean = true,
+    val examRemindMinutesList: List<Int> = listOf(60, 1440),
+    val examRemindPersistent: Boolean = false,
     val remindTask: Boolean = true,
     val remindEvent: Boolean = true,
     /** 「今日安排」摘要通知，默认关；时间由 [digestHour]/[digestMinute] 决定。 */
@@ -86,7 +86,7 @@ data class Settings(
         get() =
             Reminders
                 .normalize(null, examRemindMinutesList)
-                .ifEmpty { listOf(30, 1440) }
+                .ifEmpty { listOf(60, 1440) }
 }
 
 /** 轻量设置存储（SharedPreferences + StateFlow）。同步令牌等敏感值另存于 [SecretStore]，不进此处。 */
