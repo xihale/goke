@@ -824,61 +824,29 @@ function renderViewer(root, data) {
       };
       if (progStyle) blockStyle['--prog'] = progStyle;
 
-      if (c.kind === 'EXAM') {
-        const display = splitExamDisplay(c.name);
-        const seat = extractExamSeat(c.note);
-        const seatText = seat ? `${seat}座` : '';
-        const children = [];
-        if (span >= 2) {
-          const badgeTokens = tokenizeVerticalTitle(display.badgeShort).slice(0, 2);
-          const teacherTokens = showTeacher && c.teacher ? tokenizeVerticalTitle(c.teacher).slice(0, span >= 3 ? 4 : 3) : [];
-          const hasFooter = Boolean(roomText || seatText);
-          const maxTokens = span >= 3 ? (hasFooter ? 9 : 11) : (seatText ? 6 : 7);
-          const rawTokens = tokenizeVerticalTitle(display.title);
-          const titleTokens = rawTokens.length > maxTokens ? [...rawTokens.slice(0, maxTokens - 1), { text: '…', tcy: false }] : rawTokens;
-          const sizeClass = rawTokens.length <= 4 ? 'sz-lg' : rawTokens.length <= 6 ? 'sz-md' : 'sz-sm';
-          children.push(
-            h('div', { class: 'tt-exam-body' },
-              h('div', { class: 'tt-exam-side' },
-                h('div', { class: 'tt-exam-seal' }, badgeTokens.map((t) => h('span', { class: `v-tok${t.tcy ? ' tcy' : ''}` }, t.text))),
-                teacherTokens.length ? h('div', { class: 'tt-exam-teacher' }, teacherTokens.map((t) => h('span', { class: `v-tok${t.tcy ? ' tcy' : ''}` }, t.text))) : null),
-              h('div', { class: `tt-exam-title ${sizeClass}` }, titleTokens.map((t) => h('span', { class: `v-tok${t.tcy ? ' tcy' : ''}` }, t.text)))),
-          );
-          if (hasFooter) {
-            children.push(
-              h('div', { class: 'tt-exam-foot' },
-                roomText ? h('span', { class: 'tt-exam-room' }, roomText) : null,
-                seatText ? h('span', { class: 'tt-exam-seat' }, seatText) : null),
-            );
-          }
-        } else {
-          const loc = roomText || seatText;
-          children.push(
-            h('span', { class: 'tt-exam-pill' }, display.badgeShort),
-            h('b', {}, display.title),
-            loc ? h('span', { class: 'tt-loc' }, loc) : null,
-          );
-        }
-        grid.append(h('button', {
-          type: 'button',
-          class: `tt-block exam c${(c.colorIndex || 0) % 8}${phaseClass}${span === 1 ? ' short' : ''}`,
-          style: blockStyle,
-          'aria-label': `${display.badgeFull}：${display.title}，${WEEKDAYS[dow(o.day) - 1]}第${o.startPeriod}到${o.endPeriod}节${o.room ? `，${o.room}` : ''}`,
-          onclick: () => openCourseDetail(o),
-        }, children));
-      } else {
-        grid.append(h('button', {
-          type: 'button',
-          class: `tt-block c${(c.colorIndex || 0) % 8}${phaseClass}${span === 1 ? ' short' : ''}`,
-          style: blockStyle,
-          'aria-label': `${c.name}，${WEEKDAYS[dow(o.day) - 1]}第${o.startPeriod}到${o.endPeriod}节${o.room ? `，${o.room}` : ''}`,
-          onclick: () => openCourseDetail(o),
-        },
-        h('b', {}, c.name),
-        roomText ? h('span', { class: 'tt-loc' }, roomText) : null,
-        showTeacher ? h('span', { class: 'tt-teacher' }, c.teacher) : null,
-        o.rescheduled ? h('span', { class: 'tt-resched' }, '已调课') : null));
-      }
+      const isExam = c.kind === 'EXAM';
+      const display = isExam ? splitExamDisplay(c.name) : null;
+      const seat = isExam ? extractExamSeat(c.note) : '';
+      const seatText = seat ? `${seat}座` : '';
+      const title = display ? display.title : c.name;
+      const titleLen = [...String(title || '').trim()].length;
+      const titleClass = titleLen >= 9 ? 'tt-title-xs' : titleLen >= 6 ? 'tt-title-sm' : '';
+      const compactLead = (text) => String(text || '').replace(/^([\u4e00-\u9fffA-Za-z0-9])\s+/, '$1\u202F');
+      const roomLen = [...String(roomText || '').trim()].length;
+      const roomClass = roomLen > 0 && roomLen <= 11 ? (roomLen >= 7 ? 'tt-loc tt-room tt-room-xs' : 'tt-loc tt-room') : 'tt-loc';
+      grid.append(h('button', {
+        type: 'button',
+        class: `tt-block${isExam ? ' exam' : ''}${span === 1 ? ' short' : ''} c${(c.colorIndex || 0) % 8}${phaseClass}`,
+        style: blockStyle,
+        'aria-label': `${display ? `${display.badgeFull}：${display.title}` : c.name}，${WEEKDAYS[dow(o.day) - 1]}第${o.startPeriod}到${o.endPeriod}节${o.room ? `，${o.room}` : ''}`,
+        onclick: () => openCourseDetail(o),
+      },
+      display ? h('span', { class: 'tt-exam-pill' }, display.badgeShort) : null,
+      h('b', { class: titleClass }, compactLead(title)),
+      roomText ? h('span', { class: roomClass }, compactLead(roomText)) : null,
+      seatText && span >= 2 ? h('span', { class: 'tt-loc' }, seatText) : null,
+      showTeacher ? h('span', { class: 'tt-teacher' }, c.teacher) : null,
+      o.rescheduled ? h('span', { class: 'tt-resched' }, '已调课') : null));
     }
 
     if (week === curWeek && today >= cal.weekStart(week) && today <= cal.weekEnd(week)) {

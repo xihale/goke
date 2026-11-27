@@ -276,12 +276,6 @@ private fun RowShell(
                 progress = progress,
                 axis = CourseProgressAxis.HORIZONTAL,
             ).then(
-                if (emphasizedBorder) {
-                    Modifier.border(0.8.dp, textFg.copy(alpha = 0.28f), MaterialTheme.shapes.medium)
-                } else {
-                    Modifier
-                },
-            ).then(
                 if (stateDesc != null) {
                     Modifier.semantics { stateDescription = stateDesc }
                 } else {

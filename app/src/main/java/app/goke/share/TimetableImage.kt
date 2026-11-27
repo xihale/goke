@@ -101,174 +101,92 @@ object TimetableImage {
             p.color = colors.bg(o.course.colorIndex).toArgb()
             c.drawRoundRect(r, 14f, 14f, p)
             val fg = colors.fg(o.course.colorIndex).toArgb()
+            val roomText = if (o.room.isNotBlank()) ctx.formatRooms(o.room) else ""
+            val teacherText = if (st.showTeacher) o.course.teacher else ""
+            val innerW = (r.width() - 18f).toInt().coerceAtLeast(1)
+            var contentTop = r.top + 10f
+            val titleText: String
+            val extraMeta: List<String>
             if (o.course.isExam) {
-                p.style = Paint.Style.STROKE
-                p.strokeWidth = 2f
-                p.color = (fg and 0x00FFFFFF) or (72 shl 24)
-                c.drawRoundRect(r, 14f, 14f, p)
-                p.style = Paint.Style.FILL
-
                 val display = JxfwSync.splitExamDisplay(o.course.name, ctx.getString(R.string.kind_exam))
-                val roomText = if (o.room.isNotBlank()) ctx.formatRooms(o.room) else ""
                 val seatText =
                     JxfwSync.extractExamSeat(o.course.note)?.let {
                         "$it${ctx.getString(R.string.widget_exam_seat_suffix)}"
                     }
-                val span = ei - si + 1
-                if (span >= 2) {
-                    drawExamBookmark(c, r, fg, p, tp, display, roomText, seatText, if (st.showTeacher) o.course.teacher else "", span)
-                } else {
-                    val pillText = display.badgeShort
-                    tp.textSize = 16f
-                    tp.typeface = Typeface.DEFAULT_BOLD
-                    tp.color = fg
-                    val pillW = tp.measureText(pillText) + 16f
-                    p.color = (fg and 0x00FFFFFF) or (46 shl 24)
-                    c.drawRoundRect(RectF(r.left + 8f, r.top + 8f, r.left + 8f + pillW, r.top + 32f), 12f, 12f, p)
-                    c.drawText(pillText, r.left + 16f, r.top + 26f, tp)
-
-                    val text =
-                        buildString {
-                            append(display.title)
-                            val loc = roomText.ifBlank { seatText.orEmpty() }
-                            if (loc.isNotBlank()) append("\n").append(loc)
-                        }
-                    tp.textSize = 20f
-                    tp.typeface = Typeface.DEFAULT_BOLD
-                    val sl =
-                        StaticLayout.Builder
-                            .obtain(text, 0, text.length, tp, (r.width() - 16).toInt().coerceAtLeast(1))
-                            .setEllipsize(TextUtils.TruncateAt.END)
-                            .setMaxLines(2)
-                            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                            .build()
-                    c.save()
-                    c.translate(r.left + 8f, r.top + 38f)
-                    sl.draw(c)
-                    c.restore()
-                }
-            } else {
-                val text =
-                    buildString {
-                        append(o.course.name)
-                        if (o.room.isNotBlank()) append("\n@").append(o.room)
-                        if (st.showTeacher && o.course.teacher.isNotBlank()) append("\n").append(o.course.teacher)
-                    }
-                tp.color = fg
-                tp.textSize = 21f
+                val pillText = display.badgeShort
+                tp.textSize = 15.5f
                 tp.typeface = Typeface.DEFAULT_BOLD
+                tp.color = fg
+                val pillW = tp.measureText(pillText) + 14f
+                p.color = (fg and 0x00FFFFFF) or (46 shl 24)
+                c.drawRoundRect(RectF(r.left + 9f, contentTop, r.left + 9f + pillW, contentTop + 23f), 11.5f, 11.5f, p)
+                c.drawText(pillText, r.left + 16f, contentTop + 17f, tp)
+                contentTop += 29f
+                titleText = display.title
+                extraMeta =
+                    buildList {
+                        if (roomText.isNotBlank()) add(roomText)
+                        if (seatText != null) add(seatText)
+                        if (teacherText.isNotBlank()) add(teacherText)
+                    }
+            } else {
+                titleText = o.course.name
+                extraMeta =
+                    buildList {
+                        if (roomText.isNotBlank()) add("@$roomText")
+                        if (teacherText.isNotBlank()) add(teacherText)
+                    }
+            }
+
+            // 标题微调字号，避免末行只剩 1 个孤字
+            tp.color = fg
+            tp.typeface = Typeface.DEFAULT_BOLD
+            val titleMaxLines = (((r.bottom - contentTop - 10f) / 26f).toInt()).coerceIn(1, 4)
+            var chosenSize = 21f
+            var titleLayout: StaticLayout? = null
+            for (sz in floatArrayOf(21f, 20f, 19f, 18f)) {
+                tp.textSize = sz
                 val sl =
                     StaticLayout.Builder
-                        .obtain(text, 0, text.length, tp, (r.width() - 16).toInt())
+                        .obtain(titleText, 0, titleText.length, tp, innerW)
                         .setEllipsize(TextUtils.TruncateAt.END)
-                        .setMaxLines(((r.height() - 16) / 26).toInt().coerceAtLeast(1))
+                        .setMaxLines(titleMaxLines)
+                        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                        .build()
+                chosenSize = sz
+                titleLayout = sl
+                if (sl.lineCount <= 1) break
+                val last = sl.lineCount - 1
+                val lastStr = titleText.substring(sl.getLineStart(last), sl.getLineEnd(last)).trim()
+                if (lastStr.length != 1) break
+            }
+            tp.textSize = chosenSize
+            val sl = titleLayout!!
+            c.save()
+            c.translate(r.left + 9f, contentTop)
+            sl.draw(c)
+            c.restore()
+
+            var metaY = contentTop + sl.height + 4f
+            if (extraMeta.isNotEmpty() && metaY + 18f < r.bottom - 6f) {
+                val metaStr = extraMeta.joinToString("\n")
+                tp.color = (fg and 0x00FFFFFF) or (210 shl 24)
+                tp.typeface = Typeface.DEFAULT
+                tp.textSize = 17.5f
+                val availLines = ((r.bottom - metaY - 8f) / 21f).toInt().coerceAtLeast(1)
+                val metaLayout =
+                    StaticLayout.Builder
+                        .obtain(metaStr, 0, metaStr.length, tp, innerW)
+                        .setEllipsize(TextUtils.TruncateAt.END)
+                        .setMaxLines(availLines)
                         .setAlignment(Layout.Alignment.ALIGN_NORMAL)
                         .build()
                 c.save()
-                c.translate(r.left + 8, r.top + 8)
-                sl.draw(c)
+                c.translate(r.left + 9f, metaY)
+                metaLayout.draw(c)
                 c.restore()
             }
         }
         return bmp
-    }
-
-    private fun drawExamBookmark(
-        c: Canvas,
-        r: RectF,
-        fg: Int,
-        p: Paint,
-        tp: TextPaint,
-        display: JxfwSync.ExamDisplay,
-        roomText: String,
-        seatText: String?,
-        teacher: String,
-        span: Int,
-    ) {
-        val hasFooter = roomText.isNotBlank() || seatText != null
-        val footerH =
-            if (!hasFooter) {
-                0f
-            } else if (roomText.isNotBlank() && seatText != null) {
-                44f
-            } else {
-                32f
-            }
-        // 底部地点不铺额外背景色，保持与卡片正常底色一致，仅用细线分隔
-        if (hasFooter) {
-            val fy = r.bottom - footerH
-            p.color = (fg and 0x00FFFFFF) or (42 shl 24)
-            p.strokeWidth = 1.5f
-            c.drawLine(r.left + 10f, fy, r.right - 10f, fy, p)
-
-            tp.textAlign = Paint.Align.CENTER
-            tp.typeface = Typeface.DEFAULT
-            tp.textSize = 16.5f
-            tp.color = (fg and 0x00FFFFFF) or (220 shl 24)
-            if (roomText.isNotBlank() && seatText != null) {
-                val roomStr = TextUtils.ellipsize(roomText, tp, r.width() - 12f, TextUtils.TruncateAt.END).toString()
-                c.drawText(roomStr, r.centerX(), fy + 18f, tp)
-                tp.textSize = 15f
-                tp.color = (fg and 0x00FFFFFF) or (184 shl 24)
-                c.drawText(seatText, r.centerX(), fy + 36f, tp)
-            } else {
-                val only = roomText.ifBlank { seatText.orEmpty() }
-                val onlyStr = TextUtils.ellipsize(only, tp, r.width() - 12f, TextUtils.TruncateAt.END).toString()
-                c.drawText(onlyStr, r.centerX(), fy + 21f, tp)
-            }
-            tp.textAlign = Paint.Align.LEFT
-        }
-
-        // 左列：竖排印章胶囊 + 竖排教师
-        val sideCx = r.left + r.width() * 0.30f
-        val sealW = 28f
-        val sealH = 48f
-        val sealTop = r.top + 14f
-        p.color = (fg and 0x00FFFFFF) or (46 shl 24)
-        c.drawRoundRect(RectF(sideCx - sealW / 2f, sealTop, sideCx + sealW / 2f, sealTop + sealH), 9f, 9f, p)
-
-        tp.textAlign = Paint.Align.CENTER
-        tp.typeface = Typeface.DEFAULT_BOLD
-        tp.textSize = 16.5f
-        tp.color = fg
-        val badgeLines = JxfwSync.formatVerticalText(display.badgeShort, 2).split("\n")
-        badgeLines.forEachIndexed { idx, line ->
-            c.drawText(line, sideCx, sealTop + 20f + idx * 20f, tp)
-        }
-
-        if (teacher.isNotBlank()) {
-            tp.typeface = Typeface.DEFAULT
-            tp.textSize = 17.5f
-            tp.color = (fg and 0x00FFFFFF) or (175 shl 24)
-            val teacherLines = JxfwSync.formatVerticalText(teacher, if (span >= 3) 4 else 3).split("\n")
-            teacherLines.forEachIndexed { idx, line ->
-                c.drawText(line, sideCx, sealTop + sealH + 24f + idx * 21f, tp)
-            }
-        }
-
-        // 右列：大字竖排课名
-        val titleCx = r.left + r.width() * 0.67f
-        val tokens = JxfwSync.tokenizeVerticalTitle(display.title)
-        val maxTokens =
-            when {
-                span >= 3 -> if (hasFooter) 9 else 11
-                hasFooter -> if (seatText != null) 6 else 7
-                else -> 7
-            }
-        val titleLines = JxfwSync.formatVerticalText(display.title, maxTokens).split("\n")
-        val titleSize =
-            when {
-                tokens.size <= 4 -> 24f
-                tokens.size <= 6 -> 21.5f
-                else -> 19.5f
-            }
-        val titleStep = titleSize * 1.16f
-        tp.typeface = Typeface.DEFAULT_BOLD
-        tp.color = fg
-        titleLines.forEachIndexed { idx, tok ->
-            tp.textSize = if (tok.length > 1) titleSize * 0.78f else titleSize
-            c.drawText(tok, titleCx, sealTop + 22f + idx * titleStep, tp)
-        }
-        tp.textAlign = Paint.Align.LEFT
     }
 }

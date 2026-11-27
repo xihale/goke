@@ -280,48 +280,30 @@ dialog.sheet::backdrop { background: rgba(14, 26, 22, .5); backdrop-filter: blur
 }
 .tt-block {
   position: relative; z-index: 1; justify-self: start; width: calc(100% / var(--lanes) - 4px); margin: 2px 2px 2px calc(100% / var(--lanes) * var(--lane) + 2px);
-  padding: 5px 5px; border: 0; border-radius: 12px; text-align: left; display: flex; flex-direction: column; gap: 2px; overflow: hidden; line-height: 1.25;
+  padding: 5px 4px; border: 0; border-radius: 12px; text-align: left; display: flex; flex-direction: column; gap: 2px; overflow: hidden; line-height: 1.25;
   transition: transform .15s var(--ease), box-shadow .15s;
 }
 .tt-block:hover { transform: scale(1.02); box-shadow: var(--shadow-md); z-index: 2; }
-.tt-block b { font-size: 12px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; overflow-wrap: anywhere; }
-.tt-block span { font-size: 10.5px; opacity: .78; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.tt-block b { font-size: 11.5px; line-height: 1.24; text-wrap: balance; word-break: break-all; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
+.tt-block b.tt-title-sm { font-size: 11px; line-height: 1.22; }
+.tt-block b.tt-title-xs { font-size: 10.5px; line-height: 1.2; }
+.tt-block span { font-size: 10px; opacity: .82; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.tt-block span.tt-room { display: block; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 9.5px; letter-spacing: -.2px; }
+.tt-block span.tt-room.tt-room-xs { font-size: 8.8px; letter-spacing: -.3px; }
 .tt-block.short b { -webkit-line-clamp: 2; line-clamp: 2; }
-.tt-block.short span { display: none; }
+.tt-block.short span:not(.tt-exam-pill) { display: none; }
 .tt-block.moved { outline: 2px dashed currentColor; outline-offset: -4px; }
 .tt-block.past { opacity: .55; }
-.tt-block.exam { box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent); }
-.tt-block.exam:not(.short) { padding: 0; gap: 0; }
-.tt-exam-body { flex: 1; min-height: 0; width: 100%; display: flex; align-items: stretch; gap: 2px; padding: 6px 3.5px 3px; }
-.tt-exam-side { display: flex; flex-direction: column; align-items: center; gap: 5px; padding-top: 1px; }
-.tt-exam-seal { display: flex; flex-direction: column; align-items: center; padding: 2.5px 2.5px; border-radius: 4.5px; background: color-mix(in srgb, currentColor 18%, transparent); font-size: 8.5px; line-height: 10px; font-weight: 700; }
-.tt-exam-teacher { display: flex; flex-direction: column; align-items: center; font-size: 8.5px; line-height: 10px; opacity: .68; }
-.tt-exam-title { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; font-weight: 700; text-align: center; }
-.tt-exam-title.sz-lg { font-size: 12px; line-height: 14px; }
-.tt-exam-title.sz-md { font-size: 11px; line-height: 12.5px; }
-.tt-exam-title.sz-sm { font-size: 10px; line-height: 11.2px; }
-.v-tok { display: block; white-space: nowrap; }
-.v-tok.tcy { font-size: .78em; line-height: 1.15; letter-spacing: -.4px; }
-.tt-exam-foot { width: 100%; display: flex; flex-direction: column; align-items: center; padding: 3.5px 3px; border-top: 1px solid color-mix(in srgb, currentColor 16%, transparent); }
-.tt-exam-room { width: 100%; font-size: 8.5px; line-height: 10px; font-weight: 600; opacity: .88; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tt-exam-seat { width: 100%; font-size: 8px; line-height: 9.5px; opacity: .72; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tt-exam-pill { align-self: flex-start; padding: 1px 4.5px; border-radius: 999px; font-size: 9px; line-height: 10px; font-weight: 700; background: color-mix(in srgb, currentColor 18%, transparent); }
+.tt-exam-pill { align-self: flex-start; padding: 1px 5px; border-radius: 999px; font-size: 9px !important; line-height: 11px; font-weight: 700; opacity: 1 !important; background: color-mix(in srgb, currentColor 18%, transparent); }
 .tt-empty { text-align: center; color: var(--on-surface-variant); padding: 16px; font-size: 14px; }
 @media (min-width: 700px) {
   .tt-grid { --row-h: 64px; grid-template-columns: 56px repeat(7, minmax(0, 1fr)); }
   .tt-wrap { padding: 12px 12px 16px; }
-  .tt-block { padding: 8px 12px; border-radius: 16px; margin-top: 3px; margin-bottom: 3px; }
-  .tt-block.exam:not(.short) { padding: 8px 10px; gap: 3px; }
-  .tt-exam-body { flex-direction: column; padding: 0; gap: 3px; }
-  .tt-exam-side { flex-direction: row; align-items: center; justify-content: space-between; width: 100%; gap: 6px; padding-top: 0; }
-  .tt-exam-seal { flex-direction: row; padding: 2px 6px; border-radius: 999px; font-size: 10.5px; line-height: 12px; }
-  .tt-exam-teacher { flex-direction: row; font-size: 11px; line-height: 13px; }
-  .tt-exam-title { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: flex-start; text-align: left; font-size: 14px !important; line-height: 18px !important; }
-  .tt-exam-foot { border-top: 0; padding: 0; align-items: flex-start; }
-  .tt-exam-room, .tt-exam-seat { text-align: left; font-size: 12px; line-height: 15px; }
-  .tt-block b { font-size: 15px; }
-  .tt-block span { font-size: 12.5px; }
-  .tt-block.short span { display: -webkit-box; }
+  .tt-block { padding: 8px 12px; border-radius: 16px; margin-top: 3px; margin-bottom: 3px; gap: 3px; }
+  .tt-block b, .tt-block b.tt-title-sm, .tt-block b.tt-title-xs { font-size: 14.5px; line-height: 1.28; }
+  .tt-block span, .tt-block span.tt-room, .tt-block span.tt-room.tt-room-xs { font-size: 12px; letter-spacing: 0; }
+  .tt-exam-pill { padding: 2px 6px; font-size: 10.5px !important; line-height: 12px; }
+  .tt-block.short span:not(.tt-exam-pill) { display: -webkit-box; }
   .tt-head b { font-size: 15px; }
   .tt-head span { font-size: 12px; }
   .tt-time span { font-size: 11px; }
