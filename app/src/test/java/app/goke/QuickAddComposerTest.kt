@@ -22,18 +22,28 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
+import app.goke.core.change.Change
 import app.goke.core.model.Course
 import app.goke.core.model.EventKind
 import app.goke.core.model.Freq
 import app.goke.core.model.Semester
 import app.goke.core.model.Snapshot
+import app.goke.core.model.Task
+import app.goke.core.todo.Bucket
 import app.goke.core.todo.QuickAdd
+import app.goke.core.todo.QuickAddConfig
+import app.goke.core.todo.QuickBatchItem
+import app.goke.core.todo.QuickToken
 import app.goke.core.todo.QuickTokenKind
 import app.goke.data.Settings
+import app.goke.data.SettingsStore
 import app.goke.ui.screens.QuickAddComposer
+import app.goke.ui.screens.QuickOverride
 import app.goke.ui.screens.QuickPanel
 import app.goke.ui.screens.WhenPick
+import app.goke.ui.screens.buildQuickTasks
 import app.goke.ui.screens.rewriteQuickField
+import app.goke.ui.screens.tokenRanges
 import app.goke.ui.theme.GokeTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -240,5 +250,163 @@ class QuickAddComposerTest {
         rule.waitForIdle()
         rule.onNodeWithContentDescription(app.getString(R.string.confirm)).assertIsDisplayed().performClick()
         assertTrue(submitted)
+    }
+
+    @Test
+    fun remindPanelInsertsAndTogglesRemindTokens() {
+        val now = LocalDateTime.of(2026, 11, 26, 16, 0)
+        var latest = ""
+        rule.setContent {
+            GokeTheme(Settings()) {
+                var field by remember { mutableStateOf(TextFieldValue("买牛奶")) }
+                var toolPanel by remember { mutableStateOf<QuickPanel?>(null) }
+                val focus = remember { FocusRequester() }
+                val parsed = remember(field.text) { if (field.text.isBlank()) null else QuickAdd.parse(field.text, now) }
+                latest = field.text
+                Column {
+                    QuickAddComposer(
+                        snap = Snapshot(),
+                        now = now,
+                        field = field,
+                        onFieldChange = { field = it },
+                        parsed = parsed,
+                        highlight = VisualTransformation.None,
+                        focusRequester = focus,
+                        toolPanel = toolPanel,
+                        onToolPanelChange = { toolPanel = it },
+                        panelWhen = null,
+                        panelRemindList = emptyList(),
+                        panelFreq = null,
+                        panelInterval = 1,
+                        panelByDays = emptySet(),
+                        panelByMonths = emptySet(),
+                        expandLabel = app.getString(R.string.detail_editor_full_edit),
+                        onExpand = {},
+                        submitLabel = app.getString(R.string.confirm),
+                        canSubmit = true,
+                        onSubmit = {},
+                        onOpenWhenPanel = {},
+                        onRewriteToken = { kinds, add ->
+                            field = rewriteQuickField(field.text, parsed?.tokens.orEmpty(), kinds, add)
+                        },
+                    )
+                }
+            }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription(app.getString(R.string.quick_add_remind)).performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithText("提醒").assertIsDisplayed()
+        rule.onNodeWithText("提醒!").assertIsDisplayed().performClick()
+        rule.waitForIdle()
+        assertEquals("买牛奶 提醒! ", latest)
+
+        rule.onNodeWithContentDescription(app.getString(R.string.quick_add_remind)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(app.getString(R.string.quick_add_remind_needs_time)).assertIsDisplayed()
+
+        rule.onNodeWithText("提醒!").performClick()
+        rule.waitForIdle()
+        assertEquals("买牛奶", latest)
+    }
+
+    @Test
+    fun chineseTimeDisplaysOnToolbar() {
+        val now = LocalDateTime.of(2026, 11, 26, 16, 0)
+        rule.setContent {
+            GokeTheme(Settings()) {
+                val field = remember { TextFieldValue("交报告 明天下午三点四十五") }
+                val focus = remember { FocusRequester() }
+                Column {
+                    QuickAddComposer(
+                        snap = Snapshot(),
+                        now = now,
+                        field = field,
+                        onFieldChange = {},
+                        parsed = QuickAdd.parse(field.text, now),
+                        highlight = VisualTransformation.None,
+                        focusRequester = focus,
+                        toolPanel = null,
+                        onToolPanelChange = {},
+                        panelWhen = null,
+                        panelRemindList = emptyList(),
+                        panelFreq = null,
+                        panelInterval = 1,
+                        panelByDays = emptySet(),
+                        panelByMonths = emptySet(),
+                        expandLabel = app.getString(R.string.detail_editor_full_edit),
+                        onExpand = {},
+                        submitLabel = app.getString(R.string.confirm),
+                        canSubmit = true,
+                        onSubmit = {},
+                        onOpenWhenPanel = {},
+                        onRewriteToken = { _, _ -> },
+                    )
+                }
+            }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithText("明天 15:45").assertIsDisplayed()
+    }
+
+    @Test
+    fun tokenRangesHighlightsOnlyTrailingRemindKeyword() {
+        val text = "提醒小明交作业 提醒"
+        val parsed = QuickAdd.parse(text, LocalDateTime.of(2026, 11, 26, 16, 0))
+        val ranges = tokenRanges(text, parsed.tokens)
+        assertEquals(1, ranges.size)
+        val (token, range) = ranges.single()
+        assertEquals(QuickTokenKind.REMIND, token.kind)
+        assertEquals(8..9, range)
+    }
+
+    @Test
+    fun buildQuickTasksMapsParsedRemindAndRespectsOverride() {
+        val now = LocalDateTime.of(2026, 11, 26, 16, 0)
+        val parsed = QuickAdd.parse("交作业 明天下午3点 提醒!", now)
+        val items = listOf(QuickBatchItem(parsed, null))
+
+        val csParsed = buildQuickTasks(Snapshot(), items, null, Bucket.TODAY, now, "add")
+        val tParsed = (csParsed.changes.single() as Change.Add).after as Task
+        assertEquals(listOf(0, 15), tParsed.remindMinutesList)
+        assertEquals(0, tParsed.remindMinutes)
+        assertTrue(tParsed.remindPersistent)
+
+        val ov = QuickOverride(whenPick = null, remindList = listOf(5, 30), persistent = false, repeat = null)
+        val csOverride = buildQuickTasks(Snapshot(), items, null, Bucket.TODAY, now, "add", override = ov)
+        val tOverride = (csOverride.changes.single() as Change.Add).after as Task
+        assertEquals(listOf(5, 30), tOverride.remindMinutesList)
+        assertEquals(5, tOverride.remindMinutes)
+        assertEquals(false, tOverride.remindPersistent)
+    }
+
+    @Test
+    fun settingsStoreRoundTripsQuickAddConfig() {
+        val store = SettingsStore(app)
+        assertEquals(QuickAddConfig.DEFAULT, store.value.quickAddConfig)
+
+        store.update {
+            it.copy(
+                quickRemindKeyword = "  闹钟  ",
+                quickRemindMinutesList = listOf(30, 5, 30),
+                quickRemindPersistentMinutesList = listOf(10, 0),
+                quickRemindBangPersistent = false,
+            )
+        }
+        val reloaded = SettingsStore(app).value
+        assertEquals("闹钟", reloaded.quickRemindKeyword)
+        assertEquals(listOf(5, 30), reloaded.quickRemindMinutesList)
+        assertEquals(listOf(0, 10), reloaded.quickRemindPersistentMinutesList)
+        assertEquals(false, reloaded.quickRemindBangPersistent)
+        assertEquals(
+            QuickAddConfig(
+                remindKeyword = "闹钟",
+                remindMinutesList = listOf(5, 30),
+                persistentRemindMinutesList = listOf(0, 10),
+                bangPersistent = false,
+            ),
+            reloaded.quickAddConfig,
+        )
     }
 }

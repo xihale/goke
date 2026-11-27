@@ -59,6 +59,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -98,6 +99,7 @@ import app.goke.BuildConfig
 import app.goke.R
 import app.goke.core.jxfw.JxfwParse
 import app.goke.core.jxfw.TzcsParse
+import app.goke.core.todo.QuickAddConfig
 import app.goke.data.DarkMode
 import app.goke.data.DownloadError
 import app.goke.data.InstallLaunchResult
@@ -659,6 +661,224 @@ fun RemindersScreen(onBack: () -> Unit) {
             }
             FormSection(stringResource(R.string.reminders_section_delivery)) {
                 ReliabilityNavRow(permOkCount = { permOkCount }) { nav.push(Route.Reliability) }
+            }
+            FormSection(stringResource(R.string.reminders_section_quick_add)) {
+                val qCfg = st.quickAddConfig
+                val kw = qCfg.normalizedKeyword
+                var kwDlg by remember { mutableStateOf(false) }
+                var normalDlg by remember { mutableStateOf(false) }
+                var bangDlg by remember { mutableStateOf(false) }
+
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                ) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (kw.isNotEmpty()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    kw,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Text(
+                                    "→",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    remindSummaryLabel(qCfg.effectiveRemindMinutes),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    "$kw!",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color =
+                                        if (st.quickRemindBangPersistent) {
+                                            MaterialTheme.colorScheme.error
+                                        } else {
+                                            MaterialTheme.colorScheme.primary
+                                        },
+                                )
+                                Text(
+                                    "→",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    remindSummaryLabel(qCfg.effectivePersistentRemindMinutes),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                if (st.quickRemindBangPersistent) {
+                                    Icon(
+                                        Icons.Rounded.NotificationsActive,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Text(
+                                        stringResource(R.string.remind_persistent),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                            }
+                        } else {
+                            Text(
+                                stringResource(R.string.quick_remind_preview_disabled),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                ValueRow(
+                    stringResource(R.string.quick_remind_keyword),
+                    kw.ifEmpty { stringResource(R.string.quick_remind_keyword_off) },
+                    onClick = { kwDlg = true },
+                )
+                if (kwDlg) {
+                    var draft by remember { mutableStateOf(kw) }
+                    MintAlertDialog(
+                        onDismissRequest = { kwDlg = false },
+                        title = { Text(stringResource(R.string.quick_remind_keyword)) },
+                        text = {
+                            TonalField(
+                                label = stringResource(R.string.quick_remind_keyword),
+                                value = draft,
+                                onChange = { raw ->
+                                    val cleaned = raw.replace(Regex("[\\s!！#@/]"), "").take(8)
+                                    draft = cleaned
+                                },
+                                supporting = stringResource(R.string.quick_remind_keyword_hint),
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    val saved = draft.replace(Regex("[\\s!！#@/]"), "").take(8)
+                                    app.settings.update { it.copy(quickRemindKeyword = saved) }
+                                    kwDlg = false
+                                },
+                            ) { Text(stringResource(R.string.ok)) }
+                        },
+                        dismissButton = { TextButton(onClick = { kwDlg = false }) { Text(stringResource(R.string.cancel)) } },
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = kw.isNotEmpty(),
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    Column {
+                        ValueRow(
+                            stringResource(R.string.quick_remind_normal_timing, kw),
+                            remindSummaryLabel(qCfg.effectiveRemindMinutes),
+                            onClick = { normalDlg = true },
+                        )
+                        if (normalDlg) {
+                            RemindPickDialog(
+                                initial = qCfg.effectiveRemindMinutes,
+                                hasTime = true,
+                                initialPersistent = false,
+                                onDismiss = { normalDlg = false },
+                                noneLabel = null,
+                                allowEmpty = false,
+                                showPersistent = false,
+                            ) { list, _ ->
+                                if (list.isNotEmpty()) {
+                                    app.settings.update { it.copy(quickRemindMinutesList = list) }
+                                }
+                                normalDlg = false
+                            }
+                        }
+
+                        val bangSummary =
+                            if (st.quickRemindBangPersistent) {
+                                "${remindSummaryLabel(qCfg.effectivePersistentRemindMinutes)} · ${stringResource(R.string.remind_persistent)}"
+                            } else {
+                                remindSummaryLabel(qCfg.effectivePersistentRemindMinutes)
+                            }
+                        ValueRow(
+                            stringResource(R.string.quick_remind_bang_timing, kw),
+                            bangSummary,
+                            onClick = { bangDlg = true },
+                        )
+                        if (bangDlg) {
+                            RemindPickDialog(
+                                initial = qCfg.effectivePersistentRemindMinutes,
+                                hasTime = true,
+                                initialPersistent = st.quickRemindBangPersistent,
+                                onDismiss = { bangDlg = false },
+                                noneLabel = null,
+                                allowEmpty = false,
+                                showPersistent = true,
+                            ) { list, persistent ->
+                                if (list.isNotEmpty()) {
+                                    app.settings.update {
+                                        it.copy(
+                                            quickRemindPersistentMinutesList = list,
+                                            quickRemindBangPersistent = persistent,
+                                        )
+                                    }
+                                }
+                                bangDlg = false
+                            }
+                        }
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = qCfg != QuickAddConfig.DEFAULT,
+                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                ) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .mintClickable(pressedScale = 0.98f, role = Role.Button) {
+                                app.settings.update {
+                                    it.copy(
+                                        quickRemindKeyword = QuickAddConfig.DEFAULT_REMIND_KEYWORD,
+                                        quickRemindMinutesList = QuickAddConfig.DEFAULT_REMIND_MINUTES,
+                                        quickRemindPersistentMinutesList = QuickAddConfig.DEFAULT_REMIND_MINUTES,
+                                        quickRemindBangPersistent = true,
+                                    )
+                                }
+                            }.padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            Icons.Rounded.RestartAlt,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            stringResource(R.string.quick_remind_reset),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
             }
         }
     }

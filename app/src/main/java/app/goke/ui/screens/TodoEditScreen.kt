@@ -259,6 +259,7 @@ fun TodoEditScreen(
         }
     var remindList by remember { mutableStateOf(initRemindList) }
     var persistent by remember { mutableStateOf(if (existing != null) existing.remindPersistent else (remindPersistentArg && initRemindList.isNotEmpty())) }
+    var remindEdited by remember { mutableStateOf(existing != null || initRemindList.isNotEmpty()) }
     var freq by remember { mutableStateOf(if (existing != null) existing.repeat?.freq else initFreq) }
     var interval by remember { mutableIntStateOf(if (existing != null) (existing.repeat?.interval ?: 1) else repeatIntervalArg.coerceAtLeast(1)) }
     var until by remember { mutableStateOf(if (existing != null) existing.repeat?.until else initUntil) }
@@ -334,8 +335,32 @@ fun TodoEditScreen(
     val pickFile = rememberFileAttachmentPicker { a -> attachments = attachments + a }
 
     val text = field.text
-    val parsed = remember(text) { if (text.isBlank()) null else QuickAdd.parse(text, baseNow) }
-    val tokens = remember(parsed) { parsed?.tokens?.filter { it.kind == QuickTokenKind.DATE || it.kind == QuickTokenKind.TIME }.orEmpty() }
+    val parsed =
+        remember(text, settings.quickAddConfig) {
+            if (text.isBlank()) null else QuickAdd.parse(text, baseNow, settings.quickAddConfig)
+        }
+    val tokens =
+        remember(parsed) {
+            parsed
+                ?.tokens
+                ?.filter {
+                    it.kind == QuickTokenKind.DATE ||
+                        it.kind == QuickTokenKind.TIME ||
+                        it.kind == QuickTokenKind.REMIND
+                }.orEmpty()
+        }
+    val effectiveRemindList =
+        if (existing == null && !remindEdited) {
+            parsed?.remindMinutesList.orEmpty()
+        } else {
+            remindList
+        }
+    val effectivePersistent =
+        if (existing == null && !remindEdited) {
+            parsed?.remindPersistent == true && effectiveRemindList.isNotEmpty()
+        } else {
+            persistent
+        }
     val textWhen =
         remember(parsed, existing, text) {
             // 已有无日期任务刚打开时，不因标题自带日期词而擅自套上日期；仅用户修改标题后才识别
@@ -380,7 +405,9 @@ fun TodoEditScreen(
                 ?.toIntOrNull()
                 ?.coerceIn(1, 3) ||
             listId != existing?.listId || priority != (existing?.priority ?: 0) ||
-            remindList != existing?.effectiveRemindMinutes.orEmpty() || persistent != (existing?.remindPersistent == true) || freq != existing?.repeat?.freq ||
+            effectiveRemindList != existing?.effectiveRemindMinutes.orEmpty() ||
+            effectivePersistent != (existing?.remindPersistent == true) ||
+            freq != existing?.repeat?.freq ||
             linkedCourseId != initialCourseId || linkedCourseWeek != initialCourseWeek || dueBeforeNextClass != initialBeforeClass ||
             (
                 freq != null &&
@@ -495,9 +522,9 @@ fun TodoEditScreen(
                 blockMinutes = blockMinutes,
                 due = dueAt,
                 dueHasTime = hasTime,
-                remindMinutes = remindList.firstOrNull(),
-                remindMinutesList = remindList,
-                remindPersistent = remindList.isNotEmpty() && persistent,
+                remindMinutes = effectiveRemindList.firstOrNull(),
+                remindMinutesList = effectiveRemindList,
+                remindPersistent = effectiveRemindList.isNotEmpty() && effectivePersistent,
                 repeat =
                     freq?.let { f ->
                         (base.repeat?.takeIf { it.freq == f } ?: Recurrence(f)).copy(
@@ -652,7 +679,7 @@ fun TodoEditScreen(
                 WhenRow(
                     whenPick = whenPick,
                     today = today,
-                    remindList = remindList,
+                    remindList = effectiveRemindList,
                     freq = freq,
                     interval = interval,
                     until = until,
@@ -665,6 +692,7 @@ fun TodoEditScreen(
                         picked = null
                         cleared = true
                         dueBeforeNextClass = false
+                        remindEdited = true
                         remindList = emptyList()
                         persistent = false
                         freq = null
@@ -1059,8 +1087,8 @@ fun TodoEditScreen(
             initial = whenPick,
             defaultDate = whenPick?.date ?: argDate ?: today,
             defaultMinutes = settings.defaultBlockMinutes,
-            initialRemindList = remindList,
-            initialPersistent = persistent,
+            initialRemindList = effectiveRemindList,
+            initialPersistent = effectivePersistent,
             initialFreq = freq,
             initialInterval = interval,
             initialUntil = until,
@@ -1070,6 +1098,7 @@ fun TodoEditScreen(
             onDismiss = { timeSheet = false },
             onPick = { r ->
                 val wp = r.whenPick
+                remindEdited = true
                 if (wp == null) {
                     picked = null
                     cleared = true

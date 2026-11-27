@@ -362,6 +362,14 @@ internal val SETTINGS_SEARCH_SPECS: List<SettingsSearchSpec> =
             route = Route.Reminders,
         ),
         SettingsSearchSpec(
+            id = "quick_add_remind",
+            titleRes = R.string.reminders_section_quick_add,
+            sectionRes = R.string.reminders_title,
+            keywordsRes = R.string.settings_search_kw_quick_add_remind,
+            icon = Icons.Rounded.NotificationsActive,
+            route = Route.Reminders,
+        ),
+        SettingsSearchSpec(
             id = "remind_digest",
             titleRes = R.string.remind_digest,
             sectionRes = R.string.reminders_title,

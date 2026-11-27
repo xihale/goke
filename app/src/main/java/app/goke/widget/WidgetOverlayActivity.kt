@@ -130,6 +130,7 @@ import app.goke.core.recurrence.CourseExpander
 import app.goke.core.time.SemesterCalendar
 import app.goke.core.time.WeekSets
 import app.goke.core.todo.QuickAdd
+import app.goke.core.todo.QuickAddConfig
 import app.goke.core.todo.QuickBatchItem
 import app.goke.core.todo.QuickTokenKind
 import app.goke.core.todo.TaskLogic
@@ -614,6 +615,7 @@ internal fun WidgetOverlayRoot(
                                 OverlayQuickAddCard(
                                     snap = live,
                                     defaultBlockMinutes = settings.defaultBlockMinutes,
+                                    quickAddConfig = settings.quickAddConfig,
                                     initialCourseId = activeTarget.initialCourseId,
                                     initialText = activeTarget.initialText,
                                     initialCourseWeek = activeTarget.initialCourseWeek,
@@ -770,6 +772,7 @@ private fun OverlayQuickAddCard(
     initialCourseId: String?,
     initialText: String,
     initialCourseWeek: Int? = null,
+    quickAddConfig: QuickAddConfig = QuickAddConfig.DEFAULT,
     registerDismissHook: ((Pair<Boolean, () -> Unit>?) -> Unit),
     onExpand: (String) -> Unit,
     onCommit: (ChangeSet, String) -> Unit,
@@ -795,15 +798,19 @@ private fun OverlayQuickAddCard(
     var panelByMonths by remember { mutableStateOf(emptySet<Int>()) }
     var confirmDiscard by remember { mutableStateOf(false) }
 
-    val parsed = remember(text, now) { if (text.isBlank()) null else QuickAdd.parse(text, now) }
+    val parsed =
+        remember(text, now, quickAddConfig) {
+            if (text.isBlank()) null else QuickAdd.parse(text, now, quickAddConfig)
+        }
     val tokens = parsed?.tokens.orEmpty()
+    val remindHighlightColor = if (parsed?.remindPersistent == true) scheme.error else scheme.primary
     val highlight =
-        remember(tokens, scheme.primary, scheme.error, scheme.tertiary, scheme.secondary, colors) {
+        remember(tokens, scheme.primary, scheme.error, scheme.tertiary, scheme.secondary, remindHighlightColor, colors) {
             if (tokens.isEmpty()) {
                 VisualTransformation.None
             } else {
                 val prioColor = colors.priorityColor(parsed?.priority ?: 3) ?: scheme.error
-                TokenHighlight(tokens, scheme.primary, prioColor, scheme.tertiary, scheme.secondary)
+                TokenHighlight(tokens, scheme.primary, prioColor, scheme.tertiary, scheme.secondary, remindHighlightColor)
             }
         }
     val focusRequester = remember { FocusRequester() }
@@ -823,7 +830,7 @@ private fun OverlayQuickAddCard(
     }
 
     fun submit() {
-        val items = QuickAdd.parseLines(text, now)
+        val items = QuickAdd.parseLines(text, now, quickAddConfig)
         if (items.isEmpty()) return
         val first = items.first().result
         val desc = ctx.getString(R.string.add_task_desc, first.title)
@@ -905,16 +912,24 @@ private fun OverlayQuickAddCard(
         panelByDays = panelByDays,
         panelByMonths = panelByMonths,
         linkedCourse = linkedCourse,
+        panelPersistent = panelPersistent,
+        quickAddConfig = quickAddConfig,
         expandLabel = stringResource(R.string.widget_overlay_expand_app),
         onExpand = { onExpand(text) },
         submitLabel = stringResource(R.string.widgets_add_action),
         canSubmit = hasBodyText,
         onSubmit = { submit() },
         onOpenWhenPanel = { whenPanel = true },
+        onClearPanelRemind = {
+            panelRemindList = emptyList()
+            panelPersistent = false
+        },
         onRewriteToken = ::rewriteToken,
     )
 
     if (whenPanel) {
+        val initialRemind = panelRemindList.ifEmpty { parsed?.remindMinutesList.orEmpty() }
+        val initialPers = if (panelRemindList.isNotEmpty()) panelPersistent else (parsed?.remindPersistent == true)
         WhenPanel(
             initial =
                 panelWhen ?: parsed?.due?.let { d ->
@@ -922,8 +937,8 @@ private fun OverlayQuickAddCard(
                 },
             defaultDate = now.toLocalDate(),
             defaultMinutes = defaultBlockMinutes,
-            initialRemindList = panelRemindList,
-            initialPersistent = panelPersistent,
+            initialRemindList = initialRemind,
+            initialPersistent = initialPers,
             initialFreq = panelFreq,
             initialInterval = panelInterval,
             initialUntil = panelUntil,
@@ -940,8 +955,18 @@ private fun OverlayQuickAddCard(
                 panelUntil = r.until
                 panelByDays = r.byDays
                 panelByMonths = r.byMonths
-                if (r.whenPick == null && r.remindMinutesList.isEmpty() && r.freq == null) {
-                    rewriteToken(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME), null)
+                val toStrip =
+                    buildSet {
+                        if (r.whenPick == null && r.remindMinutesList.isEmpty() && r.freq == null) {
+                            add(QuickTokenKind.DATE)
+                            add(QuickTokenKind.TIME)
+                        }
+                        if (r.remindMinutesList.isEmpty() && parsed?.remindMinutesList?.isNotEmpty() == true) {
+                            add(QuickTokenKind.REMIND)
+                        }
+                    }
+                if (toStrip.isNotEmpty()) {
+                    rewriteToken(toStrip, null)
                 }
                 whenPanel = false
             },

@@ -3,6 +3,7 @@ package app.goke.data
 import android.content.Context
 import android.content.SharedPreferences
 import app.goke.core.model.Reminders
+import app.goke.core.todo.QuickAddConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -61,7 +62,20 @@ data class Settings(
     val pendingUpdateApkSha256: String = "",
     /** 已在弹窗中点过「以后再说」的版本，同版本不再重复自动弹窗，仍保留在设置页提示。 */
     val dismissedUpdateVersion: String = "",
+    val quickRemindKeyword: String = QuickAddConfig.DEFAULT_REMIND_KEYWORD,
+    val quickRemindMinutesList: List<Int> = QuickAddConfig.DEFAULT_REMIND_MINUTES,
+    val quickRemindPersistentMinutesList: List<Int> = QuickAddConfig.DEFAULT_REMIND_MINUTES,
+    val quickRemindBangPersistent: Boolean = true,
 ) {
+    val quickAddConfig: QuickAddConfig
+        get() =
+            QuickAddConfig(
+                remindKeyword = quickRemindKeyword,
+                remindMinutesList = quickRemindMinutesList,
+                persistentRemindMinutesList = quickRemindPersistentMinutesList,
+                bangPersistent = quickRemindBangPersistent,
+            )
+
     val effectiveCourseRemindMinutes: List<Int>
         get() =
             Reminders
@@ -84,29 +98,20 @@ class SettingsStore(
     val flow: StateFlow<Settings> = _flow.asStateFlow()
     val value: Settings get() = _flow.value
 
+    private fun readMinutesList(
+        key: String,
+        fallback: List<Int>,
+    ): List<Int> {
+        val raw = sp.getString(key, null) ?: return fallback
+        val parsed = raw.split(',').mapNotNull { it.trim().toIntOrNull() }
+        return Reminders.normalize(null, parsed).ifEmpty { fallback }
+    }
+
     private fun read(): Settings {
         val d = Settings()
         val courseRemind = sp.getInt("courseRemindMinutes", d.courseRemindMinutes).coerceAtLeast(0)
-        val rawRemindList = sp.getString("courseRemindMinutesList", null)
-        val parsedRemindList =
-            rawRemindList
-                ?.split(',')
-                ?.mapNotNull { it.trim().toIntOrNull() }
-                ?.filter { it >= 0 }
-                ?.distinct()
-                ?.sorted()
-                ?.takeIf { it.isNotEmpty() }
-                ?: listOf(courseRemind)
-        val rawExamRemindList = sp.getString("examRemindMinutesList", null)
-        val parsedExamRemindList =
-            rawExamRemindList
-                ?.split(',')
-                ?.mapNotNull { it.trim().toIntOrNull() }
-                ?.filter { it >= 0 }
-                ?.distinct()
-                ?.sorted()
-                ?.takeIf { it.isNotEmpty() }
-                ?: d.examRemindMinutesList
+        val parsedRemindList = readMinutesList("courseRemindMinutesList", listOf(courseRemind))
+        val parsedExamRemindList = readMinutesList("examRemindMinutesList", d.examRemindMinutesList)
         return Settings(
             themeSource = runCatching { ThemeSource.valueOf(sp.getString("themeSource", d.themeSource.name)!!) }.getOrDefault(d.themeSource),
             preset = sp.getString("preset", d.preset)!!,
@@ -144,6 +149,10 @@ class SettingsStore(
             pendingUpdateApkSize = sp.getLong("pendingUpdateApkSize", d.pendingUpdateApkSize),
             pendingUpdateApkSha256 = sp.getString("pendingUpdateApkSha256", d.pendingUpdateApkSha256)!!,
             dismissedUpdateVersion = sp.getString("dismissedUpdateVersion", d.dismissedUpdateVersion)!!,
+            quickRemindKeyword = (sp.getString("quickRemindKeyword", d.quickRemindKeyword) ?: d.quickRemindKeyword).trim(),
+            quickRemindMinutesList = readMinutesList("quickRemindMinutesList", d.quickRemindMinutesList),
+            quickRemindPersistentMinutesList = readMinutesList("quickRemindPersistentMinutesList", d.quickRemindPersistentMinutesList),
+            quickRemindBangPersistent = sp.getBoolean("quickRemindBangPersistent", d.quickRemindBangPersistent),
         )
     }
 
@@ -153,10 +162,18 @@ class SettingsStore(
             block(_flow.value).let { raw ->
                 val list = raw.effectiveCourseRemindMinutes
                 val examList = raw.effectiveExamRemindMinutes
+                val qRemind = Reminders.normalize(null, raw.quickRemindMinutesList).ifEmpty { QuickAddConfig.DEFAULT_REMIND_MINUTES }
+                val qBangRemind =
+                    Reminders.normalize(null, raw.quickRemindPersistentMinutesList).ifEmpty {
+                        QuickAddConfig.DEFAULT_REMIND_MINUTES
+                    }
                 raw.copy(
                     courseRemindMinutes = list.first(),
                     courseRemindMinutesList = list,
                     examRemindMinutesList = examList,
+                    quickRemindKeyword = raw.quickRemindKeyword.trim(),
+                    quickRemindMinutesList = qRemind,
+                    quickRemindPersistentMinutesList = qBangRemind,
                 )
             }
         sp
@@ -197,6 +214,10 @@ class SettingsStore(
             .putLong("pendingUpdateApkSize", n.pendingUpdateApkSize)
             .putString("pendingUpdateApkSha256", n.pendingUpdateApkSha256)
             .putString("dismissedUpdateVersion", n.dismissedUpdateVersion)
+            .putString("quickRemindKeyword", n.quickRemindKeyword)
+            .putString("quickRemindMinutesList", n.quickRemindMinutesList.joinToString(","))
+            .putString("quickRemindPersistentMinutesList", n.quickRemindPersistentMinutesList.joinToString(","))
+            .putBoolean("quickRemindBangPersistent", n.quickRemindBangPersistent)
             .apply()
         _flow.value = n
     }

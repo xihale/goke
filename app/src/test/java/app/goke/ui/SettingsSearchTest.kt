@@ -60,13 +60,13 @@ class SettingsSearchTest {
     }
 
     @Test
-    fun catalogHas43UniqueValidEntries() {
-        assertEquals(43, SETTINGS_SEARCH_SPECS.size)
+    fun catalogHas44UniqueValidEntries() {
+        assertEquals(44, SETTINGS_SEARCH_SPECS.size)
         val ids = SETTINGS_SEARCH_SPECS.map { it.id }
         assertEquals(ids.size, ids.toSet().size)
 
         val catalog = buildSettingsSearchCatalog(app)
-        assertEquals(43, catalog.size)
+        assertEquals(44, catalog.size)
         for (item in catalog) {
             assertTrue("Blank id", item.id.isNotBlank())
             assertTrue("Blank title for ${item.id}", item.title.isNotBlank())

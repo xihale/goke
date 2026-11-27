@@ -1069,6 +1069,18 @@
     <string name="prefs_section_todo">待办与手势</string>
     <string name="reminders_title">提醒与通知</string>
     <string name="reminders_section_schedule">提醒开关</string>
+    <string name="reminders_section_quick_add">快速添加提醒简写</string>
+    <string name="quick_remind_preview_disabled">已关闭提醒关键词简写</string>
+    <string name="quick_remind_keyword">提醒关键词</string>
+    <string name="quick_remind_keyword_off">已关闭</string>
+    <string name="quick_remind_keyword_hint">最多 8 个字，留空可关闭关键词简写（自动忽略 ! # @ /）</string>
+    <string name="quick_remind_normal_timing">「%1$s」提醒时间</string>
+    <string name="quick_remind_bang_timing">「%1$s!」提醒时间</string>
+    <string name="quick_remind_reset">恢复默认设置</string>
+    <string name="quick_add_remind">提醒</string>
+    <string name="quick_add_remind_custom">自定义</string>
+    <string name="quick_add_remind_settings">简写设置</string>
+    <string name="quick_add_remind_needs_time">未设时间时仅记录提醒配置，补充时间后自动触发</string>
     <string name="reminders_section_assist">每日与快捷</string>
     <string name="reminders_section_delivery">权限与送达</string>
     <string name="reminders_enabled_count">已开启 %1$d 项</string>
@@ -1396,6 +1408,7 @@
     <string name="settings_search_kw_remind_exams">考试 倒计时 常驻 提醒 exam</string>
     <string name="settings_search_kw_remind_tasks">待办 任务 截止 提醒 task todo</string>
     <string name="settings_search_kw_remind_events">日程 活动 提醒 event</string>
+    <string name="settings_search_kw_quick_add_remind">快速添加 简写 关键词 提醒 持续提醒 提前 quick add remind</string>
     <string name="settings_search_kw_remind_digest">每日摘要 早报 定时 汇总 推送 digest</string>
     <string name="settings_search_kw_quick_notif">常驻 通知栏 快捷 快速添加 quick</string>
     <string name="settings_search_kw_auto_mute">静音 勿扰 免打扰 上课 自动 mute dnd</string>

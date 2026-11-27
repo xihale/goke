@@ -98,6 +98,7 @@ import app.goke.core.model.TaskList
 import app.goke.core.time.SemesterCalendar
 import app.goke.core.todo.Bucket
 import app.goke.core.todo.QuickAdd
+import app.goke.core.todo.QuickAddConfig
 import app.goke.core.todo.QuickAddResult
 import app.goke.core.todo.QuickBatchItem
 import app.goke.core.todo.QuickToken
@@ -120,6 +121,7 @@ import app.goke.ui.icons.Event
 import app.goke.ui.icons.Flag
 import app.goke.ui.icons.Inbox
 import app.goke.ui.icons.LocalOffer
+import app.goke.ui.icons.NotificationsActive
 import app.goke.ui.icons.NotificationsNone
 import app.goke.ui.icons.OpenInFull
 import app.goke.ui.icons.Repeat
@@ -132,7 +134,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 
 /** 工具栏就地展开的选择面板（不弹浮层，键盘不动）。 */
-internal enum class QuickPanel { PRIORITY, LIST, TAG, COURSE }
+internal enum class QuickPanel { PRIORITY, LIST, TAG, COURSE, REMIND }
 
 /** 优先级档位的快捷语法文字：`!高` / `!中` / `!低`，与 [QuickAdd] 的解析口径一致。 */
 internal fun priorityToken(v: Int): Int =
@@ -192,13 +194,14 @@ internal fun QuickAddSheet(
     acceptShare: Boolean = true,
 ) {
     val nav = LocalNav.current
+    val settings = settingsState()
     val pending = nav.pendingAddText
     var batch by remember { mutableStateOf<List<QuickBatchItem>?>(null) }
 
     LaunchedEffect(pending) {
         if (acceptShare && pending != null) {
             nav.pendingAddText = null
-            val items = QuickAdd.parseLines(pending, now)
+            val items = QuickAdd.parseLines(pending, now, settings.quickAddConfig)
             if (items.size > 1) {
                 batch = items
             }
@@ -243,8 +246,10 @@ internal fun QuickAddSheet(
     var panelByMonths by remember { mutableStateOf(emptySet<Int>()) }
     var confirmDiscard by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
-    val settings = settingsState()
-    val parsed = remember(text, now) { if (text.isBlank()) null else QuickAdd.parse(text, now) }
+    val parsed =
+        remember(text, now, settings.quickAddConfig) {
+            if (text.isBlank()) null else QuickAdd.parse(text, now, settings.quickAddConfig)
+        }
     val isTabVisible = LocalTabVisible.current.value
     val currentOnDismiss by rememberUpdatedState(onDismiss)
 
@@ -265,13 +270,14 @@ internal fun QuickAddSheet(
     val scheme = MaterialTheme.colorScheme
     val colors = MintTheme.colors
     val tokens = parsed?.tokens.orEmpty()
+    val remindHighlightColor = if (parsed?.remindPersistent == true) scheme.error else scheme.primary
     val highlight =
-        remember(tokens, scheme.primary, scheme.error, scheme.tertiary, scheme.secondary, colors) {
+        remember(tokens, scheme.primary, scheme.error, scheme.tertiary, scheme.secondary, remindHighlightColor, colors) {
             if (tokens.isEmpty()) {
                 VisualTransformation.None
             } else {
                 val prioColor = colors.priorityColor(parsed?.priority ?: 3) ?: scheme.error
-                TokenHighlight(tokens, scheme.primary, prioColor, scheme.tertiary, scheme.secondary)
+                TokenHighlight(tokens, scheme.primary, prioColor, scheme.tertiary, scheme.secondary, remindHighlightColor)
             }
         }
 
@@ -374,9 +380,13 @@ internal fun QuickAddSheet(
         val endArg = wp?.let { w -> if (w.start != null && w.minutes != null) LocalDateTime.of(w.date, w.start).plusMinutes(w.minutes.toLong()).toString() else null }
         val resolvedListId = parsed?.listName?.let { n -> snap.lists.firstOrNull { it.name == n }?.id } ?: listFilter
         val resolvedCourseId = parsed?.courseName?.let { n -> snap.courses.firstOrNull { it.deletedAt == null && it.name.contains(n, ignoreCase = true) }?.id }
-        val remindArg = panelRemindList.firstOrNull()
-        val remindListArg = panelRemindList.takeIf { it.isNotEmpty() }?.joinToString(",")
-        val persistentArg = panelPersistent && panelRemindList.isNotEmpty()
+        val effectiveRemindList = panelRemindList.ifEmpty { parsed?.remindMinutesList.orEmpty() }
+        val effectivePersistent =
+            (if (panelRemindList.isNotEmpty()) panelPersistent else (parsed?.remindPersistent == true)) &&
+                effectiveRemindList.isNotEmpty()
+        val remindArg = effectiveRemindList.firstOrNull()
+        val remindListArg = effectiveRemindList.takeIf { it.isNotEmpty() }?.joinToString(",")
+        val persistentArg = effectivePersistent
         val freqArg = panelFreq?.name
         val intervalArg = panelInterval.coerceAtLeast(1)
         val untilArg = if (panelFreq == null) null else panelUntil?.toString()
@@ -460,6 +470,8 @@ internal fun QuickAddSheet(
                 panelInterval = panelInterval,
                 panelByDays = panelByDays,
                 panelByMonths = panelByMonths,
+                panelPersistent = panelPersistent,
+                quickAddConfig = settings.quickAddConfig,
                 defaultDateLabel = defaultDateLabel,
                 defaultListLabel = defaultListLabel,
                 expandLabel = stringResource(R.string.detail_editor_full_edit),
@@ -468,12 +480,23 @@ internal fun QuickAddSheet(
                 canSubmit = hasBodyText && !submitted,
                 onSubmit = { finish() },
                 onOpenWhenPanel = { whenPanel = true },
+                onOpenRemindSettings = {
+                    clearDraft()
+                    onDismiss()
+                    nav.push(Route.Reminders)
+                },
+                onClearPanelRemind = {
+                    panelRemindList = emptyList()
+                    panelPersistent = false
+                },
                 onRewriteToken = ::rewrite,
             )
         }
     }
 
     if (whenPanel) {
+        val initialRemind = panelRemindList.ifEmpty { parsed?.remindMinutesList.orEmpty() }
+        val initialPers = if (panelRemindList.isNotEmpty()) panelPersistent else (parsed?.remindPersistent == true)
         WhenPanel(
             initial =
                 panelWhen ?: parsed?.due?.let { d ->
@@ -481,8 +504,8 @@ internal fun QuickAddSheet(
                 },
             defaultDate = now.toLocalDate(),
             defaultMinutes = settings.defaultBlockMinutes,
-            initialRemindList = panelRemindList,
-            initialPersistent = panelPersistent,
+            initialRemindList = initialRemind,
+            initialPersistent = initialPers,
             initialFreq = panelFreq,
             initialInterval = panelInterval,
             initialUntil = panelUntil,
@@ -499,8 +522,18 @@ internal fun QuickAddSheet(
                 panelUntil = r.until
                 panelByDays = r.byDays
                 panelByMonths = r.byMonths
-                if (r.whenPick == null && r.remindMinutesList.isEmpty() && r.freq == null) {
-                    rewrite(setOf(QuickTokenKind.DATE, QuickTokenKind.TIME), null)
+                val toStrip =
+                    buildSet {
+                        if (r.whenPick == null && r.remindMinutesList.isEmpty() && r.freq == null) {
+                            add(QuickTokenKind.DATE)
+                            add(QuickTokenKind.TIME)
+                        }
+                        if (r.remindMinutesList.isEmpty() && parsed?.remindMinutesList?.isNotEmpty() == true) {
+                            add(QuickTokenKind.REMIND)
+                        }
+                    }
+                if (toStrip.isNotEmpty()) {
+                    rewrite(toStrip, null)
                 }
                 whenPanel = false
             },
@@ -551,12 +584,23 @@ internal fun QuickAddComposer(
     defaultDateLabel: String? = null,
     defaultListLabel: String? = null,
     linkedCourse: Course? = null,
+    panelPersistent: Boolean = false,
+    quickAddConfig: QuickAddConfig = QuickAddConfig.DEFAULT,
+    onOpenRemindSettings: (() -> Unit)? = null,
+    onClearPanelRemind: (() -> Unit)? = null,
 ) {
     val ctx = LocalContext.current
     val scheme = MaterialTheme.colorScheme
     val colors = MintTheme.colors
     val today = now.toLocalDate()
     val text = field.text
+    val effectiveRemindList = panelRemindList.ifEmpty { parsed?.remindMinutesList.orEmpty() }
+    val effectivePersistent =
+        if (panelRemindList.isNotEmpty()) {
+            panelPersistent
+        } else {
+            parsed?.remindPersistent == true && effectiveRemindList.isNotEmpty()
+        }
 
     val existingTags =
         remember(snap.tasks) {
@@ -849,6 +893,62 @@ internal fun QuickAddComposer(
         }
     }
 
+    AnimatedVisibility(
+        visible = toolPanel == QuickPanel.REMIND,
+        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+    ) {
+        val kw = quickAddConfig.normalizedKeyword
+        val parsedHasRemind = parsed?.remindMinutesList?.isNotEmpty() == true
+        val needsTime =
+            effectiveRemindList.isNotEmpty() &&
+                panelWhen == null &&
+                parsed?.due == null &&
+                defaultDateLabel == null &&
+                parsed?.courseName == null &&
+                linkedCourse == null
+        Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            FlowRow(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (kw.isNotEmpty()) {
+                    val normalOn = parsedHasRemind && !parsed.remindPersistent && panelRemindList.isEmpty()
+                    ChipPill(kw, on = normalOn) {
+                        onClearPanelRemind?.invoke()
+                        onRewriteToken(setOf(QuickTokenKind.REMIND), if (normalOn) null else kw)
+                        onToolPanelChange(null)
+                    }
+                    val bangOn = parsedHasRemind && parsed.remindPersistent && panelRemindList.isEmpty()
+                    ChipPill("$kw!", on = bangOn) {
+                        onClearPanelRemind?.invoke()
+                        onRewriteToken(setOf(QuickTokenKind.REMIND), if (bangOn) null else "$kw!")
+                        onToolPanelChange(null)
+                    }
+                }
+                ChipPill(stringResource(R.string.quick_add_remind_custom), on = panelRemindList.isNotEmpty()) {
+                    onToolPanelChange(null)
+                    onOpenWhenPanel()
+                }
+                if (onOpenRemindSettings != null) {
+                    ChipPill(stringResource(R.string.quick_add_remind_settings), on = false) {
+                        onToolPanelChange(null)
+                        onOpenRemindSettings()
+                    }
+                }
+            }
+            if (needsTime) {
+                Text(
+                    stringResource(R.string.quick_add_remind_needs_time),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp, start = 2.dp),
+                )
+            }
+        }
+    }
+
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Row(
             Modifier
@@ -891,6 +991,43 @@ internal fun QuickAddComposer(
                 }
                 if (panelRemindList.isNotEmpty() && (panelWhen != null || panelFreq != null)) {
                     Icon(Icons.Rounded.NotificationsNone, null, tint = scheme.primary, modifier = Modifier.size(14.dp))
+                }
+            }
+
+            val remindDesc = stringResource(R.string.quick_add_remind)
+            val remindTint =
+                when {
+                    effectivePersistent -> scheme.error
+                    effectiveRemindList.isNotEmpty() -> scheme.primary
+                    else -> scheme.onSurfaceVariant
+                }
+            Row(
+                modifier =
+                    Modifier
+                        .heightIn(min = 44.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .mintClickable(pressedScale = 0.96f, role = Role.Button) {
+                            onToolPanelChange(if (toolPanel == QuickPanel.REMIND) null else QuickPanel.REMIND)
+                        }.semantics { contentDescription = remindDesc }
+                        .padding(horizontal = 6.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Icon(
+                    if (effectivePersistent) Icons.Rounded.NotificationsActive else Icons.Rounded.NotificationsNone,
+                    null,
+                    tint = remindTint,
+                    modifier = Modifier.size(19.dp),
+                )
+                if (effectiveRemindList.isNotEmpty()) {
+                    Text(
+                        remindSummaryLabel(effectiveRemindList),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = remindTint,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 96.dp),
+                    )
                 }
             }
 
@@ -998,6 +1135,19 @@ private fun QuickComposerIconBtn(
     }
 }
 
+private const val REMIND_LEFT_DELIMS = ",，。.;；:：、([【（"
+private const val REMIND_RIGHT_DELIMS = ",，。.;；:：、)]】）#@/!！"
+
+private fun isRemindBoundaryMatch(
+    text: String,
+    start: Int,
+    end: Int,
+): Boolean {
+    val leftOk = start == 0 || text[start - 1].isWhitespace() || text[start - 1] in REMIND_LEFT_DELIMS
+    val rightOk = end == text.length || text[end].isWhitespace() || text[end] in REMIND_RIGHT_DELIMS
+    return leftOk && rightOk
+}
+
 /** 按文本中非重叠位置匹配解析出的 token 区间，避免替换/高亮误伤同名子串。 */
 internal fun tokenRanges(
     text: String,
@@ -1014,7 +1164,8 @@ internal fun tokenRanges(
             if (idx < 0) break
             val end = idx + token.text.length
             val overlaps = (idx until end).any { used[it] }
-            if (!overlaps) {
+            val boundaryOk = token.kind != QuickTokenKind.REMIND || isRemindBoundaryMatch(text, idx, end)
+            if (!overlaps && boundaryOk) {
                 for (k in idx until end) used[k] = true
                 found = idx until end
                 break
@@ -1071,6 +1222,10 @@ private fun BatchPreviewDialog(
                             p.listName?.let { l -> add("#$l") }
                             p.tags.forEach { t -> add("@$t") }
                             if (p.priority > 0) add("!" + ctx.getString(listOf(R.string.priority_1, R.string.priority_2, R.string.priority_3)[p.priority - 1]))
+                            if (p.remindMinutesList.isNotEmpty()) {
+                                val rLabel = remindSummaryLabel(p.remindMinutesList)
+                                add(if (p.remindPersistent) "$rLabel · ${ctx.getString(R.string.remind_persistent)}" else rLabel)
+                            }
                         }
                     Column(Modifier.padding(start = if (item.parentIndex != null) 20.dp else 0.dp, top = 4.dp, bottom = 4.dp)) {
                         Text((if (item.parentIndex != null) "↳ " else "") + p.title, style = MaterialTheme.typography.bodyLarge)
@@ -1100,6 +1255,7 @@ internal class TokenHighlight(
     val priorityColor: Color,
     val tertiary: Color,
     val secondary: Color,
+    val remindColor: Color = primary,
 ) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
@@ -1112,6 +1268,7 @@ internal class TokenHighlight(
                     QuickTokenKind.PRIORITY -> priorityColor
                     QuickTokenKind.LIST -> tertiary
                     QuickTokenKind.TAG -> secondary
+                    QuickTokenKind.REMIND -> remindColor
                 }
             b.addStyle(SpanStyle(color = c, fontWeight = FontWeight.Medium, background = c.copy(alpha = 0.12f)), r.first, r.last + 1)
         }
@@ -1121,7 +1278,12 @@ internal class TokenHighlight(
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is TokenHighlight) return false
-        return tokens == other.tokens && primary == other.primary && priorityColor == other.priorityColor && tertiary == other.tertiary && secondary == other.secondary
+        return tokens == other.tokens &&
+            primary == other.primary &&
+            priorityColor == other.priorityColor &&
+            tertiary == other.tertiary &&
+            secondary == other.secondary &&
+            remindColor == other.remindColor
     }
 
     override fun hashCode(): Int {
@@ -1130,6 +1292,7 @@ internal class TokenHighlight(
         result = 31 * result + priorityColor.hashCode()
         result = 31 * result + tertiary.hashCode()
         result = 31 * result + secondary.hashCode()
+        result = 31 * result + remindColor.hashCode()
         return result
     }
 }
@@ -1234,6 +1397,10 @@ internal fun buildQuickTasks(
                 dueHasTime = false
             }
         }
+        val remindList = ov?.remindList?.takeIf { it.isNotEmpty() } ?: p.remindMinutesList
+        val remindPersistent =
+            (if (ov?.remindList?.isNotEmpty() == true) ov.persistent else p.remindPersistent) &&
+                remindList.isNotEmpty()
         changes +=
             Change.Add(
                 Task(
@@ -1253,9 +1420,9 @@ internal fun buildQuickTasks(
                     source = Source.MANUAL,
                     blockStart = blockStart,
                     blockMinutes = blockMinutes,
-                    remindMinutes = ov?.remindList?.firstOrNull(),
-                    remindMinutesList = ov?.remindList.orEmpty(),
-                    remindPersistent = ov?.persistent == true && ov.remindList.isNotEmpty(),
+                    remindMinutes = remindList.firstOrNull(),
+                    remindMinutesList = remindList,
+                    remindPersistent = remindPersistent,
                     repeat = ov?.repeat,
                 ),
             )
