@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -1651,6 +1652,7 @@ private fun WeekGrid(
                         onCommit = { ns, nm -> onMoveTask(t, ns, nm) },
                         allowDrag = !reschedulePicking,
                         stacked = slot.stacked,
+                        wide = blockW >= 64.dp,
                         modifier =
                             Modifier
                                 .absoluteOffset(timeColW + colW * (s.dayOfWeek.value - 1) + offsetX, tbox.top)
@@ -2003,6 +2005,7 @@ internal fun TaskBlock(
     onCommit: (LocalDateTime, Int) -> Unit,
     allowDrag: Boolean = true,
     stacked: Boolean = false,
+    wide: Boolean = false,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
@@ -2064,6 +2067,7 @@ internal fun TaskBlock(
     val blockBorder =
         when {
             active -> 2.dp to dragBorder
+            task.isExam -> 0.8.dp to textFg.copy(alpha = 0.28f)
             stacked -> 0.75.dp to textFg.copy(alpha = 0.14f)
             else -> null
         }
@@ -2145,22 +2149,204 @@ internal fun TaskBlock(
                 )
             },
     ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .clip(TaskBlockShape)
-                .courseProgressBackground(
-                    activeBg = bg,
-                    phase = effectivePhase,
-                    progress = effectiveProgress,
-                    axis = CourseProgressAxis.VERTICAL,
-                ).then(if (blockBorder != null) Modifier.border(blockBorder.first, blockBorder.second, TaskBlockShape) else Modifier)
-                .padding(horizontal = 5.dp, vertical = 5.dp),
-        ) {
-            if (overlap > 1 && !active) {
-                Column(Modifier.weight(1f)) {
+        val examDisplay =
+            if (task.isExam && !active) {
+                JxfwSync.splitExamDisplay(task.title, stringResource(R.string.kind_exam))
+            } else {
+                null
+            }
+        val examLoc =
+            if (examDisplay != null) {
+                task.extra["location"]
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { LocalContext.current.formatRooms(it) }
+                    .orEmpty()
+            } else {
+                ""
+            }
+        if (examDisplay != null && minutes >= 75 && !wide) {
+            val tokens = remember(examDisplay.title) { JxfwSync.tokenizeVerticalTitle(examDisplay.title) }
+            val maxTokens =
+                when {
+                    minutes >= 135 -> 9
+                    examLoc.isNotEmpty() -> 6
+                    else -> 7
+                }
+            val (vFontSize, vLineHeight) =
+                when {
+                    tokens.size <= 4 -> 12.sp to 14.sp
+                    tokens.size <= 6 -> 11.sp to 12.5.sp
+                    else -> 10.sp to 11.2.sp
+                }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clip(TaskBlockShape)
+                    .courseProgressBackground(
+                        activeBg = bg,
+                        phase = effectivePhase,
+                        progress = effectiveProgress,
+                        axis = CourseProgressAxis.VERTICAL,
+                    ).then(if (blockBorder != null) Modifier.border(blockBorder.first, blockBorder.second, TaskBlockShape) else Modifier),
+            ) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(start = 3.5.dp, end = 3.5.dp, top = 7.dp, bottom = 3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Column(
+                            Modifier.padding(top = 1.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Box(
+                                Modifier
+                                    .clip(RoundedCornerShape(4.5.dp))
+                                    .background(textFg.copy(alpha = 0.18f))
+                                    .padding(horizontal = 2.5.dp, vertical = 2.5.dp),
+                            ) {
+                                Text(
+                                    JxfwSync.formatVerticalText(examDisplay.badgeShort, 2),
+                                    color = textFg,
+                                    style = titleStyle.copy(fontSize = 8.5.sp, lineHeight = 10.sp),
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        }
+                        Box(
+                            Modifier.weight(1f).fillMaxHeight(),
+                            contentAlignment = Alignment.TopCenter,
+                        ) {
+                            Text(
+                                JxfwSync.formatVerticalText(examDisplay.title, maxTokens),
+                                color = textFg,
+                                style = titleStyle.copy(fontSize = vFontSize, lineHeight = vLineHeight),
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                modifier =
+                                    Modifier.semantics {
+                                        contentDescription = "${examDisplay.badgeFull} ${examDisplay.title}"
+                                    },
+                            )
+                        }
+                    }
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 5.dp),
+                        thickness = 0.6.dp,
+                        color = textFg.copy(alpha = 0.16f),
+                    )
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 3.5.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        if (examLoc.isNotEmpty()) {
+                            Text(
+                                examLoc,
+                                modifier = Modifier.fillMaxWidth(),
+                                color = textFg.copy(alpha = 0.88f),
+                                style = timeStyle.copy(fontSize = 8.5.sp, lineHeight = 10.sp),
+                                fontWeight = FontWeight.Medium,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Text(
+                            start.hm(),
+                            modifier = Modifier.fillMaxWidth(),
+                            color = textFg.copy(alpha = 0.72f),
+                            style = timeStyle.copy(fontSize = 8.sp, lineHeight = 9.5.sp),
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip,
+                        )
+                    }
+                }
+                if (overlap > 1) {
+                    OverlapBadge(
+                        overlap = overlap,
+                        fg = textFg,
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 3.dp),
+                    )
+                }
+            }
+        } else {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .clip(TaskBlockShape)
+                    .courseProgressBackground(
+                        activeBg = bg,
+                        phase = effectivePhase,
+                        progress = effectiveProgress,
+                        axis = CourseProgressAxis.VERTICAL,
+                    ).then(if (blockBorder != null) Modifier.border(blockBorder.first, blockBorder.second, TaskBlockShape) else Modifier)
+                    .padding(horizontal = 5.dp, vertical = 5.dp),
+            ) {
+                if (overlap > 1 && !active) {
+                    Column(Modifier.weight(1f)) {
+                        if (examDisplay != null) {
+                            Box(
+                                Modifier
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(textFg.copy(alpha = 0.18f))
+                                    .padding(horizontal = 4.5.dp, vertical = 1.dp),
+                            ) {
+                                Text(
+                                    if (wide) examDisplay.badgeFull else examDisplay.badgeShort,
+                                    color = textFg,
+                                    style = timeStyle.copy(fontSize = 9.sp, lineHeight = 10.sp),
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Clip,
+                                )
+                            }
+                            Spacer(Modifier.height(2.dp))
+                        }
+                        Text(
+                            examDisplay?.title ?: task.title,
+                            modifier = Modifier.weight(1f, fill = false),
+                            color = textFg,
+                            style = titleStyle,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 4,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    OverlapBadge(
+                        overlap = overlap,
+                        fg = textFg,
+                        modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
+                    )
+                } else {
+                    if (examDisplay != null) {
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(textFg.copy(alpha = 0.18f))
+                                .padding(horizontal = 4.5.dp, vertical = 1.dp),
+                        ) {
+                            Text(
+                                if (wide) examDisplay.badgeFull else examDisplay.badgeShort,
+                                color = textFg,
+                                style = timeStyle.copy(fontSize = 9.sp, lineHeight = 10.sp),
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Clip,
+                            )
+                        }
+                        Spacer(Modifier.height(2.dp))
+                    }
                     Text(
-                        task.title,
+                        examDisplay?.title ?: task.title,
+                        // 时间那行必须留得下：标题吃掉剩余空间，短块里自动收成省略号
                         modifier = Modifier.weight(1f, fill = false),
                         color = textFg,
                         style = titleStyle,
@@ -2168,46 +2354,21 @@ internal fun TaskBlock(
                         maxLines = 4,
                         overflow = TextOverflow.Ellipsis,
                     )
-                }
-                OverlapBadge(
-                    overlap = overlap,
-                    fg = textFg,
-                    modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
-                )
-            } else {
-                Text(
-                    task.title,
-                    // 时间那行必须留得下：标题吃掉剩余空间，短块里自动收成省略号
-                    modifier = Modifier.weight(1f, fill = false),
-                    color = textFg,
-                    style = titleStyle,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (task.isExam && !active) {
+                    val label =
+                        when {
+                            !active -> start.hm()
+                            mode == 3 -> previewEnd.hm()
+                            else -> previewStart.hm()
+                        }
                     Text(
-                        stringResource(R.string.kind_exam),
-                        color = textFg,
+                        label,
+                        color = if (active) MaterialTheme.colorScheme.primary else textFg.copy(alpha = 0.85f),
                         style = timeStyle,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                         maxLines = 1,
+                        overflow = TextOverflow.Clip,
                     )
                 }
-                val label =
-                    when {
-                        !active -> start.hm()
-                        mode == 3 -> previewEnd.hm()
-                        else -> previewStart.hm()
-                    }
-                Text(
-                    label,
-                    color = if (active) MaterialTheme.colorScheme.primary else textFg.copy(alpha = 0.85f),
-                    style = timeStyle,
-                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip,
-                )
             }
         }
         // 拖起来才出现的抓手：上边 = 改开始时间，下边 = 改结束时间；缩放淡入出现
@@ -2361,6 +2522,7 @@ private fun CourseBlock(
     val resolvedBorder =
         when {
             borderColor != Color.Transparent -> 2.dp to borderColor
+            o.course.isExam -> 0.8.dp to textFg.copy(alpha = 0.28f)
             stacked -> 0.75.dp to textFg.copy(alpha = 0.14f)
             else -> null
         }
@@ -2376,80 +2538,283 @@ private fun CourseBlock(
                 .then(if (stateDesc != null) Modifier.semantics { stateDescription = stateDesc } else Modifier)
                 .then(if (resolvedBorder != null) Modifier.border(resolvedBorder.first, resolvedBorder.second, CourseBlockShape) else Modifier),
         ) {
-            // 一列就 40dp 出头：教室 / 老师照样要显示，靠换行和省略号交代；
-            // 把信息藏起来比截断更糟。宽卡片（平板 / 横屏）才加「@」前缀区分教室，窄列里多这一个字符就没地方了。
-            Column(Modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 6.dp)) {
-                val strike = if (isRemoved) TextDecoration.LineThrough else null
-                Column(Modifier.weight(1f)) {
-                    // 字号统一由 WeekGrid 记住传入；时间/教室数字用 tnum
-                    Text(
-                        o.course.name,
-                        color = textFg,
-                        style = titleStyle,
-                        fontWeight = FontWeight.Bold,
-                        maxLines =
-                            when {
-                                rows >= 3 -> 4
-                                rows == 2 -> if (overlap > 1) 3 else 4
-                                else -> if (overlap > 1) 1 else 2
-                            },
-                        overflow = TextOverflow.Ellipsis,
-                        textDecoration = strike,
-                    )
-                    // 多教室按 DESIGN 规则折叠（超过 2 处折叠为「首间 等 N 处」），完整列表留在 CourseSheet 中查看。
-                    if (o.room.isNotBlank()) {
-                        val ctx = LocalContext.current
-                        val roomText = remember(o.room, ctx) { ctx.formatRooms(o.room) }
-                        val teacherLine = if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) 1 else 0
-                        val roomMaxLines =
-                            (BaseRowH * rows - 16.dp - 26.dp - 12.dp * teacherLine).div(12.dp).toInt().coerceAtLeast(2)
-                        if (roomText.isNotEmpty()) {
-                            Text(
-                                if (wide) "@" + roomText else roomText,
-                                modifier = Modifier.weight(1f, fill = false),
-                                color = textFg.copy(alpha = 0.85f),
-                                // 窄卡与宽卡字号：至少 10sp，保证 TalkBack 及大字号无障碍要求
-                                style = roomStyle,
-                                maxLines = roomMaxLines,
-                                overflow = TextOverflow.Ellipsis,
-                                textDecoration = strike,
+            val strike = if (isRemoved) TextDecoration.LineThrough else null
+            if (o.course.isExam) {
+                val ctx = LocalContext.current
+                val examFallback = stringResource(R.string.kind_exam)
+                val seatSuffix = stringResource(R.string.widget_exam_seat_suffix)
+                val examDisplay = remember(o.course.name, examFallback) { JxfwSync.splitExamDisplay(o.course.name, examFallback) }
+                val roomText = remember(o.room, ctx) { if (o.room.isNotBlank()) ctx.formatRooms(o.room) else "" }
+                val seatText = remember(o.course.note, seatSuffix) { JxfwSync.extractExamSeat(o.course.note)?.let { "$it$seatSuffix" } }
+
+                if (rows >= 2 && !wide) {
+                    // 宣纸双列竖签：左列竖排印章+教师，右列竖排课名；有地点时底部保持卡片正常底色加细线隔开
+                    val tokens = remember(examDisplay.title) { JxfwSync.tokenizeVerticalTitle(examDisplay.title) }
+                    val hasFooter = roomText.isNotBlank() || seatText != null
+                    val maxTokens =
+                        when {
+                            rows >= 3 -> if (hasFooter) 9 else 11
+                            hasFooter -> if (seatText != null) 6 else 7
+                            else -> 7
+                        }
+                    val (vFontSize, vLineHeight) =
+                        when {
+                            tokens.size <= 4 -> 12.sp to 14.sp
+                            tokens.size <= 6 -> 11.sp to 12.5.sp
+                            else -> 10.sp to 11.2.sp
+                        }
+                    Box(Modifier.fillMaxSize()) {
+                        Column(Modifier.fillMaxSize()) {
+                            Row(
+                                Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .padding(start = 3.5.dp, end = 3.5.dp, top = 7.dp, bottom = 3.dp),
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                Column(
+                                    Modifier.padding(top = 1.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    Box(
+                                        Modifier
+                                            .clip(RoundedCornerShape(4.5.dp))
+                                            .background(textFg.copy(alpha = 0.18f))
+                                            .padding(horizontal = 2.5.dp, vertical = 2.5.dp),
+                                    ) {
+                                        Text(
+                                            JxfwSync.formatVerticalText(examDisplay.badgeShort, 2),
+                                            color = textFg,
+                                            style = titleStyle.copy(fontSize = 8.5.sp, lineHeight = 10.sp),
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center,
+                                        )
+                                    }
+                                    if (showTeacher && o.course.teacher.isNotBlank()) {
+                                        Spacer(Modifier.height(6.dp))
+                                        Text(
+                                            JxfwSync.formatVerticalText(o.course.teacher, if (rows >= 3) 4 else 3),
+                                            color = textFg.copy(alpha = 0.68f),
+                                            style = roomStyle.copy(fontSize = 9.sp, lineHeight = 10.5.sp),
+                                            textAlign = TextAlign.Center,
+                                        )
+                                    }
+                                    if (o.rescheduled) {
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            JxfwSync.formatVerticalText(stringResource(R.string.rescheduled), 2),
+                                            color = textFg.copy(alpha = 0.9f),
+                                            style = roomStyle.copy(fontSize = 8.5.sp, lineHeight = 10.sp),
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center,
+                                        )
+                                    }
+                                }
+                                Box(
+                                    Modifier.weight(1f).fillMaxHeight(),
+                                    contentAlignment = Alignment.TopCenter,
+                                ) {
+                                    Text(
+                                        JxfwSync.formatVerticalText(examDisplay.title, maxTokens),
+                                        color = textFg,
+                                        style = titleStyle.copy(fontSize = vFontSize, lineHeight = vLineHeight),
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        textDecoration = strike,
+                                        modifier =
+                                            Modifier.semantics {
+                                                contentDescription = "${examDisplay.badgeFull} ${examDisplay.title}"
+                                            },
+                                    )
+                                }
+                            }
+                            if (hasFooter) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 5.dp),
+                                    thickness = 0.6.dp,
+                                    color = textFg.copy(alpha = 0.16f),
+                                )
+                                Column(
+                                    Modifier.fillMaxWidth().padding(horizontal = 3.dp, vertical = 3.5.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    if (roomText.isNotBlank()) {
+                                        Text(
+                                            roomText,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            color = textFg.copy(alpha = 0.88f),
+                                            style = roomStyle.copy(fontSize = 8.5.sp, lineHeight = 10.sp),
+                                            fontWeight = FontWeight.Medium,
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textDecoration = strike,
+                                        )
+                                    }
+                                    if (seatText != null) {
+                                        Text(
+                                            seatText,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            color = textFg.copy(alpha = 0.72f),
+                                            style = roomStyle.copy(fontSize = 8.sp, lineHeight = 9.5.sp),
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textDecoration = strike,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        if (overlap > 1) {
+                            OverlapBadge(
+                                overlap = overlap,
+                                fg = textFg,
+                                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 3.dp),
                             )
                         }
                     }
-                    if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) {
-                        Text(
-                            o.course.teacher,
-                            color = textFg.copy(alpha = 0.75f),
-                            style = roomStyle,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    if (o.course.isExam) {
-                        Text(
-                            stringResource(R.string.kind_exam),
-                            color = textFg,
-                            style = roomStyle,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                        )
-                    }
-                    if (o.rescheduled) {
-                        Text(
-                            stringResource(R.string.rescheduled),
-                            color = textFg,
-                            style = roomStyle,
-                            fontWeight = FontWeight.Bold,
-                        )
+                } else {
+                    // 1 节极矮块或平板宽列：紧凑横排 + 顶部半透胶囊，不重复「考试」
+                    val locLine =
+                        if (wide) {
+                            JxfwSync.formatExamLocation(roomText, o.course.note, seatSuffix).orEmpty()
+                        } else {
+                            roomText.ifBlank { seatText.orEmpty() }
+                        }
+                    Column(Modifier.fillMaxSize().padding(horizontal = 5.dp, vertical = 5.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Box(
+                                Modifier
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(textFg.copy(alpha = 0.18f))
+                                    .padding(horizontal = 4.5.dp, vertical = 1.dp),
+                            ) {
+                                Text(
+                                    if (wide) examDisplay.badgeFull else examDisplay.badgeShort,
+                                    color = textFg,
+                                    style = roomStyle.copy(fontSize = 9.sp, lineHeight = 10.sp),
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Clip,
+                                )
+                            }
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                examDisplay.title,
+                                color = textFg,
+                                style = titleStyle,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = if (rows == 1) 1 else 2,
+                                overflow = TextOverflow.Ellipsis,
+                                textDecoration = strike,
+                            )
+                            if (locLine.isNotEmpty()) {
+                                Text(
+                                    if (wide) "@$locLine" else locLine,
+                                    color = textFg.copy(alpha = 0.85f),
+                                    style = roomStyle,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textDecoration = strike,
+                                )
+                            }
+                            if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) {
+                                Text(
+                                    o.course.teacher,
+                                    color = textFg.copy(alpha = 0.72f),
+                                    style = roomStyle,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            if (o.rescheduled) {
+                                Text(
+                                    stringResource(R.string.rescheduled),
+                                    color = textFg,
+                                    style = roomStyle,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        }
+                        if (overlap > 1) {
+                            OverlapBadge(
+                                overlap = overlap,
+                                fg = textFg,
+                                modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
+                            )
+                        }
                     }
                 }
-                if (overlap > 1) {
-                    OverlapBadge(
-                        overlap = overlap,
-                        fg = textFg,
-                        modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
-                    )
+            } else {
+                // 一列就 40dp 出头：教室 / 老师照样要显示，靠换行和省略号交代；
+                // 把信息藏起来比截断更糟。宽卡片（平板 / 横屏）才加「@」前缀区分教室，窄列里多这一个字符就没地方了。
+                Column(Modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 6.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        // 字号统一由 WeekGrid 记住传入；时间/教室数字用 tnum
+                        Text(
+                            o.course.name,
+                            color = textFg,
+                            style = titleStyle,
+                            fontWeight = FontWeight.Bold,
+                            maxLines =
+                                when {
+                                    rows >= 3 -> 4
+                                    rows == 2 -> if (overlap > 1) 3 else 4
+                                    else -> if (overlap > 1) 1 else 2
+                                },
+                            overflow = TextOverflow.Ellipsis,
+                            textDecoration = strike,
+                        )
+                        // 多教室按 DESIGN 规则折叠（超过 2 处折叠为「首间 等 N 处」），完整列表留在 CourseSheet 中查看。
+                        if (o.room.isNotBlank()) {
+                            val ctx = LocalContext.current
+                            val roomText = remember(o.room, ctx) { ctx.formatRooms(o.room) }
+                            val teacherLine = if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) 1 else 0
+                            val roomMaxLines =
+                                (BaseRowH * rows - 16.dp - 26.dp - 12.dp * teacherLine).div(12.dp).toInt().coerceAtLeast(2)
+                            if (roomText.isNotEmpty()) {
+                                Text(
+                                    if (wide) "@" + roomText else roomText,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    color = textFg.copy(alpha = 0.85f),
+                                    // 窄卡与宽卡字号：至少 10sp，保证 TalkBack 及大字号无障碍要求
+                                    style = roomStyle,
+                                    maxLines = roomMaxLines,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textDecoration = strike,
+                                )
+                            }
+                        }
+                        if (showTeacher && rows >= 2 && o.course.teacher.isNotBlank()) {
+                            Text(
+                                o.course.teacher,
+                                color = textFg.copy(alpha = 0.75f),
+                                style = roomStyle,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (o.rescheduled) {
+                            Text(
+                                stringResource(R.string.rescheduled),
+                                color = textFg,
+                                style = roomStyle,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                    if (overlap > 1) {
+                        OverlapBadge(
+                            overlap = overlap,
+                            fg = textFg,
+                            modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
+                        )
+                    }
                 }
             }
         }
@@ -2803,6 +3168,12 @@ private fun CourseSheet(
                                 .padding(bottom = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
+                            val sheetExam =
+                                if (liveCourse.isExam) {
+                                    JxfwSync.splitExamDisplay(liveCourse.name, stringResource(R.string.kind_exam))
+                                } else {
+                                    null
+                                }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
                                     Modifier
@@ -2813,15 +3184,15 @@ private fun CourseSheet(
                                 )
                                 Spacer(Modifier.width(10.dp))
                                 Text(
-                                    liveCourse.name,
+                                    sheetExam?.title ?: liveCourse.name,
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.SemiBold,
                                     modifier = Modifier.weight(1f),
                                 )
-                                if (liveCourse.isExam) {
+                                if (sheetExam != null) {
                                     Spacer(Modifier.width(8.dp))
                                     Tag(
-                                        stringResource(R.string.kind_exam),
+                                        sheetExam.badgeFull,
                                         MaterialTheme.colorScheme.tertiaryContainer,
                                         MaterialTheme.colorScheme.onTertiaryContainer,
                                     )

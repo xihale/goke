@@ -2,9 +2,12 @@
 
 import { ctx } from '../ctx.js';
 import { h, icon } from '../dom.js';
-import { openCourseDetail, openCourseForm, openSemesterForm } from '../forms.js';
-import { currentSemester, expandCourses, semesterCalendar } from '../model.js';
-import { WEEKDAYS, dow, todayNum, ymd } from '../util.js';
+import { openCourseDetail, openCourseForm, openSemesterForm, openTaskForm } from '../forms.js';
+import {
+  blockRows, currentSemester, expandCourses, extractExamSeat, isExamTask,
+  semesterCalendar, splitExamDisplay, tokenizeVerticalTitle,
+} from '../model.js';
+import { WEEKDAYS, dow, fmtTime, parseDateTime, todayNum, ymd } from '../util.js';
 import { emptyState } from './shared.js';
 
 let viewWeek = null;
@@ -76,8 +79,37 @@ export const timetableView = {
     const { sem, cal, today, week } = s;
     const view = store.view();
     const curWeek = cal.weekOf(today);
-    const occs = expandCourses(sem, view.courses, view.exceptions, cal.weekStart(week), cal.weekEnd(week));
-    assignLanes(occs);
+    const wStart = cal.weekStart(week);
+    const wEnd = cal.weekEnd(week);
+    const occs = expandCourses(sem, view.courses, view.exceptions, wStart, wEnd);
+    const listColors = new Map(view.lists.map((l) => [l.id, l.colorIndex ?? 1]));
+    const taskItems = [];
+    for (const t of view.tasks) {
+      if (t.deletedAt != null || !t.blockStart) continue;
+      if (t.extra?.code || t.extra?.pickupCode) continue;
+      const dt = parseDateTime(t.blockStart);
+      if (!dt || Number.isNaN(dt.day) || dt.day < wStart || dt.day > wEnd) continue;
+      const dur = t.blockMinutes || 60;
+      if (dur > 180) continue;
+      const endMin = dt.min + dur;
+      const rows = blockRows(cal.periods, dt.min, endMin);
+      if (!rows) continue;
+      taskItems.push({
+        kind: 'task',
+        task: t,
+        day: dt.day,
+        startMin: dt.min,
+        endMin,
+        startPeriod: rows.startPeriod,
+        endPeriod: rows.endPeriod,
+        colorIndex: isExamTask(t) ? 2 : (listColors.get(t.listId) ?? 1),
+      });
+    }
+    const gridItems = [
+      ...occs.map((o) => ({ ...o, kind: 'course' })),
+      ...taskItems,
+    ];
+    assignLanes(gridItems);
 
     const bar = h('div', { class: 'week-bar' },
       h('button', { type: 'button', class: 'icon-btn tonal', 'aria-label': '上一周', disabled: week <= 1, onclick: () => go(-1) }, icon('left')),
@@ -109,19 +141,112 @@ export const timetableView = {
         }));
       }
     });
-    for (const o of occs) {
+    for (const o of gridItems) {
       const r1 = pos.get(o.startPeriod);
       const r2 = pos.get(o.endPeriod);
       if (r1 == null || r2 == null) continue;
       const span = o.endPeriod - o.startPeriod + 1;
+      if (o.kind === 'task') {
+        const t = o.task;
+        const exam = isExamTask(t);
+        if (exam) {
+          const display = splitExamDisplay(t.title);
+          const loc = (t.extra?.location || '').trim();
+          const timeStr = fmtTime(o.startMin);
+          const children = [];
+          if (span >= 2) {
+            const badgeTokens = tokenizeVerticalTitle(display.badgeShort).slice(0, 2);
+            const rawTokens = tokenizeVerticalTitle(display.title);
+            const maxTokens = span >= 3 ? 9 : (loc ? 6 : 7);
+            const titleTokens = rawTokens.length > maxTokens ? [...rawTokens.slice(0, maxTokens - 1), { text: '…', tcy: false }] : rawTokens;
+            const sizeClass = rawTokens.length <= 4 ? 'sz-lg' : rawTokens.length <= 6 ? 'sz-md' : 'sz-sm';
+            children.push(
+              h('div', { class: 'tt-exam-body' },
+                h('div', { class: 'tt-exam-side' },
+                  h('div', { class: 'tt-exam-seal' }, badgeTokens.map((tok) => h('span', { class: `v-tok${tok.tcy ? ' tcy' : ''}` }, tok.text)))),
+                h('div', { class: `tt-exam-title ${sizeClass}` }, titleTokens.map((tok) => h('span', { class: `v-tok${tok.tcy ? ' tcy' : ''}` }, tok.text)))),
+              h('div', { class: 'tt-exam-foot' },
+                loc ? h('span', { class: 'tt-exam-room' }, loc) : null,
+                h('span', { class: 'tt-exam-seat' }, timeStr)),
+            );
+          } else {
+            children.push(
+              h('span', { class: 'tt-exam-pill' }, display.badgeShort),
+              h('b', {}, display.title),
+              h('span', {}, loc || timeStr),
+            );
+          }
+          grid.append(h('button', {
+            type: 'button',
+            class: `tt-block exam task-blk c${o.colorIndex % 8}${t.done ? ' past' : ''}${span === 1 ? ' short' : ''}`,
+            style: { 'grid-row': `${r1 + 2} / ${r2 + 3}`, 'grid-column': dow(o.day) + 1, '--lane': o.lane, '--lanes': o.lanes },
+            'aria-label': `${display.badgeFull}：${display.title}，${WEEKDAYS[dow(o.day) - 1]} ${timeStr}${loc ? `，${loc}` : ''}`,
+            onclick: () => openTaskForm({ task: t }),
+          }, children));
+        } else {
+          grid.append(h('button', {
+            type: 'button',
+            class: `tt-block task-blk c${o.colorIndex % 8}${t.done ? ' past' : ''}${span === 1 ? ' short' : ''}`,
+            style: { 'grid-row': `${r1 + 2} / ${r2 + 3}`, 'grid-column': dow(o.day) + 1, '--lane': o.lane, '--lanes': o.lanes },
+            'aria-label': `${t.title}，${WEEKDAYS[dow(o.day) - 1]} ${fmtTime(o.startMin)}`,
+            onclick: () => openTaskForm({ task: t }),
+          }, h('b', {}, t.title), h('span', {}, fmtTime(o.startMin))));
+        }
+        continue;
+      }
       const c = o.course;
-      grid.append(h('button', {
-        type: 'button',
-        class: `tt-block c${c.colorIndex % 8}${o.rescheduled ? ' moved' : ''}${span === 1 ? ' short' : ''}`,
-        style: { 'grid-row': `${r1 + 2} / ${r2 + 3}`, 'grid-column': dow(o.day) + 1, '--lane': o.lane, '--lanes': o.lanes },
-        'aria-label': `${c.name}，${WEEKDAYS[dow(o.day) - 1]}第${o.startPeriod}到${o.endPeriod}节${o.room ? `，${o.room}` : ''}`,
-        onclick: () => openCourseDetail(o),
-      }, h('b', {}, c.name), o.room ? h('span', {}, o.room) : null, !o.room && c.teacher ? h('span', {}, c.teacher) : null));
+      const isExam = c.kind === 'EXAM';
+      if (isExam) {
+        const display = splitExamDisplay(c.name);
+        const seat = extractExamSeat(c.note);
+        const seatText = seat ? `${seat}座` : '';
+        const children = [];
+        if (span >= 2) {
+          const badgeTokens = tokenizeVerticalTitle(display.badgeShort).slice(0, 2);
+          const teacherTokens = c.teacher ? tokenizeVerticalTitle(c.teacher).slice(0, span >= 3 ? 4 : 3) : [];
+          const hasFooter = Boolean(o.room || seatText);
+          const maxTokens = span >= 3 ? (hasFooter ? 9 : 11) : (seatText ? 6 : 7);
+          const rawTokens = tokenizeVerticalTitle(display.title);
+          const titleTokens = rawTokens.length > maxTokens ? [...rawTokens.slice(0, maxTokens - 1), { text: '…', tcy: false }] : rawTokens;
+          const sizeClass = rawTokens.length <= 4 ? 'sz-lg' : rawTokens.length <= 6 ? 'sz-md' : 'sz-sm';
+          children.push(
+            h('div', { class: 'tt-exam-body' },
+              h('div', { class: 'tt-exam-side' },
+                h('div', { class: 'tt-exam-seal' }, badgeTokens.map((t) => h('span', { class: `v-tok${t.tcy ? ' tcy' : ''}` }, t.text))),
+                teacherTokens.length ? h('div', { class: 'tt-exam-teacher' }, teacherTokens.map((t) => h('span', { class: `v-tok${t.tcy ? ' tcy' : ''}` }, t.text))) : null),
+              h('div', { class: `tt-exam-title ${sizeClass}` }, titleTokens.map((t) => h('span', { class: `v-tok${t.tcy ? ' tcy' : ''}` }, t.text)))),
+          );
+          if (hasFooter) {
+            children.push(
+              h('div', { class: 'tt-exam-foot' },
+                o.room ? h('span', { class: 'tt-exam-room' }, o.room) : null,
+                seatText ? h('span', { class: 'tt-exam-seat' }, seatText) : null),
+            );
+          }
+        } else {
+          const loc = o.room || seatText;
+          children.push(
+            h('span', { class: 'tt-exam-pill' }, display.badgeShort),
+            h('b', {}, display.title),
+            loc ? h('span', {}, loc) : null,
+          );
+        }
+        grid.append(h('button', {
+          type: 'button',
+          class: `tt-block exam c${c.colorIndex % 8}${o.rescheduled ? ' moved' : ''}${span === 1 ? ' short' : ''}`,
+          style: { 'grid-row': `${r1 + 2} / ${r2 + 3}`, 'grid-column': dow(o.day) + 1, '--lane': o.lane, '--lanes': o.lanes },
+          'aria-label': `${display.badgeFull}：${display.title}，${WEEKDAYS[dow(o.day) - 1]}第${o.startPeriod}到${o.endPeriod}节${o.room ? `，${o.room}` : ''}`,
+          onclick: () => openCourseDetail(o),
+        }, children));
+      } else {
+        grid.append(h('button', {
+          type: 'button',
+          class: `tt-block c${c.colorIndex % 8}${o.rescheduled ? ' moved' : ''}${span === 1 ? ' short' : ''}`,
+          style: { 'grid-row': `${r1 + 2} / ${r2 + 3}`, 'grid-column': dow(o.day) + 1, '--lane': o.lane, '--lanes': o.lanes },
+          'aria-label': `${c.name}，${WEEKDAYS[dow(o.day) - 1]}第${o.startPeriod}到${o.endPeriod}节${o.room ? `，${o.room}` : ''}`,
+          onclick: () => openCourseDetail(o),
+        }, h('b', {}, c.name), o.room ? h('span', {}, o.room) : null, !o.room && c.teacher ? h('span', {}, c.teacher) : null));
+      }
     }
 
     const wrap = h('div', { class: 'tt-wrap' }, grid);
@@ -143,7 +268,7 @@ export const timetableView = {
       const dy = t.clientY - sy;
       if (Math.abs(dx) > 70 && Math.abs(dy) < 50) go(dx < 0 ? 1 : -1);
     }, { passive: true });
-    const note = occs.length ? null : h('p', { class: 'tt-empty' }, '这一周没有课');
+    const note = gridItems.length ? null : h('p', { class: 'tt-empty' }, '这一周没有课');
     return h('div', { class: 'tt' }, bar, wrap, note);
   },
 };

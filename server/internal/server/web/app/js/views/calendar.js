@@ -50,10 +50,11 @@ function agendaPanel(day) {
     return panel;
   }
   if (ag.allDay.length) panel.append(h('div', { class: 'allday' }, ag.allDay.map((e) => eventCard(e, { day }))));
+  const listColors = new Map(view.lists.map((l) => [l.id, l.colorIndex ?? 1]));
   const isPast = (x) => day < today || (day === today && x.endMin <= now);
   for (const x of ag.timed) {
     const card = x.kind === 'course' ? courseCard(x, { past: x.kind === 'course' && isPast(x) })
-      : x.kind === 'event' ? eventCard(x, { day }) : blockCard(x);
+      : x.kind === 'event' ? eventCard(x, { day }) : blockCard(x, { past: isPast(x), listColors });
     panel.append(h('div', { class: 'tl-row' }, h('div', { class: 'tl-time' }, h('b', {}, fmtTime(x.startMin)), h('span', {}, x.kind === 'event' && x.endDay > day ? '' : fmtTime(x.endMin))), card));
   }
   if (ag.tasks.length) {

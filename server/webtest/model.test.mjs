@@ -236,3 +236,27 @@ test('课程未知字段往返保留', () => {
   const touched = M.touch(withExtra, { room: '教4-101' }, 5000);
   assert.equal(touched.customUnknownField, 'keep-me');
 });
+
+test('考试展示拆分、座位号提取与纵中横分词', () => {
+  const pe = M.splitExamDisplay('考试：体育（3）');
+  assert.equal(pe.badgeFull, '考试');
+  assert.equal(pe.badgeShort, '考试');
+  assert.equal(pe.title, '体育(3)');
+  assert.deepEqual(M.tokenizeVerticalTitle(pe.title), [
+    { text: '体', tcy: false },
+    { text: '育', tcy: false },
+    { text: '(3)', tcy: true },
+  ]);
+
+  const mid = M.splitExamDisplay('期中考试：概率论');
+  assert.equal(mid.badgeFull, '期中考试');
+  assert.equal(mid.badgeShort, '期中');
+  assert.equal(mid.title, '概率论');
+
+  assert.equal(M.extractExamSeat('大学城校区 · 正常安排 · 座位号 18'), '18');
+  assert.equal(M.isExamTask({ id: 't1', extra: { kind: 'EXAM' } }), true);
+  assert.equal(M.isExamTask({ id: 't2', tags: ['考试'] }), true);
+  assert.equal(M.isExamTask({ id: 't3', tags: ['学习'] }), false);
+  assert.deepEqual(M.blockRows(sem.periods, 10 * 60 + 25, 12 * 60), { startPeriod: 3, endPeriod: 4 });
+  assert.deepEqual(M.blockRows(sem.periods, 12 * 60 + 10, 12 * 60 + 50), { startPeriod: 4, endPeriod: 4 });
+});

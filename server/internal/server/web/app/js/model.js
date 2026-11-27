@@ -143,8 +143,99 @@ function range(a, b) {
 
 // ---------- 课程展开 ----------
 
+const EXAM_PREFIX_CAPTURE_RE = /^((?:期中|期末|随堂|结课|实验|上机)?(?:考试|测验|小测|考核)|(?:期中|期末|随堂|结课)测试|补考|重考|缓考|机考|机试)\s*[:：·\-—]\s*(.*)$/;
 const EXAM_NAME_PREFIX_RE = /^(?:(?:期中|期末|随堂|结课|实验|上机)?(?:考试|测验|小测|考核)|(?:期中|期末|随堂|结课)测试|补考|重考|缓考|机考|机试)\s*[:：·\-—]\s*/;
 const EXAM_NAME_SUFFIX_RE = /\s*[:：·\-—]?\s*(?:(?:期中|期末|随堂|结课|实验|上机)?(?:考试|测验|小测|考核)|(?:期中|期末|随堂|结课)测试|补考|重考|缓考|机考|机试)$/;
+const EXAM_SEAT_RE = /座位号\s*([^\s·,，;；]+)/;
+const VERTICAL_PAREN_RE = /^\([A-Za-z0-9+\-]{1,2}\)/;
+const VERTICAL_ASCII_RE = /^[A-Za-z0-9+\-]{1,3}/;
+
+function shortenExamBadge(badgeFull) {
+  if (badgeFull.includes('期中')) return '期中';
+  if (badgeFull.includes('期末')) return '期末';
+  if (badgeFull.includes('随堂')) return '随堂';
+  if (badgeFull.includes('结课')) return '结课';
+  if (badgeFull.includes('补考')) return '补考';
+  if (badgeFull.includes('重考')) return '重考';
+  if (badgeFull.includes('缓考')) return '缓考';
+  if (badgeFull.includes('机考') || badgeFull.includes('机试') || badgeFull.includes('上机')) return '机考';
+  if (badgeFull.includes('实验')) return '实验';
+  if (badgeFull.includes('测验') || badgeFull.includes('小测') || badgeFull.includes('测试')) return '测验';
+  return badgeFull.slice(0, 2);
+}
+
+export function extractExamSeat(note) {
+  const m = EXAM_SEAT_RE.exec(String(note || ''));
+  return m && m[1] ? m[1].trim() : null;
+}
+
+export function splitExamDisplay(rawName, fallbackBadge = '考试') {
+  const trimmed = String(rawName || '').trim();
+  const m = EXAM_PREFIX_CAPTURE_RE.exec(trimmed);
+  const prefix = m && m[1] ? m[1].trim() : '';
+  const rest = m && m[2] ? m[2].trim() : '';
+  const title = (rest || trimmed).replace(/（/g, '(').replace(/）/g, ')');
+  const badgeFull = prefix || String(fallbackBadge || '考试').trim() || '考试';
+  return { badgeFull, badgeShort: shortenExamBadge(badgeFull), title };
+}
+
+export function tokenizeVerticalTitle(raw) {
+  const norm = String(raw || '').trim().replace(/（/g, '(').replace(/）/g, ')');
+  if (!norm) return [];
+  const tokens = [];
+  let i = 0;
+  while (i < norm.length) {
+    const rest = norm.slice(i);
+    const paren = VERTICAL_PAREN_RE.exec(rest);
+    if (paren) {
+      tokens.push({ text: paren[0], tcy: true });
+      i += paren[0].length;
+      continue;
+    }
+    const ascii = VERTICAL_ASCII_RE.exec(rest);
+    if (ascii) {
+      tokens.push({ text: ascii[0], tcy: true });
+      i += ascii[0].length;
+      continue;
+    }
+    const ch = norm[i];
+    if (ch.trim()) tokens.push({ text: ch, tcy: false });
+    i++;
+  }
+  return tokens;
+}
+
+export function isExamTask(t) {
+  if (!t) return false;
+  const id = String(t.id || '');
+  return t.extra?.kind === 'EXAM'
+    || id.startsWith('jxfw-exam/')
+    || id.startsWith('jxfw-course-exam/')
+    || (Array.isArray(t.tags) && t.tags.includes('考试'));
+}
+
+/** 将分钟区间 [startMin, endMin) 映射到节次范围 `{ startPeriod, endPeriod }`。 */
+export function blockRows(periods, startMin, endMin) {
+  const list = [...(periods || [])].sort((a, b) => a.index - b.index);
+  if (!list.length) return null;
+  const hit = [];
+  for (const p of list) {
+    const ps = parseTime(p.start);
+    const pe = parseTime(p.end);
+    if (Number.isNaN(ps) || Number.isNaN(pe)) continue;
+    if (ps < endMin && startMin < pe) hit.push(p.index);
+  }
+  if (hit.length) return { startPeriod: hit[0], endPeriod: hit[hit.length - 1] };
+  let best = list[0].index;
+  let bestDist = Infinity;
+  for (const p of list) {
+    const ps = parseTime(p.start);
+    if (Number.isNaN(ps)) continue;
+    const dist = Math.abs(ps - startMin);
+    if (dist < bestDist) { bestDist = dist; best = p.index; }
+  }
+  return { startPeriod: best, endPeriod: best };
+}
 
 export function normalizeCourseNameForExam(raw) {
   let s = String(raw || '').trim().replace(/（/g, '(').replace(/）/g, ')').replace(/\s+/g, '');

@@ -417,6 +417,100 @@ button { cursor: pointer; }
   font-weight: 700;
   line-height: 1.15;
 }
+.tt-block.exam {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent);
+}
+.tt-block.exam:not(.short) {
+  padding: 0;
+  gap: 0;
+}
+.tt-exam-body {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 6px 3.5px 3px;
+}
+.tt-exam-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding-top: 1px;
+}
+.tt-exam-seal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2.5px;
+  border-radius: 4.5px;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  font-size: 8.5px;
+  line-height: 10px;
+  font-weight: 700;
+}
+.tt-exam-teacher {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 8.5px;
+  line-height: 10px;
+  opacity: .68;
+}
+.tt-exam-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-weight: 700;
+  text-align: center;
+}
+.tt-exam-title.sz-lg { font-size: 12px; line-height: 14px; }
+.tt-exam-title.sz-md { font-size: 11px; line-height: 12.5px; }
+.tt-exam-title.sz-sm { font-size: 10px; line-height: 11.2px; }
+.v-tok { display: block; white-space: nowrap; }
+.v-tok.tcy { font-size: .78em; line-height: 1.15; letter-spacing: -.4px; }
+.tt-exam-foot {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3.5px 3px;
+  border-top: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+}
+.tt-exam-room {
+  width: 100%;
+  font-size: 8.5px;
+  line-height: 10px;
+  font-weight: 600;
+  opacity: .88;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tt-exam-seat {
+  width: 100%;
+  font-size: 8px;
+  line-height: 9.5px;
+  opacity: .72;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tt-exam-pill {
+  align-self: flex-start;
+  padding: 1px 4.5px;
+  border-radius: 999px;
+  font-size: 9px;
+  line-height: 10px;
+  font-weight: 700;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
 .tt-empty {
   text-align: center;
   color: var(--on-surface-variant);
@@ -729,6 +823,14 @@ dialog.sheet::backdrop {
   .tt-block .tt-loc { font-size: 12px; }
   .tt-block .tt-teacher { font-size: 11.5px; }
   .tt-block.short .tt-loc { display: -webkit-box; -webkit-line-clamp: 1; line-clamp: 1; }
+  .tt-block.exam:not(.short) { padding: 8px 10px; gap: 3px; }
+  .tt-exam-body { flex-direction: column; padding: 0; gap: 3px; }
+  .tt-exam-side { flex-direction: row; align-items: center; justify-content: space-between; width: 100%; gap: 6px; padding-top: 0; }
+  .tt-exam-seal { flex-direction: row; padding: 2px 6px; border-radius: 999px; font-size: 10.5px; line-height: 12px; }
+  .tt-exam-teacher { flex-direction: row; font-size: 11px; line-height: 13px; }
+  .tt-exam-title { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: flex-start; text-align: left; font-size: 14px !important; line-height: 18px !important; }
+  .tt-exam-foot { border-top: 0; padding: 0; align-items: flex-start; }
+  .tt-exam-room, .tt-exam-seat { text-align: left; font-size: 12px; line-height: 15px; }
 }
 
 @keyframes pop { from { transform: scale(.96); opacity: 0; } }

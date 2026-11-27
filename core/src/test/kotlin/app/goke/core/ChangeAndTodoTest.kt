@@ -595,4 +595,34 @@ class ChangeAndTodoTest {
         assertEquals(1, conflicts.size)
         assertEquals("大学英语", conflicts.single().bTitle)
     }
+
+    @Test fun `splitExamDisplay and vertical tokenizer strip prefixes and keep short suffixes upright`() {
+        val pe = JxfwSync.splitExamDisplay("考试：体育（3）", "考试")
+        assertEquals("考试", pe.badgeFull)
+        assertEquals("考试", pe.badgeShort)
+        assertEquals("体育(3)", pe.title)
+        assertEquals(listOf("体", "育", "(3)"), JxfwSync.tokenizeVerticalTitle(pe.title))
+
+        val mid = JxfwSync.splitExamDisplay("期中考试：概率论", "考试")
+        assertEquals("期中考试", mid.badgeFull)
+        assertEquals("期中", mid.badgeShort)
+        assertEquals("概率论", mid.title)
+
+        val quiz = JxfwSync.splitExamDisplay("随堂测验：数据结构与算法", "考试")
+        assertEquals("随堂测验", quiz.badgeFull)
+        assertEquals("随堂", quiz.badgeShort)
+        assertEquals("数据结构与算法", quiz.title)
+        assertEquals("数\n据\n结\n构\n与\n…", JxfwSync.formatVerticalText(quiz.title, 6))
+
+        val makeup = JxfwSync.splitExamDisplay("补考：大学物理（2）", "考试")
+        assertEquals("补考", makeup.badgeFull)
+        assertEquals("补考", makeup.badgeShort)
+        assertEquals("大学物理(2)", makeup.title)
+        assertEquals(listOf("大", "学", "物", "理", "(2)"), JxfwSync.tokenizeVerticalTitle(makeup.title))
+
+        val manual = JxfwSync.splitExamDisplay("高等数学", "考试")
+        assertEquals("考试", manual.badgeFull)
+        assertEquals("考试", manual.badgeShort)
+        assertEquals("高等数学", manual.title)
+    }
 }

@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
 import app.goke.core.agenda.BlockItem
+import app.goke.core.agenda.CourseItem
 import app.goke.core.agenda.TaskItem
 import app.goke.core.change.Change
 import app.goke.core.change.ChangeSet
@@ -66,6 +67,7 @@ import app.goke.core.importer.IcsImporter
 import app.goke.core.importer.IcsParser
 import app.goke.core.importer.ImportPlanner
 import app.goke.core.model.Attachment
+import app.goke.core.model.Course
 import app.goke.core.model.Event
 import app.goke.core.model.EventKind
 import app.goke.core.model.Freq
@@ -73,6 +75,7 @@ import app.goke.core.model.Source
 import app.goke.core.model.Task
 import app.goke.core.model.TaskList
 import app.goke.core.parcel.ParcelInfo
+import app.goke.core.recurrence.CourseOccurrence
 import app.goke.core.time.SemesterCalendar
 import app.goke.core.time.TimePhase
 import app.goke.core.util.Ids
@@ -1191,5 +1194,179 @@ class ScreensSmokeTest {
         rule.onNodeWithText(app.getString(R.string.notif_snooze_after_hours, 4)).assertIsDisplayed()
         rule.onNodeWithText(app.getString(R.string.notif_snooze_after_hours, 1)).performClick()
         rule.waitUntil(5_000) { dismissed }
+    }
+
+    @Test
+    fun examTimetableAndAgendaShots() {
+        val snap = app.repo.snapshot.value
+        val sem = snap.currentSemester!!
+        val cal = SemesterCalendar(sem)
+        val curWeek = cal.weekOf(LocalDate.now()).coerceIn(1, sem.totalWeeks)
+        val now = System.currentTimeMillis()
+        val examCourses =
+            listOf(
+                Course(
+                    id = "exam_pe",
+                    semesterId = sem.id,
+                    name = "考试：体育（3）",
+                    teacher = "李勃",
+                    room = "",
+                    dayOfWeek = 2,
+                    startPeriod = 3,
+                    endPeriod = 4,
+                    weeks = setOf(curWeek),
+                    colorIndex = 2,
+                    kind = EventKind.EXAM,
+                ),
+                Course(
+                    id = "exam_prob",
+                    semesterId = sem.id,
+                    name = "期中考试：概率论",
+                    teacher = "王伟",
+                    room = "教3-204",
+                    dayOfWeek = 3,
+                    startPeriod = 3,
+                    endPeriod = 4,
+                    weeks = setOf(curWeek),
+                    colorIndex = 2,
+                    note = "大学城校区 · 座位号 18",
+                    kind = EventKind.EXAM,
+                ),
+                Course(
+                    id = "exam_ds",
+                    semesterId = sem.id,
+                    name = "随堂测验：数据结构与算法",
+                    teacher = "陈思远",
+                    room = "实4-401",
+                    dayOfWeek = 4,
+                    startPeriod = 3,
+                    endPeriod = 4,
+                    weeks = setOf(curWeek),
+                    colorIndex = 2,
+                    kind = EventKind.EXAM,
+                ),
+                Course(
+                    id = "exam_phy",
+                    semesterId = sem.id,
+                    name = "补考：大学物理（2）",
+                    teacher = "张敏",
+                    room = "教1-102",
+                    dayOfWeek = 5,
+                    startPeriod = 1,
+                    endPeriod = 1,
+                    weeks = setOf(curWeek),
+                    colorIndex = 2,
+                    note = "座位号 07",
+                    kind = EventKind.EXAM,
+                ),
+            )
+        runBlocking {
+            val replaceExisting =
+                snap.courses
+                    .filter {
+                        it.semesterId == sem.id &&
+                            it.deletedAt == null &&
+                            curWeek in it.weeks &&
+                            ((it.dayOfWeek in 2..4 && it.startPeriod <= 4 && it.endPeriod >= 3) || (it.dayOfWeek == 5 && it.startPeriod == 1))
+                    }.map { Change.Remove(it) }
+            app.repo.commit(
+                ChangeSet(
+                    "exam_shots",
+                    "exam_shots",
+                    Source.MANUAL,
+                    now,
+                    replaceExisting + examCourses.map { Change.Add(it) },
+                ),
+            )
+        }
+
+        val page = mutableIntStateOf(0)
+        val today = LocalDate.now()
+        val occPe =
+            CourseOccurrence(
+                course = examCourses[0],
+                week = curWeek,
+                date = today,
+                startPeriod = 3,
+                endPeriod = 4,
+                start = today.atTime(10, 25),
+                end = today.atTime(12, 0),
+                room = "",
+                rescheduled = false,
+            )
+        val occProb =
+            CourseOccurrence(
+                course = examCourses[1],
+                week = curWeek,
+                date = today,
+                startPeriod = 3,
+                endPeriod = 4,
+                start = today.atTime(14, 0),
+                end = today.atTime(15, 35),
+                room = "教3-204",
+                rescheduled = false,
+            )
+        DebugHooks.suppressUiForShots = true
+        try {
+            app.settings.update { it.copy(darkMode = DarkMode.LIGHT) }
+            rule.setContent {
+                Host {
+                    when (page.intValue) {
+                        0 -> {
+                            GokeRoot(app, null, initialTab = Tab.TIMETABLE) {}
+                        }
+
+                        else -> {
+                            Column(Modifier.padding(16.dp)) {
+                                AgendaRow(
+                                    item = CourseItem(occPe),
+                                    now = today.atTime(9, 0),
+                                    showTeacher = true,
+                                    onOpenCourse = {},
+                                    onOpenEvent = {},
+                                    onOpenTask = {},
+                                    onToggleTask = { _, _ -> },
+                                )
+                                AgendaRow(
+                                    item = CourseItem(occProb),
+                                    now = today.atTime(9, 0),
+                                    showTeacher = true,
+                                    onOpenCourse = {},
+                                    onOpenEvent = {},
+                                    onOpenTask = {},
+                                    onToggleTask = { _, _ -> },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            rule.waitForIdle()
+            rule.onNodeWithContentDescription("考试 体育(3)").assertIsDisplayed()
+            rule.onNodeWithContentDescription("期中考试 概率论").assertIsDisplayed()
+            rule.onNodeWithContentDescription("随堂测验 数据结构与算法").assertIsDisplayed()
+            rule.onNodeWithText("补考").assertIsDisplayed()
+            rule.onAllNodesWithText("大学物理(2)")[0].assertIsDisplayed()
+            shot("exam_timetable_light")
+
+            app.settings.update { it.copy(darkMode = DarkMode.DARK) }
+            rule.waitForIdle()
+            shot("exam_timetable_dark")
+
+            rule.runOnIdle { page.intValue = 1 }
+            rule.waitForIdle()
+            rule.onNodeWithText("体育(3)").assertIsDisplayed()
+            rule.onNodeWithText("概率论").assertIsDisplayed()
+            rule.onNodeWithText("期中考试").assertIsDisplayed()
+            rule.onNodeWithText("考试：体育（3）").assertDoesNotExist()
+            shot("exam_agenda_dark")
+
+            app.settings.update { it.copy(darkMode = DarkMode.LIGHT) }
+            rule.waitForIdle()
+            shot("exam_agenda_light")
+        } finally {
+            app.settings.update { it.copy(darkMode = DarkMode.SYSTEM) }
+            DebugHooks.suppressUiForShots = false
+        }
     }
 }

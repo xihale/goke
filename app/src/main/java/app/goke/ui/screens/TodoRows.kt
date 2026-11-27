@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.goke.R
 import app.goke.core.change.Edits
+import app.goke.core.jxfw.JxfwSync
 import app.goke.core.model.Snapshot
 import app.goke.core.model.Source
 import app.goke.core.model.Task
@@ -181,13 +182,17 @@ fun buildTodoRowModel(
     val course = index.courseById[task.courseId]
     val code = task.parcelCode()
     val station = if (code != null) task.parcelLabel()?.takeIf { it.isNotBlank() } else null
+    val examTag = if (task.isExam) context.getString(R.string.kind_exam) else null
     val meta =
         buildList {
             if (task.dropped) add(context.getString(R.string.todo_dropped_mark))
             if (course != null && !(task.dueBeforeNextClass && due != null)) add(course.name)
             list?.let { add(it.name) }
             if (total > 0) add(context.getString(R.string.subtasks_progress, done, total))
-            task.tags.take(2).forEach { add("#$it") }
+            task.tags
+                .filter { it != examTag }
+                .take(2)
+                .forEach { add("#$it") }
         }.joinToString(" · ")
     val dueText =
         due?.let {
@@ -328,14 +333,42 @@ fun TodoLine(
             if (code != null) {
                 ParcelCodeHeadline(code = code, done = isDone, copyEnabled = !selectMode)
             } else {
-                Text(
-                    model.task.title,
-                    style = typography.bodyLarge,
-                    color = titleColor,
-                    textDecoration = if (isDone) TextDecoration.LineThrough else null,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                val examDisplay =
+                    if (model.task.isExam) {
+                        JxfwSync.splitExamDisplay(model.task.title, stringResource(R.string.kind_exam))
+                    } else {
+                        null
+                    }
+                if (examDisplay != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            examDisplay.title,
+                            style = typography.bodyLarge,
+                            color = titleColor,
+                            textDecoration = if (isDone) TextDecoration.LineThrough else null,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        Tag(
+                            examDisplay.badgeFull,
+                            scheme.tertiaryContainer.copy(alpha = if (isDone) doneAlpha else 1f),
+                            scheme.onTertiaryContainer.copy(alpha = if (isDone) doneAlpha else 1f),
+                        )
+                    }
+                } else {
+                    Text(
+                        model.task.title,
+                        style = typography.bodyLarge,
+                        color = titleColor,
+                        textDecoration = if (isDone) TextDecoration.LineThrough else null,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             val dueText = model.dueText
             val meta = model.metaText

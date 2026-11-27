@@ -151,8 +151,67 @@ function semesterCalendar(sem) {
   };
 }
 
+const EXAM_PREFIX_CAPTURE_RE = /^((?:期中|期末|随堂|结课|实验|上机)?(?:考试|测验|小测|考核)|(?:期中|期末|随堂|结课)测试|补考|重考|缓考|机考|机试)\s*[:：·\-—]\s*(.*)$/;
 const EXAM_NAME_PREFIX_RE = /^(?:(?:期中|期末|随堂|结课|实验|上机)?(?:考试|测验|小测|考核)|(?:期中|期末|随堂|结课)测试|补考|重考|缓考|机考|机试)\s*[:：·\-—]\s*/;
 const EXAM_NAME_SUFFIX_RE = /\s*[:：·\-—]?\s*(?:(?:期中|期末|随堂|结课|实验|上机)?(?:考试|测验|小测|考核)|(?:期中|期末|随堂|结课)测试|补考|重考|缓考|机考|机试)$/;
+const EXAM_SEAT_RE = /座位号\s*([^\s·,，;；]+)/;
+const VERTICAL_PAREN_RE = /^\([A-Za-z0-9+\-]{1,2}\)/;
+const VERTICAL_ASCII_RE = /^[A-Za-z0-9+\-]{1,3}/;
+
+function shortenExamBadge(badgeFull) {
+  if (badgeFull.includes('期中')) return '期中';
+  if (badgeFull.includes('期末')) return '期末';
+  if (badgeFull.includes('随堂')) return '随堂';
+  if (badgeFull.includes('结课')) return '结课';
+  if (badgeFull.includes('补考')) return '补考';
+  if (badgeFull.includes('重考')) return '重考';
+  if (badgeFull.includes('缓考')) return '缓考';
+  if (badgeFull.includes('机考') || badgeFull.includes('机试') || badgeFull.includes('上机')) return '机考';
+  if (badgeFull.includes('实验')) return '实验';
+  if (badgeFull.includes('测验') || badgeFull.includes('小测') || badgeFull.includes('测试')) return '测验';
+  return badgeFull.slice(0, 2);
+}
+
+function extractExamSeat(note) {
+  const m = EXAM_SEAT_RE.exec(String(note || ''));
+  return m && m[1] ? m[1].trim() : null;
+}
+
+function splitExamDisplay(rawName, fallbackBadge = '考试') {
+  const trimmed = String(rawName || '').trim();
+  const m = EXAM_PREFIX_CAPTURE_RE.exec(trimmed);
+  const prefix = m && m[1] ? m[1].trim() : '';
+  const rest = m && m[2] ? m[2].trim() : '';
+  const title = (rest || trimmed).replace(/（/g, '(').replace(/）/g, ')');
+  const badgeFull = prefix || String(fallbackBadge || '考试').trim() || '考试';
+  return { badgeFull, badgeShort: shortenExamBadge(badgeFull), title };
+}
+
+function tokenizeVerticalTitle(raw) {
+  const norm = String(raw || '').trim().replace(/（/g, '(').replace(/）/g, ')');
+  if (!norm) return [];
+  const tokens = [];
+  let i = 0;
+  while (i < norm.length) {
+    const rest = norm.slice(i);
+    const paren = VERTICAL_PAREN_RE.exec(rest);
+    if (paren) {
+      tokens.push({ text: paren[0], tcy: true });
+      i += paren[0].length;
+      continue;
+    }
+    const ascii = VERTICAL_ASCII_RE.exec(rest);
+    if (ascii) {
+      tokens.push({ text: ascii[0], tcy: true });
+      i += ascii[0].length;
+      continue;
+    }
+    const ch = norm[i];
+    if (ch.trim()) tokens.push({ text: ch, tcy: false });
+    i++;
+  }
+  return tokens;
+}
 
 function normalizeCourseNameForExam(raw) {
   let s = String(raw || '').trim().replace(/（/g, '(').replace(/）/g, ')').replace(/\s+/g, '');
@@ -765,17 +824,61 @@ function renderViewer(root, data) {
       };
       if (progStyle) blockStyle['--prog'] = progStyle;
 
-      grid.append(h('button', {
-        type: 'button',
-        class: `tt-block c${(c.colorIndex || 0) % 8}${phaseClass}${span === 1 ? ' short' : ''}`,
-        style: blockStyle,
-        'aria-label': `${c.name}，${WEEKDAYS[dow(o.day) - 1]}第${o.startPeriod}到${o.endPeriod}节${o.room ? `，${o.room}` : ''}`,
-        onclick: () => openCourseDetail(o),
-      },
-      h('b', {}, c.name),
-      roomText ? h('span', { class: 'tt-loc' }, roomText) : null,
-      showTeacher ? h('span', { class: 'tt-teacher' }, c.teacher) : null,
-      o.rescheduled ? h('span', { class: 'tt-resched' }, '已调课') : null));
+      if (c.kind === 'EXAM') {
+        const display = splitExamDisplay(c.name);
+        const seat = extractExamSeat(c.note);
+        const seatText = seat ? `${seat}座` : '';
+        const children = [];
+        if (span >= 2) {
+          const badgeTokens = tokenizeVerticalTitle(display.badgeShort).slice(0, 2);
+          const teacherTokens = showTeacher && c.teacher ? tokenizeVerticalTitle(c.teacher).slice(0, span >= 3 ? 4 : 3) : [];
+          const hasFooter = Boolean(roomText || seatText);
+          const maxTokens = span >= 3 ? (hasFooter ? 9 : 11) : (seatText ? 6 : 7);
+          const rawTokens = tokenizeVerticalTitle(display.title);
+          const titleTokens = rawTokens.length > maxTokens ? [...rawTokens.slice(0, maxTokens - 1), { text: '…', tcy: false }] : rawTokens;
+          const sizeClass = rawTokens.length <= 4 ? 'sz-lg' : rawTokens.length <= 6 ? 'sz-md' : 'sz-sm';
+          children.push(
+            h('div', { class: 'tt-exam-body' },
+              h('div', { class: 'tt-exam-side' },
+                h('div', { class: 'tt-exam-seal' }, badgeTokens.map((t) => h('span', { class: `v-tok${t.tcy ? ' tcy' : ''}` }, t.text))),
+                teacherTokens.length ? h('div', { class: 'tt-exam-teacher' }, teacherTokens.map((t) => h('span', { class: `v-tok${t.tcy ? ' tcy' : ''}` }, t.text))) : null),
+              h('div', { class: `tt-exam-title ${sizeClass}` }, titleTokens.map((t) => h('span', { class: `v-tok${t.tcy ? ' tcy' : ''}` }, t.text)))),
+          );
+          if (hasFooter) {
+            children.push(
+              h('div', { class: 'tt-exam-foot' },
+                roomText ? h('span', { class: 'tt-exam-room' }, roomText) : null,
+                seatText ? h('span', { class: 'tt-exam-seat' }, seatText) : null),
+            );
+          }
+        } else {
+          const loc = roomText || seatText;
+          children.push(
+            h('span', { class: 'tt-exam-pill' }, display.badgeShort),
+            h('b', {}, display.title),
+            loc ? h('span', { class: 'tt-loc' }, loc) : null,
+          );
+        }
+        grid.append(h('button', {
+          type: 'button',
+          class: `tt-block exam c${(c.colorIndex || 0) % 8}${phaseClass}${span === 1 ? ' short' : ''}`,
+          style: blockStyle,
+          'aria-label': `${display.badgeFull}：${display.title}，${WEEKDAYS[dow(o.day) - 1]}第${o.startPeriod}到${o.endPeriod}节${o.room ? `，${o.room}` : ''}`,
+          onclick: () => openCourseDetail(o),
+        }, children));
+      } else {
+        grid.append(h('button', {
+          type: 'button',
+          class: `tt-block c${(c.colorIndex || 0) % 8}${phaseClass}${span === 1 ? ' short' : ''}`,
+          style: blockStyle,
+          'aria-label': `${c.name}，${WEEKDAYS[dow(o.day) - 1]}第${o.startPeriod}到${o.endPeriod}节${o.room ? `，${o.room}` : ''}`,
+          onclick: () => openCourseDetail(o),
+        },
+        h('b', {}, c.name),
+        roomText ? h('span', { class: 'tt-loc' }, roomText) : null,
+        showTeacher ? h('span', { class: 'tt-teacher' }, c.teacher) : null,
+        o.rescheduled ? h('span', { class: 'tt-resched' }, '已调课') : null));
+      }
     }
 
     if (week === curWeek && today >= cal.weekStart(week) && today <= cal.weekEnd(week)) {

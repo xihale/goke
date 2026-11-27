@@ -8,6 +8,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -124,10 +125,16 @@ fun AgendaRow(
                 } else {
                     rawRoomText
                 }
+            val examDisplay =
+                if (o.course.isExam) {
+                    JxfwSync.splitExamDisplay(o.course.name, stringResource(R.string.kind_exam))
+                } else {
+                    null
+                }
             val tag =
                 when {
-                    o.course.isExam && o.rescheduled -> "${stringResource(R.string.kind_exam)} · ${stringResource(R.string.rescheduled)}"
-                    o.course.isExam -> stringResource(R.string.kind_exam)
+                    examDisplay != null && o.rescheduled -> "${examDisplay.badgeFull} · ${stringResource(R.string.rescheduled)}"
+                    examDisplay != null -> examDisplay.badgeFull
                     o.rescheduled -> stringResource(R.string.rescheduled)
                     else -> null
                 }
@@ -137,12 +144,13 @@ fun AgendaRow(
                 endTime = o.end.hm(),
                 bg = colors.bg(o.course.colorIndex),
                 fg = colors.fg(o.course.colorIndex),
-                title = o.course.name,
+                title = examDisplay?.title ?: o.course.name,
                 subtitle = listOf(roomText, if (showTeacher) o.course.teacher else "").filter { it.isNotBlank() }.joinToString(" · "),
                 phase = phase,
                 progress = progress,
                 onClick = { onOpenCourse(o.course.id) },
                 tag = tag,
+                emphasizedBorder = o.course.isExam,
             )
         }
 
@@ -151,9 +159,15 @@ fun AgendaRow(
             val phase = if (item.allDay) TimePhase.UPCOMING else CourseProgress.phase(item.start, item.end, now)
             val progress = if (item.allDay) 0f else CourseProgress.fraction(item.start, item.end, now)
             val timeLabel = if (item.allDay) stringResource(R.string.all_day) else item.start.hm()
+            val examDisplay =
+                if (e.kind == EventKind.EXAM) {
+                    JxfwSync.splitExamDisplay(e.title, stringResource(R.string.kind_exam))
+                } else {
+                    null
+                }
             val kindTag =
                 when (e.kind) {
-                    EventKind.EXAM -> stringResource(R.string.kind_exam)
+                    EventKind.EXAM -> examDisplay?.badgeFull ?: stringResource(R.string.kind_exam)
                     EventKind.COUNTDOWN -> stringResource(R.string.kind_countdown)
                     else -> null
                 }
@@ -163,12 +177,13 @@ fun AgendaRow(
                 endTime = if (!item.allDay && item.end.isAfter(item.start)) item.end.hm() else null,
                 bg = colors.bg(e.colorIndex),
                 fg = colors.fg(e.colorIndex),
-                title = e.title,
+                title = examDisplay?.title ?: e.title,
                 subtitle = ctx.formatRooms(e.location),
                 phase = phase,
                 progress = progress,
                 onClick = { onOpenEvent(e.id) },
                 tag = kindTag,
+                emphasizedBorder = e.kind == EventKind.EXAM,
             )
         }
 
@@ -190,9 +205,16 @@ fun AgendaRow(
                 val colorIndex = listColors[t.listId] ?: 1
                 val phase = if (t.done) TimePhase.FINISHED else CourseProgress.phase(item.start, item.end, now)
                 val progress = if (t.done) 1f else CourseProgress.fraction(item.start, item.end, now)
+                val isExamBlock = t.extra["kind"] == EventKind.EXAM.name
+                val examDisplay =
+                    if (isExamBlock) {
+                        JxfwSync.splitExamDisplay(t.title, stringResource(R.string.kind_exam))
+                    } else {
+                        null
+                    }
                 val kindTag =
                     when (t.extra["kind"]) {
-                        EventKind.EXAM.name -> stringResource(R.string.kind_exam)
+                        EventKind.EXAM.name -> examDisplay?.badgeFull ?: stringResource(R.string.kind_exam)
                         EventKind.COUNTDOWN.name -> stringResource(R.string.kind_countdown)
                         else -> null
                     }
@@ -208,12 +230,13 @@ fun AgendaRow(
                     endTime = if (item.end.isAfter(item.start)) item.end.hm() else null,
                     bg = colors.bg(colorIndex),
                     fg = colors.fg(colorIndex),
-                    title = t.title,
+                    title = examDisplay?.title ?: t.title,
                     subtitle = location,
                     phase = phase,
                     progress = progress,
                     onClick = { onOpenTask(t.id) },
                     tag = kindTag,
+                    emphasizedBorder = isExamBlock,
                 )
             }
         }
@@ -232,6 +255,7 @@ private fun RowShell(
     progress: Float,
     onClick: () -> Unit,
     tag: String? = null,
+    emphasizedBorder: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     // 进行中按时间比例从左向右渐进置灰，已结束整行退灰；文字保持可读对比度
@@ -251,6 +275,12 @@ private fun RowShell(
                 phase = phase,
                 progress = progress,
                 axis = CourseProgressAxis.HORIZONTAL,
+            ).then(
+                if (emphasizedBorder) {
+                    Modifier.border(0.8.dp, textFg.copy(alpha = 0.28f), MaterialTheme.shapes.medium)
+                } else {
+                    Modifier
+                },
             ).then(
                 if (stateDesc != null) {
                     Modifier.semantics { stateDescription = stateDesc }
@@ -328,14 +358,42 @@ fun TaskRow(
                     )
                 }
             } else {
-                Text(
-                    task.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = titleColor.copy(alpha = rowAlpha),
-                    textDecoration = if (task.done) TextDecoration.LineThrough else TextDecoration.None,
-                )
+                val examDisplay =
+                    if (task.isExam) {
+                        JxfwSync.splitExamDisplay(task.title, stringResource(R.string.kind_exam))
+                    } else {
+                        null
+                    }
+                if (examDisplay != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            examDisplay.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = titleColor.copy(alpha = rowAlpha),
+                            textDecoration = if (task.done) TextDecoration.LineThrough else TextDecoration.None,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        Tag(
+                            examDisplay.badgeFull,
+                            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = rowAlpha),
+                            MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = rowAlpha),
+                        )
+                    }
+                } else {
+                    Text(
+                        task.title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = titleColor.copy(alpha = rowAlpha),
+                        textDecoration = if (task.done) TextDecoration.LineThrough else TextDecoration.None,
+                    )
+                }
                 if (subtitle != null) {
                     Text(
                         subtitle,

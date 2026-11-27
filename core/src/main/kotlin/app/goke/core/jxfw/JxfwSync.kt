@@ -64,10 +64,109 @@ object JxfwSync {
         }
     }
 
+    private val EXAM_PREFIX_CAPTURE_RE =
+        Regex("""^((?:期中|期末|随堂|结课|实验|上机)?(?:考试|测验|小测|考核)|(?:期中|期末|随堂|结课)测试|补考|重考|缓考|机考|机试)\s*[:：·\-—]\s*(.*)$""")
     private val EXAM_NAME_PREFIX_RE =
         Regex("""^(?:(?:期中|期末|随堂|结课|实验|上机)?(?:考试|测验|小测|考核)|(?:期中|期末|随堂|结课)测试|补考|重考|缓考|机考|机试)\s*[:：·\-—]\s*""")
     private val EXAM_NAME_SUFFIX_RE =
         Regex("""\s*[:：·\-—]?\s*(?:(?:期中|期末|随堂|结课|实验|上机)?(?:考试|测验|小测|考核)|(?:期中|期末|随堂|结课)测试|补考|重考|缓考|机考|机试)$""")
+
+    data class ExamDisplay(
+        val badgeFull: String,
+        val badgeShort: String,
+        val title: String,
+    )
+
+    private fun shortenExamBadge(badgeFull: String): String =
+        when {
+            "期中" in badgeFull -> "期中"
+            "期末" in badgeFull -> "期末"
+            "随堂" in badgeFull -> "随堂"
+            "结课" in badgeFull -> "结课"
+            "补考" in badgeFull -> "补考"
+            "重考" in badgeFull -> "重考"
+            "缓考" in badgeFull -> "缓考"
+            "机考" in badgeFull || "机试" in badgeFull || "上机" in badgeFull -> "机考"
+            "实验" in badgeFull -> "实验"
+            "测验" in badgeFull || "小测" in badgeFull || "测试" in badgeFull -> "测验"
+            else -> badgeFull.take(2)
+        }
+
+    /** 拆分展示用考试徽标与去前缀后的干净课名，统一全半角括号。 */
+    fun splitExamDisplay(
+        rawName: String,
+        fallbackBadge: String,
+    ): ExamDisplay {
+        val trimmed = rawName.trim()
+        val m = EXAM_PREFIX_CAPTURE_RE.find(trimmed)
+        val prefix =
+            m
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        val rest =
+            m
+                ?.groupValues
+                ?.getOrNull(2)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        val cleanTitle = (rest ?: trimmed).replace('（', '(').replace('）', ')')
+        val badgeFull = prefix ?: fallbackBadge.trim().ifEmpty { "考试" }
+        return ExamDisplay(
+            badgeFull = badgeFull,
+            badgeShort = shortenExamBadge(badgeFull),
+            title = cleanTitle,
+        )
+    }
+
+    private val VERTICAL_PAREN_RE = Regex("""^\([A-Za-z0-9+\-]{1,2}\)""")
+    private val VERTICAL_ASCII_RE = Regex("""^[A-Za-z0-9+\-]{1,3}""")
+
+    /** 将标题按直立纵中横切分为竖排 token：短括号后缀 `(3)` 与 `<=3` 位 ASCII 串保持整体直立。 */
+    fun tokenizeVerticalTitle(raw: String): List<String> {
+        val norm = raw.trim().replace('（', '(').replace('）', ')')
+        if (norm.isEmpty()) return emptyList()
+        val tokens = mutableListOf<String>()
+        var i = 0
+        while (i < norm.length) {
+            val rest = norm.substring(i)
+            val paren = VERTICAL_PAREN_RE.find(rest)
+            if (paren != null) {
+                tokens += paren.value
+                i += paren.value.length
+                continue
+            }
+            val ascii = VERTICAL_ASCII_RE.find(rest)
+            if (ascii != null) {
+                tokens += ascii.value
+                i += ascii.value.length
+                continue
+            }
+            val ch = norm[i]
+            if (!ch.isWhitespace()) {
+                tokens += ch.toString()
+            }
+            i++
+        }
+        return tokens
+    }
+
+    /** 格式化为竖排多行文本，超出 [maxTokens] 时末尾收为 `…`。 */
+    fun formatVerticalText(
+        raw: String,
+        maxTokens: Int,
+    ): String {
+        val tokens = tokenizeVerticalTitle(raw)
+        if (tokens.isEmpty() || maxTokens <= 0) return ""
+        val limited =
+            if (tokens.size > maxTokens) {
+                if (maxTokens == 1) listOf("…") else tokens.take(maxTokens - 1) + "…"
+            } else {
+                tokens
+            }
+        return limited.joinToString("\n")
+    }
 
     /** 归一化课程/考试名：剥离前后缀的考试标记、统一全半角括号与空白，用于随堂考/同课考试去重与升层。 */
     fun normalizeCourseNameForExam(raw: String): String {

@@ -51,12 +51,13 @@ export const todayView = {
           : '好好休息，或者添加一件想做的事'),
         h('span', { class: 'summary-count' }, total ? `${done}/${total}` : '')));
 
+    const listColors = new Map(view.lists.map((l) => [l.id, l.colorIndex ?? 1]));
     const timeline = h('section', { class: 'timeline' });
     if (ag.allDay.length) timeline.append(h('div', { class: 'allday' }, ag.allDay.map((e) => eventCard(e, { day }))));
     for (const x of ag.timed) {
       const card = x.kind === 'course' ? courseCard(x, { past: isPast(x) })
         : x.kind === 'event' ? eventCard(x, { past: isPast(x), day })
-          : blockCard(x);
+          : blockCard(x, { past: isPast(x), listColors });
       const endLabel = x.kind === 'event' && x.endDay > day ? '' : fmtTime(x.endMin);
       timeline.append(h('div', { class: 'tl-row' },
         h('div', { class: 'tl-time' }, h('b', {}, x.kind === 'event' && x.day < day ? '继续' : fmtTime(x.startMin)), h('span', {}, endLabel)),
