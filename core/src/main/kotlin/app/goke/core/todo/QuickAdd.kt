@@ -1,9 +1,35 @@
 package app.goke.core.todo
 
+import app.goke.core.model.Reminders
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+
+data class QuickAddConfig(
+    /** 触发普通/持续提醒的关键词（去空白；为空表示禁用关键词简写）。默认「提醒」。 */
+    val remindKeyword: String = DEFAULT_REMIND_KEYWORD,
+    /** 命中普通「提醒」时的默认提前分钟列表（自动去重排序，空则回退到 [DEFAULT_REMIND_MINUTES]）。 */
+    val remindMinutesList: List<Int> = DEFAULT_REMIND_MINUTES,
+    /** 命中「提醒!」/「提醒！」时的提前分钟列表（空则沿用 [effectiveRemindMinutes]）。 */
+    val persistentRemindMinutesList: List<Int> = DEFAULT_REMIND_MINUTES,
+    /** 「提醒!」/「提醒！」是否开启持续提醒（一直响，直到完成或关掉）。 */
+    val bangPersistent: Boolean = true,
+) {
+    val normalizedKeyword: String get() = remindKeyword.trim()
+    val effectiveRemindMinutes: List<Int>
+        get() = Reminders.normalize(null, remindMinutesList).ifEmpty { DEFAULT_REMIND_MINUTES }
+    val effectivePersistentRemindMinutes: List<Int>
+        get() = Reminders.normalize(null, persistentRemindMinutesList).ifEmpty { effectiveRemindMinutes }
+
+    companion object {
+        const val DEFAULT_REMIND_KEYWORD = "提醒"
+
+        /** 15 分钟前 + 准时（经 Reminders.normalize 升序归一化为 [0, 15]）。 */
+        val DEFAULT_REMIND_MINUTES: List<Int> = listOf(0, 15)
+        val DEFAULT = QuickAddConfig()
+    }
+}
 
 data class QuickAddResult(
     val title: String,
@@ -16,9 +42,13 @@ data class QuickAddResult(
     val courseName: String? = null,
     /** 被识别并从标题里剔除的原文片段（供输入框高亮、点标签回写）。 */
     val tokens: List<QuickToken> = emptyList(),
+    /** 由快速输入解析出的提前提醒分钟列表（已归一化升序）；空表示未写提醒语法。 */
+    val remindMinutesList: List<Int> = emptyList(),
+    /** 是否开启持续提醒（需配合非空 [remindMinutesList] 生效）。 */
+    val remindPersistent: Boolean = false,
 )
 
-enum class QuickTokenKind { DATE, TIME, PRIORITY, LIST, TAG, COURSE }
+enum class QuickTokenKind { DATE, TIME, PRIORITY, LIST, TAG, COURSE, REMIND }
 
 /** 输入里被识别的一段原文。 */
 data class QuickToken(
@@ -26,27 +56,105 @@ data class QuickToken(
     val kind: QuickTokenKind,
 )
 
-/** 一行快速输入：识别日期 / 时间 / 清单（#）/ 标签（@）/ 优先级（!高 !中 !低）。 */
+/** 一行快速输入：识别日期 / 时间 / 清单（#）/ 标签（@）/ 优先级（!高 !中 !低）/ 提醒。 */
 object QuickAdd {
     private val CN = mapOf('零' to 0, '〇' to 0, '一' to 1, '二' to 2, '两' to 2, '三' to 3, '四' to 4, '五' to 5, '六' to 6, '七' to 7, '八' to 8, '九' to 9)
+
+    private const val REMIND_LB = "(^|[\\s,，。.;；:：、(\\[【（])"
+    private const val REMIND_BANG = "([!！](?!(?:高|中|低|[123])(?![0-9])))?"
+    private const val REMIND_RB = "(?=$|[\\s,，。.;；:：、)\\]】）#@/]|[!！](?:高|中|低|[123])(?![0-9]))"
+    private const val DUR_NUM = "(\\d{1,4}|[一二两三四五六七八九十]{1,3})"
+    private const val DUR_UNIT = "(分钟|分|小时|时|天|min|m|h|d)"
+    private const val PERIOD = "(清晨|早晨|早间|早上|上午|中午|午间|午后|下午|傍晚|晚间|晚上|夜间|夜里|半夜|深夜|凌晨)"
+    private const val HOUR_PART = "(\\d{1,2}|[一二两三四五六七八九十]{1,3})"
+    private const val CN_MIN = "(?:[零〇][一二三四五六七八九]|[一二三四五]?十[一二三四五六七八九]?|[一二三四五六七八九](?=分))"
+    private const val MIN_PART = "(半|一刻|两刻|二刻|三刻|\\d{1,2}(?![A-Za-z])|$CN_MIN)"
+
+    private val PM_PERIODS = setOf("下午", "午后", "傍晚", "晚上", "晚间", "夜间", "夜里")
+    private val NIGHT_TWELVE_PERIODS = setOf("晚上", "夜间", "夜里")
+    private val EARLY_MORNING_PERIODS = setOf("凌晨", "半夜", "深夜")
+    private val LATE_NIGHT_PERIODS = setOf("半夜", "深夜")
+    private val NOON_PERIODS = setOf("中午", "午间")
 
     fun cnNumber(s: String): Int? {
         s.toIntOrNull()?.let { return it }
         if (s.isEmpty()) return null
-        if (s == "十") return 10
-        if (s.startsWith("十")) return 10 + (CN[s.getOrNull(1) ?: return 10] ?: return null)
-        val ten = s.indexOf('十')
+        val cleaned = s.trimStart('零', '〇')
+        if (cleaned.isEmpty()) return 0
+        if (cleaned == "十") return 10
+        if (cleaned.startsWith("十")) {
+            val b = cleaned.getOrNull(1) ?: return 10
+            return if (cleaned.length == 2) 10 + (CN[b] ?: return null) else null
+        }
+        val ten = cleaned.indexOf('十')
         if (ten > 0) {
-            val a = CN[s[0]] ?: return null
-            val b = if (ten + 1 < s.length) CN[s[ten + 1]] ?: return null else 0
+            val a = CN[cleaned[0]] ?: return null
+            val b =
+                when {
+                    ten + 1 == cleaned.length -> 0
+                    ten + 2 == cleaned.length -> CN[cleaned[ten + 1]] ?: return null
+                    else -> return null
+                }
             return a * 10 + b
         }
-        return if (s.length == 1) CN[s[0]] else null
+        return if (cleaned.length == 1) CN[cleaned[0]] else null
+    }
+
+    private fun parseDurationMinutes(
+        numStr: String,
+        unit: String,
+    ): Int? {
+        val n = cnNumber(numStr) ?: return null
+        val mins =
+            when (unit.lowercase()) {
+                "分钟", "分", "min", "m" -> n
+                "小时", "时", "h" -> n * 60
+                "天", "d" -> n * 1440
+                else -> return null
+            }
+        return mins.takeIf { it in 0..10080 }
+    }
+
+    private fun adjustHour(
+        period: String,
+        rawHour: Int,
+        impliedPm: Boolean,
+    ): Int? {
+        if (rawHour !in 0..24) return null
+        var h = rawHour
+        when {
+            period in PM_PERIODS -> {
+                if (period in NIGHT_TWELVE_PERIODS && h == 12) {
+                    h = 0
+                } else if (h in 1..11) {
+                    h += 12
+                }
+            }
+
+            period in EARLY_MORNING_PERIODS -> {
+                if (h == 12) {
+                    h = 0
+                } else if (period in LATE_NIGHT_PERIODS && h in 10..11) {
+                    h += 12
+                }
+            }
+
+            period in NOON_PERIODS -> {
+                if (h in 1..10) h += 12
+            }
+
+            period.isEmpty() && impliedPm && h in 1..11 -> {
+                h += 12
+            }
+        }
+        if (h == 24) h = 0
+        return h.takeIf { it in 0..23 }
     }
 
     fun parse(
         input: String,
         now: LocalDateTime,
+        config: QuickAddConfig = QuickAddConfig.DEFAULT,
     ): QuickAddResult {
         var text = input.trim()
         var priority = 0
@@ -54,6 +162,8 @@ object QuickAdd {
         val tags = mutableListOf<String>()
         val tokens = mutableListOf<QuickToken>()
         var courseName: String? = null
+        val remindOffsets = mutableListOf<Int>()
+        var remindPersistent = false
 
         fun eat(
             src: String,
@@ -64,14 +174,78 @@ object QuickAdd {
             return src.replace(value, " ")
         }
 
-        Regex("[!！](高|中|低|[123])").find(text)?.let {
+        fun eatRange(
+            src: String,
+            range: IntRange,
+            kind: QuickTokenKind,
+        ): String {
+            tokens += QuickToken(src.substring(range).trim(), kind)
+            return src.replaceRange(range, " ")
+        }
+
+        val kw = config.normalizedKeyword
+        if (kw.isNotEmpty()) {
+            val escKw = Regex.escape(kw)
+            val prefixRegex =
+                Regex(
+                    "${REMIND_LB}(提前\\s*(?:(半)\\s*(?:小时|时)|${DUR_NUM}\\s*${DUR_UNIT})\\s*${escKw}${REMIND_BANG})${REMIND_RB}",
+                    RegexOption.IGNORE_CASE,
+                )
+            val suffixRegex =
+                Regex(
+                    "${REMIND_LB}(${escKw}\\s*(?:(半)\\s*(?:小时|时)|${DUR_NUM}\\s*${DUR_UNIT})${REMIND_BANG})${REMIND_RB}",
+                    RegexOption.IGNORE_CASE,
+                )
+            val standaloneRegex = Regex("${REMIND_LB}(${escKw}${REMIND_BANG})${REMIND_RB}")
+
+            fun consumeOffsetPattern(regex: Regex) {
+                var from = 0
+                while (from <= text.length) {
+                    val m = regex.find(text, from) ?: break
+                    val mins =
+                        if (m.groupValues[3] == "半") {
+                            30
+                        } else {
+                            parseDurationMinutes(m.groupValues[4], m.groupValues[5])
+                        }
+                    val tokenRange = m.groups[2]!!.range
+                    if (mins == null) {
+                        from = tokenRange.last + 1
+                        continue
+                    }
+                    remindOffsets += mins
+                    if (m.groupValues[6].isNotEmpty() && config.bangPersistent) {
+                        remindPersistent = true
+                    }
+                    text = eatRange(text, tokenRange, QuickTokenKind.REMIND)
+                    from = 0
+                }
+            }
+
+            consumeOffsetPattern(prefixRegex)
+            consumeOffsetPattern(suffixRegex)
+
+            while (true) {
+                val m = standaloneRegex.find(text) ?: break
+                val hasBang = m.groupValues[3].isNotEmpty()
+                if (hasBang) {
+                    remindOffsets += config.effectivePersistentRemindMinutes
+                    if (config.bangPersistent) remindPersistent = true
+                } else {
+                    remindOffsets += config.effectiveRemindMinutes
+                }
+                text = eatRange(text, m.groups[2]!!.range, QuickTokenKind.REMIND)
+            }
+        }
+
+        Regex("(?<![!！])[!！](高|中|低|[123])(?![0-9])").find(text)?.let {
             priority =
                 when (it.groupValues[1]) {
                     "高", "3" -> 3
                     "中", "2" -> 2
                     else -> 1
                 }
-            text = eat(text, it.value, QuickTokenKind.PRIORITY)
+            text = eatRange(text, it.range, QuickTokenKind.PRIORITY)
         }
         Regex("#([^\\s#@!！，,。.？?]+)[，,。.？?]*").find(text)?.let {
             listName = it.groupValues[1]
@@ -190,27 +364,45 @@ object QuickAdd {
                 text = eat(text, m.value, QuickTokenKind.DATE)
             }
         }
-        // 时间
-        Regex("(早上|上午|中午|下午|傍晚|晚上|凌晨)?\\s*(\\d{1,2}|[一二两三四五六七八九十]{1,3})\\s*(?:点|:|：)\\s*(半|一刻|三刻|\\d{1,2}(?![A-Za-z]))?\\s*分?").find(text)?.let { m ->
-            val period = m.groupValues[1]
-            var h = cnNumber(m.groupValues[2]) ?: -1
-            val mm =
-                when (val g = m.groupValues[3]) {
-                    "半" -> 30
-                    "一刻" -> 15
-                    "三刻" -> 45
-                    "" -> 0
-                    else -> g.toIntOrNull() ?: 0
+        // 时间：先解析「差X分Y点」，再解析标准中/混合时间
+        var parsedExplicitTime = false
+        Regex("$PERIOD?\\s*差\\s*(一刻|半|\\d{1,2}|[零〇一二两三四五六七八九十]{1,3})\\s*(?:分钟|分)?\\s*(?:到)?\\s*$PERIOD?\\s*(\\d{1,2}|[一二两三四五六七八九十]{1,3})\\s*(?:点钟?|时)")
+            .find(text)
+            ?.let { m ->
+                val period = m.groupValues[1].ifEmpty { m.groupValues[3] }
+                val subMin =
+                    when (val g = m.groupValues[2]) {
+                        "一刻" -> 15
+                        "半" -> 30
+                        else -> cnNumber(g)
+                    }
+                val targetHour = cnNumber(m.groupValues[4])?.let { adjustHour(period, it, impliedPm) }
+                if (subMin != null && subMin in 1..59 && targetHour != null) {
+                    time = LocalTime.of(targetHour, 0).minusMinutes(subMin.toLong())
+                    text = eatRange(text, m.range, QuickTokenKind.TIME)
+                    parsedExplicitTime = true
                 }
-            if (h in 0..24) {
-                if ((period == "下午" || period == "晚上" || period == "傍晚") && h < 12) h += 12
-                if (period == "中午" && h < 11) h += 12
-                // 「今晚8点」：日期词已经暗示了下午，别把 8 点当成早上八点
-                if (period.isEmpty() && impliedPm && h in 1..11) h += 12
-                if (h == 24) h = 0
-                time = LocalTime.of(h, mm.coerceIn(0, 59))
-                text = eat(text, m.value, QuickTokenKind.TIME)
             }
+        if (!parsedExplicitTime) {
+            Regex("$PERIOD?\\s*$HOUR_PART\\s*(?:(?:点|时)\\s*(?:过\\s*)?(?:$MIN_PART\\s*(?:分钟|分)?|整|钟)?|(?:[:：])\\s*(\\d{1,2}(?![A-Za-z]))\\s*(?:分钟|分)?)")
+                .find(text)
+                ?.let { m ->
+                    val period = m.groupValues[1]
+                    val hour = cnNumber(m.groupValues[2])?.let { adjustHour(period, it, impliedPm) }
+                    val minStr = m.groupValues[3].ifEmpty { m.groupValues[4] }
+                    val mm =
+                        when (minStr) {
+                            "半", "两刻", "二刻" -> 30
+                            "一刻" -> 15
+                            "三刻" -> 45
+                            "" -> 0
+                            else -> cnNumber(minStr)?.takeIf { it in 0..59 }
+                        }
+                    if (hour != null && mm != null) {
+                        time = LocalTime.of(hour, mm)
+                        text = eatRange(text, m.range, QuickTokenKind.TIME)
+                    }
+                }
         }
         val hasTime = time != null
         var due: LocalDateTime? = null
@@ -219,8 +411,21 @@ object QuickAdd {
             if (date == null && time != null && LocalDateTime.of(d, time).isBefore(now)) d = d.plusDays(1)
             due = LocalDateTime.of(d, time ?: LocalTime.MIDNIGHT)
         }
+        val finalRemind = Reminders.normalize(null, remindOffsets)
+        val finalPersistent = remindPersistent && finalRemind.isNotEmpty()
         val title = text.replace(Regex("\\s+"), " ").trim().ifEmpty { input.trim() }
-        return QuickAddResult(title, due, hasTime, priority, listName, tags, courseName, tokens)
+        return QuickAddResult(
+            title = title,
+            due = due,
+            dueHasTime = hasTime,
+            priority = priority,
+            listName = listName,
+            tags = tags,
+            courseName = courseName,
+            tokens = tokens,
+            remindMinutesList = finalRemind,
+            remindPersistent = finalPersistent,
+        )
     }
 
     /**
@@ -230,6 +435,7 @@ object QuickAdd {
     fun parseLines(
         input: String,
         now: LocalDateTime,
+        config: QuickAddConfig = QuickAddConfig.DEFAULT,
     ): List<QuickBatchItem> {
         val out = mutableListOf<QuickBatchItem>()
         var lastTop: Int? = null
@@ -240,7 +446,7 @@ object QuickAdd {
             val body = raw.trim().replace(Regex("^([-*•·]|\\d{1,2}[.、)）])\\s*"), "").trim()
             if (body.isEmpty()) continue
             val parent = if ((indented || dash) && lastTop != null) lastTop else null
-            out += QuickBatchItem(parse(body, now), parent)
+            out += QuickBatchItem(parse(body, now, config), parent)
             if (parent == null) lastTop = out.lastIndex
         }
         return out
