@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import app.goke.R
 import app.goke.debug.DebugHooks
 import app.goke.jxfw.JxfwException
+import app.goke.jxfw.JxfwNoticesState
 import app.goke.jxfw.JxfwState
 import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
@@ -61,6 +62,7 @@ import app.goke.ui.components.TonalField
 import app.goke.ui.icons.Checklist
 import app.goke.ui.icons.Grade
 import app.goke.ui.icons.MeetingRoom
+import app.goke.ui.icons.NotificationsNone
 import app.goke.ui.icons.OpenInNew
 import app.goke.ui.icons.Sync
 import kotlinx.coroutines.launch
@@ -78,6 +80,7 @@ internal fun jxfwStamp(ms: Long): String = LocalDateTime.ofInstant(Instant.ofEpo
 fun JxfwScreen(onBack: () -> Unit) {
     val app = LocalApp.current
     val state by app.jxfw.state.collectAsState()
+    val noticesState by app.jxfw.noticesState.collectAsState()
     MintScreen(title = stringResource(R.string.jxfw_title), onBack = onBack) {
         Column(
             Modifier
@@ -98,7 +101,7 @@ fun JxfwScreen(onBack: () -> Unit) {
                     )
                 }
             }
-            if (state.loggedIn) AccountPanel(state) else LoginPanel(state)
+            if (state.loggedIn) AccountPanel(state, noticesState) else LoginPanel(state, noticesState)
         }
     }
 }
@@ -155,8 +158,12 @@ internal fun JxfwErrorGuidance(
 }
 
 @Composable
-private fun LoginPanel(state: JxfwState) {
+private fun LoginPanel(
+    state: JxfwState,
+    noticesState: JxfwNoticesState,
+) {
     val app = LocalApp.current
+    val nav = LocalNav.current
     var user by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var localBusy by remember { mutableStateOf(false) }
@@ -219,11 +226,26 @@ private fun LoginPanel(state: JxfwState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp),
         )
+        FormSection {
+            NavRow(
+                title = stringResource(R.string.jxfw_notices_title),
+                subtitle = stringResource(R.string.jxfw_notices_entry_desc),
+                icon = Icons.Rounded.NotificationsNone,
+                trailing =
+                    noticesState.activeUnreadIds.size
+                        .takeIf { it > 0 }
+                        ?.let { stringResource(R.string.jxfw_notices_unread_count, it) },
+                onClick = { nav.push(Route.JxfwNotices) },
+            )
+        }
     }
 }
 
 @Composable
-private fun AccountPanel(state: JxfwState) {
+private fun AccountPanel(
+    state: JxfwState,
+    noticesState: JxfwNoticesState,
+) {
     val ctx = LocalContext.current
     val app = LocalApp.current
     val actions = LocalActions.current
@@ -320,6 +342,16 @@ private fun AccountPanel(state: JxfwState) {
             icon = Icons.Rounded.Checklist,
             onClick = { nav.push(Route.CourseSelection) },
         )
+        NavRow(
+            title = stringResource(R.string.jxfw_notices_title),
+            subtitle = stringResource(R.string.jxfw_notices_entry_desc),
+            icon = Icons.Rounded.NotificationsNone,
+            trailing =
+                noticesState.activeUnreadIds.size
+                    .takeIf { it > 0 }
+                    ?.let { stringResource(R.string.jxfw_notices_unread_count, it) },
+            onClick = { nav.push(Route.JxfwNotices) },
+        )
     }
 
     FormSection(stringResource(R.string.jxfw_term_picker)) {
@@ -341,6 +373,26 @@ private fun AccountPanel(state: JxfwState) {
             checked = state.autoSync,
             onChange = { app.jxfw.setAutoSync(it) },
         )
+        SwitchRow(
+            title = stringResource(R.string.jxfw_notice_auto),
+            subtitle = stringResource(R.string.jxfw_notice_auto_desc),
+            checked = noticesState.enabled,
+            onChange = { app.jxfw.setNoticeEnabled(it) },
+        )
+        if (noticesState.enabled) {
+            SwitchRow(
+                title = stringResource(R.string.jxfw_notice_public),
+                subtitle = stringResource(R.string.jxfw_notice_public_desc),
+                checked = noticesState.publicEnabled,
+                onChange = { app.jxfw.setNoticePublicEnabled(it) },
+            )
+            SwitchRow(
+                title = stringResource(R.string.jxfw_notice_internal),
+                subtitle = stringResource(R.string.jxfw_notice_internal_desc),
+                checked = noticesState.internalEnabled,
+                onChange = { app.jxfw.setNoticeInternalEnabled(it) },
+            )
+        }
     }
     Text(
         stringResource(R.string.jxfw_keystore_reassurance),

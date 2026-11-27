@@ -73,6 +73,8 @@ sealed interface Route {
 
     @Serializable data object Jxfw : Route
 
+    @Serializable data object JxfwNotices : Route
+
     @Serializable data object Grades : Route
 
     @Serializable data object PhysicalTest : Route
@@ -82,6 +84,14 @@ sealed interface Route {
     @Serializable data object CourseSelection : Route
 
     @Serializable data object Reliability : Route
+
+    @Serializable data class CampusResources(
+        val initialTab: Int = 0,
+        val initialQuery: String = "",
+        val initialCode: String = "",
+    ) : Route
+
+    @Serializable data object DropSend : Route
 
     /** uri 为空表示先让用户选择文件。 */
     @Serializable data class Import(

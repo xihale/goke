@@ -8,6 +8,7 @@ import app.goke.core.campus.TzcsStrings
 import app.goke.core.campus.UnavailableCampusAdapterFactory
 import app.goke.core.change.ChangeSet
 import app.goke.core.jxfw.ClassroomBuilding
+import app.goke.core.jxfw.JxfwNotice
 import app.goke.core.jxfw.XkActionResult
 import app.goke.core.jxfw.XkCourseItem
 import app.goke.core.model.Snapshot
@@ -118,6 +119,8 @@ class CampusAdapterFallbackTest {
                 body: String,
             ) = Unit
 
+            override fun postJxfwNoticeNotification(newNotices: List<JxfwNotice>) = Unit
+
             override fun updateWeeklyJxfwAlarm(enabled: Boolean) = Unit
 
             override fun followHotWaterArrearsWorker(enabled: Boolean) = Unit
@@ -145,8 +148,33 @@ class CampusAdapterFallbackTest {
             jxfw.seedStateForTest(
                 state = JxfwState(username = "demo"),
                 buildings = listOf(ClassroomBuilding(code = "01", name = "B1")),
+                noticesState =
+                    app.goke.jxfw.JxfwNoticesState(
+                        notices =
+                            listOf(
+                                JxfwNotice(id = "pub-1", title = "Pub", source = app.goke.core.jxfw.JxfwNoticeSource.PUBLIC),
+                                JxfwNotice(id = "jxfw:1", title = "Int", source = app.goke.core.jxfw.JxfwNoticeSource.INTERNAL),
+                            ),
+                        unreadIds = setOf("pub-1", "jxfw:1"),
+                    ),
             )
             assertEquals(1, jxfw.fetchClassroomBuildings().size)
+            assertTrue(jxfw.noticesState.value.publicEnabled)
+            assertTrue(jxfw.noticesState.value.internalEnabled)
+            jxfw.setNoticePublicEnabled(false)
+            assertFalse(jxfw.noticesState.value.publicEnabled)
+            assertEquals(setOf("jxfw:1"), jxfw.noticesState.value.unreadIds)
+            assertEquals(setOf("jxfw:1"), jxfw.noticesState.value.activeUnreadIds)
+            jxfw.setNoticeInternalEnabled(false)
+            assertFalse(jxfw.noticesState.value.internalEnabled)
+            assertTrue(
+                jxfw.noticesState.value.unreadIds
+                    .isEmpty(),
+            )
+            assertTrue(
+                jxfw.noticesState.value.activeUnreadIds
+                    .isEmpty(),
+            )
 
             val tzcs = UnavailableCampusAdapterFactory.createTzcs(Unit, stubHost)
             assertFalse(tzcs.isSupported)
@@ -160,5 +188,9 @@ class CampusAdapterFallbackTest {
             assertEquals(HotWaterErrorCode.UNSUPPORTED, hwRes.errorCode)
             val ordersRes = hw.fetchOrders(all = false)
             assertTrue(ordersRes is app.goke.hotwater.HotWaterApiResult.Err)
+
+            val dropDefaults = UnavailableCampusAdapterFactory.dropRelayDefaults()
+            assertEquals("", dropDefaults.shareUrl)
+            assertEquals("", dropDefaults.dropUrl)
         }
 }

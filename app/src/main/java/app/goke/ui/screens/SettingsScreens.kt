@@ -143,6 +143,7 @@ import app.goke.ui.icons.Checklist
 import app.goke.ui.icons.Cloud
 import app.goke.ui.icons.DeleteSweep
 import app.goke.ui.icons.FitnessCenter
+import app.goke.ui.icons.FolderOpen
 import app.goke.ui.icons.Grade
 import app.goke.ui.icons.History
 import app.goke.ui.icons.LaptopMac
@@ -369,6 +370,11 @@ fun SettingsScreen() {
                                 Icons.Rounded.LocalShipping,
                                 trailing = stringResource(if (st.parcelEnabled) R.string.parcel_status_on else R.string.parcel_status_off),
                             ) { nav.push(Route.Parcel) }
+                            NavRow(
+                                stringResource(R.string.droprelay_title),
+                                null,
+                                Icons.Rounded.FolderOpen,
+                            ) { nav.push(Route.CampusResources()) }
                         }
                     }
                     item(key = "prefs_section", contentType = "form_section") {

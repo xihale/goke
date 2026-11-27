@@ -60,13 +60,13 @@ class SettingsSearchTest {
     }
 
     @Test
-    fun catalogHas46UniqueValidEntries() {
-        assertEquals(46, SETTINGS_SEARCH_SPECS.size)
+    fun catalogHas47UniqueValidEntries() {
+        assertEquals(47, SETTINGS_SEARCH_SPECS.size)
         val ids = SETTINGS_SEARCH_SPECS.map { it.id }
         assertEquals(ids.size, ids.toSet().size)
 
         val catalog = buildSettingsSearchCatalog(app)
-        assertEquals(46, catalog.size)
+        assertEquals(47, catalog.size)
         for (item in catalog) {
             assertTrue("Blank id", item.id.isNotBlank())
             assertTrue("Blank title for ${item.id}", item.title.isNotBlank())
@@ -120,6 +120,7 @@ class SettingsSearchTest {
         assertEquals("grades", searchSettings("绩点", catalog).first().item.id)
         assertEquals("grades", searchSettings("挂科", catalog).first().item.id)
         assertEquals("parcel", searchSettings("取件码", catalog).first().item.id)
+        assertEquals("campus_resources", searchSettings("droprelay", catalog).first().item.id)
 
         // Multi-token AND matching
         val examRemind = searchSettings("提醒 考试", catalog).map { it.item.id }

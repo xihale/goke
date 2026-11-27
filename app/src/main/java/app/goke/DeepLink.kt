@@ -34,6 +34,16 @@ sealed interface DeepLink {
     data object Parcel : DeepLink
 
     data object HotWater : DeepLink
+
+    data object JxfwNotices : DeepLink
+
+    /** 打开校园快传并预填 6 位取件码预览。 */
+    data class DropReceive(
+        val code: String,
+    ) : DeepLink
+
+    /** 从系统分享菜单进入应用内快传发送页。 */
+    data object DropSend : DeepLink
 }
 
 object DeepLinks {
@@ -104,6 +114,13 @@ object DeepLinks {
             .authority("hotwater")
             .build()
 
+    fun jxfwNoticesUri(): Uri =
+        Uri
+            .Builder()
+            .scheme(SCHEME)
+            .authority("jxfw-notices")
+            .build()
+
     fun parseUri(uri: Uri): DeepLink? {
         if (uri.scheme != SCHEME) return null
         return when (uri.host) {
@@ -115,6 +132,7 @@ object DeepLinks {
             "timetable" -> DeepLink.Timetable
             "parcel" -> DeepLink.Parcel
             "hotwater" -> DeepLink.HotWater
+            "jxfw-notices" -> DeepLink.JxfwNotices
             else -> null
         }
     }

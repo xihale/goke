@@ -21,6 +21,85 @@ data class JxfwGrade(
     val filterKey: String get() = "$term|$code|$name"
 }
 
+/** 教务通知来源：公开教务处官网公告或登录态站内个人消息。 */
+@Serializable
+enum class JxfwNoticeSource {
+    PUBLIC,
+    INTERNAL,
+}
+
+/** 教务通知条目（数据源无关；仅本机缓存，不入 Repository/Sync）。 */
+@Serializable
+data class JxfwNotice(
+    val id: String,
+    val title: String,
+    val date: String = "",
+    val url: String = "",
+    val source: JxfwNoticeSource = JxfwNoticeSource.PUBLIC,
+)
+
+/** 教务通知增量去重与多源合并纯函数工具（不含任何协议与网络细节）。 */
+object JxfwNoticeDiff {
+    const val MAX_SEEN_IDS = 100
+    const val MAX_CACHED_NOTICES = 30
+
+    data class DiffResult(
+        val newNotices: List<JxfwNotice>,
+        val updatedSeenIds: List<String>,
+    )
+
+    /**
+     * 计算新增通知并更新已见 ID 集合（保序去重，最多保留 [maxSeenIds] 条）。
+     *
+     * - [isInitialBaseline] 为 true 时视为首次基线：全部写入已见集合，不产生新增提醒。
+     * - 严格按 [JxfwNotice.id] 去重，不假设列表日期单调递减（兼容置顶公告）。
+     */
+    fun diffNew(
+        incoming: List<JxfwNotice>,
+        seenIds: List<String>,
+        isInitialBaseline: Boolean,
+        maxSeenIds: Int = MAX_SEEN_IDS,
+    ): DiffResult {
+        val seenSet = seenIds.toHashSet()
+        val dedupedIncoming = incoming.filter { it.id.isNotBlank() }.distinctBy { it.id }
+        val newOnes =
+            if (isInitialBaseline) {
+                emptyList()
+            } else {
+                dedupedIncoming.filter { it.id !in seenSet }
+            }
+        val merged = LinkedHashSet<String>()
+        for (item in dedupedIncoming) {
+            merged += item.id
+        }
+        for (id in seenIds) {
+            if (id.isNotBlank()) merged += id
+        }
+        val limit = maxSeenIds.coerceAtLeast(dedupedIncoming.size)
+        return DiffResult(
+            newNotices = newOnes,
+            updatedSeenIds = merged.take(limit),
+        )
+    }
+
+    /** 合并公开公告与站内消息：站内消息优先置前，按 [JxfwNotice.id] 去重，保留最近 [maxItems] 条。 */
+    fun mergeSources(
+        publicNotices: List<JxfwNotice>,
+        internalNotices: List<JxfwNotice>,
+        maxItems: Int = MAX_CACHED_NOTICES,
+    ): List<JxfwNotice> {
+        val seen = HashSet<String>()
+        val result = ArrayList<JxfwNotice>()
+        for (item in internalNotices) {
+            if (item.id.isNotBlank() && seen.add(item.id)) result += item
+        }
+        for (item in publicNotices) {
+            if (item.id.isNotBlank() && seen.add(item.id)) result += item
+        }
+        return result.take(maxItems)
+    }
+}
+
 /** 成绩汇总统计（总学分、已修/通过学分、参评学分、加权均绩、课程数）。 */
 data class JxfwGradeSummary(
     val totalCredits: Double,

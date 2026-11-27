@@ -4,6 +4,8 @@ import app.goke.core.jxfw.ClassroomBuilding
 import app.goke.core.jxfw.ClassroomOccupancy
 import app.goke.core.jxfw.ClassroomRoom
 import app.goke.core.jxfw.JxfwGrade
+import app.goke.core.jxfw.JxfwNotice
+import app.goke.core.jxfw.JxfwNoticeSource
 import app.goke.core.jxfw.JxfwParse
 import app.goke.core.jxfw.JxfwPlan
 import app.goke.core.jxfw.TzcsYearReport
@@ -21,6 +23,7 @@ import app.goke.hotwater.HotWaterState
 import app.goke.jxfw.JxfwCourseSelectionState
 import app.goke.jxfw.JxfwException
 import app.goke.jxfw.JxfwGradesState
+import app.goke.jxfw.JxfwNoticesState
 import app.goke.jxfw.JxfwState
 import app.goke.jxfw.TzcsException
 import app.goke.jxfw.TzcsState
@@ -56,6 +59,7 @@ private class UnavailableJxfwAdapter(
 
     private val _state = MutableStateFlow(JxfwState())
     private val _gradesState = MutableStateFlow(JxfwGradesState())
+    private val _noticesState = MutableStateFlow(JxfwNoticesState())
     private val _xkState = MutableStateFlow(JxfwCourseSelectionState())
 
     private var cachedBuildings: List<ClassroomBuilding> = emptyList()
@@ -64,11 +68,14 @@ private class UnavailableJxfwAdapter(
 
     override val state: StateFlow<JxfwState> = _state.asStateFlow()
     override val gradesState: StateFlow<JxfwGradesState> = _gradesState.asStateFlow()
+    override val noticesState: StateFlow<JxfwNoticesState> = _noticesState.asStateFlow()
     override val xkState: StateFlow<JxfwCourseSelectionState> = _xkState.asStateFlow()
 
     override fun hydrate() = Unit
 
     override fun hydrateGrades() = Unit
+
+    override fun hydrateNotices() = Unit
 
     override fun ensureAlarm() = Unit
 
@@ -106,6 +113,7 @@ private class UnavailableJxfwAdapter(
     override suspend fun logout() {
         _state.value = JxfwState()
         _gradesState.value = JxfwGradesState()
+        _noticesState.value = JxfwNoticesState()
         _xkState.value = JxfwCourseSelectionState()
         cachedBuildings = emptyList()
         cachedRooms.clear()
@@ -116,6 +124,36 @@ private class UnavailableJxfwAdapter(
         _state.update { it.copy(autoSync = on) }
     }
 
+    override fun setNoticeEnabled(on: Boolean) {
+        _noticesState.update { it.copy(enabled = on) }
+    }
+
+    override fun setNoticePublicEnabled(on: Boolean) {
+        _noticesState.update { cur ->
+            val nextUnread =
+                if (on) {
+                    cur.unreadIds
+                } else {
+                    val publicIds = cur.notices.filter { it.source == JxfwNoticeSource.PUBLIC }.mapTo(HashSet()) { it.id }
+                    cur.unreadIds - publicIds
+                }
+            cur.copy(publicEnabled = on, unreadIds = nextUnread)
+        }
+    }
+
+    override fun setNoticeInternalEnabled(on: Boolean) {
+        _noticesState.update { cur ->
+            val nextUnread =
+                if (on) {
+                    cur.unreadIds
+                } else {
+                    val internalIds = cur.notices.filter { it.source == JxfwNoticeSource.INTERNAL }.mapTo(HashSet()) { it.id }
+                    cur.unreadIds - internalIds
+                }
+            cur.copy(internalEnabled = on, unreadIds = nextUnread)
+        }
+    }
+
     override suspend fun fullSync(termCode: String?): JxfwPlan = throw unsupported()
 
     override suspend fun weeklySync(auto: Boolean): JxfwPlan? = null
@@ -124,6 +162,20 @@ private class UnavailableJxfwAdapter(
         val err = unsupported()
         _gradesState.update { it.copy(busy = false, lastError = err.message, lastErrorKind = err.kind) }
         return Result.failure(err)
+    }
+
+    override suspend fun refreshNotices(notify: Boolean): Result<List<JxfwNotice>> {
+        val err = unsupported()
+        _noticesState.update { it.copy(busy = false, lastError = err.message, lastErrorKind = err.kind) }
+        return Result.failure(err)
+    }
+
+    override fun markNoticeRead(id: String) {
+        _noticesState.update { it.copy(unreadIds = it.unreadIds - id) }
+    }
+
+    override fun markAllNoticesRead() {
+        _noticesState.update { it.copy(unreadIds = emptySet()) }
     }
 
     override suspend fun loadCourseSelection(
@@ -170,6 +222,7 @@ private class UnavailableJxfwAdapter(
         roomsByBuilding: Map<String, List<ClassroomRoom>>,
         weekOccupancy: Map<Pair<String, LocalDate>, Map<LocalDate, List<ClassroomOccupancy>>>,
         gradesState: JxfwGradesState?,
+        noticesState: JxfwNoticesState?,
     ) {
         _state.value = state
         cachedBuildings = buildings
@@ -179,6 +232,9 @@ private class UnavailableJxfwAdapter(
         cachedWeekOccupancy.putAll(weekOccupancy)
         if (gradesState != null) {
             _gradesState.value = gradesState
+        }
+        if (noticesState != null) {
+            _noticesState.value = noticesState
         }
     }
 }

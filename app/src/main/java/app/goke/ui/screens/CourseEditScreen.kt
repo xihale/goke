@@ -50,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -88,6 +89,7 @@ import app.goke.core.todo.TaskLogic
 import app.goke.core.util.Ids
 import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
+import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
 import app.goke.ui.LocalRouteBackHolder
 import app.goke.ui.Route
@@ -98,12 +100,14 @@ import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.SectionLabel
 import app.goke.ui.components.SegmentedPill
+import app.goke.ui.components.Tag
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.ValueRow
 import app.goke.ui.components.mintClickable
 import app.goke.ui.components.rememberNoFocusPopup
 import app.goke.ui.formatRooms
 import app.goke.ui.hm
+import app.goke.ui.icons.FolderOpen
 import app.goke.ui.liveSnapshot
 import app.goke.ui.reduceMotion
 import app.goke.ui.settingsState
@@ -738,6 +742,51 @@ fun CourseEditScreen(
                     remember(snap.tasks, snap.courses, origin) {
                         TaskLogic.forCourse(snap.tasks, snap.courses, origin)
                     }
+                val app = LocalApp.current
+                val dropRelayState by app.dropRelay.state.collectAsState()
+                val matchedResources =
+                    remember(dropRelayState.index, origin.name) {
+                        app.dropRelay.matchingFilesForCourse(origin.name)
+                    }
+                if (matchedResources.isNotEmpty()) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
+                            .heightIn(min = 48.dp)
+                            .mintClickable(pressedScale = 0.98f) {
+                                nav.push(Route.CampusResources(initialTab = 0, initialQuery = origin.name))
+                            }.padding(horizontal = 4.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Rounded.FolderOpen,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.droprelay_course_resources),
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Tag(
+                            text = stringResource(R.string.droprelay_course_resources_count, matchedResources.size),
+                            bg = MaterialTheme.colorScheme.primaryContainer,
+                            fg = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
                 SectionLabel(
                     stringResource(R.string.course_todos),
                     trailing = related.size.takeIf { it > 0 }?.toString(),

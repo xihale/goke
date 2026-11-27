@@ -57,6 +57,7 @@ import app.goke.ui.icons.Checklist
 import app.goke.ui.icons.Cloud
 import app.goke.ui.icons.DeleteSweep
 import app.goke.ui.icons.FitnessCenter
+import app.goke.ui.icons.FolderOpen
 import app.goke.ui.icons.Grade
 import app.goke.ui.icons.History
 import app.goke.ui.icons.LaptopMac
@@ -115,6 +116,15 @@ internal val SETTINGS_SEARCH_SPECS: List<SettingsSearchSpec> =
             keywordsRes = R.string.settings_search_kw_jxfw,
             icon = Icons.Rounded.School,
             route = Route.Jxfw,
+            isTopLevel = true,
+        ),
+        SettingsSearchSpec(
+            id = "campus_resources",
+            titleRes = R.string.droprelay_title,
+            sectionRes = R.string.me_hub_campus_section,
+            keywordsRes = R.string.droprelay_settings_kw,
+            icon = Icons.Rounded.FolderOpen,
+            route = Route.CampusResources(),
             isTopLevel = true,
         ),
         SettingsSearchSpec(

@@ -73,6 +73,7 @@ class SettingsNavigationTest {
                 R.string.xk_title,
                 R.string.hotwater_title,
                 R.string.parcel_title,
+                R.string.droprelay_title,
                 R.string.appearance,
                 R.string.widgets_title,
                 R.string.prefs_title,
@@ -211,7 +212,19 @@ class SettingsNavigationTest {
         }
         rule.waitForIdle()
 
-        rule.onNodeWithText(app.getString(R.string.data_title)).performClick()
+        val dataLabel = app.getString(R.string.data_title)
+        val settingsList = rule.onAllNodes(hasScrollAction()).onLast()
+        settingsList.performScrollToNode(hasText(dataLabel))
+        rule.waitForIdle()
+        val listBounds = settingsList.fetchSemanticsNode().boundsInRoot
+        val nodeBounds = rule.onNodeWithText(dataLabel).fetchSemanticsNode().boundsInRoot
+        if (nodeBounds.bottom > listBounds.bottom - 180f) {
+            settingsList.performTouchInput {
+                swipeUp(startY = bottom * 0.6f, endY = bottom * 0.3f)
+            }
+            rule.waitForIdle()
+        }
+        rule.onNodeWithText(dataLabel).performClick()
         rule.waitForIdle()
         rule.onNodeWithContentDescription(app.getString(R.string.back)).assertIsDisplayed()
 
@@ -237,7 +250,7 @@ class SettingsNavigationTest {
         rule.onNodeWithText(app.getString(R.string.data_title)).assertIsDisplayed()
 
         // Re-entering DataScreen -> ImportScreen and exiting both must still work cleanly
-        rule.onNodeWithText(app.getString(R.string.data_title)).performClick()
+        rule.onNodeWithText(dataLabel).performClick()
         rule.waitForIdle()
         rule.onAllNodesWithText(app.getString(R.string.import_file)).onLast().performClick()
         rule.waitForIdle()

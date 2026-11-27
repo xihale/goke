@@ -5,6 +5,7 @@ import app.goke.core.jxfw.ClassroomBuilding
 import app.goke.core.jxfw.ClassroomOccupancy
 import app.goke.core.jxfw.ClassroomRoom
 import app.goke.core.jxfw.JxfwGrade
+import app.goke.core.jxfw.JxfwNotice
 import app.goke.core.jxfw.JxfwPlan
 import app.goke.core.jxfw.TzcsYearReport
 import app.goke.core.jxfw.XkActionResult
@@ -20,6 +21,7 @@ import app.goke.hotwater.HotWaterTaskCopy
 import app.goke.hotwater.HotWaterVault
 import app.goke.jxfw.JxfwCourseSelectionState
 import app.goke.jxfw.JxfwGradesState
+import app.goke.jxfw.JxfwNoticesState
 import app.goke.jxfw.JxfwState
 import app.goke.jxfw.TzcsState
 import kotlinx.coroutines.flow.StateFlow
@@ -113,6 +115,8 @@ interface CampusHost {
         body: String,
     )
 
+    fun postJxfwNoticeNotification(newNotices: List<JxfwNotice>)
+
     fun updateWeeklyJxfwAlarm(enabled: Boolean)
 
     fun followHotWaterArrearsWorker(enabled: Boolean)
@@ -130,11 +134,14 @@ interface JxfwAdapter {
     val portalHost: String
     val state: StateFlow<JxfwState>
     val gradesState: StateFlow<JxfwGradesState>
+    val noticesState: StateFlow<JxfwNoticesState>
     val xkState: StateFlow<JxfwCourseSelectionState>
 
     fun hydrate()
 
     fun hydrateGrades()
+
+    fun hydrateNotices()
 
     fun ensureAlarm()
 
@@ -154,11 +161,23 @@ interface JxfwAdapter {
 
     fun setAutoSync(on: Boolean)
 
+    fun setNoticeEnabled(on: Boolean)
+
+    fun setNoticePublicEnabled(on: Boolean)
+
+    fun setNoticeInternalEnabled(on: Boolean)
+
     suspend fun fullSync(termCode: String? = null): JxfwPlan
 
     suspend fun weeklySync(auto: Boolean = false): JxfwPlan?
 
     suspend fun refreshGrades(termCode: String = ""): Result<List<JxfwGrade>>
+
+    suspend fun refreshNotices(notify: Boolean = false): Result<List<JxfwNotice>>
+
+    fun markNoticeRead(id: String)
+
+    fun markAllNoticesRead()
 
     suspend fun loadCourseSelection(
         searchKey: String = "",
@@ -191,6 +210,7 @@ interface JxfwAdapter {
         roomsByBuilding: Map<String, List<ClassroomRoom>> = emptyMap(),
         weekOccupancy: Map<Pair<String, LocalDate>, Map<LocalDate, List<ClassroomOccupancy>>> = emptyMap(),
         gradesState: JxfwGradesState? = null,
+        noticesState: JxfwNoticesState? = null,
     )
 }
 
@@ -265,6 +285,12 @@ interface HotWaterAdapter {
     suspend fun toggleValve(): HotWaterOpResult
 }
 
+/** 校园资料库与快传（DropRelay）可选默认地址：公开构建为空，私有适配器模块可按需注入校园内网默认地址。 */
+data class CampusDropRelayDefaults(
+    val shareUrl: String = "",
+    val dropUrl: String = "",
+)
+
 /** 私有适配器工厂契约（由私有模块通过固定类名实现，开源构建缺失时自动回退至桩实现）。 */
 interface CampusAdapterFactory {
     fun createJxfw(
@@ -281,4 +307,6 @@ interface CampusAdapterFactory {
         context: Any,
         host: CampusHost,
     ): HotWaterAdapter
+
+    fun dropRelayDefaults(): CampusDropRelayDefaults = CampusDropRelayDefaults()
 }

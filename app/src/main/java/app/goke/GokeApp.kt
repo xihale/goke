@@ -24,6 +24,7 @@ import app.goke.core.campus.TzcsStrings
 import app.goke.core.campus.UnavailableCampusAdapterFactory
 import app.goke.core.change.ChangeSet
 import app.goke.core.change.Unify
+import app.goke.core.jxfw.JxfwNotice
 import app.goke.core.jxfw.JxfwSync
 import app.goke.core.model.Snapshot
 import app.goke.data.AutoBackup
@@ -35,6 +36,7 @@ import app.goke.data.SecretStore
 import app.goke.data.SettingsStore
 import app.goke.data.UpdateChecker
 import app.goke.debug.DebugHooks
+import app.goke.droprelay.DropRelayManager
 import app.goke.hotwater.HotWaterArrearsWorker
 import app.goke.hotwater.HotWaterShowerRecord
 import app.goke.hotwater.HotWaterTaskCopy
@@ -97,6 +99,8 @@ open class GokeApp : Application() {
         private set
     lateinit var timetableShare: TimetableShareManager
         private set
+    lateinit var dropRelay: DropRelayManager
+        private set
     lateinit var updateChecker: UpdateChecker
         private set
     lateinit var feedback: app.goke.ui.FeedbackEngine
@@ -142,6 +146,7 @@ open class GokeApp : Application() {
         jxfw = adapterFactory.createJxfw(this, campusHost)
         tzcs = adapterFactory.createTzcs(this, campusHost)
         hotWater = adapterFactory.createHotWater(this, campusHost)
+        dropRelay = DropRelayManager(this, settings, adapterFactory.dropRelayDefaults(), errors)
 
         timetableShare =
             TimetableShareManager(
@@ -161,6 +166,7 @@ open class GokeApp : Application() {
                 jxfw.hydrate()
                 tzcs.hydrate()
                 hotWater.hydrate()
+                dropRelay.hydrate()
                 PeriodicSync.follow(this@GokeApp, false)
                 updateChecker.clearStalePendingUpdate(cacheDir)
                 Notifications.ensureChannels(this@GokeApp)
@@ -330,6 +336,10 @@ open class GokeApp : Application() {
                 body: String,
             ) {
                 Notifications.post(this@GokeApp, JXFW_NOTIFY_ID, Notifications.CHANNEL_REMINDER, title, body)
+            }
+
+            override fun postJxfwNoticeNotification(newNotices: List<JxfwNotice>) {
+                Notifications.postJxfwNotices(this@GokeApp, newNotices)
             }
 
             override fun updateWeeklyJxfwAlarm(enabled: Boolean) {

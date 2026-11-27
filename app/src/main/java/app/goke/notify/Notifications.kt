@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import app.goke.DeepLinks
 import app.goke.MainActivity
 import app.goke.R
+import app.goke.core.jxfw.JxfwNotice
 import app.goke.hotwater.HotWaterShowerRecord
 import app.goke.widget.WidgetOverlayActivity
 
@@ -31,8 +32,10 @@ object Notifications {
     private val LEGACY_CHANNELS = listOf("reminder", "reminder_v2", "exam_reminder", "exam_reminder_v2", "exam_reminder_v3")
     const val CHANNEL_PARCEL = "parcel"
     const val CHANNEL_HOT_WATER = "hot_water"
+    const val CHANNEL_JXFW_NOTICE = "jxfw_notice"
     const val CHANNEL_QUICK = "quickadd"
     const val CHANNEL_LAN_WEB = "lan_web"
+    const val NOTIFY_JXFW_NOTICE_ID = 7423
     const val NOTIFY_QUICK_ID = 9002
     const val NOTIFY_LAN_WEB_ID = 9003
     private const val BURST_COOLDOWN_MS = 3_000L
@@ -84,6 +87,11 @@ object Notifications {
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_HOT_WATER, ctx.getString(R.string.channel_hot_water), NotificationManager.IMPORTANCE_DEFAULT),
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_JXFW_NOTICE, ctx.getString(R.string.channel_jxfw_notice), NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = ctx.getString(R.string.channel_jxfw_notice_desc)
+            },
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_QUICK, ctx.getString(R.string.channel_quick), NotificationManager.IMPORTANCE_LOW).apply {
@@ -248,6 +256,65 @@ object Notifications {
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
         runCatching { NotificationManagerCompat.from(ctx).notify(notifId, n.build()) }
+    }
+
+    /** 教务处新公告 / 站内消息单条聚合提醒，固定 ID 避免刷屏，点击直达教务通知页。 */
+    fun postJxfwNotices(
+        ctx: Context,
+        newNotices: List<JxfwNotice>,
+        publicEnabled: Boolean = true,
+        internalEnabled: Boolean = true,
+    ) {
+        val filtered =
+            newNotices.filter {
+                when (it.source) {
+                    app.goke.core.jxfw.JxfwNoticeSource.PUBLIC -> publicEnabled
+                    app.goke.core.jxfw.JxfwNoticeSource.INTERNAL -> internalEnabled
+                }
+            }
+        if (filtered.isEmpty() || !canPost(ctx)) return
+        ensureChannels(ctx)
+        val open =
+            PendingIntent.getActivity(
+                ctx,
+                NOTIFY_JXFW_NOTICE_ID,
+                Intent(Intent.ACTION_VIEW, DeepLinks.jxfwNoticesUri(), ctx, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        val title =
+            if (filtered.all { it.source == app.goke.core.jxfw.JxfwNoticeSource.INTERNAL }) {
+                ctx.getString(R.string.jxfw_notice_notif_internal_title)
+            } else {
+                ctx.getString(R.string.jxfw_notice_notif_title)
+            }
+        val firstTitle = filtered.first().title
+        val text =
+            if (filtered.size == 1) {
+                firstTitle
+            } else {
+                ctx.getString(R.string.jxfw_notice_notif_multi, firstTitle, filtered.size)
+            }
+        val builder =
+            NotificationCompat
+                .Builder(ctx, CHANNEL_JXFW_NOTICE)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        if (filtered.size > 1) {
+            val inbox = NotificationCompat.InboxStyle().setBigContentTitle(title)
+            for (item in filtered.take(3)) {
+                inbox.addLine(item.title)
+            }
+            builder.setStyle(inbox)
+        } else {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(text))
+        }
+        runCatching { NotificationManagerCompat.from(ctx).notify(NOTIFY_JXFW_NOTICE_ID, builder.build()) }
     }
 
     fun canPost(ctx: Context): Boolean =

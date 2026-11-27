@@ -89,16 +89,19 @@ import app.goke.ui.screens.AboutScreen
 import app.goke.ui.screens.AppearanceScreen
 import app.goke.ui.screens.CalendarScreen
 import app.goke.ui.screens.CalendarSyncScreen
+import app.goke.ui.screens.CampusResourcesScreen
 import app.goke.ui.screens.ClassroomScreen
 import app.goke.ui.screens.CourseEditScreen
 import app.goke.ui.screens.CourseSelectionScreen
 import app.goke.ui.screens.DataScreen
+import app.goke.ui.screens.DropSendScreen
 import app.goke.ui.screens.EditTimetableScreen
 import app.goke.ui.screens.GradesScreen
 import app.goke.ui.screens.HistoryScreen
 import app.goke.ui.screens.HotWaterBillsScreen
 import app.goke.ui.screens.HotWaterScreen
 import app.goke.ui.screens.ImportScreen
+import app.goke.ui.screens.JxfwNoticesScreen
 import app.goke.ui.screens.JxfwScreen
 import app.goke.ui.screens.LanWebScreen
 import app.goke.ui.screens.McpScreen
@@ -241,6 +244,18 @@ fun GokeRoot(
 
             DeepLink.HotWater -> {
                 nav.push(Route.HotWater)
+            }
+
+            DeepLink.JxfwNotices -> {
+                nav.push(Route.JxfwNotices)
+            }
+
+            is DeepLink.DropReceive -> {
+                nav.push(Route.CampusResources(initialTab = 1, initialCode = l.code))
+            }
+
+            DeepLink.DropSend -> {
+                nav.push(Route.DropSend)
             }
 
             is DeepLink.Add -> {
@@ -856,6 +871,10 @@ private fun RouteContent(
             JxfwScreen(onBack)
         }
 
+        Route.JxfwNotices -> {
+            JxfwNoticesScreen(onBack)
+        }
+
         Route.Grades -> {
             GradesScreen(onBack)
         }
@@ -874,6 +893,19 @@ private fun RouteContent(
 
         Route.Reliability -> {
             ReliabilityScreen(onBack)
+        }
+
+        is Route.CampusResources -> {
+            CampusResourcesScreen(
+                initialTab = route.initialTab,
+                initialQuery = route.initialQuery,
+                initialCode = route.initialCode,
+                onBack = onBack,
+            )
+        }
+
+        Route.DropSend -> {
+            DropSendScreen(onBack)
         }
 
         is Route.Import -> {

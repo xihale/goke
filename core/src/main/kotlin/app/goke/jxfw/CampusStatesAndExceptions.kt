@@ -1,6 +1,8 @@
 package app.goke.jxfw
 
 import app.goke.core.jxfw.JxfwGrade
+import app.goke.core.jxfw.JxfwNotice
+import app.goke.core.jxfw.JxfwNoticeSource
 import app.goke.core.jxfw.TzcsParse
 import app.goke.core.jxfw.TzcsYearReport
 import app.goke.core.jxfw.XkCourseItem
@@ -64,6 +66,39 @@ data class JxfwGradesState(
     val lastError: String? = null,
     val lastErrorKind: JxfwException.Kind? = null,
 )
+
+/** 本地教务通知缓存与刷新状态（仅本机只读缓存，不入 Repository/Sync）。 */
+data class JxfwNoticesState(
+    val notices: List<JxfwNotice> = emptyList(),
+    val unreadIds: Set<String> = emptySet(),
+    val enabled: Boolean = true,
+    val publicEnabled: Boolean = true,
+    val internalEnabled: Boolean = true,
+    val fetchedAt: Long? = null,
+    val busy: Boolean = false,
+    val lastError: String? = null,
+    val lastErrorKind: JxfwException.Kind? = null,
+) {
+    /** 指定来源是否已开启。 */
+    fun isSourceEnabled(source: JxfwNoticeSource): Boolean =
+        when (source) {
+            JxfwNoticeSource.PUBLIC -> publicEnabled
+            JxfwNoticeSource.INTERNAL -> internalEnabled
+        }
+
+    /** 仅包含当前已开启来源的未读通知 ID（关闭某来源后不计入未读红点与计数）。 */
+    val activeUnreadIds: Set<String>
+        get() {
+            if (unreadIds.isEmpty()) return emptySet()
+            val enabledNoticeIds =
+                notices
+                    .asSequence()
+                    .filter { isSourceEnabled(it.source) }
+                    .map { it.id }
+                    .toHashSet()
+            return unreadIds.filterTo(LinkedHashSet()) { it in enabledNoticeIds }
+        }
+}
 
 /** 选课状态（进程内只读/操作状态，不入 Repository/Sync）。 */
 data class JxfwCourseSelectionState(
