@@ -440,21 +440,8 @@ fun TimetableScreen() {
     val listColor = remember(snap) { snap.lists.associate { it.id to it.colorIndex } }
     val weekBlocksCache = remember(snap, listColor, sem) { mutableMapOf<Int, List<BlockRow>>() }
     val courseTodoCounts =
-        remember(snap.tasks, snap.courses) {
-            val courseById = snap.courses.filter { it.deletedAt == null }.associateBy { it.id }
-            val byKey = HashMap<Pair<String, String>, Int>()
-            val byId = HashMap<String, Int>()
-            snap.tasks.forEach { t ->
-                if (t.deletedAt == null && t.parentId == null && !t.done && t.courseId != null) {
-                    val cid = t.courseId!!
-                    byId[cid] = (byId[cid] ?: 0) + 1
-                    courseById[cid]?.let { c ->
-                        val key = c.semesterId to c.name.trim()
-                        byKey[key] = (byKey[key] ?: 0) + 1
-                    }
-                }
-            }
-            byKey to byId
+        remember(snap.tasks, snap.courses, snap.exceptions, sem, now) {
+            TaskLogic.occurrenceCounts(snap.tasks, sem, snap.courses, snap.exceptions, now)
         }
 
     // 预览开启时跳到第一个有变化的周
@@ -702,9 +689,7 @@ fun TimetableScreen() {
                             },
                         periods = periods,
                         reschedulePicking = pickingRescheduleFor != null,
-                        courseTodoCount = { c ->
-                            courseTodoCounts.first[c.semesterId to c.name.trim()] ?: courseTodoCounts.second[c.id] ?: 0
-                        },
+                        courseTodoCounts = courseTodoCounts,
                         onClick = { cell ->
                             val picking = pickingRescheduleFor
                             if (picking != null) {
@@ -1001,7 +986,7 @@ private fun WeekGrid(
     modifier: Modifier = Modifier,
     periods: List<PeriodTime> = remember(sem) { sem.periods.sortedBy { it.index } },
     reschedulePicking: Boolean = false,
-    courseTodoCount: (Course) -> Int = { 0 },
+    courseTodoCounts: Map<Pair<String, Int>, Int> = emptyMap(),
     onClick: (TimetableCell) -> Unit,
     onOpenTask: (String) -> Unit,
     /** 叠放的正面卡被点开：同一时段的全部安排，由调用方列出让用户挑。 */
@@ -1577,10 +1562,10 @@ private fun WeekGrid(
                             }
                         }
                     val todoCount =
-                        if (cell.kind == CellKind.REMOVED || week < currentWeek) {
+                        if (cell.kind == CellKind.REMOVED) {
                             0
                         } else {
-                            courseTodoCount(o.course)
+                            courseTodoCounts[o.course.id to o.originalWeek] ?: 0
                         }
                     CourseBlock(
                         cell,
@@ -2949,7 +2934,7 @@ private fun CourseSheet(
             if (!visible || submitted) return
             submitted = true
             onDismiss()
-            nav.push(Route.TodoEdit(courseId = liveCourse.id))
+            nav.push(Route.TodoEdit(courseId = liveCourse.id, courseWeek = o.originalWeek))
         }
 
         AnimatedContent(
@@ -2960,8 +2945,8 @@ private fun CourseSheet(
             if (!editing && activeCell != null) {
                 val courseById = remember(snap.courses) { snap.courses.filter { it.deletedAt == null }.associateBy { it.id } }
                 val relatedTodos =
-                    remember(snap.tasks, snap.courses, liveCourse) {
-                        TaskLogic.forCourse(snap.tasks, snap.courses, liveCourse)
+                    remember(snap.tasks, snap.courses, snap.exceptions, sem, o, now) {
+                        TaskLogic.forOccurrence(snap.tasks, sem, snap.courses, snap.exceptions, o, now)
                     }
                 val todoIndex = remember(snap, now) { todoIndexOf(snap, now) }
 
@@ -2973,13 +2958,15 @@ private fun CourseSheet(
                     val ms = System.currentTimeMillis()
                     val updated =
                         if (bind) {
-                            task.copy(
+                            task.withCourseLink(
                                 courseId = liveCourse.id,
+                                courseWeek = o.originalWeek,
                                 dueBeforeNextClass = task.due == null && task.blockStart == null,
                             )
                         } else {
-                            task.copy(
+                            task.withCourseLink(
                                 courseId = null,
+                                courseWeek = null,
                                 dueBeforeNextClass = false,
                             )
                         }
@@ -2999,7 +2986,7 @@ private fun CourseSheet(
                 ) { isBinding ->
                     if (isBinding) {
                         val initialOrder =
-                            remember(liveCourse.id, isBinding) {
+                            remember(liveCourse.id, o.originalWeek, isBinding) {
                                 if (!isBinding) {
                                     emptyMap()
                                 } else {
@@ -3010,7 +2997,7 @@ private fun CourseSheet(
                                             compareBy<Task>(
                                                 {
                                                     when {
-                                                        TaskLogic.matchesCourse(it, liveCourse, courseById) -> 0
+                                                        TaskLogic.matchesOccurrence(it, o, sem, snap.courses, snap.exceptions, now) -> 0
                                                         it.courseId == null -> 1
                                                         else -> 2
                                                     }
@@ -3097,8 +3084,14 @@ private fun CourseSheet(
                                     verticalArrangement = Arrangement.spacedBy(2.dp),
                                 ) {
                                     filtered.forEach { t ->
-                                        val isBound = TaskLogic.matchesCourse(t, liveCourse, courseById)
+                                        val isBound = TaskLogic.matchesOccurrence(t, o, sem, snap.courses, snap.exceptions, now)
                                         val otherCourse = if (!isBound) courseById[t.courseId] else null
+                                        val otherOcc =
+                                            if (!isBound && otherCourse != null && t.courseWeek != null) {
+                                                TaskLogic.targetOccurrence(t, sem, snap.courses, snap.exceptions, now)
+                                            } else {
+                                                null
+                                            }
                                         val timeMeta =
                                             when {
                                                 t.dueBeforeNextClass -> stringResource(R.string.course_link_before_class)
@@ -3106,10 +3099,18 @@ private fun CourseSheet(
                                                 t.blockStart != null -> ctx.dueLabel(t.blockStart!!, true, today)
                                                 else -> null
                                             }
+                                        val boundOtherLabel =
+                                            otherCourse?.let { oc ->
+                                                if (otherOcc != null) {
+                                                    stringResource(R.string.course_todos_bound_other_session, oc.name, ctx.monthDay(otherOcc.date))
+                                                } else {
+                                                    stringResource(R.string.course_todos_bound_other, oc.name)
+                                                }
+                                            }
                                         val sub =
                                             listOfNotNull(
                                                 timeMeta,
-                                                otherCourse?.let { stringResource(R.string.course_todos_bound_other, it.name) },
+                                                boundOtherLabel,
                                             ).joinToString(" · ")
                                         Row(
                                             Modifier

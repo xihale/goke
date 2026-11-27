@@ -17,6 +17,7 @@ import app.goke.core.model.EventKind
 import app.goke.core.model.Snapshot
 import app.goke.core.model.Source
 import app.goke.core.model.Task
+import app.goke.core.todo.TaskLogic
 import app.goke.data.Settings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -355,13 +356,13 @@ class ReminderScheduler(
                                     } else {
                                         null
                                     }
-                                // 「课前要交」的待办一并写进提醒：上课前最后一次想起来
+                                // 「课前要交」的待办一并写进提醒：只附带属于这一节具体课次的待办
+                                val sem = snap.semesters.firstOrNull { it.id == c.semesterId } ?: snap.currentSemester
                                 val due =
-                                    snap.tasks
-                                        .filter { t ->
-                                            t.deletedAt == null && t.parentId == null && !t.done && t.dueBeforeNextClass && t.courseId != null &&
-                                                (t.courseId == c.id || snap.courses.firstOrNull { x -> x.id == t.courseId }?.name == c.name)
-                                        }.map { it.title }
+                                    TaskLogic
+                                        .forOccurrence(snap.tasks, sem, snap.courses, snap.exceptions, item.occ, now)
+                                        .filter { it.dueBeforeNextClass }
+                                        .map { it.title }
                                 val dueText = if (due.isEmpty()) null else ctx.getString(R.string.remind_course_tasks, due.take(3).joinToString("、"))
                                 val timeText = "%02d:%02d".format(item.occ.start.hour, item.occ.start.minute)
                                 val detail = listOfNotNull(loc, teacher, weekDetail, dueText).joinToString(" · ")

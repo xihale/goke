@@ -108,6 +108,8 @@ sealed interface Route {
         val location: String? = null,
         /** 从课程页「加一条待办」带过来的关联课程。 */
         val courseId: String? = null,
+        /** 钉死到某一节具体课时的原教学周（`CourseOccurrence.originalWeek`）。 */
+        val courseWeek: Int? = null,
         /** 周历上框选了几天：其余日期（ISO，逗号分隔）跟着一起建。 */
         val extraDates: String? = null,
         val listId: String? = null,

@@ -28,7 +28,7 @@ object NextUps {
             CourseExpander
                 .occurrences(sem, s.courses, s.exceptions, from, from.plusDays(horizonDays))
                 .firstOrNull { it.end.isAfter(now) } ?: return null
-        val related = TaskLogic.forCourse(s.tasks, s.courses, occ.course)
+        val related = TaskLogic.forOccurrence(s.tasks, sem, s.courses, s.exceptions, occ, now)
         return NextUp(occ, related)
     }
 }

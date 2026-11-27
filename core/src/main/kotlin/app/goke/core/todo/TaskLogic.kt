@@ -6,6 +6,7 @@ import app.goke.core.model.Recurrence
 import app.goke.core.model.Semester
 import app.goke.core.model.Task
 import app.goke.core.recurrence.CourseExpander
+import app.goke.core.recurrence.CourseOccurrence
 import app.goke.core.recurrence.RecurrenceEngine
 import app.goke.core.util.IdGenerator
 import app.goke.core.util.Ids
@@ -214,7 +215,116 @@ object TaskLogic {
         }
     }
 
-    /** 关联课程且「下节课前」的任务，截止为该课程下一次上课的开始时间。 */
+    /** 解析任务 [task] 对应的单一具体课次；无关联或已取消/找不到时返回 null。 */
+    fun targetOccurrence(
+        task: Task,
+        semester: Semester?,
+        courses: List<Course>,
+        exceptions: List<CourseException>,
+        now: LocalDateTime,
+    ): CourseOccurrence? {
+        val cid = task.courseId ?: return null
+        val sem = semester ?: return null
+        val cw = task.courseWeek
+        if (cw != null) {
+            return CourseExpander.occurrence(sem, courses, exceptions, cid, cw)
+        }
+        if (task.dueBeforeNextClass || (task.due == null && task.blockStart == null)) {
+            return CourseExpander.nextOccurrence(sem, courses, exceptions, cid, now)
+        }
+        val anchor = task.blockStart ?: task.due ?: return null
+        val anchorCourse = courses.firstOrNull { it.id == cid && it.deletedAt == null }
+        val matching =
+            courses.filter { c ->
+                c.deletedAt == null &&
+                    (
+                        c.id == cid ||
+                            (anchorCourse != null && c.semesterId == anchorCourse.semesterId && c.name.trim() == anchorCourse.name.trim())
+                    )
+            }
+        val anchorDate = anchor.toLocalDate()
+        val onDate = CourseExpander.occurrences(sem, matching, exceptions, anchorDate, anchorDate)
+        if (onDate.isNotEmpty()) {
+            val sameSlot = onDate.filter { it.course.id == cid }
+            val pool = sameSlot.ifEmpty { onDate }
+            return pool.firstOrNull { !it.end.isBefore(anchor) } ?: pool.first()
+        }
+        return CourseExpander.nextOccurrence(sem, courses, exceptions, cid, anchor.minusSeconds(1))
+    }
+
+    /** 判断任务 [task] 是否属于具体课次 [occ]。 */
+    fun matchesOccurrence(
+        task: Task,
+        occ: CourseOccurrence,
+        semester: Semester?,
+        courses: List<Course>,
+        exceptions: List<CourseException>,
+        now: LocalDateTime,
+    ): Boolean {
+        val cid = task.courseId ?: return false
+        val cw = task.courseWeek
+        if (cw != null) {
+            return cid == occ.course.id && cw == occ.originalWeek
+        }
+        val target = targetOccurrence(task, semester, courses, exceptions, now) ?: return false
+        return target.course.id == occ.course.id && target.originalWeek == occ.originalWeek
+    }
+
+    /** 列出属于具体课次 [occ] 的顶层任务（默认仅未完成）。 */
+    fun forOccurrence(
+        tasks: List<Task>,
+        semester: Semester?,
+        courses: List<Course>,
+        exceptions: List<CourseException>,
+        occ: CourseOccurrence,
+        now: LocalDateTime,
+        includeDone: Boolean = false,
+    ): List<Task> =
+        tasks.filter { t ->
+            t.deletedAt == null &&
+                t.parentId == null &&
+                (includeDone || !t.done) &&
+                matchesOccurrence(t, occ, semester, courses, exceptions, now)
+        }
+
+    /** 统计每个具体课次 `(courseId, originalWeek)` 上的未完成顶层课程待办数。 */
+    fun occurrenceCounts(
+        tasks: List<Task>,
+        semester: Semester?,
+        courses: List<Course>,
+        exceptions: List<CourseException>,
+        now: LocalDateTime,
+    ): Map<Pair<String, Int>, Int> {
+        val sem = semester ?: return emptyMap()
+        val byId = courses.filter { it.deletedAt == null }.associateBy { it.id }
+        val nextCache = HashMap<Any, CourseOccurrence?>()
+        val counts = HashMap<Pair<String, Int>, Int>()
+        for (t in tasks) {
+            if (t.deletedAt != null || t.parentId != null || t.done) continue
+            val cid = t.courseId ?: continue
+            val cw = t.courseWeek
+            val occ =
+                if (cw != null) {
+                    CourseExpander.occurrence(sem, courses, exceptions, cid, cw)
+                } else if (t.dueBeforeNextClass || (t.due == null && t.blockStart == null)) {
+                    val key: Any = byId[cid]?.let { it.semesterId to it.name.trim() } ?: cid
+                    if (nextCache.containsKey(key)) {
+                        nextCache[key]
+                    } else {
+                        CourseExpander.nextOccurrence(sem, courses, exceptions, cid, now).also { nextCache[key] = it }
+                    }
+                } else {
+                    targetOccurrence(t, sem, courses, exceptions, now)
+                }
+            if (occ != null) {
+                val occKey = occ.course.id to occ.originalWeek
+                counts[occKey] = (counts[occKey] ?: 0) + 1
+            }
+        }
+        return counts
+    }
+
+    /** 关联课程且「下节课前」的任务，截止为该课程指定课次或下一次上课的开始时间。 */
     fun effectiveDue(
         task: Task,
         semester: Semester?,
@@ -223,6 +333,10 @@ object TaskLogic {
         now: LocalDateTime,
     ): LocalDateTime? {
         if (task.dueBeforeNextClass && task.courseId != null && semester != null) {
+            val cw = task.courseWeek
+            if (cw != null) {
+                return CourseExpander.occurrence(semester, courses, exceptions, task.courseId, cw)?.start ?: task.due
+            }
             CourseExpander.nextOccurrence(semester, courses, exceptions, task.courseId, now)?.let { return it.start }
         }
         return task.due

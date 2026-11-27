@@ -151,6 +151,7 @@ fun TodoEditScreen(
     endArg: String? = null,
     textDraft: String? = null,
     courseArg: String? = null,
+    courseWeekArg: Int? = null,
     extraDatesArg: String? = null,
     noteDraft: String? = null,
     locationArg: String? = null,
@@ -266,8 +267,19 @@ fun TodoEditScreen(
     var listId by remember { mutableStateOf(if (existing != null) existing.listId else listArg) }
     var priority by remember { mutableIntStateOf(existing?.priority ?: 0) }
     val initialCourseId = remember(existing, courseArg) { existing?.courseId ?: courseArg }
+    val initialCourseWeek =
+        remember(existing, courseArg, courseWeekArg) {
+            if (existing != null) {
+                existing.courseWeek
+            } else if (courseArg != null) {
+                courseWeekArg
+            } else {
+                null
+            }
+        }
     val initialBeforeClass = remember(existing, courseArg, initWhen) { existing?.dueBeforeNextClass ?: (courseArg != null && initWhen == null) }
     var linkedCourseId by remember { mutableStateOf(initialCourseId) }
+    var linkedCourseWeek by remember { mutableStateOf(initialCourseWeek) }
     var dueBeforeNextClass by remember { mutableStateOf(initialBeforeClass) }
     val semesterCourses =
         remember(snap.courses, snap.currentSemester) {
@@ -284,12 +296,16 @@ fun TodoEditScreen(
                 snap.courses.firstOrNull { it.id == cid && it.deletedAt == null } ?: snap.courses.firstOrNull { it.id == cid }
             }
         }
-    val nextCourseOcc =
-        remember(linkedCourse, snap.currentSemester, snap.courses, snap.exceptions, baseNow) {
+    val targetCourseOcc =
+        remember(linkedCourse, linkedCourseWeek, snap.currentSemester, snap.courses, snap.exceptions, baseNow) {
             val sem = snap.currentSemester
             val cid = linkedCourse?.id
             if (sem != null && cid != null) {
-                CourseExpander.nextOccurrence(sem, snap.courses, snap.exceptions, cid, baseNow)
+                if (linkedCourseWeek != null) {
+                    CourseExpander.occurrence(sem, snap.courses, snap.exceptions, cid, linkedCourseWeek!!)
+                } else {
+                    CourseExpander.nextOccurrence(sem, snap.courses, snap.exceptions, cid, baseNow)
+                }
             } else {
                 null
             }
@@ -365,7 +381,7 @@ fun TodoEditScreen(
                 ?.coerceIn(1, 3) ||
             listId != existing?.listId || priority != (existing?.priority ?: 0) ||
             remindList != existing?.effectiveRemindMinutes.orEmpty() || persistent != (existing?.remindPersistent == true) || freq != existing?.repeat?.freq ||
-            linkedCourseId != initialCourseId || dueBeforeNextClass != initialBeforeClass ||
+            linkedCourseId != initialCourseId || linkedCourseWeek != initialCourseWeek || dueBeforeNextClass != initialBeforeClass ||
             (
                 freq != null &&
                     (
@@ -459,6 +475,11 @@ fun TodoEditScreen(
                 if (loc.isNotEmpty()) put("location", loc) else remove("location")
                 val cols = imageCols?.takeIf { attachments.any { a -> a.mime.startsWith("image/") } }
                 if (cols != null) put("imageCols", cols.toString()) else remove("imageCols")
+                if (linkedCourseId != null && linkedCourseWeek != null) {
+                    put(Task.EXTRA_COURSE_WEEK, linkedCourseWeek.toString())
+                } else {
+                    remove(Task.EXTRA_COURSE_WEEK)
+                }
             }
         val next =
             base.copy(
@@ -639,7 +660,7 @@ fun TodoEditScreen(
                     byMonths = byMonths,
                     linkedCourse = linkedCourse,
                     dueBeforeNextClass = dueBeforeNextClass,
-                    nextClassStart = nextCourseOcc?.start,
+                    nextClassStart = targetCourseOcc?.start,
                     onClear = {
                         picked = null
                         cleared = true
@@ -846,6 +867,7 @@ fun TodoEditScreen(
                             TextButton(
                                 onClick = {
                                     linkedCourseId = null
+                                    linkedCourseWeek = null
                                     dueBeforeNextClass = false
                                     barPanel = null
                                 },
@@ -855,14 +877,29 @@ fun TodoEditScreen(
                         }
                     }
                     if (linkedCourse != null) {
+                        val isPinnedSession = linkedCourseWeek != null && targetCourseOcc != null
                         val sub =
-                            if (nextCourseOcc != null) {
-                                stringResource(R.string.course_link_before_class_desc_time, ctx.dueLabel(nextCourseOcc.start, true, today))
-                            } else {
-                                stringResource(R.string.course_link_before_class_desc)
+                            when {
+                                isPinnedSession -> {
+                                    stringResource(
+                                        R.string.course_link_before_session_desc_time,
+                                        ctx.dueLabel(targetCourseOcc.start, true, today),
+                                    )
+                                }
+
+                                targetCourseOcc != null -> {
+                                    stringResource(
+                                        R.string.course_link_before_class_desc_time,
+                                        ctx.dueLabel(targetCourseOcc.start, true, today),
+                                    )
+                                }
+
+                                else -> {
+                                    stringResource(R.string.course_link_before_class_desc)
+                                }
                             }
                         SwitchRow(
-                            title = stringResource(R.string.course_link_before_class),
+                            title = stringResource(if (isPinnedSession) R.string.course_link_before_session else R.string.course_link_before_class),
                             subtitle = sub,
                             checked = dueBeforeNextClass,
                             onChange = { on ->
@@ -897,8 +934,11 @@ fun TodoEditScreen(
                                     .background(if (selected) scheme.primaryContainer.copy(alpha = 0.45f) else Color.Transparent)
                                     .semantics { this.selected = selected }
                                     .mintClickable(pressedScale = 0.98f, role = Role.RadioButton) {
-                                        linkedCourseId = c.id
-                                        if (whenPick == null) dueBeforeNextClass = true
+                                        if (!selected) {
+                                            linkedCourseId = c.id
+                                            linkedCourseWeek = null
+                                            if (whenPick == null) dueBeforeNextClass = true
+                                        }
                                         barPanel = null
                                     }.padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,

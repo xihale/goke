@@ -39,36 +39,63 @@ object CourseExpander {
             if (c.deletedAt != null || c.semesterId != semester.id) continue
             for (w in c.weeks.sorted()) {
                 val ex = exByKey[c.id to w]?.lastOrNull()
-                if (ex?.type == ExceptionType.CANCEL) continue
-                val week = if (ex?.type == ExceptionType.RESCHEDULE) ex.newWeek ?: w else w
-                val dow = if (ex?.type == ExceptionType.RESCHEDULE) ex.newDayOfWeek ?: c.dayOfWeek else c.dayOfWeek
-                val sp = if (ex?.type == ExceptionType.RESCHEDULE) ex.newStartPeriod ?: c.startPeriod else c.startPeriod
-                val ep = if (ex?.type == ExceptionType.RESCHEDULE) ex.newEndPeriod ?: c.endPeriod else c.endPeriod
-                val date = cal.dateOf(week, dow)
-                if (date.isBefore(from) || date.isAfter(to)) continue
-                val useCustomClock =
-                    ex?.type != ExceptionType.RESCHEDULE ||
-                        (ex.newStartPeriod == null && ex.newEndPeriod == null)
-                val startClock = (if (useCustomClock) c.startTime else null) ?: cal.startTime(sp)
-                val endClock = (if (useCustomClock) c.endTime else null) ?: cal.endTime(ep)
-                val s = startClock?.let { date.atTime(it) } ?: continue
-                val e = endClock?.let { date.atTime(it) } ?: continue
-                out +=
-                    CourseOccurrence(
-                        course = c,
-                        week = week,
-                        date = date,
-                        startPeriod = sp,
-                        endPeriod = ep,
-                        start = s,
-                        end = e,
-                        room = (if (ex?.type == ExceptionType.RESCHEDULE) ex.newRoom else null) ?: c.room,
-                        rescheduled = ex?.type == ExceptionType.RESCHEDULE,
-                        originalWeek = w,
-                    )
+                val occ = expandOne(cal, c, w, ex) ?: continue
+                if (occ.date.isBefore(from) || occ.date.isAfter(to)) continue
+                out += occ
             }
         }
         return promoteExamOccurrences(out).sortedWith(compareBy({ it.start }, { it.course.name }))
+    }
+
+    private fun expandOne(
+        cal: SemesterCalendar,
+        c: Course,
+        w: Int,
+        ex: CourseException?,
+    ): CourseOccurrence? {
+        if (ex?.type == ExceptionType.CANCEL) return null
+        val week = if (ex?.type == ExceptionType.RESCHEDULE) ex.newWeek ?: w else w
+        val dow = if (ex?.type == ExceptionType.RESCHEDULE) ex.newDayOfWeek ?: c.dayOfWeek else c.dayOfWeek
+        val sp = if (ex?.type == ExceptionType.RESCHEDULE) ex.newStartPeriod ?: c.startPeriod else c.startPeriod
+        val ep = if (ex?.type == ExceptionType.RESCHEDULE) ex.newEndPeriod ?: c.endPeriod else c.endPeriod
+        val date = cal.dateOf(week, dow)
+        val useCustomClock =
+            ex?.type != ExceptionType.RESCHEDULE ||
+                (ex.newStartPeriod == null && ex.newEndPeriod == null)
+        val startClock = (if (useCustomClock) c.startTime else null) ?: cal.startTime(sp)
+        val endClock = (if (useCustomClock) c.endTime else null) ?: cal.endTime(ep)
+        val s = startClock?.let { date.atTime(it) } ?: return null
+        val e = endClock?.let { date.atTime(it) } ?: return null
+        return CourseOccurrence(
+            course = c,
+            week = week,
+            date = date,
+            startPeriod = sp,
+            endPeriod = ep,
+            start = s,
+            end = e,
+            room = (if (ex?.type == ExceptionType.RESCHEDULE) ex.newRoom else null) ?: c.room,
+            rescheduled = ex?.type == ExceptionType.RESCHEDULE,
+            originalWeek = w,
+        )
+    }
+
+    /** 展开课程 [courseId] 在原教学周 [originalWeek] 的具体课次（已取消或不在排课周内返回 null）。 */
+    fun occurrence(
+        semester: Semester,
+        courses: List<Course>,
+        exceptions: List<CourseException>,
+        courseId: String,
+        originalWeek: Int,
+    ): CourseOccurrence? {
+        val c =
+            courses.firstOrNull {
+                it.id == courseId && it.deletedAt == null && it.semesterId == semester.id && originalWeek in it.weeks
+            } ?: return null
+        val ex =
+            exceptions
+                .lastOrNull { it.deletedAt == null && it.courseId == c.id && it.week == originalWeek }
+        return expandOne(SemesterCalendar(semester), c, originalWeek, ex)
     }
 
     /** 将同一天同课程且时间/节次重叠的常规课次提升并归并到考试层，消除随堂考与常规课的假性时间冲突。 */

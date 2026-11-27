@@ -126,11 +126,13 @@ import app.goke.core.model.Freq
 import app.goke.core.model.Recurrence
 import app.goke.core.model.Snapshot
 import app.goke.core.model.Task
+import app.goke.core.recurrence.CourseExpander
 import app.goke.core.time.SemesterCalendar
 import app.goke.core.time.WeekSets
 import app.goke.core.todo.QuickAdd
 import app.goke.core.todo.QuickBatchItem
 import app.goke.core.todo.QuickTokenKind
+import app.goke.core.todo.TaskLogic
 import app.goke.data.DarkMode
 import app.goke.gokeApp
 import app.goke.notify.ReminderAlertService
@@ -204,6 +206,7 @@ internal sealed interface OverlayTarget {
     data class Add(
         val initialCourseId: String? = null,
         val initialText: String = "",
+        val initialCourseWeek: Int? = null,
     ) : OverlayTarget
 
     data class CourseDetail(
@@ -613,6 +616,7 @@ internal fun WidgetOverlayRoot(
                                     defaultBlockMinutes = settings.defaultBlockMinutes,
                                     initialCourseId = activeTarget.initialCourseId,
                                     initialText = activeTarget.initialText,
+                                    initialCourseWeek = activeTarget.initialCourseWeek,
                                     registerDismissHook = { dismissHook = it },
                                     onExpand = { draft ->
                                         onOpenInApp(DeepLinks.addUri(draft.ifBlank { null }, activeTarget.initialCourseId))
@@ -647,8 +651,8 @@ internal fun WidgetOverlayRoot(
                                         onOpenTask = { task ->
                                             onChangeTarget(OverlayTarget.TaskDetail(task.id))
                                         },
-                                        onAddCourseTask = {
-                                            onChangeTarget(OverlayTarget.Add(initialCourseId = course.id))
+                                        onAddCourseTask = { cw ->
+                                            onChangeTarget(OverlayTarget.Add(initialCourseId = course.id, initialCourseWeek = cw))
                                         },
                                         onExpand = { onOpenInApp(DeepLinks.courseUri(course.id)) },
                                     )
@@ -765,6 +769,7 @@ private fun OverlayQuickAddCard(
     defaultBlockMinutes: Int,
     initialCourseId: String?,
     initialText: String,
+    initialCourseWeek: Int? = null,
     registerDismissHook: ((Pair<Boolean, () -> Unit>?) -> Unit),
     onExpand: (String) -> Unit,
     onCommit: (ChangeSet, String) -> Unit,
@@ -863,7 +868,11 @@ private fun OverlayQuickAddCard(
                                 val t = ch.after as Task
                                 if (t.courseId == null && t.parentId == null) {
                                     Change.Add(
-                                        t.copy(courseId = linkedCourse.id, dueBeforeNextClass = t.due == null),
+                                        t.withCourseLink(
+                                            courseId = linkedCourse.id,
+                                            courseWeek = initialCourseWeek,
+                                            dueBeforeNextClass = t.due == null,
+                                        ),
                                     )
                                 } else {
                                     ch
@@ -964,7 +973,7 @@ private fun OverlayCourseCard(
     endPeriod: Int?,
     onToggleTask: (Task, Boolean) -> Unit,
     onOpenTask: (Task) -> Unit,
-    onAddCourseTask: () -> Unit,
+    onAddCourseTask: (Int?) -> Unit,
     onExpand: () -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -992,9 +1001,21 @@ private fun OverlayCourseCard(
             course.teacher.takeIf { it.isNotBlank() },
             WeekSets.format(course.weeks).takeIf { it.isNotBlank() },
         ).joinToString(" · ")
+    val targetOcc =
+        remember(sem, course, date, sp, ep, snap.exceptions) {
+            if (sem == null) return@remember null
+            val targetDate = date ?: LocalDate.now()
+            val occs = CourseExpander.occurrences(sem, listOf(course), snap.exceptions, targetDate, targetDate)
+            occs.firstOrNull { it.startPeriod == sp && it.endPeriod == ep } ?: occs.firstOrNull()
+        }
+    val now = remember { LocalDateTime.now() }
     val courseTasks =
-        remember(snap.tasks, course.id) {
-            snap.tasks.filter { !it.done && it.parentId == null && it.courseId == course.id }
+        remember(snap.tasks, snap.courses, snap.exceptions, sem, course, targetOcc, now) {
+            if (targetOcc != null && sem != null) {
+                TaskLogic.forOccurrence(snap.tasks, sem, snap.courses, snap.exceptions, targetOcc, now)
+            } else {
+                TaskLogic.forCourse(snap.tasks, snap.courses, course)
+            }
         }
 
     val week =
@@ -1112,7 +1133,7 @@ private fun OverlayCourseCard(
             Text(stringResource(R.string.widget_overlay_course_detail))
         }
         Button(
-            onClick = onAddCourseTask,
+            onClick = { onAddCourseTask(targetOcc?.originalWeek ?: week) },
             interactionSource = addInteraction,
             modifier = Modifier.weight(1f).heightIn(min = 48.dp).mintPressScale(addInteraction, 0.96f),
         ) {

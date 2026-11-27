@@ -509,7 +509,7 @@ internal class LocalMcpTools(
         if ("courseId" in args) {
             val cid = args.str("courseId")?.takeIf { it.isNotBlank() }
             if (cid != null && snap.courses.none { it.id == cid }) throw McpToolError("课程不存在：$cid")
-            next = next.copy(courseId = cid)
+            next = next.withCourseLink(cid, courseWeek = if (cid == next.courseId) next.courseWeek else null, dueBeforeNextClass = next.dueBeforeNextClass)
         }
         args.bool("dueBeforeNextClass")?.let { next = next.copy(dueBeforeNextClass = it) }
         if ("blockStart" in args) {

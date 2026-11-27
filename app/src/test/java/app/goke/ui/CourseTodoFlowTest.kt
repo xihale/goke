@@ -2,6 +2,7 @@ package app.goke.ui
 
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -27,6 +28,7 @@ import app.goke.ui.theme.GokeTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -198,13 +200,13 @@ class CourseTodoFlowTest {
         rule.waitForIdle()
         rule.onNodeWithText(app.getString(R.string.course_todos_bind_title)).assertIsDisplayed()
 
-        // 绑定无日期的待办 -> dueBeforeNextClass = true
+        // 绑定无日期的待办 -> dueBeforeNextClass = true 且钉死到当前课次周次
         rule.onAllNodesWithText(unboundTask.title).onLast().performClick()
         rule.waitUntil(3_000) {
             val saved =
                 app.repo.snapshot.value.tasks
                     .firstOrNull { it.id == unboundTask.id }
-            saved?.courseId == courseA.id && saved.dueBeforeNextClass
+            saved?.courseId == courseA.id && saved.courseWeek != null && saved.dueBeforeNextClass
         }
 
         // 绑定已有具体截止时间的待办 -> 保留原时间，不强覆写 dueBeforeNextClass
@@ -213,7 +215,7 @@ class CourseTodoFlowTest {
             val saved =
                 app.repo.snapshot.value.tasks
                     .firstOrNull { it.id == datedTask.id }
-            saved?.courseId == courseA.id && !saved.dueBeforeNextClass
+            saved?.courseId == courseA.id && saved.courseWeek != null && !saved.dueBeforeNextClass
         }
 
         // 系统返回仅退出「关联已有」，保留 CourseSheet 预览且待办默认展开（使用 TodoLine 呈现）
@@ -250,11 +252,89 @@ class CourseTodoFlowTest {
             app.repo.snapshot.value.tasks
                 .first { it.id == datedTask.id }
         assertEquals(courseA.id, updatedDated.courseId)
+        assertNotNull(updatedDated.courseWeek)
         assertFalse(updatedDated.dueBeforeNextClass)
         val updatedUnbound =
             app.repo.snapshot.value.tasks
                 .first { it.id == unboundTask.id }
         assertNull(updatedUnbound.courseId)
+        assertNull(updatedUnbound.courseWeek)
         assertTrue(!updatedUnbound.dueBeforeNextClass)
+    }
+
+    @Test
+    fun sameCourseMultipleWeeklySlotsPinTodoToTappedSessionOnly() {
+        val snap = app.repo.snapshot.value
+        val sem = snap.currentSemester!!
+        val cal = SemesterCalendar(sem)
+        val currentWeek = cal.weekOf(LocalDate.now()).coerceIn(1, sem.totalWeeks)
+        val otherDow = (1..7).first { it != courseA.dayOfWeek && it != courseB.dayOfWeek }
+        val courseAOtherSlot =
+            Course(
+                id = "course-a-slot2",
+                semesterId = sem.id,
+                name = courseA.name,
+                teacher = courseA.teacher,
+                room = "实验2-404",
+                dayOfWeek = otherDow,
+                startPeriod = 5,
+                endPeriod = 6,
+                weeks = setOf(currentWeek, (currentWeek + 1).coerceAtMost(sem.totalWeeks)),
+                colorIndex = 1,
+            )
+        runBlocking {
+            app.repo.commit(
+                ChangeSet(
+                    Ids.next(),
+                    "add second slot",
+                    Source.MANUAL,
+                    System.currentTimeMillis(),
+                    listOf(
+                        Change.Modify(courseA, courseA.copy(weeks = setOf(currentWeek, (currentWeek + 1).coerceAtMost(sem.totalWeeks)))),
+                        Change.Add(courseAOtherSlot),
+                    ),
+                ),
+            )
+        }
+
+        val nav = Nav(initialTab = Tab.TIMETABLE)
+        rule.setContent {
+            val st by app.settings.flow.collectAsState()
+            GokeTheme(st) {
+                GokeRoot(app, null, initialTab = Tab.TIMETABLE, nav = nav) {}
+            }
+        }
+        rule.waitForIdle()
+
+        // 点开第一个时段的课程卡片（实验1-202），绑定一条待办
+        rule.onAllNodes(hasText(courseA.room, substring = true)).onFirst().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription(app.getString(R.string.course_todos_bind)).performClick()
+        rule.waitForIdle()
+        rule.onAllNodesWithText(unboundTask.title).onLast().performClick()
+        rule.waitUntil(3_000) {
+            val saved =
+                app.repo.snapshot.value.tasks
+                    .firstOrNull { it.id == unboundTask.id }
+            saved?.courseId == courseA.id && saved.courseWeek == currentWeek
+        }
+
+        // 退出「关联已有」后，第一节（实验1-202）的 CourseSheet 展示刚绑定的待办
+        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription(app.getString(R.string.course_todos_hide)).assertIsDisplayed()
+        rule.onAllNodesWithText(unboundTask.title).assertCountEquals(2)
+
+        // 关闭 CourseSheet 后，课表上只有一个课程块显示便利贴计数（另一节同名课与下周均不显示）
+        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
+        rule.waitForIdle()
+        rule.onAllNodesWithContentDescription(app.getString(R.string.course_card_todos_desc, 1)).assertCountEquals(1)
+
+        // 点开另一天同名课程的卡片（实验2-404），预览中不应包含刚才绑给第一节的待办
+        rule.onAllNodes(hasText(courseAOtherSlot.room, substring = true)).onFirst().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription(app.getString(R.string.course_todos_show)).assertIsDisplayed()
+        rule.onAllNodesWithContentDescription(app.getString(R.string.course_todos_hide)).assertCountEquals(0)
+        rule.onAllNodesWithText(unboundTask.title).assertCountEquals(1)
     }
 }

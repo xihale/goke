@@ -242,6 +242,7 @@ data class Task(
      * 扩展字段：
      * - 快递：`code` / `place` / `company` / `windowStart` / `windowEnd`（兼容旧键 `pickupCode` / `pickupPlace`）
      * - 日程/考试/倒数日：`kind`（`EXAM` / `COUNTDOWN` / `NORMAL`）、`location`、`checkable`（`"false"` 表示不可勾选）
+     * - 课程具体课次：`courseWeek`（对应 `CourseOccurrence.originalWeek`，缺省表示未钉死到单次课）
      */
     val extra: Map<String, String> = emptyMap(),
     val attachments: List<Attachment> = emptyList(),
@@ -250,11 +251,39 @@ data class Task(
     override val userId: String? = null,
     val remindMinutesList: List<Int> = emptyList(),
 ) : Record {
+    companion object {
+        const val EXTRA_COURSE_WEEK = "courseWeek"
+    }
+
     val effectiveRemindMinutes: List<Int>
         get() = Reminders.normalize(remindMinutes, remindMinutesList)
 
+    /** 钉死到某一节具体课时的原教学周（对应 `CourseOccurrence.originalWeek`）；null 表示未指定单节课。 */
+    val courseWeek: Int?
+        get() = extra[EXTRA_COURSE_WEEK]?.toIntOrNull()?.takeIf { it > 0 }
+
     val isExam: Boolean
         get() = extra["kind"] == EventKind.EXAM.name || id.startsWith("jxfw-exam/") || id.startsWith("jxfw-course-exam/")
+
+    fun withCourseLink(
+        courseId: String?,
+        courseWeek: Int? = null,
+        dueBeforeNextClass: Boolean = false,
+    ): Task {
+        val nextExtra =
+            if (courseId != null && courseWeek != null && courseWeek > 0) {
+                extra + (EXTRA_COURSE_WEEK to courseWeek.toString())
+            } else if (EXTRA_COURSE_WEEK in extra) {
+                extra - EXTRA_COURSE_WEEK
+            } else {
+                extra
+            }
+        return copy(
+            courseId = courseId,
+            dueBeforeNextClass = courseId != null && dueBeforeNextClass,
+            extra = nextExtra,
+        )
+    }
 
     override fun withMeta(
         updatedAt: Long,

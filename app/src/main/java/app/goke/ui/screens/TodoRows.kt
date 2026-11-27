@@ -110,11 +110,13 @@ fun todoIndexOf(
             due[t.id] =
                 if (t.dueBeforeNextClass && cid != null && sem != null) {
                     val cache = nextClassByCourse ?: HashMap<String, LocalDateTime?>().also { nextClassByCourse = it }
+                    val cw = t.courseWeek
+                    val cacheKey = if (cw != null) "$cid#$cw" else cid
                     val nextStart =
-                        if (cache.containsKey(cid)) {
-                            cache[cid]
+                        if (cache.containsKey(cacheKey)) {
+                            cache[cacheKey]
                         } else {
-                            TaskLogic.effectiveDue(t.copy(due = null), sem, snap.courses, snap.exceptions, now).also { cache[cid] = it }
+                            TaskLogic.effectiveDue(t.copy(due = null), sem, snap.courses, snap.exceptions, now).also { cache[cacheKey] = it }
                         }
                     nextStart ?: t.due
                 } else {
@@ -176,7 +178,12 @@ fun buildTodoRowModel(
     context: android.content.Context,
 ): TodoRowModel {
     val due = if (task.id in index.due) index.due[task.id] else TaskLogic.effectiveDue(task, snap.currentSemester, snap.courses, snap.exceptions, now)
-    val overdue = TaskLogic.isOverdue(task, now)
+    val overdue =
+        if (task.dueBeforeNextClass && task.courseWeek != null) {
+            due != null && !task.done && task.blockStart == null && due.isBefore(now)
+        } else {
+            TaskLogic.isOverdue(task, now)
+        }
     val (done, total) = index.progress[task.id] ?: (0 to 0)
     val list = index.listById[task.listId]
     val course = index.courseById[task.courseId]
@@ -197,7 +204,8 @@ fun buildTodoRowModel(
     val dueText =
         due?.let {
             if (task.dueBeforeNextClass && course != null) {
-                context.getString(R.string.before_next_class_short, course.name)
+                val base = context.getString(R.string.before_next_class_short, course.name)
+                if (task.courseWeek != null) "$base · ${context.dueLabel(it, true, now.toLocalDate())}" else base
             } else {
                 context.dueLabel(it, task.dueHasTime, now.toLocalDate())
             }

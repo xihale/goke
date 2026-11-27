@@ -892,6 +892,7 @@ private fun RouteContent(
                 endArg = route.end,
                 textDraft = route.text,
                 courseArg = route.courseId,
+                courseWeekArg = route.courseWeek,
                 extraDatesArg = route.extraDates,
                 noteDraft = route.note,
                 locationArg = route.location,
