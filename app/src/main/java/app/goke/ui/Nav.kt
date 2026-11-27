@@ -240,6 +240,11 @@ class Actions(
         }
     }
 
+    /** 触发统一触觉与音效反馈。 */
+    fun feedback(event: FeedbackEvent) {
+        app.feedback.play(event)
+    }
+
     /** 撤销当前提示对应的操作。 */
     fun undoNow() {
         val p = undo ?: return
@@ -247,6 +252,7 @@ class Actions(
         scope.launch {
             try {
                 val ok = app.repo.undo(p.csId)
+                if (ok) app.feedback.play(FeedbackEvent.UNDO)
                 toast(app.getString(if (ok) R.string.undone_toast else R.string.history_blocked_toast))
             } catch (e: CancellationException) {
                 throw e

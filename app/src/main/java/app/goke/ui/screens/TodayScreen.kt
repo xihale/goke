@@ -2,6 +2,8 @@ package app.goke.ui.screens
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -84,6 +86,7 @@ import app.goke.core.time.SemesterCalendar
 import app.goke.core.todo.Bucket
 import app.goke.core.todo.SmartList
 import app.goke.core.todo.TaskLogic
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalNav
 import app.goke.ui.Route
@@ -105,6 +108,7 @@ import app.goke.ui.fullDate
 import app.goke.ui.hm
 import app.goke.ui.icons.ExpandMore
 import app.goke.ui.icons.WbSunny
+import app.goke.ui.isClearingTodayTasks
 import app.goke.ui.liveSnapshot
 import app.goke.ui.monthDayWeekday
 import app.goke.ui.reduceMotion
@@ -794,8 +798,21 @@ fun toggle(
     now: LocalDateTime,
     msg: String,
 ) {
-    val desc = if (done) msg else task.title
+    val clearedToday = done && isClearingTodayTasks(snap, setOf(task.id), now)
+    val desc =
+        when {
+            clearedToday -> actions.app.getString(R.string.today_all_done_toast)
+            done -> msg
+            else -> task.title
+        }
     val cs = Edits.toggleTask(snap, task, done, System.currentTimeMillis(), now, desc)
+    actions.feedback(
+        when {
+            clearedToday -> FeedbackEvent.CELEBRATE
+            done -> FeedbackEvent.TASK_COMPLETE
+            else -> FeedbackEvent.SOFT_TICK
+        },
+    )
     actions.commit(cs, desc)
 }
 
@@ -806,10 +823,36 @@ fun ProgressRing(
     description: String,
     modifier: Modifier = Modifier,
 ) {
-    val p by animateFloatAsState(progress.coerceIn(0f, 1f), MintTheme.spec(), label = "ring")
+    val clamped = progress.coerceIn(0f, 1f)
+    val complete = clamped >= 1f
+    val reduce = reduceMotion()
+    val p by animateFloatAsState(clamped, MintTheme.spec(), label = "ring")
+    val bar by animateColorAsState(
+        if (complete) MintTheme.colors.added else MaterialTheme.colorScheme.onSurfaceVariant,
+        MintTheme.spec(),
+        label = "ring-color",
+    )
+    val pulse = remember { Animatable(1f) }
+    val pressSpec = MintTheme.press<Float>()
+    val settleSpec = MintTheme.spec<Float>()
+    var wasComplete by remember { mutableStateOf(complete) }
+    LaunchedEffect(complete, reduce) {
+        if (complete && !wasComplete && !reduce) {
+            pulse.snapTo(1f)
+            pulse.animateTo(1.12f, pressSpec)
+            pulse.animateTo(1f, settleSpec)
+        }
+        wasComplete = complete
+    }
     val track = MaterialTheme.colorScheme.surfaceContainerHighest
-    val bar = MaterialTheme.colorScheme.onSurfaceVariant
-    Box(modifier.semantics { contentDescription = description }, contentAlignment = Alignment.Center) {
+    Box(
+        modifier
+            .graphicsLayer {
+                scaleX = pulse.value
+                scaleY = pulse.value
+            }.semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
         Canvas(Modifier.fillMaxSize()) {
             val stroke = 4.dp.toPx()
             val inset = stroke / 2
@@ -817,6 +860,10 @@ fun ProgressRing(
             drawArc(track, 0f, 360f, false, Offset(inset, inset), sz, style = Stroke(stroke))
             drawArc(bar, -90f, 360f * p.coerceIn(0f, 1f), false, Offset(inset, inset), sz, style = Stroke(stroke, cap = StrokeCap.Round))
         }
-        Text(center, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
+        Text(
+            center,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (complete) MintTheme.colors.added else MaterialTheme.colorScheme.onSurface,
+        )
     }
 }

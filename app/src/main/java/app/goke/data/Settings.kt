@@ -38,6 +38,10 @@ data class Settings(
     val quickAddNotif: Boolean = false,
     /** 交换待办滑动方向：左滑完成、右滑改期。 */
     val swapSwipe: Boolean = false,
+    /** 完成任务、新建保存等交互的震动反馈，默认开启。 */
+    val hapticFeedback: Boolean = true,
+    /** 完成任务、新建保存等交互的轻音效反馈，默认开启（随系统静音/震动模式自动静默）。 */
+    val soundFeedback: Boolean = true,
     /** 上课期间自动静音（勿扰），下课恢复；需要勿扰权限。 */
     val autoMute: Boolean = false,
     /** 每天自动备份一次全量 JSON 到应用外部目录，默认关。 */
@@ -132,6 +136,8 @@ class SettingsStore(
             digestMinute = sp.getInt("digestMinute", d.digestMinute).coerceIn(0, 59),
             quickAddNotif = sp.getBoolean("quickAddNotif", d.quickAddNotif),
             swapSwipe = sp.getBoolean("swapSwipe", d.swapSwipe),
+            hapticFeedback = sp.getBoolean("hapticFeedback", d.hapticFeedback),
+            soundFeedback = sp.getBoolean("soundFeedback", d.soundFeedback),
             autoMute = sp.getBoolean("autoMute", d.autoMute),
             autoBackup = sp.getBoolean("autoBackup", d.autoBackup),
             backupKeep = sp.getInt("backupKeep", d.backupKeep),
@@ -197,6 +203,8 @@ class SettingsStore(
             .putInt("digestMinute", n.digestMinute)
             .putBoolean("quickAddNotif", n.quickAddNotif)
             .putBoolean("swapSwipe", n.swapSwipe)
+            .putBoolean("hapticFeedback", n.hapticFeedback)
+            .putBoolean("soundFeedback", n.soundFeedback)
             .putBoolean("autoMute", n.autoMute)
             .putBoolean("autoBackup", n.autoBackup)
             .putInt("backupKeep", n.backupKeep)

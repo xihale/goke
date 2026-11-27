@@ -86,6 +86,7 @@ import app.goke.core.model.Source
 import app.goke.core.time.WeekSets
 import app.goke.core.todo.TaskLogic
 import app.goke.core.util.Ids
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalNav
 import app.goke.ui.LocalRouteBackHolder
@@ -413,6 +414,7 @@ fun CourseEditScreen(
             return
         }
         val desc = ctx.getString(if (origin == null) R.string.add_course_desc else R.string.edit_course_desc, name.trim())
+        actions.feedback(FeedbackEvent.SUCCESS)
         actions.commit(
             ChangeSet(Ids.next(), desc, Source.MANUAL, ms, changes),
             desc,

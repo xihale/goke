@@ -101,6 +101,7 @@
     <string name="overdue_since">%1$s 起逾期</string>
     <string name="timeline">今日时间线</string>
     <string name="done_toast">已完成「%1$s」</string>
+    <string name="today_all_done_toast">今日待办已全部完成！</string>
     <string name="go_todo">去待办看看</string>
     <string name="block_subtitle_short">%1$s – %2$s</string>
     <string name="label_lasting">持续</string>
@@ -1067,6 +1068,11 @@
     <string name="prefs_title">显示与交互</string>
     <string name="prefs_section_schedule">课表与日历</string>
     <string name="prefs_section_todo">待办与手势</string>
+    <string name="prefs_section_feedback">反馈与激励</string>
+    <string name="haptic_feedback">震动反馈</string>
+    <string name="haptic_feedback_desc">完成待办、保存日程与手势确认时轻震提醒</string>
+    <string name="sound_feedback">音效反馈</string>
+    <string name="sound_feedback_desc">完成任务、清空今日与操作成功时播放轻音效（静音模式自动静默）</string>
     <string name="reminders_title">提醒与通知</string>
     <string name="reminders_section_schedule">提醒开关</string>
     <string name="reminders_section_quick_add">提醒简写</string>
@@ -1400,6 +1406,8 @@
     <string name="settings_search_kw_week_starts_monday">周一 周日 星期 首日 起始日 日历 monday sunday week</string>
     <string name="settings_search_kw_default_block_minutes">时长 分钟 时间块 待办 默认 todo duration block</string>
     <string name="settings_search_kw_swap_swipe">左滑 右滑 手势 滑动 方向 swipe gesture</string>
+    <string name="settings_search_kw_haptic_feedback">震动 振动 触觉 反馈 马达 haptic vibrate feedback</string>
+    <string name="settings_search_kw_sound_feedback">声音 音效 提示音 反馈 庆祝 激励 sound audio sfx feedback</string>
     <string name="settings_search_kw_remind_courses">上课 课程 提前 提醒 铃声 course</string>
     <string name="settings_search_kw_remind_exams">考试 倒计时 常驻 提醒 exam</string>
     <string name="settings_search_kw_remind_tasks">待办 任务 截止 提醒 task todo</string>

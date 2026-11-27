@@ -488,6 +488,16 @@ fun PreferencesScreen(onBack: () -> Unit) {
                     app.settings.update { it.copy(swapSwipe = v) }
                 }
             }
+            FormSection(stringResource(R.string.prefs_section_feedback)) {
+                SwitchRow(stringResource(R.string.haptic_feedback), stringResource(R.string.haptic_feedback_desc), st.hapticFeedback) { v ->
+                    app.settings.update { it.copy(hapticFeedback = v) }
+                    if (v) app.feedback.previewHaptic()
+                }
+                SwitchRow(stringResource(R.string.sound_feedback), stringResource(R.string.sound_feedback_desc), st.soundFeedback) { v ->
+                    app.settings.update { it.copy(soundFeedback = v) }
+                    if (v) app.feedback.previewSound()
+                }
+            }
         }
     }
 }
@@ -669,83 +679,6 @@ fun RemindersScreen(onBack: () -> Unit) {
                 var normalDlg by remember { mutableStateOf(false) }
                 var bangDlg by remember { mutableStateOf(false) }
 
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                ) {
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (kw.isNotEmpty()) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Text(
-                                    kw,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Text(
-                                    "→",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Text(
-                                    remindSummaryLabel(qCfg.effectiveRemindMinutes),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Text(
-                                    "$kw!",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color =
-                                        if (st.quickRemindBangPersistent) {
-                                            MaterialTheme.colorScheme.error
-                                        } else {
-                                            MaterialTheme.colorScheme.primary
-                                        },
-                                )
-                                Text(
-                                    "→",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Text(
-                                    remindSummaryLabel(qCfg.effectivePersistentRemindMinutes),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                                if (st.quickRemindBangPersistent) {
-                                    Icon(
-                                        Icons.Rounded.NotificationsActive,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                    Text(
-                                        stringResource(R.string.remind_persistent),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.error,
-                                    )
-                                }
-                            }
-                        } else {
-                            Text(
-                                stringResource(R.string.quick_remind_preview_disabled),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-
                 ValueRow(
                     stringResource(R.string.quick_remind_keyword),
                     kw.ifEmpty { stringResource(R.string.quick_remind_keyword_off) },
@@ -758,7 +691,7 @@ fun RemindersScreen(onBack: () -> Unit) {
                         title = { Text(stringResource(R.string.quick_remind_keyword)) },
                         text = {
                             TonalField(
-                                label = stringResource(R.string.quick_remind_keyword),
+                                label = "",
                                 value = draft,
                                 onChange = { raw ->
                                     val cleaned = raw.replace(Regex("[\\s!！#@/]"), "").take(8)
@@ -787,7 +720,7 @@ fun RemindersScreen(onBack: () -> Unit) {
                 ) {
                     Column {
                         ValueRow(
-                            stringResource(R.string.quick_remind_normal_timing, kw),
+                            kw,
                             remindSummaryLabel(qCfg.effectiveRemindMinutes),
                             onClick = { normalDlg = true },
                         )
@@ -815,7 +748,7 @@ fun RemindersScreen(onBack: () -> Unit) {
                                 remindSummaryLabel(qCfg.effectivePersistentRemindMinutes)
                             }
                         ValueRow(
-                            stringResource(R.string.quick_remind_bang_timing, kw),
+                            "$kw!",
                             bangSummary,
                             onClick = { bangDlg = true },
                         )
@@ -873,7 +806,7 @@ fun RemindersScreen(onBack: () -> Unit) {
                             modifier = Modifier.size(18.dp),
                         )
                         Text(
-                            stringResource(R.string.quick_remind_reset),
+                            stringResource(R.string.reset_default),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )

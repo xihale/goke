@@ -5,6 +5,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -199,5 +201,37 @@ class TodoEditNavigationTest {
         rule.waitForIdle()
         assertEquals(2, backCalls)
         assertEquals(0, rule.onAllNodesWithText(app.getString(R.string.detail_editor_discard_title)).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun tappingBlankAreaBelowNoteLineFocusesNoteField() {
+        rule.setContent {
+            val nav = rememberNav()
+            val scope = rememberCoroutineScope()
+            val actions = remember { Actions(app, scope, nav) }
+            GokeTheme(app.settings.flow.value) {
+                CompositionLocalProvider(
+                    LocalApp provides app,
+                    LocalActions provides actions,
+                    LocalNav provides nav,
+                ) {
+                    TodoEditScreen(
+                        id = null,
+                        onBack = {},
+                    )
+                }
+            }
+        }
+        rule.waitForIdle()
+
+        val noteNode = rule.onNodeWithContentDescription(app.getString(R.string.label_note))
+        val noteBounds = noteNode.fetchSemanticsNode().boundsInRoot
+        val rootBounds = rule.onRoot().fetchSemanticsNode().boundsInRoot
+        // Tap well below the single note line inside the blank note block
+        val tapBelowNote = Offset(rootBounds.width * 0.5f, (noteBounds.bottom + 200f).coerceAtMost(rootBounds.height * 0.7f))
+        rule.onRoot().performTouchInput { click(tapBelowNote) }
+        rule.waitForIdle()
+
+        noteNode.assertIsFocused()
     }
 }

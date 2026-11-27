@@ -81,6 +81,7 @@ import app.goke.core.time.TimePhase
 import app.goke.core.util.HtmlEntities
 import app.goke.core.util.Ids
 import app.goke.ui.Actions
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
@@ -435,6 +436,7 @@ fun copyParcelCode(
     code: String,
 ) {
     ctx.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText(code, code))
+    actions.feedback(FeedbackEvent.SOFT_TICK)
     actions.toast(ctx.getString(R.string.parcel_code_copied, code))
 }
 
@@ -612,6 +614,7 @@ fun EventDetailSheet(
                         if (converting) return@TextButton
                         converting = true
                         val desc = ctx.getString(R.string.delete_desc, e.title)
+                        actions.feedback(FeedbackEvent.DELETE)
                         actions.commit(Edits.delete(snap, e, desc, System.currentTimeMillis()), desc)
                         onDismiss()
                     },

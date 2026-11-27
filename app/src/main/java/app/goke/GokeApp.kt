@@ -99,6 +99,8 @@ open class GokeApp : Application() {
         private set
     lateinit var updateChecker: UpdateChecker
         private set
+    lateinit var feedback: app.goke.ui.FeedbackEngine
+        private set
 
     /** 外部入口（通知 / 小组件 / 快捷方式 / 分享）待处理的动作，由根组合消费后清空。 */
     val links = MutableStateFlow<DeepLink?>(null)
@@ -114,6 +116,7 @@ open class GokeApp : Application() {
         errors.attach(this)
         repo = Repository(MintDb(this))
         settings = SettingsStore(this)
+        feedback = app.goke.ui.FeedbackEngine(this) { settings.value }
         // 首屏仅依赖 repo 与 settings：立即在 IO 启动读库，与其余控制器构造并行
         val loadJob =
             scope.launch {

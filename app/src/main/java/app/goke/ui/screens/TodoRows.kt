@@ -57,6 +57,7 @@ import app.goke.core.model.Task
 import app.goke.core.todo.Bucket
 import app.goke.core.todo.TaskLogic
 import app.goke.core.util.Ids
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalNav
 import app.goke.ui.components.MintCheck
@@ -514,13 +515,21 @@ internal fun TodoRow(
                 val currentTask = modelNow.task
                 when (v) {
                     SwipeToDismissBoxValue.StartToEnd -> {
-                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                        if (swapSwipe) onSwipeLeftNow(currentTask) else onToggleNow(currentTask, !currentTask.done)
+                        if (swapSwipe) {
+                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                            onSwipeLeftNow(currentTask)
+                        } else {
+                            onToggleNow(currentTask, !currentTask.done)
+                        }
                     }
 
                     SwipeToDismissBoxValue.EndToStart -> {
-                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                        if (swapSwipe) onToggleNow(currentTask, !currentTask.done) else onSwipeLeftNow(currentTask)
+                        if (swapSwipe) {
+                            onToggleNow(currentTask, !currentTask.done)
+                        } else {
+                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                            onSwipeLeftNow(currentTask)
+                        }
                     }
 
                     SwipeToDismissBoxValue.Settled -> {}
@@ -694,6 +703,7 @@ internal fun InlineSubAdd(
         if (title.isEmpty()) return
         val order = (TaskLogic.subtasks(snap.tasks, parent.id).maxOfOrNull { it.sortOrder } ?: 0) + 1
         val sub = Task(Ids.next(), title, listId = parent.listId, parentId = parent.id, sortOrder = order)
+        actions.feedback(FeedbackEvent.SUCCESS)
         actions.commit(Edits.save(snap, sub, ctx.getString(R.string.add_task_desc, title), System.currentTimeMillis()))
         text = ""
     }

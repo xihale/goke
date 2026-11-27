@@ -105,6 +105,7 @@ import app.goke.core.todo.QuickToken
 import app.goke.core.todo.QuickTokenKind
 import app.goke.core.todo.TaskLogic
 import app.goke.core.util.Ids
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalNav
 import app.goke.ui.LocalTabVisible
@@ -216,6 +217,7 @@ internal fun QuickAddSheet(
             val first = placed.first().result
             val desc = if (placed.size == 1) ctx.getString(R.string.add_task_desc, first.title) else ctx.getString(R.string.todo_batch_desc, placed.size)
             val msg = if (placed.size == 1) ctx.getString(R.string.task_added_toast, first.title) else ctx.getString(R.string.todo_batch_toast, placed.size)
+            actions.feedback(FeedbackEvent.SUCCESS)
             actions.commit(buildQuickTasks(snap, placed, listFilter, defaultBucket, now, desc), msg, undoable = placed.size > 1)
             batch = null
         }
@@ -325,6 +327,7 @@ internal fun QuickAddSheet(
             } else {
                 null
             }
+        actions.feedback(FeedbackEvent.SUCCESS)
         actions.commit(buildQuickTasks(snap, placed, listFilter, defaultBucket, now, desc, ov), msg, undoable = placed.size > 1)
     }
 

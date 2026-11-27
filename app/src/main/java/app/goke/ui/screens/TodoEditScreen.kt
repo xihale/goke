@@ -7,8 +7,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -49,6 +51,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,8 +63,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -70,6 +77,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
@@ -96,6 +104,7 @@ import app.goke.core.todo.QuickAdd
 import app.goke.core.todo.QuickTokenKind
 import app.goke.core.todo.TaskLogic
 import app.goke.core.util.Ids
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalNav
 import app.goke.ui.LocalRouteBackHolder
@@ -322,6 +331,8 @@ fun TodoEditScreen(
     // 顶栏「更多」仍在原位弹菜单，但它不抢焦点
     val noFocusPopup = rememberNoFocusPopup()
     val titleFocus = remember { FocusRequester() }
+    val noteFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
     val reduce = reduceMotion()
     LaunchedEffect(existing == null) {
         if (existing == null) {
@@ -597,6 +608,7 @@ fun TodoEditScreen(
                 linkedCourse != null -> resources.getString(R.string.detail_editor_added_course, linkedCourse.name)
                 else -> resources.getString(R.string.detail_editor_added_inbox)
             }
+        actions.feedback(FeedbackEvent.SUCCESS)
         actions.commit(ChangeSet(Ids.next(), desc, Source.MANUAL, ms, changes.flatMap { it.changes }), feedback, undoable = true)
         onBack()
     }
@@ -646,6 +658,7 @@ fun TodoEditScreen(
                                 if (committed) return@DropdownMenuItem
                                 committed = true
                                 // 删除不做二次确认：落库后出撤回浮钮（4.5s），回收站也能恢复
+                                actions.feedback(FeedbackEvent.DELETE)
                                 actions.commit(
                                     Edits.delete(snap, existing, ctx.getString(R.string.delete_desc, existing.title), System.currentTimeMillis()),
                                     ctx.getString(R.string.delete_desc, existing.title),
@@ -662,116 +675,134 @@ fun TodoEditScreen(
         },
     ) {
         Column(Modifier.fillMaxSize()) {
-            Column(
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp),
-            ) {
-                SmartTitle(
-                    field,
-                    { field = it },
-                    ranges,
-                    titleFocus,
-                    done = existing?.done == true,
-                )
-                WhenRow(
-                    whenPick = whenPick,
-                    today = today,
-                    remindList = effectiveRemindList,
-                    freq = freq,
-                    interval = interval,
-                    until = until,
-                    byDays = byDays,
-                    byMonths = byMonths,
-                    linkedCourse = linkedCourse,
-                    dueBeforeNextClass = dueBeforeNextClass,
-                    nextClassStart = targetCourseOcc?.start,
-                    onClear = {
-                        picked = null
-                        cleared = true
-                        dueBeforeNextClass = false
-                        remindEdited = true
-                        remindList = emptyList()
-                        persistent = false
-                        freq = null
-                        interval = 1
-                        until = null
-                        byDays = emptySet()
-                        byMonths = emptySet()
-                    },
-                ) { timeSheet = true }
-                if (extraDays.isNotEmpty()) {
-                    // 周历框选带进来的其它日期：明说会建几条，不再静默生成
-                    Text(
-                        stringResource(R.string.detail_editor_extra_dates, extraDays.size + 1),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
-                AnimatedVisibility(
-                    visible = clashes.isNotEmpty(),
-                    enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-                    exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val viewportHeight = maxHeight
+                var noteTopY by remember { mutableFloatStateOf(0f) }
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .heightIn(min = viewportHeight)
+                        .pointerInput(Unit) {
+                            detectTapGestures { offset ->
+                                if (offset.y >= noteTopY) {
+                                    noteFocus.requestFocus()
+                                    keyboard?.show()
+                                }
+                            }
+                        }.padding(horizontal = 16.dp),
                 ) {
-                    ConflictCard(title = stringResource(R.string.conflict_title), modifier = Modifier.padding(top = 4.dp)) {
-                        clashes.forEach { c ->
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .mintClickable(pressedScale = 0.98f) {
-                                        if (existing == null && hasChanges) {
-                                            // 新建草稿尚未落库：走确认提示，不静默丢弃草稿
-                                            confirmDiscard = true
-                                        } else {
-                                            nav.focusDate = c.at.toLocalDate()
-                                            nav.tab = Tab.TIMETABLE
-                                            if (existing != null && title.isNotEmpty()) commit()
-                                            nav.clearToRoot()
-                                        }
-                                    }.padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    stringResource(
-                                        if (c.course) R.string.clash_row_course else R.string.clash_row_task,
-                                        c.title,
-                                        c.at.hm(),
-                                    ),
-                                    Modifier.weight(1f),
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
-                                )
-                                Text(
-                                    ctx.monthDayWeekday(c.at.toLocalDate()),
-                                    style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Icon(
-                                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                    null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp),
-                                )
+                    SmartTitle(
+                        field,
+                        { field = it },
+                        ranges,
+                        titleFocus,
+                        done = existing?.done == true,
+                    )
+                    WhenRow(
+                        whenPick = whenPick,
+                        today = today,
+                        remindList = effectiveRemindList,
+                        freq = freq,
+                        interval = interval,
+                        until = until,
+                        byDays = byDays,
+                        byMonths = byMonths,
+                        linkedCourse = linkedCourse,
+                        dueBeforeNextClass = dueBeforeNextClass,
+                        nextClassStart = targetCourseOcc?.start,
+                        onClear = {
+                            picked = null
+                            cleared = true
+                            dueBeforeNextClass = false
+                            remindEdited = true
+                            remindList = emptyList()
+                            persistent = false
+                            freq = null
+                            interval = 1
+                            until = null
+                            byDays = emptySet()
+                            byMonths = emptySet()
+                        },
+                    ) { timeSheet = true }
+                    if (extraDays.isNotEmpty()) {
+                        // 周历框选带进来的其它日期：明说会建几条，不再静默生成
+                        Text(
+                            stringResource(R.string.detail_editor_extra_dates, extraDays.size + 1),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                    AnimatedVisibility(
+                        visible = clashes.isNotEmpty(),
+                        enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                        exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+                    ) {
+                        ConflictCard(title = stringResource(R.string.conflict_title), modifier = Modifier.padding(top = 4.dp)) {
+                            clashes.forEach { c ->
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .mintClickable(pressedScale = 0.98f) {
+                                            if (existing == null && hasChanges) {
+                                                // 新建草稿尚未落库：走确认提示，不静默丢弃草稿
+                                                confirmDiscard = true
+                                            } else {
+                                                nav.focusDate = c.at.toLocalDate()
+                                                nav.tab = Tab.TIMETABLE
+                                                if (existing != null && title.isNotEmpty()) commit()
+                                                nav.clearToRoot()
+                                            }
+                                        }.padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        stringResource(
+                                            if (c.course) R.string.clash_row_course else R.string.clash_row_task,
+                                            c.title,
+                                            c.at.hm(),
+                                        ),
+                                        Modifier.weight(1f),
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                                    )
+                                    Text(
+                                        ctx.monthDayWeekday(c.at.toLocalDate()),
+                                        style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Icon(
+                                        Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                        null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
                             }
                         }
                     }
-                }
-                Spacer(Modifier.height(8.dp))
-                FlatField(location, stringResource(R.string.field_location), onChange = { location = it }, singleLine = true)
-                FlatField(note, stringResource(R.string.label_note), onChange = { note = it }, singleLine = false)
-                if (attachments.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
-                    AttachmentEditor(
-                        items = attachments,
-                        onChange = { attachments = it },
-                        imageColumns = imageCols,
-                        onImageColumnsChange = { imageCols = it },
+                    FlatField(location, stringResource(R.string.field_location), onChange = { location = it }, singleLine = true)
+                    FlatField(
+                        note,
+                        stringResource(R.string.label_note),
+                        onChange = { note = it },
+                        singleLine = false,
+                        focusRequester = noteFocus,
+                        modifier = Modifier.onGloballyPositioned { noteTopY = it.positionInParent().y },
                     )
+                    if (attachments.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        AttachmentEditor(
+                            items = attachments,
+                            onChange = { attachments = it },
+                            imageColumns = imageCols,
+                            onImageColumnsChange = { imageCols = it },
+                        )
+                    }
+                    Spacer(Modifier.height(24.dp))
                 }
-                Spacer(Modifier.height(24.dp))
             }
             if (existing != null) {
                 val subs = TaskLogic.subtasks(snap.tasks, existing.id)
@@ -798,6 +829,7 @@ fun TodoEditScreen(
                                     color = if (s.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                                 )
                                 IconButton(onClick = {
+                                    actions.feedback(FeedbackEvent.DELETE)
                                     actions.commit(
                                         Edits.delete(snap, s, ctx.getString(R.string.delete_desc, s.title), System.currentTimeMillis()),
                                         ctx.getString(R.string.delete_desc, s.title),
@@ -1320,9 +1352,10 @@ private fun FlatField(
     singleLine: Boolean = true,
     /** 变化时清空输入（如添加子任务后）。 */
     reset: Any? = null,
+    focusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
 ) {
-    var v by remember(reset) { mutableStateOf(TextFieldValue(value)) }
+    var v by remember(reset) { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
     BasicTextField(
         value = v,
         onValueChange = {
@@ -1333,6 +1366,7 @@ private fun FlatField(
             modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
+                .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
                 .semantics { contentDescription = placeholder }
                 .padding(vertical = 8.dp),
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),

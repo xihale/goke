@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import app.goke.core.change.Edits
 import app.goke.gokeApp
+import app.goke.ui.FeedbackEvent
+import app.goke.ui.isClearingTodayTasks
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
@@ -32,7 +34,10 @@ class TaskActionReceiver : BroadcastReceiver() {
                         val snap = app.repo.snapshot.value
                         val task = snap.tasks.firstOrNull { it.id == taskId && it.deletedAt == null }
                         if (task != null && !task.done) {
-                            app.repo.commit(Edits.toggleTask(snap, task, true, System.currentTimeMillis(), LocalDateTime.now(), task.title))
+                            val nowDt = LocalDateTime.now()
+                            val clearedToday = isClearingTodayTasks(snap, setOf(task.id), nowDt)
+                            app.feedback.play(if (clearedToday) FeedbackEvent.CELEBRATE else FeedbackEvent.TASK_COMPLETE)
+                            app.repo.commit(Edits.toggleTask(snap, task, true, System.currentTimeMillis(), nowDt, task.title))
                         }
                     } finally {
                         pending.finish()

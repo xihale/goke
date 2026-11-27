@@ -142,6 +142,7 @@ import app.goke.notify.SnoozeOption
 import app.goke.notify.SnoozePlan
 import app.goke.notify.SnoozePlanner
 import app.goke.notify.SnoozeScaleMode
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.components.ChipPill
 import app.goke.ui.components.ConfirmDialog
 import app.goke.ui.components.CourseNoteBox
@@ -167,6 +168,7 @@ import app.goke.ui.icons.Notes
 import app.goke.ui.icons.OpenInFull
 import app.goke.ui.icons.Repeat
 import app.goke.ui.icons.Schedule
+import app.goke.ui.isClearingTodayTasks
 import app.goke.ui.screens.QuickAddComposer
 import app.goke.ui.screens.QuickOverride
 import app.goke.ui.screens.QuickPanel
@@ -641,9 +643,21 @@ internal fun WidgetOverlayRoot(
                                         endPeriod = activeTarget.endPeriod,
                                         onToggleTask = { task, done ->
                                             val nowDt = LocalDateTime.now()
+                                            val clearedToday = done && isClearingTodayTasks(live, setOf(task.id), nowDt)
+                                            app.feedback.play(
+                                                when {
+                                                    clearedToday -> FeedbackEvent.CELEBRATE
+                                                    done -> FeedbackEvent.TASK_COMPLETE
+                                                    else -> FeedbackEvent.SOFT_TICK
+                                                },
+                                            )
                                             val desc = ctx.getString(R.string.edit_task_desc, task.title)
                                             val toast =
-                                                if (done) ctx.getString(R.string.widget_overlay_task_done_toast, task.title) else null
+                                                when {
+                                                    clearedToday -> ctx.getString(R.string.today_all_done_toast)
+                                                    done -> ctx.getString(R.string.widget_overlay_task_done_toast, task.title)
+                                                    else -> null
+                                                }
                                             commitAndRefresh(
                                                 Edits.toggleTask(live, task, done, System.currentTimeMillis(), nowDt, desc),
                                                 toast = toast,
@@ -678,9 +692,17 @@ internal fun WidgetOverlayRoot(
                                             }
                                         },
                                         onMarkDone = {
-                                            val msg = ctx.getString(R.string.widget_overlay_parcel_done_toast, task.title)
+                                            val nowDt = LocalDateTime.now()
+                                            val clearedToday = isClearingTodayTasks(live, setOf(task.id), nowDt)
+                                            app.feedback.play(if (clearedToday) FeedbackEvent.CELEBRATE else FeedbackEvent.TASK_COMPLETE)
+                                            val msg =
+                                                if (clearedToday) {
+                                                    ctx.getString(R.string.today_all_done_toast)
+                                                } else {
+                                                    ctx.getString(R.string.widget_overlay_parcel_done_toast, task.title)
+                                                }
                                             commitAndRefresh(
-                                                Edits.toggleTask(live, task, true, System.currentTimeMillis(), LocalDateTime.now(), task.title),
+                                                Edits.toggleTask(live, task, true, System.currentTimeMillis(), nowDt, task.title),
                                                 toast = msg,
                                                 closeAfter = true,
                                             )
@@ -701,11 +723,24 @@ internal fun WidgetOverlayRoot(
                                         },
                                         registerDismissHook = { dismissHook = it },
                                         onToggleDone = { t, done, closeAfter ->
+                                            val nowDt = LocalDateTime.now()
+                                            val clearedToday = done && isClearingTodayTasks(live, setOf(t.id), nowDt)
+                                            app.feedback.play(
+                                                when {
+                                                    clearedToday -> FeedbackEvent.CELEBRATE
+                                                    done -> FeedbackEvent.TASK_COMPLETE
+                                                    else -> FeedbackEvent.SOFT_TICK
+                                                },
+                                            )
                                             val desc = ctx.getString(R.string.edit_task_desc, t.title)
                                             val msg =
-                                                if (done) ctx.getString(R.string.widget_overlay_task_done_toast, t.title) else null
+                                                when {
+                                                    clearedToday -> ctx.getString(R.string.today_all_done_toast)
+                                                    done -> ctx.getString(R.string.widget_overlay_task_done_toast, t.title)
+                                                    else -> null
+                                                }
                                             commitAndRefresh(
-                                                Edits.toggleTask(live, t, done, System.currentTimeMillis(), LocalDateTime.now(), desc),
+                                                Edits.toggleTask(live, t, done, System.currentTimeMillis(), nowDt, desc),
                                                 toast = msg,
                                                 closeAfter = closeAfter,
                                             )

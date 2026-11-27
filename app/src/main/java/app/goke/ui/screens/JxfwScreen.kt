@@ -45,6 +45,7 @@ import app.goke.R
 import app.goke.debug.DebugHooks
 import app.goke.jxfw.JxfwException
 import app.goke.jxfw.JxfwState
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
@@ -270,6 +271,7 @@ private fun AccountPanel(state: JxfwState) {
                     scope.launch {
                         try {
                             app.jxfw.fullSync(selectedTerm)
+                            actions.feedback(FeedbackEvent.SUCCESS)
                             actions.toast(ctx.getString(R.string.jxfw_done_toast))
                         } catch (_: JxfwException) {
                             // 错误已写入状态并显示

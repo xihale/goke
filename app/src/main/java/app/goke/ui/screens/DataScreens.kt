@@ -60,6 +60,7 @@ import app.goke.core.model.Semester
 import app.goke.core.time.SemesterCalendar
 import app.goke.debug.DebugHooks
 import app.goke.share.Sharing
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
@@ -481,6 +482,7 @@ fun ImportScreen(
                                     onClick = {
                                         if (committed) return@Button
                                         committed = true
+                                        actions.feedback(FeedbackEvent.SUCCESS)
                                         actions.commit(cs, ctx.getString(R.string.imported_toast))
                                         nav.tab = Tab.TIMETABLE
                                         nav.clearToRoot()

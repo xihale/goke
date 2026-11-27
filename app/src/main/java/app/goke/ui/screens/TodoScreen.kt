@@ -72,6 +72,7 @@ import app.goke.core.model.TaskList
 import app.goke.core.todo.Bucket
 import app.goke.core.todo.TaskLogic
 import app.goke.core.todo.TodoSearch
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalNav
 import app.goke.ui.LocalTabVisible
@@ -85,6 +86,7 @@ import app.goke.ui.icons.Checklist
 import app.goke.ui.icons.ExpandMore
 import app.goke.ui.icons.Flag
 import app.goke.ui.icons.FolderOpen
+import app.goke.ui.isClearingTodayTasks
 import app.goke.ui.liveSnapshot
 import app.goke.ui.reduceMotion
 import app.goke.ui.rememberNowGated
@@ -593,6 +595,7 @@ fun TodoScreen() {
                 onReschedule = { if (selected.isNotEmpty()) rescheduleFor = selected.toList() },
                 onList = { id ->
                     if (selectedTasks.isNotEmpty()) {
+                        actions.feedback(FeedbackEvent.SOFT_TICK)
                         actions.commit(
                             Edits.updateTasks(selectedTasks, ctx.getString(R.string.todo_bulk_desc, selectedTasks.size), System.currentTimeMillis()) { it.copy(listId = id) },
                             ctx.getString(R.string.todo_bulk_toast, selectedTasks.size),
@@ -602,6 +605,7 @@ fun TodoScreen() {
                 },
                 onPriority = { p ->
                     if (selectedTasks.isNotEmpty()) {
+                        actions.feedback(FeedbackEvent.SOFT_TICK)
                         actions.commit(
                             Edits.updateTasks(selectedTasks, ctx.getString(R.string.todo_bulk_desc, selectedTasks.size), System.currentTimeMillis()) { it.copy(priority = p) },
                             ctx.getString(R.string.todo_bulk_toast, selectedTasks.size),
@@ -613,10 +617,18 @@ fun TodoScreen() {
                     val todo = selectedTasks.filter { !it.done }
                     if (todo.isNotEmpty()) {
                         val ms = System.currentTimeMillis()
+                        val clearedToday = isClearingTodayTasks(snap, todo.mapTo(mutableSetOf()) { it.id }, now)
                         val desc = ctx.getString(R.string.todo_bulk_done_desc, todo.size)
+                        val toastMsg =
+                            if (clearedToday) {
+                                ctx.getString(R.string.today_all_done_toast)
+                            } else {
+                                ctx.getString(R.string.todo_bulk_toast, todo.size)
+                            }
+                        actions.feedback(if (clearedToday || todo.size >= 2) FeedbackEvent.CELEBRATE else FeedbackEvent.TASK_COMPLETE)
                         actions.commit(
                             mergeChangeSets(desc, todo.map { Edits.toggleTask(snap, it, true, ms, now, desc) }),
-                            ctx.getString(R.string.todo_bulk_toast, todo.size),
+                            toastMsg,
                         )
                         exitSelect()
                     }
@@ -625,6 +637,7 @@ fun TodoScreen() {
                     if (selectedTasks.isNotEmpty()) {
                         val ms = System.currentTimeMillis()
                         val desc = ctx.getString(R.string.todo_bulk_delete_desc, selectedTasks.size)
+                        actions.feedback(FeedbackEvent.DELETE)
                         actions.commit(
                             mergeChangeSets(desc, selectedTasks.map { Edits.delete(snap, it, desc, ms) }),
                             desc,

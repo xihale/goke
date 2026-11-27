@@ -4,7 +4,9 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -301,6 +303,7 @@ fun MintCheck(
     val scheme = MaterialTheme.colorScheme
     val checkColor = scheme.onSurfaceVariant
     val strokeColor = tint ?: scheme.outline
+    val burstColor = MintTheme.colors.added
     val reduceMotion = LocalReduceMotion.current
     Box(
         modifier =
@@ -320,6 +323,7 @@ fun MintCheck(
                         strokeWidth = strokeWidth,
                         checkColor = checkColor,
                         strokeColor = strokeColor,
+                        burstColor = burstColor,
                         reduceMotion = reduceMotion,
                     ),
                 ),
@@ -332,6 +336,7 @@ private data class MintCheckElement(
     val strokeWidth: Dp,
     val checkColor: Color,
     val strokeColor: Color,
+    val burstColor: Color,
     val reduceMotion: Boolean,
 ) : ModifierNodeElement<MintCheckNode>() {
     override fun create(): MintCheckNode =
@@ -341,6 +346,7 @@ private data class MintCheckElement(
             strokeWidth = strokeWidth,
             checkColor = checkColor,
             strokeColor = strokeColor,
+            burstColor = burstColor,
             reduceMotion = reduceMotion,
         )
 
@@ -351,6 +357,7 @@ private data class MintCheckElement(
             strokeWidth = strokeWidth,
             checkColor = checkColor,
             strokeColor = strokeColor,
+            burstColor = burstColor,
             reduceMotion = reduceMotion,
         )
     }
@@ -362,22 +369,30 @@ private class MintCheckNode(
     private var strokeWidth: Dp,
     private var checkColor: Color,
     private var strokeColor: Color,
+    private var burstColor: Color,
     private var reduceMotion: Boolean,
 ) : Modifier.Node(),
     DrawModifierNode {
     private var progress: Float = if (checked) 1f else 0f
+    private var burstProgress: Float = 0f
     private var animatable: Animatable<Float, AnimationVector1D>? = null
+    private var burstAnimatable: Animatable<Float, AnimationVector1D>? = null
     private var animJob: Job? = null
+    private var burstJob: Job? = null
     private var checkPath: Path? = null
 
     override fun onAttach() {
         progress = if (checked) 1f else 0f
+        burstProgress = 0f
     }
 
     override fun onDetach() {
         animJob?.cancel()
         animJob = null
+        burstJob?.cancel()
+        burstJob = null
         progress = if (checked) 1f else 0f
+        burstProgress = 0f
     }
 
     fun update(
@@ -386,6 +401,7 @@ private class MintCheckNode(
         strokeWidth: Dp,
         checkColor: Color,
         strokeColor: Color,
+        burstColor: Color,
         reduceMotion: Boolean,
     ) {
         val checkedChanged = this.checked != checked
@@ -393,18 +409,23 @@ private class MintCheckNode(
             this.boxSize != boxSize ||
                 this.strokeWidth != strokeWidth ||
                 this.checkColor != checkColor ||
-                this.strokeColor != strokeColor
+                this.strokeColor != strokeColor ||
+                this.burstColor != burstColor
         this.checked = checked
         this.boxSize = boxSize
         this.strokeWidth = strokeWidth
         this.checkColor = checkColor
         this.strokeColor = strokeColor
+        this.burstColor = burstColor
         this.reduceMotion = reduceMotion
 
         if (checkedChanged) {
             val target = if (checked) 1f else 0f
             animJob?.cancel()
             animJob = null
+            burstJob?.cancel()
+            burstJob = null
+            burstProgress = 0f
             if (!isAttached || reduceMotion) {
                 progress = target
                 invalidateDraw()
@@ -422,6 +443,19 @@ private class MintCheckNode(
                         progress = target
                         invalidateDraw()
                     }
+                if (checked) {
+                    val burst = burstAnimatable ?: Animatable(0f).also { burstAnimatable = it }
+                    burstJob =
+                        coroutineScope.launch {
+                            burst.snapTo(0f)
+                            burst.animateTo(1f, tween(durationMillis = 360, easing = FastOutSlowInEasing)) {
+                                burstProgress = value
+                                invalidateDraw()
+                            }
+                            burstProgress = 0f
+                            invalidateDraw()
+                        }
+                }
             }
         } else if (visualChanged) {
             invalidateDraw()
@@ -430,6 +464,7 @@ private class MintCheckNode(
 
     override fun ContentDrawScope.draw() {
         val t = progress.coerceIn(0f, 1f)
+        val b = burstProgress.coerceIn(0f, 1f)
         val boxPx = boxSize.toPx()
         val strokePx = strokeWidth.toPx()
         val halfStroke = strokePx / 2f
@@ -445,38 +480,58 @@ private class MintCheckNode(
                 t >= 1f -> checkColor
                 else -> lerp(strokeColor, checkColor, t)
             }
-        drawRoundRect(
-            color = currentStrokeColor,
-            topLeft = Offset(left, top),
-            size = Size(rectSize, rectSize),
-            cornerRadius = CornerRadius(cornerPx, cornerPx),
-            style = Stroke(width = strokePx),
-        )
-        if (t > 0f) {
-            val checkStrokePx = 2.dp.toPx()
-            val boxLeft = cx - boxPx / 2f
-            val boxTop = cy - boxPx / 2f
-            val path = checkPath ?: Path().also { checkPath = it }
-            path.rewind()
-            path.moveTo(boxLeft + boxPx * 0.28f, boxTop + boxPx * 0.52f)
-            path.lineTo(boxLeft + boxPx * 0.44f, boxTop + boxPx * 0.70f)
-            path.lineTo(boxLeft + boxPx * 0.74f, boxTop + boxPx * 0.34f)
-            val drawBlock: DrawScope.() -> Unit = {
-                drawPath(
-                    path = path,
-                    color = if (t >= 1f) checkColor else checkColor.copy(alpha = t),
-                    style =
-                        Stroke(
-                            width = checkStrokePx,
-                            cap = StrokeCap.Round,
-                            join = StrokeJoin.Round,
-                        ),
-                )
+        val popScale = if (b > 0f && b < 1f) 1f + 0.12f * kotlin.math.sin(b * kotlin.math.PI).toFloat() else 1f
+        val drawCheckBox: DrawScope.() -> Unit = {
+            drawRoundRect(
+                color = currentStrokeColor,
+                topLeft = Offset(left, top),
+                size = Size(rectSize, rectSize),
+                cornerRadius = CornerRadius(cornerPx, cornerPx),
+                style = Stroke(width = strokePx),
+            )
+            if (t > 0f) {
+                val checkStrokePx = 2.dp.toPx()
+                val boxLeft = cx - boxPx / 2f
+                val boxTop = cy - boxPx / 2f
+                val path = checkPath ?: Path().also { checkPath = it }
+                path.rewind()
+                path.moveTo(boxLeft + boxPx * 0.28f, boxTop + boxPx * 0.52f)
+                path.lineTo(boxLeft + boxPx * 0.44f, boxTop + boxPx * 0.70f)
+                path.lineTo(boxLeft + boxPx * 0.74f, boxTop + boxPx * 0.34f)
+                val drawBlock: DrawScope.() -> Unit = {
+                    drawPath(
+                        path = path,
+                        color = if (t >= 1f) checkColor else checkColor.copy(alpha = t),
+                        style =
+                            Stroke(
+                                width = checkStrokePx,
+                                cap = StrokeCap.Round,
+                                join = StrokeJoin.Round,
+                            ),
+                    )
+                }
+                if (t >= 0.999f) {
+                    drawBlock()
+                } else {
+                    scale(scaleX = t, scaleY = t, pivot = Offset(cx, cy), block = drawBlock)
+                }
             }
-            if (t >= 0.999f) {
-                drawBlock()
-            } else {
-                scale(scaleX = t, scaleY = t, pivot = Offset(cx, cy), block = drawBlock)
+        }
+        if (popScale != 1f) {
+            scale(scaleX = popScale, scaleY = popScale, pivot = Offset(cx, cy), block = drawCheckBox)
+        } else {
+            drawCheckBox()
+        }
+        if (b > 0f && b < 1f) {
+            val dotAlpha = (1f - b).coerceIn(0f, 1f) * 0.85f
+            val radius = boxPx * (0.56f + 0.44f * b)
+            val dotRadius = (2.1f * (1f - b * 0.72f)).dp.toPx()
+            val dotColor = burstColor.copy(alpha = dotAlpha)
+            for (i in 0 until 6) {
+                val angle = (i * 60.0 - 30.0) * kotlin.math.PI / 180.0
+                val dx = (kotlin.math.cos(angle) * radius).toFloat()
+                val dy = (kotlin.math.sin(angle) * radius).toFloat()
+                drawCircle(color = dotColor, radius = dotRadius, center = Offset(cx + dx, cy + dy))
             }
         }
         drawContent()

@@ -47,6 +47,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import app.goke.R
 import app.goke.calendar.SystemCalendarSync
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.components.ComingSoonScreen
@@ -242,6 +243,7 @@ private fun SystemCalendarSection() {
                         onClick = {
                             scope.launch {
                                 val n = app.calendarSync.syncNow()
+                                actions.feedback(FeedbackEvent.SUCCESS)
                                 actions.toast(ctx.getString(R.string.cal_sync_done_toast, n))
                             }
                         },
