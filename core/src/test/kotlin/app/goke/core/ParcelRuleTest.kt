@@ -144,12 +144,26 @@ class ParcelRuleTest {
     }
 
     @Test
+    fun pickupCodeGenericTakeAway() {
+        val r = parse("【递管家】请凭取件码27-27-32到梅苑西区11号丰巢柜前代收点取走您的京东快递包裹")!!
+        assertEquals("pickup_code_generic", r.ruleId)
+        assertEquals("27-27-32", r.code)
+        assertEquals("梅苑西区11号丰巢柜前代收点", r.place)
+        assertEquals("递管家", r.company)
+        assertNull(r.deadline)
+    }
+
+    @Test
     fun codeGenericWithAddressSuffix() {
         val r = parse("【极兔速递】请凭B3-3-1020到梅苑西区妈妈驿站取件，地址：翠湖路12号")!!
         assertEquals("code_generic", r.ruleId)
         assertEquals("B3-3-1020", r.code)
         assertEquals("梅苑西区妈妈驿站", r.place)
         assertNull(r.deadline)
+        val takeAway = parse("【极兔速递】请凭B3-3-1020到梅苑西区妈妈驿站取走您的包裹")!!
+        assertEquals("code_generic", takeAway.ruleId)
+        assertEquals("B3-3-1020", takeAway.code)
+        assertEquals("梅苑西区妈妈驿站", takeAway.place)
     }
 
     @Test

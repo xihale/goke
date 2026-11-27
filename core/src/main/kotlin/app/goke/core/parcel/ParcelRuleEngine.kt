@@ -28,7 +28,8 @@ object ParcelRuleEngine {
             ParcelRule("yunda_hours", "韵达超市-时段", "包裹已到{place}面，韵达快递，请于{hours}凭{code}取件", company = "韵达", deadline = DeadlineSpec.Closing("hours"), builtin = true),
             ParcelRule("yunda", "韵达超市", "包裹已到{place}面{skip}凭{code}取件", company = "韵达", builtin = true),
             ParcelRule("shelf", "代收点-货架", "您的快递:*{num}已到{place}，请凭{code}前往", builtin = true),
-            ParcelRule("code_generic", "凭码取件-通用", "凭{code}到{place}取件", builtin = true),
+            ParcelRule("pickup_code_generic", "凭取件码-通用", "凭取件码{code}到{place}取", builtin = true),
+            ParcelRule("code_generic", "凭码取件-通用", "凭{code}到{place}取", builtin = true),
             ParcelRule("privacy_code", "隐私号取件", "已到{place}，请凭收货隐私号{code}取件", builtin = true),
             // 通知兜底：App 通知（菜鸟裹裹等）常用「取件码：X」/「取件码 X」句式；要求分隔符，
             // 避免吞进「取件码acs.fcbox.com/s/xx」这类短链（短信语料 0 命中，非语料种子）。
