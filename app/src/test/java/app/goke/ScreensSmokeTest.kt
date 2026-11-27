@@ -35,12 +35,14 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasImeAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -50,6 +52,8 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.input.ImeAction
@@ -96,6 +100,7 @@ import app.goke.ui.components.AttachmentEditor
 import app.goke.ui.components.CuteQrCode
 import app.goke.ui.components.ProvideMintModalScope
 import app.goke.ui.liveSnapshot
+import app.goke.ui.monthDayWeekday
 import app.goke.ui.rememberNav
 import app.goke.ui.screens.AboutScreen
 import app.goke.ui.screens.AppearanceScreen
@@ -1368,5 +1373,70 @@ class ScreensSmokeTest {
             app.settings.update { it.copy(darkMode = DarkMode.SYSTEM) }
             DebugHooks.suppressUiForShots = false
         }
+    }
+
+    @Test
+    fun todayScreenSwipePrevNextAndBackToday() {
+        val today = LocalDate.now()
+        val nowMs = System.currentTimeMillis()
+        val tomorrowTask =
+            Task(
+                id = Ids.next(),
+                title = "次日复习任务",
+                due = today.plusDays(1).atTime(23, 59),
+            )
+        val yesterdayTask =
+            Task(
+                id = Ids.next(),
+                title = "昨日回顾任务",
+                due = today.minusDays(1).atTime(23, 59),
+                done = true,
+                doneAt = nowMs,
+            )
+        runBlocking {
+            app.repo.commit(
+                ChangeSet(
+                    "today_swipe_test",
+                    "today_swipe_test",
+                    Source.MANUAL,
+                    nowMs,
+                    listOf(Change.Add(tomorrowTask), Change.Add(yesterdayTask)),
+                ),
+            )
+        }
+
+        rule.setContent {
+            Host { GokeRoot(app, null, initialTab = Tab.TODAY) {} }
+        }
+        rule.waitForIdle()
+
+        val backTodayLabel = app.getString(R.string.back_today)
+        rule.onNode(hasTestTag("today-title") and hasText(app.monthDayWeekday(today))).assertIsDisplayed()
+        rule.onNodeWithText(backTodayLabel).assertDoesNotExist()
+
+        // 左滑到明天
+        rule.onNodeWithTag("today-pager").performTouchInput { swipeLeft() }
+        rule.waitForIdle()
+        rule.onNode(hasTestTag("today-title") and hasText(app.monthDayWeekday(today.plusDays(1)))).assertIsDisplayed()
+        rule.onNodeWithText("次日复习任务").assertIsDisplayed()
+        rule.onNode(hasTestTag("today-subtitle") and hasText(app.getString(R.string.tomorrow), substring = true)).assertIsDisplayed()
+        rule.onNodeWithText(backTodayLabel).assertIsDisplayed()
+
+        // 点击「回今天」回到今天
+        rule.onNodeWithText(backTodayLabel).performClick()
+        rule.waitForIdle()
+        rule.onNode(hasTestTag("today-title") and hasText(app.monthDayWeekday(today))).assertIsDisplayed()
+        rule.onNodeWithText(backTodayLabel).assertDoesNotExist()
+
+        // 右滑到昨天
+        rule.onNodeWithTag("today-pager").performTouchInput { swipeRight() }
+        rule.waitForIdle()
+        rule.onNode(hasTestTag("today-title") and hasText(app.monthDayWeekday(today.minusDays(1)))).assertIsDisplayed()
+        rule.onNode(hasTestTag("today-subtitle") and hasText(app.getString(R.string.yesterday), substring = true)).assertIsDisplayed()
+        rule.onNodeWithText(backTodayLabel).assertIsDisplayed()
+        // 昨天任务已标记完成，展开已完成栏后可见
+        rule.onNodeWithText(app.getString(R.string.done_count, 1)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("昨日回顾任务").assertIsDisplayed()
     }
 }

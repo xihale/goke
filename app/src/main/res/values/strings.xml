@@ -1046,6 +1046,9 @@
     <string name="lic_quickjs_name">quickjs-kt</string>
     <!-- Polish Wave 2 Pre-added Strings -->
     <string name="today_no_classes">今日无课</string>
+    <string name="day_no_classes">当日无课</string>
+    <string name="today_days_ago">%1$d 天前</string>
+    <string name="today_days_later">%1$d 天后</string>
     <string name="today_summary_remaining">还剩 %1$d 项</string>
     <string name="cal_day_events_count">%1$d 项日程</string>
     <string name="cal_day_todo_count">%1$d 项待办</string>
