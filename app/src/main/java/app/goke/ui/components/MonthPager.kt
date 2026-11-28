@@ -19,6 +19,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +45,7 @@ import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 
 /** 翻页中心页：向前后各留出 3000 个月，滑不到头。 */
@@ -62,9 +65,20 @@ fun MonthPager(
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val reduce = reduceMotion()
+    val anchor = remember { initial }
     val pager = rememberPagerState(initialPage = PAGE_CENTER) { PAGE_CENTER * 2 }
 
-    fun monthOf(page: Int): YearMonth = initial.plusMonths((page - PAGE_CENTER).toLong())
+    fun monthOf(page: Int): YearMonth = anchor.plusMonths((page - PAGE_CENTER).toLong())
+
+    LaunchedEffect(selected) {
+        val targetMonth = selected?.let(YearMonth::from) ?: return@LaunchedEffect
+        val targetPage =
+            (PAGE_CENTER + ChronoUnit.MONTHS.between(anchor, targetMonth).toInt())
+                .coerceIn(0, PAGE_CENTER * 2 - 1)
+        if (targetPage != pager.currentPage) {
+            if (reduce) pager.scrollToPage(targetPage) else pager.animateScrollToPage(targetPage)
+        }
+    }
 
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -230,7 +230,8 @@ internal fun WhenPanel(
                         minutes = null
                     }
                 }
-                MonthPager(selected = date, initial = YearMonth.from(date), onPick = {
+                val initialMonth = remember { YearMonth.from(date) }
+                MonthPager(selected = date, initial = initialMonth, onPick = {
                     date = it
                     datePicked = true
                 })
