@@ -35,7 +35,6 @@ let package = Package(
                 .unsafeFlags([
                     "-Osize",
                     "-whole-module-optimization",
-                    "-lto=llvm-full",
                     "-Xfrontend", "-disable-reflection-names",
                     "-Xllvm", "-enable-machine-outliner",
                 ], .when(configuration: .release)),
@@ -51,7 +50,6 @@ let package = Package(
                 .unsafeFlags([
                     "-Osize",
                     "-whole-module-optimization",
-                    "-lto=llvm-full",
                     "-Xfrontend", "-disable-reflection-names",
                     "-Xllvm", "-enable-machine-outliner",
                 ], .when(configuration: .release)),
