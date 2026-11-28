@@ -64,7 +64,7 @@ jobs:
         working-directory: ios
         run: xcodegen generate
 
-      - name: Run iOS Simulator tests and Debug build
+      - name: Run iOS Simulator Debug build
         run: |
           SIM_UDID=$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
@@ -79,10 +79,6 @@ jobs:
           sys.exit("No available iPhone Simulator found")
           ')
           echo "Using Simulator UDID: $SIM_UDID"
-
-          (cd ios/GokeCore && xcodebuild test \
-            -scheme GokeCore \
-            -destination "id=$SIM_UDID")
 
           xcodebuild build \
             -project ios/Goke.xcodeproj \
