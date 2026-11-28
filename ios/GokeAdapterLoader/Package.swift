@@ -13,7 +13,7 @@ let hasPrivateAdapters = FileManager.default.fileExists(atPath: adapterManifest)
 let package = Package(
     name: "GokeAdapterLoader",
     platforms: [
-        .iOS(.v15),
+        .iOS(.v17),
         .macOS(.v15),
     ],
     products: [
