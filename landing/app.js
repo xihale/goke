@@ -383,7 +383,7 @@
     });
   }
 
-  /* 5. Hydrate latest release info from latest.json */
+  /* 5. Hydrate latest Android (v*) & iOS (ios-v*) release info */
   function formatMiB(bytes) {
     return (bytes / (1024 * 1024)).toFixed(2) + ' MiB';
   }
@@ -392,31 +392,148 @@
     if (el) el.textContent = text;
   }
 
+  var androidHydratedFromMirror = false;
+
+  function applyAndroidRelease(info) {
+    if (!info || !info.apkName || !info.href) return;
+    var ver = info.tag || 'latest';
+    var sizeStr = info.size ? formatMiB(info.size) : '2.88 MiB';
+
+    setText('heroVer', ver);
+    setText('heroVerSize', sizeStr);
+    setText('heroLeadSize', sizeStr);
+    setText('heroBtnSize', sizeStr);
+    setText('dlApkName', info.apkName);
+    setText('dlSize', sizeStr);
+
+    ['heroApkBtn', 'dlApkBtn'].forEach(function (id) {
+      var a = document.getElementById(id);
+      if (a) a.setAttribute('href', info.href);
+    });
+
+    var shaEl = document.getElementById('dlSha');
+    if (shaEl) {
+      if (info.sha256) {
+        shaEl.textContent = 'SHA-256: ' + info.sha256;
+      } else if (info.source) {
+        shaEl.textContent = info.source;
+      }
+    }
+  }
+
+  function applyIosRelease(release, asset) {
+    if (!release || !asset || !asset.browser_download_url) return;
+    var ver = release.tag_name || '';
+    var ipaUrl = asset.browser_download_url;
+    var sizeStr = asset.size ? formatMiB(asset.size) : '';
+    var sideStoreUrl = 'sidestore://install?url=' + encodeURIComponent(ipaUrl);
+
+    if (ver) {
+      setText('heroIosVer', ver);
+      setText('dlIosVer', ver);
+    }
+    if (asset.name) {
+      setText('dlIosName', asset.name);
+    }
+    setText('dlIosNote', '未签名 IPA，请使用 SideStore / AltStore 签名安装，或通过 TrollStore 直接安装。');
+
+    var sizeEl = document.getElementById('dlIosSize');
+    if (sizeEl && sizeStr) {
+      sizeEl.textContent = sizeStr;
+      sizeEl.classList.remove('is-hidden');
+    }
+
+    var iosBtn = document.getElementById('dlIosBtn');
+    if (iosBtn) {
+      iosBtn.setAttribute('href', ipaUrl);
+      iosBtn.textContent = '下载 IPA';
+    }
+
+    var sideStoreBtn = document.getElementById('dlSideStoreBtn');
+    if (sideStoreBtn) {
+      sideStoreBtn.setAttribute('href', sideStoreUrl);
+      sideStoreBtn.classList.remove('is-hidden');
+    }
+  }
+
+  function pickApkAsset(assets) {
+    if (!Array.isArray(assets)) return null;
+    var apks = assets.filter(function (a) {
+      return a && typeof a.name === 'string' && /\.apk$/i.test(a.name) && a.browser_download_url;
+    });
+    if (!apks.length) return null;
+    for (var i = 0; i < apks.length; i++) {
+      if (/arm64-v8a/i.test(apks[i].name)) return apks[i];
+    }
+    return apks[0];
+  }
+
+  function pickIpaAsset(assets) {
+    if (!Array.isArray(assets)) return null;
+    for (var i = 0; i < assets.length; i++) {
+      var a = assets[i];
+      if (a && typeof a.name === 'string' && /\.ipa$/i.test(a.name) && a.browser_download_url) {
+        return a;
+      }
+    }
+    return null;
+  }
+
   if (typeof fetch === 'function') {
     fetch('./downloads/latest.json', { cache: 'no-cache' })
       .then(function (res) { return res.ok ? res.json() : null; })
       .then(function (data) {
         if (!data || !data.apk_name) return;
         var latest = data.stable || data;
-        var ver = latest.tag_name || ('v' + latest.version);
-        var sizeStr = latest.apk_size ? formatMiB(latest.apk_size) : '2.88 MiB';
-        var href = './downloads/' + latest.apk_name;
-
-        setText('heroVer', ver);
-        setText('heroVerSize', sizeStr);
-        setText('heroLeadSize', sizeStr);
-        setText('heroBtnSize', sizeStr);
-        setText('dlApkName', latest.apk_name);
-        setText('dlSize', sizeStr);
-
-        ['heroApkBtn', 'dlApkBtn'].forEach(function (id) {
-          var a = document.getElementById(id);
-          if (a) a.setAttribute('href', href);
+        androidHydratedFromMirror = true;
+        applyAndroidRelease({
+          tag: latest.tag_name || ('v' + latest.version),
+          apkName: latest.apk_name,
+          size: latest.apk_size,
+          href: './downloads/' + latest.apk_name,
+          sha256: latest.apk_sha256
         });
+      })
+      .catch(function () {});
 
-        var shaEl = document.getElementById('dlSha');
-        if (shaEl && latest.apk_sha256) {
-          shaEl.textContent = 'SHA-256: ' + latest.apk_sha256;
+    fetch('https://api.github.com/repos/xihale/goke/releases?per_page=20', {
+      headers: { Accept: 'application/vnd.github+json' }
+    })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (releases) {
+        if (!Array.isArray(releases)) return;
+        var androidFound = false;
+        var iosFound = false;
+
+        for (var i = 0; i < releases.length; i++) {
+          var rel = releases[i];
+          if (!rel || rel.draft || typeof rel.tag_name !== 'string') continue;
+
+          if (!androidFound && /^v/.test(rel.tag_name)) {
+            var apk = pickApkAsset(rel.assets);
+            if (apk) {
+              androidFound = true;
+              if (!androidHydratedFromMirror) {
+                applyAndroidRelease({
+                  tag: rel.tag_name,
+                  apkName: apk.name,
+                  size: apk.size,
+                  href: apk.browser_download_url,
+                  source: 'GitHub Releases · ' + rel.tag_name
+                });
+              }
+            }
+          }
+
+          if (!iosFound && /^ios-v/.test(rel.tag_name)) {
+            var ipa = pickIpaAsset(rel.assets);
+            if (ipa) {
+              iosFound = true;
+              applyIosRelease(rel, ipa);
+            }
+          }
+
+          if (androidFound && iosFound) break;
         }
       })
       .catch(function () {});
