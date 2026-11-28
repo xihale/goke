@@ -22,6 +22,7 @@ import app.goke.gokeApp
 import app.goke.hotwater.HotWaterErrorCode
 import app.goke.hotwater.HotWaterPhase
 import app.goke.hotwater.HotWaterState
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.screens.errorStringRes
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -68,7 +69,9 @@ class HotWaterWidgetProvider : AppWidgetProvider() {
                         context.startActivity(launch)
                         return@launch
                     }
-                    app.hotWater.toggleValve()
+                    if (app.hotWater.toggleValve().ok) {
+                        app.feedback.play(FeedbackEvent.SUCCESS)
+                    }
                 } finally {
                     pending.finish()
                 }
