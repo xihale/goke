@@ -14,7 +14,8 @@ import app.goke.core.jxfw.XkWindowStatus
 class JxfwException(
     message: String,
     val kind: Kind = Kind.OTHER,
-) : Exception(message) {
+    cause: Throwable? = null,
+) : Exception(message, cause) {
     enum class Kind {
         /** 连不上 / 超时 / 非 2xx */
         NETWORK,
@@ -128,7 +129,8 @@ data class JxfwCourseSelectionState(
 class TzcsException(
     message: String,
     val kind: Kind = Kind.OTHER,
-) : Exception(message) {
+    cause: Throwable? = null,
+) : Exception(message, cause) {
     enum class Kind {
         NETWORK,
         CREDENTIALS,

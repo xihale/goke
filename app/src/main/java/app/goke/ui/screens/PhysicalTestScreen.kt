@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
@@ -72,6 +73,7 @@ import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.components.ChipPill
 import app.goke.ui.components.ConfirmDialog
+import app.goke.ui.components.CopyErrorButton
 import app.goke.ui.components.EmptyState
 import app.goke.ui.components.MintAlertDialog
 import app.goke.ui.components.MintCard
@@ -173,6 +175,9 @@ fun PhysicalTestScreen(onBack: () -> Unit) {
                     TzcsErrorBanner(
                         message = tzcsState.lastError!!,
                         isNetworkError = tzcsState.lastErrorKind == TzcsException.Kind.NETWORK,
+                        allowCopy =
+                            tzcsState.lastErrorKind == TzcsException.Kind.PROTOCOL ||
+                                tzcsState.lastErrorKind == TzcsException.Kind.OTHER,
                     )
                 }
             }
@@ -305,7 +310,9 @@ private fun TzcsLoginPanel(
     var captchaBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var captchaLoading by remember { mutableStateOf(false) }
     var captchaError by remember { mutableStateOf<String?>(null) }
+    var captchaErrorUnexpected by remember { mutableStateOf(false) }
     var localError by remember { mutableStateOf<String?>(null) }
+    var localErrorUnexpected by remember { mutableStateOf(false) }
     var localBusy by remember { mutableStateOf(false) }
 
     LaunchedEffect(defaultStudentId) {
@@ -318,6 +325,7 @@ private fun TzcsLoginPanel(
         if (!captchaLoading) {
             captchaLoading = true
             captchaError = null
+            captchaErrorUnexpected = false
             scope.launch {
                 app.tzcs
                     .loadCaptcha()
@@ -326,8 +334,14 @@ private fun TzcsLoginPanel(
                         if (captchaBitmap == null) {
                             captchaError = ctx.getString(R.string.tzcs_campus_net_hint)
                         }
-                    }.onFailure {
-                        captchaError = ctx.getString(R.string.tzcs_campus_net_hint)
+                    }.onFailure { err ->
+                        val te = err as? TzcsException
+                        if (te != null && te.kind != TzcsException.Kind.NETWORK) {
+                            captchaError = te.message?.takeIf { it.isNotBlank() } ?: ctx.getString(R.string.tzcs_err_unknown)
+                            captchaErrorUnexpected = te.kind == TzcsException.Kind.PROTOCOL || te.kind == TzcsException.Kind.OTHER
+                        } else {
+                            captchaError = ctx.getString(R.string.tzcs_campus_net_hint)
+                        }
                     }
                 captchaLoading = false
             }
@@ -380,20 +394,52 @@ private fun TzcsLoginPanel(
                 modifier = Modifier.padding(bottom = 4.dp),
             )
         }
+        val submitUnexpected =
+            if (localError != null) {
+                localErrorUnexpected
+            } else {
+                state.lastErrorKind == TzcsException.Kind.PROTOCOL || state.lastErrorKind == TzcsException.Kind.OTHER
+            }
         if (!submitError.isNullOrBlank()) {
-            Text(
-                submitError,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
+            if (submitUnexpected) {
+                SelectionContainer {
+                    Text(
+                        submitError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                    )
+                }
+                val reports by app.errors.reports.collectAsState()
+                CopyErrorButton(errorSummary = submitError, reports = reports)
+            } else {
+                Text(
+                    submitError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+            }
         } else if (!captchaError.isNullOrBlank()) {
-            Text(
-                captchaError!!,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
+            if (captchaErrorUnexpected) {
+                SelectionContainer {
+                    Text(
+                        captchaError!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                    )
+                }
+                val reports by app.errors.reports.collectAsState()
+                CopyErrorButton(errorSummary = captchaError!!, reports = reports)
+            } else {
+                Text(
+                    captchaError!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+            }
         }
         Spacer(Modifier.height(4.dp))
         Button(
@@ -401,6 +447,7 @@ private fun TzcsLoginPanel(
             onClick = {
                 localBusy = true
                 localError = null
+                localErrorUnexpected = false
                 scope.launch {
                     app.tzcs
                         .loginAndFetch(user, password, vercode)
@@ -410,7 +457,9 @@ private fun TzcsLoginPanel(
                             actions.feedback(FeedbackEvent.SUCCESS)
                             actions.toast(ctx.getString(R.string.tzcs_refreshed_toast, list.size))
                         }.onFailure { err ->
+                            val te = err as? TzcsException
                             localError = err.message
+                            localErrorUnexpected = te == null || te.kind == TzcsException.Kind.PROTOCOL || te.kind == TzcsException.Kind.OTHER
                             vercode = ""
                             reloadCaptcha()
                         }
@@ -611,15 +660,29 @@ private fun TzcsSummaryCard(
 private fun TzcsErrorBanner(
     message: String,
     isNetworkError: Boolean = false,
+    allowCopy: Boolean = false,
 ) {
     val campusHint = stringResource(R.string.tzcs_campus_net_hint)
+    val app = LocalApp.current
     MintCard(color = MintTheme.colors.conflictBg) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                message,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
+            if (allowCopy) {
+                SelectionContainer {
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                val reports by app.errors.reports.collectAsState()
+                CopyErrorButton(errorSummary = message, reports = reports)
+            } else {
+                Text(
+                    message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             if (isNetworkError && message != campusHint) {
                 Text(
                     campusHint,
@@ -747,8 +810,14 @@ private fun TzcsVerifyRefreshDialog(
                         if (captchaBitmap == null) {
                             captchaError = ctx.getString(R.string.tzcs_campus_net_hint)
                         }
-                    }.onFailure {
-                        captchaError = ctx.getString(R.string.tzcs_campus_net_hint)
+                    }.onFailure { err ->
+                        val te = err as? TzcsException
+                        captchaError =
+                            if (te != null && te.kind != TzcsException.Kind.NETWORK) {
+                                te.message?.takeIf { it.isNotBlank() } ?: ctx.getString(R.string.tzcs_err_unknown)
+                            } else {
+                                ctx.getString(R.string.tzcs_campus_net_hint)
+                            }
                     }
                 captchaLoading = false
             }

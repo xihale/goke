@@ -38,6 +38,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.goke.BuildConfig
 import app.goke.R
 import app.goke.data.ErrorReport
 import java.text.SimpleDateFormat
@@ -204,7 +205,38 @@ fun ErrorLogListDialog(
     )
 }
 
-private fun copyErrorText(
+@Composable
+internal fun CopyErrorButton(
+    errorSummary: String,
+    reports: List<ErrorReport>,
+    modifier: Modifier = Modifier,
+) {
+    val ctx = LocalContext.current
+    var copied by remember(errorSummary, reports.firstOrNull()?.id) { mutableStateOf(false) }
+    val copiedToast = stringResource(R.string.error_modal_copied)
+    TextButton(
+        onClick = {
+            val matched =
+                reports.firstOrNull {
+                    errorSummary.isNotBlank() && (errorSummary in it.detail || errorSummary in it.summary)
+                }
+            val payload =
+                matched?.detail ?: buildString {
+                    appendLine("version=${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                    appendLine("device=${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim())
+                    appendLine("sdk=${android.os.Build.VERSION.SDK_INT}")
+                    append("error=").append(errorSummary)
+                }
+            copyErrorText(ctx, payload, copiedToast)
+            copied = true
+        },
+        modifier = modifier.heightIn(min = 48.dp),
+    ) {
+        Text(stringResource(if (copied) R.string.error_modal_copy_done else R.string.error_modal_copy))
+    }
+}
+
+internal fun copyErrorText(
     ctx: Context,
     detail: String,
     toastText: String,

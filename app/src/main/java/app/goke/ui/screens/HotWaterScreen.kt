@@ -53,6 +53,7 @@ import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
 import app.goke.ui.Route
 import app.goke.ui.components.ChipChoice
+import app.goke.ui.components.CopyErrorButton
 import app.goke.ui.components.MintAlertDialog
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
@@ -215,11 +216,16 @@ fun HotWaterScreen(onBack: () -> Unit) {
                             }
 
                             if (state.errorCode != HotWaterErrorCode.NONE) {
+                                val errMsg = hotWaterErrorMessage(state.errorCode, state.errorDetail)
                                 Text(
-                                    text = hotWaterErrorMessage(state.errorCode, state.errorDetail),
+                                    text = errMsg,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.error,
                                 )
+                                if (state.errorCode == HotWaterErrorCode.NETWORK_ERROR || state.errorCode == HotWaterErrorCode.BLE_ERROR) {
+                                    val reports by app.errors.reports.collectAsState()
+                                    CopyErrorButton(errorSummary = errMsg, reports = reports)
+                                }
                             }
 
                             Button(
@@ -361,11 +367,16 @@ fun HotWaterScreen(onBack: () -> Unit) {
                             }
 
                             if (state.errorCode != HotWaterErrorCode.NONE) {
+                                val errMsg = hotWaterErrorMessage(state.errorCode, state.errorDetail)
                                 Text(
-                                    text = hotWaterErrorMessage(state.errorCode, state.errorDetail),
+                                    text = errMsg,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = scheme.error,
                                 )
+                                if (state.errorCode == HotWaterErrorCode.NETWORK_ERROR || state.errorCode == HotWaterErrorCode.BLE_ERROR) {
+                                    val reports by app.errors.reports.collectAsState()
+                                    CopyErrorButton(errorSummary = errMsg, reports = reports)
+                                }
                             }
 
                             Button(
@@ -547,7 +558,11 @@ private fun hotWaterErrorMessage(
     if (code == HotWaterErrorCode.AUTH_FAILED && detail.isNotBlank() && detail.any { it.code > 127 }) {
         return detail
     }
-    return stringResource(code.errorStringRes())
+    val base = stringResource(code.errorStringRes())
+    if ((code == HotWaterErrorCode.NETWORK_ERROR || code == HotWaterErrorCode.BLE_ERROR) && detail.isNotBlank()) {
+        return "$base（$detail）"
+    }
+    return base
 }
 
 internal fun HotWaterErrorCode.errorStringRes(): Int =

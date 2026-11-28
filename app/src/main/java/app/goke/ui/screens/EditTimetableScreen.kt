@@ -504,9 +504,9 @@ private fun JxfwSyncCard(sem: Semester) {
                     Text(state.progress.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            jxfwCardErrorText(state.lastErrorKind, state.lastError)?.let { err ->
+            if (!state.lastError.isNullOrBlank() || state.lastErrorKind != null) {
                 Spacer(Modifier.height(6.dp))
-                Text(err, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                JxfwErrorGuidance(state.lastErrorKind, state.lastError)
             }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -534,21 +534,6 @@ private fun JxfwSyncCard(sem: Semester) {
         }
     }
 }
-
-@Composable
-private fun jxfwCardErrorText(
-    kind: JxfwException.Kind?,
-    raw: String?,
-): String? =
-    when (kind) {
-        null -> raw
-        JxfwException.Kind.CREDENTIALS -> stringResource(R.string.jxfw_err_credentials)
-        JxfwException.Kind.CAPTCHA -> stringResource(R.string.jxfw_err_captcha)
-        JxfwException.Kind.SMS -> stringResource(R.string.jxfw_err_sms)
-        JxfwException.Kind.NETWORK -> stringResource(R.string.jxfw_err_network)
-        JxfwException.Kind.UNSUPPORTED -> stringResource(R.string.jxfw_err_unsupported)
-        else -> raw
-    }
 
 /** 一门课一行：植物色竖条 + 课名 + 时段摘要（多时段折叠成「前两个 · N 个时段」）+ 教室 + 右箭头。 */
 @Composable

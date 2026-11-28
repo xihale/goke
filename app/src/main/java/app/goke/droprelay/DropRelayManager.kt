@@ -125,7 +125,9 @@ class DropRelayManager(
             }
         } catch (e: DropRelayException) {
             Log.w(TAG, "refreshIndex($shareUrl) failed: ${e.kind} ${e.message}", e.cause ?: e)
-            errors.record("droprelay.refreshIndex", e)
+            if (e.kind != DropRelayErrorKind.UNREACHABLE) {
+                errors.record("droprelay.refreshIndex", e)
+            }
             _state.update {
                 it.copy(
                     loadingIndex = false,

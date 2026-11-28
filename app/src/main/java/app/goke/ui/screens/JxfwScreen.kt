@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
@@ -53,6 +54,7 @@ import app.goke.ui.LocalNav
 import app.goke.ui.Route
 import app.goke.ui.components.ChipChoice
 import app.goke.ui.components.ConfirmDialog
+import app.goke.ui.components.CopyErrorButton
 import app.goke.ui.components.FormSection
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
@@ -107,7 +109,7 @@ fun JxfwScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun errorText(
+internal fun jxfwErrorText(
     kind: JxfwException.Kind?,
     raw: String?,
 ): String? =
@@ -116,7 +118,7 @@ private fun errorText(
         JxfwException.Kind.CREDENTIALS -> stringResource(R.string.jxfw_err_credentials)
         JxfwException.Kind.CAPTCHA -> stringResource(R.string.jxfw_err_captcha)
         JxfwException.Kind.SMS -> stringResource(R.string.jxfw_err_sms)
-        JxfwException.Kind.NETWORK -> stringResource(R.string.jxfw_err_network)
+        JxfwException.Kind.NETWORK -> raw?.takeIf { it.isNotBlank() } ?: stringResource(R.string.jxfw_err_network)
         JxfwException.Kind.UNSUPPORTED -> stringResource(R.string.jxfw_err_unsupported)
         else -> raw
     }
@@ -126,16 +128,34 @@ internal fun JxfwErrorGuidance(
     kind: JxfwException.Kind?,
     raw: String?,
 ) {
-    val msg = errorText(kind, raw) ?: return
+    val msg = jxfwErrorText(kind, raw) ?: return
     val ctx = LocalContext.current
     val app = LocalApp.current
+    val isUnexpected =
+        kind == null ||
+            kind == JxfwException.Kind.NETWORK ||
+            kind == JxfwException.Kind.PROTOCOL ||
+            kind == JxfwException.Kind.OTHER
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
-            msg,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(horizontal = 4.dp),
-        )
+        if (isUnexpected) {
+            SelectionContainer {
+                Text(
+                    msg,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+            }
+            val reports by app.errors.reports.collectAsState()
+            CopyErrorButton(errorSummary = msg, reports = reports)
+        } else {
+            Text(
+                msg,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+        }
         val host = app.jxfw.portalHost
         if ((kind == JxfwException.Kind.CAPTCHA || kind == JxfwException.Kind.SMS) && host.isNotBlank()) {
             TextButton(
