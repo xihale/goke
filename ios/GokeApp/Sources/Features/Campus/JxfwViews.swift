@@ -18,7 +18,7 @@ private enum CampusStorageKeys {
 }
 
 @MainActor
-private enum CampusHelpers {
+enum CampusHelpers {
     static func suggestedTerms(reference: LocalDate = .today()) -> [String] {
         let current = JxfwParse.currentTerm(today: reference)
         guard current.count == 6, let year = Int(current.prefix(4)) else {
