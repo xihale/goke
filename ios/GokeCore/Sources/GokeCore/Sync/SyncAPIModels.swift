@@ -103,12 +103,28 @@ public protocol HTTPTransport: Sendable {
     func send(_ request: HTTPRequest) async throws -> HTTPResponse
 }
 
+#if canImport(Security)
+/// Optional handler for `URLSessionDelegate` TLS/authentication challenges on Apple platforms.
+public typealias TLSChallengeHandler = @Sendable (
+    URLAuthenticationChallenge,
+    @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+) -> Void
+#endif
+
 private final class TransportSessionDelegate: NSObject, URLSessionTaskDelegate, Sendable {
     private let allowRedirects: Bool
+    #if canImport(Security)
+    private let tlsChallengeHandler: TLSChallengeHandler?
 
+    init(allowRedirects: Bool, tlsChallengeHandler: TLSChallengeHandler? = nil) {
+        self.allowRedirects = allowRedirects
+        self.tlsChallengeHandler = tlsChallengeHandler
+    }
+    #else
     init(allowRedirects: Bool) {
         self.allowRedirects = allowRedirects
     }
+    #endif
 
     func urlSession(
         _ session: URLSession,
@@ -126,7 +142,11 @@ private final class TransportSessionDelegate: NSObject, URLSessionTaskDelegate, 
         didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
-        CampusTls.handleAuthenticationChallenge(challenge, completionHandler: completionHandler)
+        if let tlsChallengeHandler {
+            tlsChallengeHandler(challenge, completionHandler)
+        } else {
+            completionHandler(.performDefaultHandling, nil)
+        }
     }
     #endif
 }
@@ -138,6 +158,32 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
     private let redirectDelegate: TransportSessionDelegate
     private let noRedirectDelegate: TransportSessionDelegate
 
+    #if canImport(Security)
+    public init(
+        configuration: URLSessionConfiguration = .ephemeral,
+        tlsChallengeHandler: TLSChallengeHandler? = nil
+    ) {
+        let redirectConfig = (configuration.copy() as? URLSessionConfiguration) ?? .ephemeral
+        redirectConfig.httpShouldSetCookies = false
+        redirectConfig.httpCookieAcceptPolicy = .never
+        let redirectDel = TransportSessionDelegate(
+            allowRedirects: true,
+            tlsChallengeHandler: tlsChallengeHandler
+        )
+        self.redirectDelegate = redirectDel
+        self.redirectSession = URLSession(configuration: redirectConfig, delegate: redirectDel, delegateQueue: nil)
+
+        let noRedirectConfig = (configuration.copy() as? URLSessionConfiguration) ?? .ephemeral
+        noRedirectConfig.httpShouldSetCookies = false
+        noRedirectConfig.httpCookieAcceptPolicy = .never
+        let noRedirectDel = TransportSessionDelegate(
+            allowRedirects: false,
+            tlsChallengeHandler: tlsChallengeHandler
+        )
+        self.noRedirectDelegate = noRedirectDel
+        self.noRedirectSession = URLSession(configuration: noRedirectConfig, delegate: noRedirectDel, delegateQueue: nil)
+    }
+    #else
     public init(configuration: URLSessionConfiguration = .ephemeral) {
         let redirectConfig = (configuration.copy() as? URLSessionConfiguration) ?? .ephemeral
         redirectConfig.httpShouldSetCookies = false
@@ -153,6 +199,7 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
         self.noRedirectDelegate = noRedirectDel
         self.noRedirectSession = URLSession(configuration: noRedirectConfig, delegate: noRedirectDel, delegateQueue: nil)
     }
+    #endif
 
     public func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         var urlRequest = URLRequest(url: request.url)
