@@ -1,0 +1,153 @@
+name: iOS Release
+
+# 正式发版时通过 ADAPTERS_SSH_KEY（Deploy Key）从私有仓库拉取 adapters/ 后打包未签名 IPA 并发布到 GitHub Release。
+on:
+  push:
+    tags: ['ios-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag or ref to build (e.g. ios-v0.0.1-beta.1)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: macos-26
+    # 私有适配器密钥存放在 release 环境
+    environment: release
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      asset_name: ${{ steps.meta.outputs.asset_name }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || '' }}
+          fetch-depth: 0
+
+      - name: Check private adapters secret
+        env:
+          ADAPTERS_SSH_KEY: ${{ secrets.ADAPTERS_SSH_KEY }}
+        run: |
+          if [ -z "$ADAPTERS_SSH_KEY" ]; then
+            echo "::error::缺少 ADAPTERS_SSH_KEY Secret，拒绝在缺失私有适配器的情况下构建发布包"
+            exit 1
+          fi
+
+      - name: Checkout private adapters
+        uses: actions/checkout@v7
+        with:
+          repository: xihale/goke-adapters
+          ssh-key: ${{ secrets.ADAPTERS_SSH_KEY }}
+          path: adapters
+
+      - name: Verify private adapters mounted
+        run: |
+          if [ ! -f adapters/ios/GokeAdapters/Package.swift ]; then
+            echo "::error::adapters/ios/GokeAdapters/Package.swift 缺失，私有适配器仓库检出异常"
+            exit 1
+          fi
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Sync iOS version from Git tag
+        run: |
+          TAG_NAME="${{ inputs.tag || github.ref_name }}"
+          python3 scripts/sync_ios_version.py --write --tag "$TAG_NAME"
+
+      - name: Run GokeCore SwiftPM tests
+        working-directory: ios/GokeCore
+        run: swift test
+
+      - name: Run GokeAdapters SwiftPM tests
+        working-directory: adapters/ios/GokeAdapters
+        run: swift test
+
+      - name: Run GokeAdapterLoader SwiftPM tests
+        working-directory: ios/GokeAdapterLoader
+        run: swift test
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Archive unsigned .ipa
+        working-directory: ios
+        run: |
+          xcodebuild archive \
+            -project Goke.xcodeproj \
+            -scheme GokeApp \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/Goke.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$RUNNER_TEMP/Goke.xcarchive/Products/Applications/GokeApp.app" "$RUNNER_TEMP/Payload/"
+          (cd "$RUNNER_TEMP" && zip -9 -X -r "$GITHUB_WORKSPACE/Goke-unsigned.ipa" Payload)
+
+      - name: Prepare release asset
+        id: meta
+        run: |
+          TAG_NAME="${{ inputs.tag || github.ref_name }}"
+          VER="${TAG_NAME#ios-}"
+          ASSET_NAME="goke-${VER}-ios-unsigned.ipa"
+          mkdir -p release-payload
+          if [ ! -f "Goke-unsigned.ipa" ]; then
+            echo "::error::缺少构建产物: Goke-unsigned.ipa"
+            exit 1
+          fi
+          cp "Goke-unsigned.ipa" "release-payload/${ASSET_NAME}"
+          ls -lh "release-payload/${ASSET_NAME}"
+          echo "tag=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "asset_name=${ASSET_NAME}" >> "$GITHUB_OUTPUT"
+          case "$VER" in
+            *-alpha*|*-beta*|*-rc*)
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Upload release payload
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-release-payload
+          path: release-payload
+          retention-days: 1
+
+  publish:
+    needs: [build]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Download release payload
+        uses: actions/download-artifact@v8
+        with:
+          name: ios-release-payload
+          path: release-payload
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG_NAME="${{ needs.build.outputs.tag }}"
+          ASSET="release-payload/${{ needs.build.outputs.asset_name }}"
+          FLAGS=(--title "$TAG_NAME" --generate-notes)
+          if [ "${{ needs.build.outputs.prerelease }}" = "true" ]; then
+            FLAGS+=(--prerelease)
+          fi
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" "$ASSET" --clobber
+            gh release edit "$TAG_NAME" --title "$TAG_NAME"
+          else
+            gh release create "$TAG_NAME" "$ASSET" "${FLAGS[@]}"
+          fi

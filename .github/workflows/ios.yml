@@ -6,10 +6,12 @@ on:
     branches: [main]
     paths:
       - ios/**
+      - scripts/sync_ios_version.py
       - .github/workflows/ios.yml
   pull_request:
     paths:
       - ios/**
+      - scripts/sync_ios_version.py
       - .github/workflows/ios.yml
 
 concurrency:
@@ -19,16 +21,18 @@ concurrency:
 jobs:
   ios:
     runs-on: macos-26
+    # ADAPTERS_SSH_KEY 存放在 release 环境
+    environment: release
     env:
       ADAPTERS_SSH_KEY: ${{ secrets.ADAPTERS_SSH_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Checkout private adapters (optional)
         if: ${{ env.ADAPTERS_SSH_KEY != '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: xihale/goke-adapters
           ssh-key: ${{ secrets.ADAPTERS_SSH_KEY }}
@@ -107,7 +111,7 @@ jobs:
           (cd "$RUNNER_TEMP" && zip -9 -X -r "$GITHUB_WORKSPACE/Goke-unsigned.ipa" Payload)
 
       - name: Upload unsigned .ipa artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: goke-ios-unsigned-ipa
           path: Goke-unsigned.ipa
