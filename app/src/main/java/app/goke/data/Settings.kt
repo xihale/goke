@@ -74,8 +74,6 @@ data class Settings(
     val dropRelayShareUrl: String = "",
     /** 自托管 DropRelay 快传地址（公开仓默认空，私有构建可回退校园默认地址）。 */
     val dropRelayDropUrl: String = "",
-    /** 是否启用系统分享菜单中的「工课快传」入口（默认关闭，避免污染系统分享菜单）。 */
-    val dropShareSheetEnabled: Boolean = false,
 ) {
     val quickAddConfig: QuickAddConfig
         get() =
@@ -167,7 +165,6 @@ class SettingsStore(
             quickRemindBangPersistent = sp.getBoolean("quickRemindBangPersistent", d.quickRemindBangPersistent),
             dropRelayShareUrl = (sp.getString("dropRelayShareUrl", d.dropRelayShareUrl) ?: d.dropRelayShareUrl).trim(),
             dropRelayDropUrl = (sp.getString("dropRelayDropUrl", d.dropRelayDropUrl) ?: d.dropRelayDropUrl).trim(),
-            dropShareSheetEnabled = sp.getBoolean("dropShareSheetEnabled", d.dropShareSheetEnabled),
         )
     }
 
@@ -237,7 +234,6 @@ class SettingsStore(
             .putBoolean("quickRemindBangPersistent", n.quickRemindBangPersistent)
             .putString("dropRelayShareUrl", n.dropRelayShareUrl.trim())
             .putString("dropRelayDropUrl", n.dropRelayDropUrl.trim())
-            .putBoolean("dropShareSheetEnabled", n.dropShareSheetEnabled)
             .apply()
         _flow.value = n
     }

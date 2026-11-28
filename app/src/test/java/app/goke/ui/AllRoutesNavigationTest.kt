@@ -77,7 +77,6 @@ class AllRoutesNavigationTest {
             Route.CourseSelection,
             Route.Reliability,
             Route.CampusResources(),
-            Route.DropSend,
             Route.Import(uri = null),
             Route.CourseEdit(),
             Route.TodoEdit(),

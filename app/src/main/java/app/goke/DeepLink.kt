@@ -37,13 +37,10 @@ sealed interface DeepLink {
 
     data object JxfwNotices : DeepLink
 
-    /** 打开校园快传并预填 6 位取件码预览。 */
+    /** 打开校园快传并预填 6 位取件码。 */
     data class DropReceive(
         val code: String,
     ) : DeepLink
-
-    /** 从系统分享菜单进入应用内快传发送页。 */
-    data object DropSend : DeepLink
 }
 
 object DeepLinks {

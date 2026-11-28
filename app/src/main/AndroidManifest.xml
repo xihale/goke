@@ -93,25 +93,6 @@
             </intent-filter>
         </activity>
 
-        <!-- 可开关的系统分享菜单「工课快传」入口：默认关闭，避免污染系统分享菜单 -->
-        <activity-alias
-            android:name=".DropShareAlias"
-            android:targetActivity=".MainActivity"
-            android:label="@string/droprelay_share_alias_label"
-            android:exported="true"
-            android:enabled="false">
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="*/*" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="*/*" />
-            </intent-filter>
-        </activity-alias>
-
         <!-- 小组件点击的无界面跳板：完成待办 / 转交主界面。窗口透明、即开即关 -->
         <activity
             android:name=".widget.WidgetActionActivity"
@@ -237,11 +218,6 @@
 
         <service
             android:name=".lanweb.LanWebService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-
-        <service
-            android:name=".droprelay.DropSeedService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 

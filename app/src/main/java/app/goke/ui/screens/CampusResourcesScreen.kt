@@ -25,7 +25,6 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,31 +51,24 @@ import app.goke.R
 import app.goke.core.campus.DropRelayFile
 import app.goke.core.campus.DropRelayLogic
 import app.goke.core.campus.ShareBrowseEntry
-import app.goke.droprelay.DropRelayErrorKind
 import app.goke.droprelay.DropRelayState
-import app.goke.ui.FeedbackEvent
-import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
-import app.goke.ui.LocalNav
-import app.goke.ui.Route
 import app.goke.ui.components.EmptyState
 import app.goke.ui.components.MintBottomSheet
 import app.goke.ui.components.MintCard
 import app.goke.ui.components.MintScreen
 import app.goke.ui.components.SegmentedPill
-import app.goke.ui.components.SwitchRow
 import app.goke.ui.components.Tag
 import app.goke.ui.components.TonalField
 import app.goke.ui.components.mintClickable
 import app.goke.ui.icons.Download
 import app.goke.ui.icons.FolderOpen
-import app.goke.ui.icons.IosShare
 import app.goke.ui.icons.OpenInNew
 import app.goke.ui.icons.Tune
 import app.goke.ui.settingsState
 import kotlinx.coroutines.launch
 
-/** 校园资料库与文件快传主入口页：资料库原生浏览/检索/智能分流下载 + 快传 6 位码预检与浏览器/应用内联动。 */
+/** 校园资料库与文件快传主入口页：资料库原生浏览/搜索/下载 + 快传浏览器一键收发。 */
 @Composable
 fun CampusResourcesScreen(
     initialTab: Int = 0,
@@ -85,8 +77,6 @@ fun CampusResourcesScreen(
     onBack: () -> Unit,
 ) {
     val app = LocalApp.current
-    val actions = LocalActions.current
-    val nav = LocalNav.current
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val st = settingsState()
@@ -121,7 +111,6 @@ fun CampusResourcesScreen(
     LaunchedEffect(initialCode, dropUrl) {
         if (initialCode.isNotBlank() && dropUrl.isNotBlank()) {
             selectedTab = 1
-            app.dropRelay.peekCode(initialCode)
         }
     }
 
@@ -131,14 +120,7 @@ fun CampusResourcesScreen(
         actions = {
             if (hasShare && selectedTab == 0) {
                 IconButton(
-                    onClick = {
-                        scope.launch {
-                            app.dropRelay.refreshIndex(force = true)
-                            if (app.dropRelay.state.value.indexError == null) {
-                                actions.feedback(FeedbackEvent.SUCCESS)
-                            }
-                        }
-                    },
+                    onClick = { scope.launch { app.dropRelay.refreshIndex(force = true) } },
                     enabled = !state.loadingIndex,
                 ) {
                     Icon(Icons.Rounded.Refresh, stringResource(R.string.droprelay_action_refresh))
@@ -181,14 +163,8 @@ fun CampusResourcesScreen(
                         onSearchQueryChange = { searchQuery = it },
                         currentDir = currentDir,
                         onNavigateDir = { currentDir = it },
-                        onRetry = {
-                            scope.launch {
-                                app.dropRelay.refreshIndex(force = true)
-                                if (app.dropRelay.state.value.indexError == null) {
-                                    actions.feedback(FeedbackEvent.SUCCESS)
-                                }
-                            }
-                        },
+                        onRetry = { scope.launch { app.dropRelay.refreshIndex(force = true) } },
+                        onOpenShareBrowser = { openExternalUrl(ctx, shareUrl) },
                         onDownloadDirZip = { dir ->
                             val zipUrl = DropRelayLogic.dirZipUrl(shareUrl, dir.path)
                             val res = app.dropRelay.enqueueDownload(zipUrl, "${dir.name}.zip")
@@ -201,46 +177,31 @@ fun CampusResourcesScreen(
                             Toast.makeText(ctx, toastText, Toast.LENGTH_SHORT).show()
                         },
                         onClickFile = { file ->
-                            scope.launch {
-                                val health = state.health ?: app.dropRelay.probeHealth()
-                                if (DropRelayLogic.shouldPreferBrowserP2p(file.size, health)) {
-                                    p2pConfirmFile = file
-                                } else {
-                                    val url = DropRelayLogic.fileWebseedUrl(shareUrl, file.normalizedPath)
-                                    val res = app.dropRelay.enqueueDownload(url, file.displayName)
-                                    val toastText =
-                                        if (res.isSuccess) {
-                                            ctx.getString(R.string.droprelay_download_started, file.displayName)
-                                        } else {
-                                            ctx.getString(R.string.droprelay_download_failed)
-                                        }
-                                    Toast.makeText(ctx, toastText, Toast.LENGTH_SHORT).show()
-                                }
+                            if (file.size > DropRelayLogic.DIRECT_DOWNLOAD_LIMIT_BYTES) {
+                                p2pConfirmFile = file
+                            } else {
+                                val url = DropRelayLogic.fileWebseedUrl(shareUrl, file.normalizedPath)
+                                val res = app.dropRelay.enqueueDownload(url, file.displayName)
+                                val toastText =
+                                    if (res.isSuccess) {
+                                        ctx.getString(R.string.droprelay_download_started, file.displayName)
+                                    } else {
+                                        ctx.getString(R.string.droprelay_download_failed)
+                                    }
+                                Toast.makeText(ctx, toastText, Toast.LENGTH_SHORT).show()
                             }
                         },
                     )
                 } else if (hasDrop) {
                     DropTransferTab(
                         dropUrl = dropUrl,
-                        state = state,
                         codeInput = codeInput,
-                        onCodeInputChange = {
-                            codeInput = it
-                            if (state.codeError != null) app.dropRelay.clearCodePreview()
-                        },
-                        onPeek = { code -> scope.launch { app.dropRelay.peekCode(code) } },
+                        onCodeInputChange = { codeInput = it },
                         onOpenReceiveBrowser = { code ->
                             openExternalUrl(ctx, DropRelayLogic.dropRoomUrl(dropUrl, code))
                         },
                         onOpenSendBrowser = {
                             openExternalUrl(ctx, dropUrl)
-                        },
-                        onOpenSendInApp = {
-                            nav.push(Route.DropSend)
-                        },
-                        shareSheetEnabled = st.dropShareSheetEnabled,
-                        onShareSheetToggle = { enabled ->
-                            app.dropRelay.setShareSheetEnabled(enabled)
                         },
                     )
                 }
@@ -250,12 +211,6 @@ fun CampusResourcesScreen(
 
     val confirmFile = p2pConfirmFile
     if (confirmFile != null && hasShare) {
-        val reasonText =
-            if (confirmFile.size > DropRelayLogic.DIRECT_DOWNLOAD_LIMIT_BYTES) {
-                stringResource(R.string.droprelay_p2p_sheet_reason_size)
-            } else {
-                stringResource(R.string.droprelay_p2p_sheet_reason_busy)
-            }
         MintBottomSheet(onDismissRequest = { p2pConfirmFile = null }) {
             Column(
                 Modifier
@@ -277,7 +232,7 @@ fun CampusResourcesScreen(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = reasonText,
+                    text = stringResource(R.string.droprelay_p2p_sheet_reason_size),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -349,6 +304,7 @@ private fun ShareLibraryTab(
     currentDir: String,
     onNavigateDir: (String) -> Unit,
     onRetry: () -> Unit,
+    onOpenShareBrowser: () -> Unit,
     onDownloadDirZip: (ShareBrowseEntry.Dir) -> Unit,
     onClickFile: (DropRelayFile) -> Unit,
 ) {
@@ -418,14 +374,35 @@ private fun ShareLibraryTab(
             }
 
             state.index == null && state.indexError != null -> {
-                EmptyState(
-                    title = stringResource(R.string.droprelay_offline_title),
-                    hint = stringResource(R.string.droprelay_offline_hint),
-                    icon = Icons.Rounded.FolderOpen,
-                    actionLabel = stringResource(R.string.droprelay_retry),
-                    onAction = onRetry,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
-                )
+                val baseHint = stringResource(R.string.droprelay_offline_hint)
+                val hint =
+                    buildString {
+                        append(baseHint)
+                        state.indexErrorDetail?.takeIf { it.isNotBlank() }?.let {
+                            append("\n")
+                            append(it)
+                        }
+                    }
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    EmptyState(
+                        title = stringResource(R.string.droprelay_offline_title),
+                        hint = hint,
+                        icon = Icons.Rounded.FolderOpen,
+                        actionLabel = stringResource(R.string.droprelay_retry),
+                        onAction = onRetry,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = onOpenShareBrowser) {
+                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.droprelay_open_in_browser))
+                    }
+                }
             }
 
             searching && searchResults.isEmpty() -> {
@@ -640,15 +617,10 @@ private fun BreadcrumbRow(
 @Composable
 private fun DropTransferTab(
     dropUrl: String,
-    state: DropRelayState,
     codeInput: String,
     onCodeInputChange: (String) -> Unit,
-    onPeek: (String) -> Unit,
     onOpenReceiveBrowser: (String) -> Unit,
     onOpenSendBrowser: () -> Unit,
-    onOpenSendInApp: () -> Unit,
-    shareSheetEnabled: Boolean,
-    onShareSheetToggle: (Boolean) -> Unit,
 ) {
     val ctx = LocalContext.current
     val clipboardCode =
@@ -664,6 +636,7 @@ private fun DropTransferTab(
                     .orEmpty()
             DropRelayLogic.extractDropCode(clipText, dropUrl)
         }
+    val parsedCode = remember(codeInput, dropUrl) { DropRelayLogic.extractDropCode(codeInput, dropUrl) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -687,11 +660,10 @@ private fun DropTransferTab(
                 if (clipboardCode != null && !clipboardCode.equals(codeInput.trim(), ignoreCase = true)) {
                     Spacer(Modifier.height(6.dp))
                     Row(
-                        Modifier
-                            .mintClickable(pressedScale = 0.97f) {
-                                onCodeInputChange(clipboardCode)
-                                onPeek(clipboardCode)
-                            },
+                        Modifier.mintClickable(pressedScale = 0.97f) {
+                            onCodeInputChange(clipboardCode)
+                            onOpenReceiveBrowser(clipboardCode)
+                        },
                     ) {
                         Tag(
                             text = stringResource(R.string.droprelay_drop_clipboard_hint, clipboardCode),
@@ -702,78 +674,13 @@ private fun DropTransferTab(
                 }
                 Spacer(Modifier.height(10.dp))
                 Button(
-                    onClick = { onPeek(codeInput) },
-                    enabled = !state.peekingCode && codeInput.isNotBlank(),
+                    onClick = { parsedCode?.let(onOpenReceiveBrowser) },
+                    enabled = parsedCode != null,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    if (state.peekingCode) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    Text(stringResource(R.string.droprelay_drop_peek_action))
-                }
-
-                val err = state.codeError
-                if (err != null) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = dropErrorMessage(err),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-
-                val preview = state.codePreview
-                if (preview != null) {
-                    Spacer(Modifier.height(12.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text =
-                            stringResource(
-                                R.string.droprelay_drop_files_summary,
-                                preview.files.size,
-                                DropRelayLogic.formatFileSize(preview.totalBytes),
-                            ),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    preview.files.take(6).forEach { f ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = f.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = DropRelayLogic.formatFileSize(f.size),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Button(
-                        onClick = { onOpenReceiveBrowser(preview.code) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.droprelay_drop_receive_browser))
-                    }
+                    Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.droprelay_drop_receive_browser))
                 }
             }
         }
@@ -800,38 +707,11 @@ private fun DropTransferTab(
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.droprelay_drop_send_browser))
                 }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = onOpenSendInApp,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Rounded.IosShare, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.droprelay_drop_send_inapp))
-                }
-                Spacer(Modifier.height(8.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                SwitchRow(
-                    title = stringResource(R.string.droprelay_share_sheet_toggle),
-                    subtitle = stringResource(R.string.droprelay_share_sheet_toggle_sub),
-                    checked = shareSheetEnabled,
-                    onChange = onShareSheetToggle,
-                )
             }
         }
         item(key = "nav_spacer") { Spacer(Modifier.navigationBarsPadding().height(16.dp)) }
     }
 }
-
-@Composable
-private fun dropErrorMessage(kind: DropRelayErrorKind): String =
-    when (kind) {
-        DropRelayErrorKind.NOT_FOUND -> stringResource(R.string.droprelay_err_not_found)
-        DropRelayErrorKind.RATE_LIMITED -> stringResource(R.string.droprelay_err_rate_limited)
-        DropRelayErrorKind.SERVER_BUSY -> stringResource(R.string.droprelay_err_busy)
-        DropRelayErrorKind.INVALID_URL -> stringResource(R.string.droprelay_err_invalid_url)
-        DropRelayErrorKind.UNREACHABLE, DropRelayErrorKind.BAD_RESPONSE -> stringResource(R.string.droprelay_err_unreachable)
-    }
 
 @Composable
 private fun DropRelayConfigSheet(

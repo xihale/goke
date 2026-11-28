@@ -94,7 +94,6 @@ import app.goke.ui.screens.ClassroomScreen
 import app.goke.ui.screens.CourseEditScreen
 import app.goke.ui.screens.CourseSelectionScreen
 import app.goke.ui.screens.DataScreen
-import app.goke.ui.screens.DropSendScreen
 import app.goke.ui.screens.EditTimetableScreen
 import app.goke.ui.screens.GradesScreen
 import app.goke.ui.screens.HistoryScreen
@@ -252,10 +251,6 @@ fun GokeRoot(
 
             is DeepLink.DropReceive -> {
                 nav.push(Route.CampusResources(initialTab = 1, initialCode = l.code))
-            }
-
-            DeepLink.DropSend -> {
-                nav.push(Route.DropSend)
             }
 
             is DeepLink.Add -> {
@@ -902,10 +897,6 @@ private fun RouteContent(
                 initialCode = route.initialCode,
                 onBack = onBack,
             )
-        }
-
-        Route.DropSend -> {
-            DropSendScreen(onBack)
         }
 
         is Route.Import -> {

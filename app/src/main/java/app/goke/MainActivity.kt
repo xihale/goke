@@ -15,7 +15,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import app.goke.core.campus.DropRelayLogic
 import app.goke.data.DarkMode
-import app.goke.droprelay.DropRelayManager
 import app.goke.notify.ReminderAlertService
 import app.goke.ui.GokeRoot
 import app.goke.ui.theme.GokeTheme
@@ -88,28 +87,6 @@ class MainActivity : ComponentActivity() {
         intent ?: return
         if (intent.hasExtra(ReminderAlertService.EXTRA_STOP_ALERT_ID)) {
             ReminderAlertService.stop(this, intent.getIntExtra(ReminderAlertService.EXTRA_STOP_ALERT_ID, 0))
-        }
-        val isDropAlias = intent.component?.className == DropRelayManager.SHARE_ALIAS_CLASS
-        if (isDropAlias && (intent.action == android.content.Intent.ACTION_SEND || intent.action == android.content.Intent.ACTION_SEND_MULTIPLE)) {
-            val uris =
-                when (intent.action) {
-                    android.content.Intent.ACTION_SEND -> {
-                        listOfNotNull(intent.getParcelableExtra<Uri>(android.content.Intent.EXTRA_STREAM))
-                    }
-
-                    android.content.Intent.ACTION_SEND_MULTIPLE -> {
-                        intent.getParcelableArrayListExtra<Uri>(android.content.Intent.EXTRA_STREAM).orEmpty()
-                    }
-
-                    else -> {
-                        emptyList()
-                    }
-                }
-            if (uris.isNotEmpty()) {
-                gokeApp.dropRelay.setPendingSendUris(uris)
-            }
-            gokeApp.links.value = DeepLink.DropSend
-            return
         }
         if (intent.action == android.content.Intent.ACTION_SEND &&
             intent.type?.startsWith("text/plain") == true &&

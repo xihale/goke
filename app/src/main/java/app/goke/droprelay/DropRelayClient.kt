@@ -1,16 +1,16 @@
 package app.goke.droprelay
 
-import app.goke.core.campus.DropCodePreview
-import app.goke.core.campus.DropCodeResponse
-import app.goke.core.campus.DropRelayHealth
 import app.goke.core.campus.DropRelayIndex
 import app.goke.core.campus.DropRelayLogic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
-import java.net.URLEncoder
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 
 enum class DropRelayErrorKind {
     INVALID_URL,
@@ -25,7 +25,8 @@ class DropRelayException(
     val kind: DropRelayErrorKind,
     val status: Int = 0,
     message: String = kind.name,
-) : Exception(message)
+    cause: Throwable? = null,
+) : Exception(message, cause)
 
 sealed interface IndexFetchResult {
     data object NotModified : IndexFetchResult
@@ -38,7 +39,7 @@ sealed interface IndexFetchResult {
     ) : IndexFetchResult
 }
 
-/** DropRelay 极简 HTTP 客户端：仅依赖 HttpURLConnection + kotlinx.serialization，校园网短超时。 */
+/** DropRelay 极简 HTTP 客户端：仅依赖 HttpURLConnection + kotlinx.serialization。 */
 class DropRelayClient {
     suspend fun fetchIndex(
         shareBaseUrl: String,
@@ -46,11 +47,13 @@ class DropRelayClient {
         lastModified: String? = null,
     ): IndexFetchResult =
         withContext(Dispatchers.IO) {
-            val base = DropRelayLogic.normalizeBaseUrl(shareBaseUrl) ?: throw DropRelayException(DropRelayErrorKind.INVALID_URL)
-            val primary = requestGet("$base/api/index.json", etag = etag, lastModified = lastModified, connectMs = 4_000, readMs = 10_000)
+            val base =
+                DropRelayLogic.normalizeBaseUrl(shareBaseUrl)
+                    ?: throw DropRelayException(DropRelayErrorKind.INVALID_URL, message = "Invalid URL: $shareBaseUrl")
+            val primary = requestGet("$base/api/index.json", etag = etag, lastModified = lastModified)
             val resp =
                 if (primary.status == 404) {
-                    requestGet("$base/app/manifest.json", etag = etag, lastModified = lastModified, connectMs = 4_000, readMs = 10_000)
+                    requestGet("$base/app/manifest.json", etag = etag, lastModified = lastModified)
                 } else {
                     primary
                 }
@@ -60,7 +63,14 @@ class DropRelayClient {
             }
             val parsed =
                 runCatching { DropRelayLogic.parseIndexJson(resp.body) }
-                    .getOrElse { throw DropRelayException(DropRelayErrorKind.BAD_RESPONSE, resp.status, it.message ?: "parse error") }
+                    .getOrElse {
+                        throw DropRelayException(
+                            DropRelayErrorKind.BAD_RESPONSE,
+                            resp.status,
+                            "Parse error: ${it.message ?: it.javaClass.simpleName}",
+                            it,
+                        )
+                    }
             val normalizedJson = DropRelayLogic.json.encodeToString(DropRelayIndex.serializer(), parsed)
             IndexFetchResult.Updated(
                 index = parsed,
@@ -70,37 +80,12 @@ class DropRelayClient {
             )
         }
 
-    suspend fun fetchHealth(baseUrl: String): DropRelayHealth =
-        withContext(Dispatchers.IO) {
-            val base = DropRelayLogic.normalizeBaseUrl(baseUrl) ?: throw DropRelayException(DropRelayErrorKind.INVALID_URL)
-            val resp = requestGet("$base/api/health", connectMs = 3_500, readMs = 4_000)
-            if (resp.status !in 200..299) throw mapHttpError(resp.status)
-            runCatching { DropRelayLogic.json.decodeFromString(DropRelayHealth.serializer(), resp.body) }
-                .getOrElse { throw DropRelayException(DropRelayErrorKind.BAD_RESPONSE, resp.status, it.message ?: "parse error") }
-        }
-
-    suspend fun peekDropCode(
-        dropBaseUrl: String,
-        code: String,
-    ): DropCodePreview =
-        withContext(Dispatchers.IO) {
-            val base = DropRelayLogic.normalizeBaseUrl(dropBaseUrl) ?: throw DropRelayException(DropRelayErrorKind.INVALID_URL)
-            val normalizedCode = code.trim().uppercase()
-            val encoded = URLEncoder.encode(normalizedCode, "UTF-8")
-            val resp = requestGet("$base/api/code?c=$encoded", connectMs = 4_000, readMs = 6_000)
-            if (resp.status !in 200..299) throw mapHttpError(resp.status)
-            val parsed =
-                runCatching { DropRelayLogic.json.decodeFromString(DropCodeResponse.serializer(), resp.body) }
-                    .getOrElse { throw DropRelayException(DropRelayErrorKind.BAD_RESPONSE, resp.status, it.message ?: "parse error") }
-            DropCodePreview(code = normalizedCode, files = parsed.files)
-        }
-
     private fun mapHttpError(status: Int): DropRelayException =
         when (status) {
-            404 -> DropRelayException(DropRelayErrorKind.NOT_FOUND, status)
-            429 -> DropRelayException(DropRelayErrorKind.RATE_LIMITED, status)
-            503 -> DropRelayException(DropRelayErrorKind.SERVER_BUSY, status)
-            else -> DropRelayException(DropRelayErrorKind.BAD_RESPONSE, status)
+            404 -> DropRelayException(DropRelayErrorKind.NOT_FOUND, status, "HTTP 404")
+            429 -> DropRelayException(DropRelayErrorKind.RATE_LIMITED, status, "HTTP 429")
+            503 -> DropRelayException(DropRelayErrorKind.SERVER_BUSY, status, "HTTP 503")
+            else -> DropRelayException(DropRelayErrorKind.BAD_RESPONSE, status, "HTTP $status")
         }
 
     private data class HttpResp(
@@ -114,20 +99,20 @@ class DropRelayClient {
         url: String,
         etag: String? = null,
         lastModified: String? = null,
-        connectMs: Int,
-        readMs: Int,
     ): HttpResp {
         val conn =
             try {
                 URL(url).openConnection() as HttpURLConnection
             } catch (e: IOException) {
-                throw DropRelayException(DropRelayErrorKind.UNREACHABLE, message = e.message ?: "connect failed")
+                throw DropRelayException(DropRelayErrorKind.UNREACHABLE, message = describeIoError(e), cause = e)
             }
         try {
             conn.requestMethod = "GET"
-            conn.connectTimeout = connectMs
-            conn.readTimeout = readMs
+            conn.instanceFollowRedirects = true
+            conn.connectTimeout = CONNECT_TIMEOUT_MS
+            conn.readTimeout = READ_TIMEOUT_MS
             conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("User-Agent", USER_AGENT)
             if (!etag.isNullOrBlank()) conn.setRequestProperty("If-None-Match", etag)
             if (!lastModified.isNullOrBlank()) conn.setRequestProperty("If-Modified-Since", lastModified)
             val status = conn.responseCode
@@ -142,9 +127,24 @@ class DropRelayClient {
         } catch (e: DropRelayException) {
             throw e
         } catch (e: IOException) {
-            throw DropRelayException(DropRelayErrorKind.UNREACHABLE, message = e.message ?: "io error")
+            throw DropRelayException(DropRelayErrorKind.UNREACHABLE, message = describeIoError(e), cause = e)
         } finally {
             conn.disconnect()
         }
+    }
+
+    private fun describeIoError(e: IOException): String =
+        when (e) {
+            is UnknownHostException -> "DNS: ${e.message.orEmpty().ifBlank { "unknown host" }}"
+            is SocketTimeoutException -> "Timeout: ${e.message.orEmpty().ifBlank { "timed out" }}"
+            is SSLException -> "TLS: ${e.message.orEmpty().ifBlank { e.javaClass.simpleName }}"
+            is ConnectException -> "Connect: ${e.message.orEmpty().ifBlank { "refused" }}"
+            else -> "${e.javaClass.simpleName}: ${e.message.orEmpty().ifBlank { "io error" }}"
+        }
+
+    companion object {
+        private const val CONNECT_TIMEOUT_MS = 8_000
+        private const val READ_TIMEOUT_MS = 15_000
+        private const val USER_AGENT = "Goke-Android/DropRelay"
     }
 }

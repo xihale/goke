@@ -91,8 +91,6 @@ sealed interface Route {
         val initialCode: String = "",
     ) : Route
 
-    @Serializable data object DropSend : Route
-
     /** uri 为空表示先让用户选择文件。 */
     @Serializable data class Import(
         val uri: String?,

@@ -1,22 +1,17 @@
 package app.goke.droprelay
 
 import android.app.DownloadManager
-import android.content.ComponentName
 import android.content.Context
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Environment
+import android.util.Log
 import app.goke.core.campus.CampusDropRelayDefaults
-import app.goke.core.campus.DropCodePreview
 import app.goke.core.campus.DropRelayFile
-import app.goke.core.campus.DropRelayHealth
 import app.goke.core.campus.DropRelayIndex
 import app.goke.core.campus.DropRelayLogic
 import app.goke.data.ErrorReporter
 import app.goke.data.SettingsStore
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,22 +21,13 @@ import java.io.File
 
 data class DropRelayState(
     val index: DropRelayIndex? = null,
-    val health: DropRelayHealth? = null,
-    val discoveredShareUrl: String = "",
-    val discoveredDropUrl: String = "",
     val loadingIndex: Boolean = false,
     val indexError: DropRelayErrorKind? = null,
+    val indexErrorDetail: String? = null,
     val lastSyncedAt: Long = 0L,
-    val peekingCode: Boolean = false,
-    val codePreview: DropCodePreview? = null,
-    val codeError: DropRelayErrorKind? = null,
-    val pendingSendUris: List<Uri> = emptyList(),
 )
 
-/**
- * DropRelay 资料库与快传控制器：管理本地索引缓存、校园网探活、6 位码预检、DownloadManager 下载、
- * 课程资源本地匹配以及系统分享菜单 `<activity-alias>` 开关。
- */
+/** DropRelay 资料库与快传控制器：管理本地索引缓存、DownloadManager 下载与课程资源本地匹配。 */
 class DropRelayManager(
     private val context: Context,
     private val settings: SettingsStore,
@@ -57,13 +43,11 @@ class DropRelayManager(
     fun effectiveShareUrl(rawSetting: String = settings.value.dropRelayShareUrl): String =
         DropRelayLogic.normalizeBaseUrl(rawSetting)
             ?: DropRelayLogic.normalizeBaseUrl(campusDefaults.shareUrl)
-            ?: DropRelayLogic.normalizeBaseUrl(_state.value.discoveredShareUrl)
             ?: ""
 
     fun effectiveDropUrl(rawSetting: String = settings.value.dropRelayDropUrl): String =
         DropRelayLogic.normalizeBaseUrl(rawSetting)
             ?: DropRelayLogic.normalizeBaseUrl(campusDefaults.dropUrl)
-            ?: DropRelayLogic.normalizeBaseUrl(_state.value.discoveredDropUrl)
             ?: ""
 
     fun hasCampusDefaults(): Boolean = campusDefaults.shareUrl.isNotBlank() || campusDefaults.dropUrl.isNotBlank()
@@ -76,7 +60,6 @@ class DropRelayManager(
         if (parsed != null) {
             _state.update { it.copy(index = parsed, lastSyncedAt = syncedAt) }
         }
-        syncShareSheetAlias(settings.value.dropShareSheetEnabled)
     }
 
     fun matchingFilesForCourse(courseName: String): List<DropRelayFile> {
@@ -90,35 +73,30 @@ class DropRelayManager(
     suspend fun refreshIndex(force: Boolean = false) {
         val shareUrl = effectiveShareUrl()
         if (shareUrl.isBlank()) {
-            _state.update { it.copy(loadingIndex = false, indexError = DropRelayErrorKind.INVALID_URL) }
+            _state.update {
+                it.copy(
+                    loadingIndex = false,
+                    indexError = DropRelayErrorKind.INVALID_URL,
+                    indexErrorDetail = null,
+                )
+            }
             return
         }
-        _state.update { it.copy(loadingIndex = true, indexError = null) }
-        val cachedEtag = if (force) null else sp.getString(KEY_ETAG, null)
-        val cachedLastMod = if (force) null else sp.getString(KEY_LAST_MODIFIED, null)
+        _state.update { it.copy(loadingIndex = true, indexError = null, indexErrorDetail = null) }
+        val hasLocalIndex = _state.value.index != null
+        val cachedEtag = if (force || !hasLocalIndex) null else sp.getString(KEY_ETAG, null)
+        val cachedLastMod = if (force || !hasLocalIndex) null else sp.getString(KEY_LAST_MODIFIED, null)
         try {
-            val (fetchResult, health) =
-                coroutineScope {
-                    val idxDeferred = async { client.fetchIndex(shareUrl, etag = cachedEtag, lastModified = cachedLastMod) }
-                    val healthDeferred = async { runCatching { client.fetchHealth(shareUrl) }.getOrNull() }
-                    idxDeferred.await() to healthDeferred.await()
-                }
+            val fetchResult = client.fetchIndex(shareUrl, etag = cachedEtag, lastModified = cachedLastMod)
             val now = System.currentTimeMillis()
-            val peerDrop =
-                health
-                    ?.discoveredPeerOrigin()
-                    ?.takeIf { health.mode.equals("share", ignoreCase = true) || it.contains("drop", ignoreCase = true) }
-                    ?.let { DropRelayLogic.normalizeBaseUrl(it) }
-                    .orEmpty()
             when (fetchResult) {
                 IndexFetchResult.NotModified -> {
                     sp.edit().putLong(KEY_SYNCED_AT, now).apply()
                     _state.update {
                         it.copy(
-                            health = health ?: it.health,
-                            discoveredDropUrl = peerDrop.ifBlank { it.discoveredDropUrl },
                             loadingIndex = false,
                             indexError = null,
+                            indexErrorDetail = null,
                             lastSyncedAt = now,
                         )
                     }
@@ -137,67 +115,35 @@ class DropRelayManager(
                     _state.update {
                         it.copy(
                             index = fetchResult.index,
-                            health = health ?: it.health,
-                            discoveredDropUrl = peerDrop.ifBlank { it.discoveredDropUrl },
                             loadingIndex = false,
                             indexError = null,
+                            indexErrorDetail = null,
                             lastSyncedAt = now,
                         )
                     }
                 }
             }
         } catch (e: DropRelayException) {
-            _state.update { it.copy(loadingIndex = false, indexError = e.kind) }
+            Log.w(TAG, "refreshIndex($shareUrl) failed: ${e.kind} ${e.message}", e.cause ?: e)
+            errors.record("droprelay.refreshIndex", e)
+            _state.update {
+                it.copy(
+                    loadingIndex = false,
+                    indexError = e.kind,
+                    indexErrorDetail = e.message,
+                )
+            }
         } catch (t: Throwable) {
+            Log.w(TAG, "refreshIndex($shareUrl) unexpected error", t)
             errors.record("droprelay.refreshIndex", t)
-            _state.update { it.copy(loadingIndex = false, indexError = DropRelayErrorKind.UNREACHABLE) }
-        }
-    }
-
-    suspend fun probeHealth(): DropRelayHealth? {
-        val shareUrl = effectiveShareUrl()
-        val dropUrl = effectiveDropUrl()
-        val target = shareUrl.ifBlank { dropUrl }
-        if (target.isBlank()) return null
-        val health = runCatching { client.fetchHealth(target) }.getOrNull()
-        if (health != null) {
-            val peer = DropRelayLogic.normalizeBaseUrl(health.discoveredPeerOrigin()).orEmpty()
-            _state.update { prev ->
-                prev.copy(
-                    health = health,
-                    discoveredDropUrl = if (health.mode.equals("share", true) && peer.isNotBlank()) peer else prev.discoveredDropUrl,
-                    discoveredShareUrl = if (health.mode.equals("drop", true) && peer.isNotBlank()) peer else prev.discoveredShareUrl,
+            _state.update {
+                it.copy(
+                    loadingIndex = false,
+                    indexError = DropRelayErrorKind.UNREACHABLE,
+                    indexErrorDetail = t.message ?: t.javaClass.simpleName,
                 )
             }
         }
-        return health
-    }
-
-    suspend fun peekCode(rawInput: String) {
-        val dropUrl = effectiveDropUrl()
-        if (dropUrl.isBlank()) {
-            _state.update { it.copy(peekingCode = false, codeError = DropRelayErrorKind.INVALID_URL, codePreview = null) }
-            return
-        }
-        val code = DropRelayLogic.extractDropCode(rawInput, dropUrl)
-        if (code == null) {
-            _state.update { it.copy(peekingCode = false, codeError = DropRelayErrorKind.NOT_FOUND, codePreview = null) }
-            return
-        }
-        _state.update { it.copy(peekingCode = true, codeError = null) }
-        try {
-            val preview = client.peekDropCode(dropUrl, code)
-            _state.update { it.copy(peekingCode = false, codePreview = preview, codeError = null) }
-        } catch (e: DropRelayException) {
-            _state.update { it.copy(peekingCode = false, codePreview = null, codeError = e.kind) }
-        } catch (t: Throwable) {
-            errors.record("droprelay.peekCode", t)
-            _state.update { it.copy(peekingCode = false, codePreview = null, codeError = DropRelayErrorKind.UNREACHABLE) }
-        }
-    }
-
-    fun clearCodePreview() {
-        _state.update { it.copy(codePreview = null, codeError = null) }
     }
 
     fun enqueueDownload(
@@ -218,46 +164,12 @@ class DropRelayManager(
             dm.enqueue(request)
         }
 
-    fun setPendingSendUris(uris: List<Uri>) {
-        _state.update { it.copy(pendingSendUris = uris) }
-    }
-
-    fun consumePendingSendUris(): List<Uri> {
-        val current = _state.value.pendingSendUris
-        if (current.isNotEmpty()) {
-            _state.update { it.copy(pendingSendUris = emptyList()) }
-        }
-        return current
-    }
-
-    fun syncShareSheetAlias(enabled: Boolean) {
-        runCatching {
-            val component = ComponentName(context, SHARE_ALIAS_CLASS)
-            val newState =
-                if (enabled) {
-                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                } else {
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-                }
-            context.packageManager.setComponentEnabledSetting(
-                component,
-                newState,
-                PackageManager.DONT_KILL_APP,
-            )
-        }
-    }
-
-    fun setShareSheetEnabled(enabled: Boolean) {
-        settings.update { it.copy(dropShareSheetEnabled = enabled) }
-        syncShareSheetAlias(enabled)
-    }
-
     companion object {
+        private const val TAG = "DropRelay"
         private const val PREFS_NAME = "droprelay_cache"
         private const val CACHE_FILE_NAME = "droprelay_index.json"
         private const val KEY_ETAG = "etag"
         private const val KEY_LAST_MODIFIED = "last_modified"
         private const val KEY_SYNCED_AT = "synced_at"
-        const val SHARE_ALIAS_CLASS = "app.goke.DropShareAlias"
     }
 }
