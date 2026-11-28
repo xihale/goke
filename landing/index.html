@@ -586,12 +586,13 @@
                 <span class="tag-muted mono" id="dlIosVer">即将发布</span>
               </div>
               <p>iOS 17+ 未签名 IPA · 支持 SideStore / AltStore / TrollStore 侧载</p>
-              <p class="dl-meta" id="dlIosNote">暂未发布 iOS 正式包，可前往 GitHub Releases 查看构建进度。</p>
+              <p class="dl-meta" id="dlIosNote">推荐先添加 SideStore 源，一次订阅即可在 SideStore 内一键检查并更新，无需反复下载 IPA。</p>
             </div>
             <div class="dl-act dl-act--ios">
               <span class="dl-size mono is-hidden" id="dlIosSize"></span>
               <div class="dl-btns">
-                <a class="btn btn-primary btn-sm is-hidden" id="dlSideStoreBtn" href="#">SideStore 一键安装</a>
+                <a class="btn btn-primary btn-sm" id="dlSideStoreSourceBtn" href="sidestore://source?url=https%3A%2F%2Fgoke.xeed.ink%2Faltstore.json">添加到 SideStore 源</a>
+                <button type="button" class="btn btn-tonal btn-sm" id="dlCopySourceBtn" data-source-url="https://goke.xeed.ink/altstore.json">复制源地址</button>
                 <a class="btn btn-tonal btn-sm" id="dlIosBtn" href="https://github.com/xihale/goke/releases">前往 Releases</a>
               </div>
             </div>
@@ -611,6 +612,7 @@
       </div>
       <div class="footer-links">
         <a href="./downloads/latest.json">latest.json</a>
+        <a href="./altstore.json">altstore.json</a>
         <a href="https://github.com/xihale/goke/releases">Releases</a>
         <a href="https://github.com/xihale/goke">GitHub</a>
         <a href="https://github.com/xihale/goke/issues">反馈</a>

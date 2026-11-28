@@ -1,0 +1,51 @@
+{
+  "name": "Goke",
+  "identifier": "app.goke.source",
+  "subtitle": "广工离线课表与日程",
+  "description": "Goke（工课）官方 SideStore / AltStore 源。添加此源后，可在 SideStore / AltStore 内一键安装并持续接收 iOS 版本更新。",
+  "iconURL": "https://raw.githubusercontent.com/xihale/goke/main/ios/GokeApp/Resources/AppIcon.png",
+  "website": "https://goke.xeed.ink/",
+  "tintColor": "#2E776C",
+  "featuredApps": [
+    "app.goke.ios"
+  ],
+  "apps": [
+    {
+      "name": "Goke",
+      "bundleIdentifier": "app.goke.ios",
+      "developerName": "xihale",
+      "subtitle": "为广工而写的离线课表与日程",
+      "localizedDescription": "Goke（工课）是专为广东工业大学设计的离线课表与日程应用，支持教务课表同步、空教室查询、考试成绩、待办事项、桌面小组件与多端同步。无广告、不接受捐款，极端非商业许可（Goke-NC-SA-2.0）。",
+      "iconURL": "https://raw.githubusercontent.com/xihale/goke/main/ios/GokeApp/Resources/AppIcon.png",
+      "tintColor": "#2E776C",
+      "category": "utilities",
+      "screenshotURLs": [
+        "https://goke.xeed.ink/assets/shot-timetable.webp",
+        "https://goke.xeed.ink/assets/shot-today.webp",
+        "https://goke.xeed.ink/assets/shot-calendar.webp",
+        "https://goke.xeed.ink/assets/shot-todo.webp"
+      ],
+      "appPermissions": {
+        "entitlements": [
+          "com.apple.security.application-groups"
+        ],
+        "privacy": {
+          "NSBluetoothAlwaysUsageDescription": "Goke 需要使用蓝牙连接宿舍水表，以支持一键开关热水与查询阀门状态。",
+          "NSCalendarsFullAccessUsageDescription": "Goke 需要完全访问系统日历，以实现课程与待办事项的双向同步。"
+        }
+      },
+      "versions": [
+        {
+          "version": "0.0.1",
+          "buildVersion": "12010",
+          "date": "2026-11-28T11:28:39Z",
+          "localizedDescription": "**Full Changelog**: https://github.com/xihale/goke/compare/v0.0.1-beta.24...ios-v0.0.1-beta.1",
+          "downloadURL": "https://github.com/xihale/goke/releases/download/ios-v0.0.1-beta.1/goke-v0.0.1-beta.1-ios-unsigned.ipa",
+          "size": 5564188,
+          "minOSVersion": "17.0"
+        }
+      ]
+    }
+  ],
+  "news": []
+}

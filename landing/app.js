@@ -393,6 +393,50 @@
   }
 
   var androidHydratedFromMirror = false;
+  var iosHydratedFromGitHub = false;
+
+  /* Copy SideStore / AltStore source URL button */
+  var copySourceBtn = document.getElementById('dlCopySourceBtn');
+  if (copySourceBtn) {
+    var copyResetTimer = null;
+    var defaultCopyLabel = copySourceBtn.textContent;
+
+    function markCopied() {
+      if (copyResetTimer) clearTimeout(copyResetTimer);
+      copySourceBtn.textContent = '已复制源地址';
+      copySourceBtn.classList.add('is-copied');
+      copyResetTimer = setTimeout(function () {
+        copySourceBtn.textContent = defaultCopyLabel;
+        copySourceBtn.classList.remove('is-copied');
+        copyResetTimer = null;
+      }, 2000);
+    }
+
+    function fallbackCopyText(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.className = 'sr-copy-buf';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+      document.body.removeChild(ta);
+      return ok;
+    }
+
+    copySourceBtn.addEventListener('click', function () {
+      var sourceUrl = copySourceBtn.getAttribute('data-source-url') || '';
+      if (!sourceUrl) return;
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(sourceUrl).then(markCopied).catch(function () {
+          if (fallbackCopyText(sourceUrl)) markCopied();
+        });
+      } else if (fallbackCopyText(sourceUrl)) {
+        markCopied();
+      }
+    });
+  }
 
   function applyAndroidRelease(info) {
     if (!info || !info.apkName || !info.href) return;
@@ -421,21 +465,19 @@
     }
   }
 
-  function applyIosRelease(release, asset) {
-    if (!release || !asset || !asset.browser_download_url) return;
-    var ver = release.tag_name || '';
-    var ipaUrl = asset.browser_download_url;
-    var sizeStr = asset.size ? formatMiB(asset.size) : '';
-    var sideStoreUrl = 'sidestore://install?url=' + encodeURIComponent(ipaUrl);
+  function applyIosRelease(info) {
+    if (!info || !info.ipaUrl) return;
+    var ver = info.tag || '';
+    var sizeStr = info.size ? formatMiB(info.size) : '';
 
     if (ver) {
       setText('heroIosVer', ver);
       setText('dlIosVer', ver);
     }
-    if (asset.name) {
-      setText('dlIosName', asset.name);
+    if (info.ipaName) {
+      setText('dlIosName', info.ipaName);
     }
-    setText('dlIosNote', '未签名 IPA，请使用 SideStore / AltStore 签名安装，或通过 TrollStore 直接安装。');
+    setText('dlIosNote', '推荐先「添加到 SideStore 源」，一次订阅即可在 SideStore 内一键更新；也可直接下载未签名 IPA。');
 
     var sizeEl = document.getElementById('dlIosSize');
     if (sizeEl && sizeStr) {
@@ -445,14 +487,8 @@
 
     var iosBtn = document.getElementById('dlIosBtn');
     if (iosBtn) {
-      iosBtn.setAttribute('href', ipaUrl);
+      iosBtn.setAttribute('href', info.ipaUrl);
       iosBtn.textContent = '下载 IPA';
-    }
-
-    var sideStoreBtn = document.getElementById('dlSideStoreBtn');
-    if (sideStoreBtn) {
-      sideStoreBtn.setAttribute('href', sideStoreUrl);
-      sideStoreBtn.classList.remove('is-hidden');
     }
   }
 
@@ -496,6 +532,26 @@
       })
       .catch(function () {});
 
+    fetch('./altstore.json', { cache: 'no-cache' })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (iosHydratedFromGitHub || !data || !Array.isArray(data.apps) || !data.apps.length) return;
+        var versions = data.apps[0] && data.apps[0].versions;
+        if (!Array.isArray(versions) || !versions.length) return;
+        var latest = versions[0];
+        if (!latest || !latest.downloadURL) return;
+        var urlParts = latest.downloadURL.split('/');
+        var ipaName = urlParts[urlParts.length - 1] || '';
+        var tagMatch = latest.downloadURL.match(/\/releases\/download\/([^/]+)\//);
+        applyIosRelease({
+          tag: tagMatch ? decodeURIComponent(tagMatch[1]) : ('v' + latest.version),
+          ipaName: ipaName,
+          size: latest.size,
+          ipaUrl: latest.downloadURL
+        });
+      })
+      .catch(function () {});
+
     fetch('https://api.github.com/repos/xihale/goke/releases?per_page=20', {
       headers: { Accept: 'application/vnd.github+json' }
     })
@@ -529,7 +585,13 @@
             var ipa = pickIpaAsset(rel.assets);
             if (ipa) {
               iosFound = true;
-              applyIosRelease(rel, ipa);
+              iosHydratedFromGitHub = true;
+              applyIosRelease({
+                tag: rel.tag_name,
+                ipaName: ipa.name,
+                size: ipa.size,
+                ipaUrl: ipa.browser_download_url
+              });
             }
           }
 
