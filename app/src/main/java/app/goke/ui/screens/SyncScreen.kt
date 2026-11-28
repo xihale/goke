@@ -80,7 +80,9 @@ fun SyncScreen(onBack: () -> Unit) {
 /** 「系统日历同步」：独立的系统日历与桌面账号双向同步设置页（可直接从设置主页进入）。 */
 @Composable
 fun CalendarSyncScreen(onBack: () -> Unit) {
+    val ctx = LocalContext.current
     val app = LocalApp.current
+    val actions = LocalActions.current
     val scope = rememberCoroutineScope()
     val calState by app.calendarSync.state.collectAsState()
 
@@ -89,7 +91,10 @@ fun CalendarSyncScreen(onBack: () -> Unit) {
             isRefreshing = calState.syncing,
             onRefresh = {
                 scope.launch {
-                    runCatching { app.calendarSync.syncNow() }
+                    runCatching { app.calendarSync.syncNow() }.onSuccess { n ->
+                        actions.feedback(FeedbackEvent.SUCCESS)
+                        actions.toast(ctx.getString(R.string.cal_sync_done_toast, n))
+                    }
                 }
             },
         ) {
@@ -259,6 +264,7 @@ private fun SystemCalendarSection() {
                             onClick = {
                                 scope.launch {
                                     if (app.calendarSync.ensureLocalCalendar() != null) {
+                                        actions.feedback(FeedbackEvent.SUCCESS)
                                         actions.toast(ctx.getString(R.string.cal_sync_local_created))
                                     }
                                 }

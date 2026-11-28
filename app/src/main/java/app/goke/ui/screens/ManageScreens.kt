@@ -72,6 +72,7 @@ import app.goke.core.parcel.RuleTemplate
 import app.goke.core.util.Ids
 import app.goke.notify.ParcelCapture
 import app.goke.notify.ParcelTasks
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.components.ConfirmDialog
@@ -121,6 +122,7 @@ private fun entityName(
 fun TrashScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
     val app = LocalApp.current
+    val actions = LocalActions.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val snap by app.repo.snapshot.collectAsState()
     val trashed =
@@ -164,6 +166,7 @@ fun TrashScreen(onBack: () -> Unit) {
                                         }
                                     app.repo.restoreFromTrash(r)
                                     deps.forEach { app.repo.restoreFromTrash(it) }
+                                    actions.feedback(FeedbackEvent.UNDO)
                                 }
                             }) { Text(stringResource(R.string.restore)) }
                             TextButton(onClick = { purgeTarget = r }) { Text(stringResource(R.string.delete_forever), color = MaterialTheme.colorScheme.error) }

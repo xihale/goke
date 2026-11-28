@@ -59,6 +59,7 @@ import app.goke.core.export.ShareExpiryPreset
 import app.goke.share.ShareException
 import app.goke.share.TimetableShareManager
 import app.goke.sync.SyncClient
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.components.ChipChoice
@@ -166,6 +167,7 @@ fun TimetableShareScreen(onBack: () -> Unit) {
                     expiresAt = expiresAt,
                     serverUrlOverride = effectiveServerUrl,
                 )
+                actions.feedback(FeedbackEvent.SUCCESS)
                 actions.toast(ctx.getString(if (isUpdate) R.string.share_updated_toast else R.string.share_published_toast))
             } catch (e: ShareException) {
                 actions.toast(e.message ?: ctx.getString(R.string.export_failed))
@@ -233,6 +235,7 @@ fun TimetableShareScreen(onBack: () -> Unit) {
                                 onClick = {
                                     val cm = ctx.getSystemService(ClipboardManager::class.java)
                                     cm?.setPrimaryClip(ClipData.newPlainText("goke-share", activeUrl))
+                                    actions.feedback(FeedbackEvent.SOFT_TICK)
                                     actions.toast(ctx.getString(R.string.share_copied_toast))
                                 },
                             ) {
@@ -498,6 +501,7 @@ fun TimetableShareScreen(onBack: () -> Unit) {
                     try {
                         app.timetableShare.deleteCloud(serverUrlOverride = state.effectiveServerUrl)
                         showQr = false
+                        actions.feedback(FeedbackEvent.DELETE)
                         actions.toast(ctx.getString(R.string.share_deleted_toast))
                     } catch (e: ShareException) {
                         actions.toast(e.message ?: ctx.getString(R.string.export_failed))

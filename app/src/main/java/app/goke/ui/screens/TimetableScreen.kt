@@ -158,6 +158,7 @@ import app.goke.core.todo.TaskLogic
 import app.goke.core.util.Ids
 import app.goke.data.Settings
 import app.goke.share.Sharing
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
@@ -564,7 +565,12 @@ fun TimetableScreen() {
                 previewCs?.let {
                     PreviewBanner(
                         it,
-                        onApply = { app.advanced.apply { actions.toast(ctx.getString(R.string.applied_toast, it.changes.size)) } },
+                        onApply = {
+                            app.advanced.apply {
+                                actions.feedback(FeedbackEvent.SUCCESS)
+                                actions.toast(ctx.getString(R.string.applied_toast, it.changes.size))
+                            }
+                        },
                         onDiscard = { app.advanced.discard() },
                     )
                 }
@@ -3609,6 +3615,7 @@ private fun ReschedulePanel(
                         Edits.save(snap, ex, ctx.getString(R.string.reschedule_desc, c.name), System.currentTimeMillis()),
                         ctx.getString(R.string.reschedule_toast, c.name),
                     )
+                    actions.feedback(FeedbackEvent.SUCCESS)
                     onCommitted(newWeek)
                 }
             },

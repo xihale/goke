@@ -249,6 +249,7 @@ fun DataScreen(onBack: () -> Unit) {
             {
                 scope.launch {
                     app.repo.replaceAll(b.snapshot)
+                    actions.feedback(FeedbackEvent.SUCCESS)
                     actions.toast(ctx.getString(R.string.restored_toast))
                 }
             },

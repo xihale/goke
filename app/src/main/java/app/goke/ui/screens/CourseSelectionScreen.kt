@@ -99,6 +99,7 @@ import app.goke.core.jxfw.XkSlotConflict
 import app.goke.core.jxfw.XkWindowStatus
 import app.goke.debug.DebugHooks
 import app.goke.jxfw.JxfwCourseSelectionState
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
@@ -157,11 +158,14 @@ fun CourseSelectionScreen(onBack: () -> Unit) {
         onOpenJxfw = { nav.push(Route.Jxfw) },
         onRefresh = {
             scope.launch {
-                app.jxfw.loadCourseSelection(
-                    searchKey = xkState.searchKey.ifBlank { "kcmc" },
-                    searchValue = xkState.searchValue,
-                    page = 1,
-                )
+                app.jxfw
+                    .loadCourseSelection(
+                        searchKey = xkState.searchKey.ifBlank { "kcmc" },
+                        searchValue = xkState.searchValue,
+                        page = 1,
+                    ).onSuccess {
+                        actions.feedback(FeedbackEvent.SUCCESS)
+                    }
             }
         },
         onSearch = { key, value ->
@@ -189,8 +193,14 @@ fun CourseSelectionScreen(onBack: () -> Unit) {
                     .enrollCourse(item)
                     .onSuccess { res ->
                         when (res) {
-                            is XkActionResult.Success -> actions.toast(ctx.getString(R.string.xk_enroll_success, item.displayName))
-                            is XkActionResult.Failure -> actions.toast(formatXkFailure(ctx, res.kind, res.reason))
+                            is XkActionResult.Success -> {
+                                actions.feedback(FeedbackEvent.SUCCESS)
+                                actions.toast(ctx.getString(R.string.xk_enroll_success, item.displayName))
+                            }
+
+                            is XkActionResult.Failure -> {
+                                actions.toast(formatXkFailure(ctx, res.kind, res.reason))
+                            }
                         }
                     }.onFailure { err ->
                         actions.toast(err.message ?: ctx.getString(R.string.xk_err_other_default))
@@ -203,8 +213,14 @@ fun CourseSelectionScreen(onBack: () -> Unit) {
                     .dropCourse(item)
                     .onSuccess { res ->
                         when (res) {
-                            is XkActionResult.Success -> actions.toast(ctx.getString(R.string.xk_drop_success, item.displayName))
-                            is XkActionResult.Failure -> actions.toast(formatXkFailure(ctx, res.kind, res.reason))
+                            is XkActionResult.Success -> {
+                                actions.feedback(FeedbackEvent.SUCCESS)
+                                actions.toast(ctx.getString(R.string.xk_drop_success, item.displayName))
+                            }
+
+                            is XkActionResult.Failure -> {
+                                actions.toast(formatXkFailure(ctx, res.kind, res.reason))
+                            }
                         }
                     }.onFailure { err ->
                         actions.toast(err.message ?: ctx.getString(R.string.xk_err_other_default))

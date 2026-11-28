@@ -67,6 +67,7 @@ import app.goke.core.jxfw.TzcsSummary
 import app.goke.core.jxfw.TzcsYearReport
 import app.goke.jxfw.TzcsException
 import app.goke.jxfw.TzcsState
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.components.ChipPill
@@ -106,6 +107,7 @@ fun PhysicalTestScreen(onBack: () -> Unit) {
             app.tzcs
                 .refreshIfSessionActive()
                 .onSuccess { list ->
+                    actions.feedback(FeedbackEvent.SUCCESS)
                     actions.toast(ctx.getString(R.string.tzcs_refreshed_toast, list.size))
                 }.onFailure { err ->
                     if ((err as? TzcsException)?.kind == TzcsException.Kind.SESSION) {
@@ -269,6 +271,7 @@ fun PhysicalTestScreen(onBack: () -> Unit) {
             onDismiss = { showVerifyDialog = false },
             onRefreshed = { count ->
                 showVerifyDialog = false
+                actions.feedback(FeedbackEvent.SUCCESS)
                 actions.toast(ctx.getString(R.string.tzcs_refreshed_toast, count))
             },
         )
@@ -404,6 +407,7 @@ private fun TzcsLoginPanel(
                         .onSuccess { list ->
                             password = ""
                             vercode = ""
+                            actions.feedback(FeedbackEvent.SUCCESS)
                             actions.toast(ctx.getString(R.string.tzcs_refreshed_toast, list.size))
                         }.onFailure { err ->
                             localError = err.message

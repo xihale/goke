@@ -49,6 +49,7 @@ import app.goke.R
 import app.goke.core.jxfw.JxfwNotice
 import app.goke.core.jxfw.JxfwNoticeSource
 import app.goke.jxfw.JxfwNoticesState
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.components.EmptyState
@@ -72,7 +73,9 @@ fun JxfwNoticesScreen(onBack: () -> Unit) {
 
     val onRefresh: () -> Unit = {
         scope.launch {
-            app.jxfw.refreshNotices(notify = false)
+            app.jxfw.refreshNotices(notify = false).onSuccess {
+                actions.feedback(FeedbackEvent.SUCCESS)
+            }
         }
     }
 

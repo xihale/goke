@@ -47,6 +47,8 @@ import androidx.core.content.ContextCompat
 import app.goke.R
 import app.goke.hotwater.HotWaterErrorCode
 import app.goke.hotwater.HotWaterPhase
+import app.goke.ui.FeedbackEvent
+import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
 import app.goke.ui.Route
@@ -72,6 +74,7 @@ private enum class HotWaterBindMode {
 @Composable
 fun HotWaterScreen(onBack: () -> Unit) {
     val app = LocalApp.current
+    val actions = LocalActions.current
     val nav = LocalNav.current
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -222,19 +225,21 @@ fun HotWaterScreen(onBack: () -> Unit) {
                             Button(
                                 onClick = {
                                     scope.launch {
-                                        when (bindMode) {
-                                            HotWaterBindMode.PASSWORD -> {
-                                                app.hotWater.loginWithPassword(phone.trim(), password)
-                                            }
+                                        val res =
+                                            when (bindMode) {
+                                                HotWaterBindMode.PASSWORD -> {
+                                                    app.hotWater.loginWithPassword(phone.trim(), password)
+                                                }
 
-                                            HotWaterBindMode.SMS -> {
-                                                app.hotWater.loginWithSms(phone.trim(), smsCode.trim())
-                                            }
+                                                HotWaterBindMode.SMS -> {
+                                                    app.hotWater.loginWithSms(phone.trim(), smsCode.trim())
+                                                }
 
-                                            HotWaterBindMode.USER_ID -> {
-                                                app.hotWater.bindWithUserId(userIdInput.trim(), uuidInput.trim())
+                                                HotWaterBindMode.USER_ID -> {
+                                                    app.hotWater.bindWithUserId(userIdInput.trim(), uuidInput.trim())
+                                                }
                                             }
-                                        }
+                                        if (res.ok) actions.feedback(FeedbackEvent.SUCCESS)
                                     }
                                 },
                                 enabled = !state.busy && canSubmit,
@@ -364,7 +369,13 @@ fun HotWaterScreen(onBack: () -> Unit) {
                             }
 
                             Button(
-                                onClick = { app.scope.launch { app.hotWater.toggleValve() } },
+                                onClick = {
+                                    app.scope.launch {
+                                        if (app.hotWater.toggleValve().ok) {
+                                            actions.feedback(FeedbackEvent.SUCCESS)
+                                        }
+                                    }
+                                },
                                 enabled = !isWorking,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
@@ -396,7 +407,13 @@ fun HotWaterScreen(onBack: () -> Unit) {
                             }
 
                             OutlinedButton(
-                                onClick = { app.scope.launch { app.hotWater.refreshStatusAndCheckArrears(probeBle = true) } },
+                                onClick = {
+                                    app.scope.launch {
+                                        if (app.hotWater.refreshStatusAndCheckArrears(probeBle = true).ok) {
+                                            actions.feedback(FeedbackEvent.SUCCESS)
+                                        }
+                                    }
+                                },
                                 enabled = !isWorking,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {

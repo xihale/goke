@@ -54,6 +54,7 @@ import app.goke.core.jxfw.JxfwGradeSummary
 import app.goke.core.jxfw.JxfwParse
 import app.goke.jxfw.JxfwException
 import app.goke.jxfw.JxfwGradesState
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
@@ -90,6 +91,7 @@ fun GradesScreen(onBack: () -> Unit) {
             app.jxfw
                 .refreshGrades()
                 .onSuccess { list ->
+                    actions.feedback(FeedbackEvent.SUCCESS)
                     actions.toast(ctx.getString(R.string.grades_refreshed_toast, list.size))
                 }
         }

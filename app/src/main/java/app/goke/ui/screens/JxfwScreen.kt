@@ -163,6 +163,7 @@ private fun LoginPanel(
     noticesState: JxfwNoticesState,
 ) {
     val app = LocalApp.current
+    val actions = LocalActions.current
     val nav = LocalNav.current
     var user by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -202,6 +203,7 @@ private fun LoginPanel(
                     try {
                         app.jxfw.login(user, password)
                         password = ""
+                        actions.feedback(FeedbackEvent.SUCCESS)
                     } catch (_: JxfwException) {
                         // 错误已写入状态并显示
                     } finally {
@@ -308,6 +310,7 @@ private fun AccountPanel(
                     scope.launch {
                         try {
                             app.jxfw.weeklySync()
+                            actions.feedback(FeedbackEvent.SUCCESS)
                         } catch (_: JxfwException) {
                             // 同上
                         }

@@ -54,6 +54,8 @@ import app.goke.core.campus.DropRelayLogic
 import app.goke.core.campus.ShareBrowseEntry
 import app.goke.droprelay.DropRelayErrorKind
 import app.goke.droprelay.DropRelayState
+import app.goke.ui.FeedbackEvent
+import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
 import app.goke.ui.Route
@@ -83,6 +85,7 @@ fun CampusResourcesScreen(
     onBack: () -> Unit,
 ) {
     val app = LocalApp.current
+    val actions = LocalActions.current
     val nav = LocalNav.current
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -128,7 +131,14 @@ fun CampusResourcesScreen(
         actions = {
             if (hasShare && selectedTab == 0) {
                 IconButton(
-                    onClick = { scope.launch { app.dropRelay.refreshIndex(force = true) } },
+                    onClick = {
+                        scope.launch {
+                            app.dropRelay.refreshIndex(force = true)
+                            if (app.dropRelay.state.value.indexError == null) {
+                                actions.feedback(FeedbackEvent.SUCCESS)
+                            }
+                        }
+                    },
                     enabled = !state.loadingIndex,
                 ) {
                     Icon(Icons.Rounded.Refresh, stringResource(R.string.droprelay_action_refresh))
@@ -171,7 +181,14 @@ fun CampusResourcesScreen(
                         onSearchQueryChange = { searchQuery = it },
                         currentDir = currentDir,
                         onNavigateDir = { currentDir = it },
-                        onRetry = { scope.launch { app.dropRelay.refreshIndex(force = true) } },
+                        onRetry = {
+                            scope.launch {
+                                app.dropRelay.refreshIndex(force = true)
+                                if (app.dropRelay.state.value.indexError == null) {
+                                    actions.feedback(FeedbackEvent.SUCCESS)
+                                }
+                            }
+                        },
                         onDownloadDirZip = { dir ->
                             val zipUrl = DropRelayLogic.dirZipUrl(shareUrl, dir.path)
                             val res = app.dropRelay.enqueueDownload(zipUrl, "${dir.name}.zip")

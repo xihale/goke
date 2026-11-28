@@ -67,6 +67,7 @@ import app.goke.core.model.Source
 import app.goke.core.time.WeekSets
 import app.goke.core.util.Ids
 import app.goke.jxfw.JxfwException
+import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.LocalNav
@@ -515,6 +516,7 @@ private fun JxfwSyncCard(sem: Semester) {
                         scope.launch {
                             try {
                                 app.jxfw.fullSync()
+                                actions.feedback(FeedbackEvent.SUCCESS)
                                 actions.toast(ctx.getString(R.string.jxfw_done_toast))
                             } catch (_: JxfwException) {
                                 // 错误已写入 state.lastError / lastErrorKind 并在卡片内联展示
