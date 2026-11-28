@@ -1145,12 +1145,15 @@ class ScreensSmokeTest {
         }
         rule.waitForIdle()
 
-        // 1. 距离较近（25 分钟）：线性分段（5/10/15/20 分钟后 + 开始时 + 自定义）
+        // 1. 主界面仅在底部展示「稍后提醒」与「完成」按钮，点击「稍后提醒」后展开线性分段面板
         rule.onNodeWithText(app.getString(R.string.notif_quick_snooze_title)).assertIsDisplayed()
-        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_minutes, 5)).assertIsDisplayed()
-        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_minutes, 10)).assertIsDisplayed()
-        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_minutes, 15)).assertIsDisplayed()
-        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_minutes, 20)).assertIsDisplayed()
+        shot("overlay_reminder_main")
+        rule.onNodeWithText(app.getString(R.string.notif_quick_snooze_title)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("5 m").assertIsDisplayed()
+        rule.onNodeWithText("10 m").assertIsDisplayed()
+        rule.onNodeWithText("15 m").assertIsDisplayed()
+        rule.onNodeWithText("20 m").assertIsDisplayed()
         shot("overlay_reminder_linear")
 
         try {
@@ -1178,7 +1181,7 @@ class ScreensSmokeTest {
                 .isNotEmpty(),
         )
 
-        // 3. 距离较远（6 小时）：指数分段（15分钟、30分钟、1小时、2小时、4小时）
+        // 3. 距离较远（6 小时）：点击「稍后提醒」后进入指数分段（15分钟、30分钟、1小时、2小时、4小时）
         dismissed = false
         rule.runOnIdle {
             target.value =
@@ -1194,10 +1197,12 @@ class ScreensSmokeTest {
                 )
         }
         rule.waitForIdle()
-        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_minutes, 15)).assertIsDisplayed()
-        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_hours, 1)).assertIsDisplayed()
-        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_hours, 4)).assertIsDisplayed()
-        rule.onNodeWithText(app.getString(R.string.notif_snooze_after_hours, 1)).performClick()
+        rule.onNodeWithText(app.getString(R.string.notif_quick_snooze_title)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("15 m").assertIsDisplayed()
+        rule.onNodeWithText("1 h").assertIsDisplayed()
+        rule.onNodeWithText("4 h").assertIsDisplayed()
+        rule.onNodeWithText("1 h").performClick()
         rule.waitUntil(5_000) { dismissed }
     }
 

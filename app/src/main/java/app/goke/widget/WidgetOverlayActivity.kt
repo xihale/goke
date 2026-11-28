@@ -13,6 +13,7 @@ import android.os.Looper
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
@@ -28,6 +29,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -62,8 +64,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -91,8 +95,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -141,7 +149,6 @@ import app.goke.notify.ReminderReceiver
 import app.goke.notify.SnoozeOption
 import app.goke.notify.SnoozePlan
 import app.goke.notify.SnoozePlanner
-import app.goke.notify.SnoozeScaleMode
 import app.goke.ui.FeedbackEvent
 import app.goke.ui.components.ChipPill
 import app.goke.ui.components.ConfirmDialog
@@ -160,6 +167,7 @@ import app.goke.ui.dueLabel
 import app.goke.ui.formatAllRooms
 import app.goke.ui.hm
 import app.goke.ui.icons.Alarm
+import app.goke.ui.icons.Bedtime
 import app.goke.ui.icons.ContentCopy
 import app.goke.ui.icons.DeleteOutline
 import app.goke.ui.icons.Flag
@@ -190,7 +198,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.temporal.ChronoUnit
 import android.graphics.Color as AndroidColor
 
 private val OverlayLeadW = 48.dp
@@ -1224,6 +1231,9 @@ private fun OverlayParcelCard(
     val due = task.due?.let { ctx.dueLabel(it, task.dueHasTime, today) }
     val overdue = task.due != null && task.due!!.isBefore(now)
     var whenPanel by remember { mutableStateOf(false) }
+    val canSnooze = reminder != null && !task.done
+    var snoozeOpen by remember(task.id, reminder?.notifId) { mutableStateOf(false) }
+    BackHandler(enabled = snoozeOpen && canSnooze) { snoozeOpen = false }
 
     val showNote =
         remember(task.note, code, place) {
@@ -1237,111 +1247,117 @@ private fun OverlayParcelCard(
         Toast.makeText(ctx, ctx.getString(R.string.parcel_code_copied, code), Toast.LENGTH_SHORT).show()
     }
 
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            code,
-            style = MaterialTheme.typography.headlineLarge.copy(fontSize = 28.sp, fontFeatureSettings = "tnum"),
-            fontWeight = FontWeight.Bold,
-            color = scheme.primary,
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .mintClickable(pressedScale = 0.98f, role = Role.Button) { copyCode() }
-                    .padding(vertical = 2.dp),
-        )
-        OverlayIconBtn(
-            icon = Icons.Rounded.ContentCopy,
-            contentDescription = stringResource(R.string.parcel_copy_code, code),
-            tint = scheme.primary,
-            iconSize = 20.dp,
-            onClick = { copyCode() },
-        )
-        OverlayIconBtn(
-            icon = Icons.Rounded.OpenInFull,
-            contentDescription = stringResource(R.string.widget_overlay_expand_app),
-            tint = scheme.onSurfaceVariant,
-            iconSize = 20.dp,
-            onClick = onExpand,
-        )
-    }
-
-    val extraLocation = task.extra["location"]?.trim().orEmpty()
-    Text(
-        place,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Medium,
-        color = scheme.onSurface,
-        modifier = Modifier.padding(top = 2.dp),
-    )
-    if (extraLocation.isNotEmpty() && !place.contains(extraLocation)) {
-        Text(
-            extraLocation,
-            style = MaterialTheme.typography.bodySmall,
-            color = scheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 2.dp),
-        )
-    }
-    if (due != null) {
-        Text(
-            due,
-            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
-            color = if (overdue) scheme.error else scheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 2.dp),
-        )
-    }
-    if (showNote) {
-        Text(
-            task.note.trim(),
-            style = MaterialTheme.typography.bodySmall,
-            color = scheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-    }
-
-    if (reminder != null && !task.done) {
-        Spacer(Modifier.height(10.dp))
-        QuickSnoozeSection(
+    if (snoozeOpen && reminder != null && !task.done) {
+        QuickSnoozePanel(
             snap = snap,
             task = task,
             reminder = reminder,
+            onBack = { snoozeOpen = false },
+            onReschedule = {
+                snoozeOpen = false
+                whenPanel = true
+            },
             onSnooze = onSnooze,
         )
-    }
-
-    Spacer(Modifier.height(16.dp))
-
-    val reschedInteraction = remember { MutableInteractionSource() }
-    val doneInteraction = remember { MutableInteractionSource() }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        FilledTonalButton(
-            onClick = { whenPanel = true },
-            interactionSource = reschedInteraction,
-            modifier = Modifier.weight(1f).heightIn(min = 48.dp).mintPressScale(reschedInteraction, 0.96f),
-            colors =
-                ButtonDefaults.filledTonalButtonColors(
-                    containerColor = scheme.surfaceContainerHighest,
-                    contentColor = scheme.onSurface,
-                ),
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Rounded.Schedule, null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(stringResource(R.string.widget_overlay_reschedule))
+            Text(
+                code,
+                style = MaterialTheme.typography.headlineLarge.copy(fontSize = 28.sp, fontFeatureSettings = "tnum"),
+                fontWeight = FontWeight.Bold,
+                color = scheme.primary,
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .mintClickable(pressedScale = 0.98f, role = Role.Button) { copyCode() }
+                        .padding(vertical = 2.dp),
+            )
+            OverlayIconBtn(
+                icon = Icons.Rounded.ContentCopy,
+                contentDescription = stringResource(R.string.parcel_copy_code, code),
+                tint = scheme.primary,
+                iconSize = 20.dp,
+                onClick = { copyCode() },
+            )
+            OverlayIconBtn(
+                icon = Icons.Rounded.OpenInFull,
+                contentDescription = stringResource(R.string.widget_overlay_expand_app),
+                tint = scheme.onSurfaceVariant,
+                iconSize = 20.dp,
+                onClick = onExpand,
+            )
         }
-        Button(
-            onClick = onMarkDone,
-            interactionSource = doneInteraction,
-            modifier = Modifier.weight(1f).heightIn(min = 48.dp).mintPressScale(doneInteraction, 0.96f),
+
+        val extraLocation = task.extra["location"]?.trim().orEmpty()
+        Text(
+            place,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Medium,
+            color = scheme.onSurface,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        if (extraLocation.isNotEmpty() && !place.contains(extraLocation)) {
+            Text(
+                extraLocation,
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        if (due != null) {
+            Text(
+                due,
+                style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                color = if (overdue) scheme.error else scheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        if (showNote) {
+            Text(
+                task.note.trim(),
+                style = MaterialTheme.typography.bodySmall,
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        val reschedInteraction = remember { MutableInteractionSource() }
+        val doneInteraction = remember { MutableInteractionSource() }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(stringResource(R.string.widget_overlay_parcel_done))
+            FilledTonalButton(
+                onClick = { if (canSnooze) snoozeOpen = true else whenPanel = true },
+                interactionSource = reschedInteraction,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp).mintPressScale(reschedInteraction, 0.96f),
+                colors =
+                    ButtonDefaults.filledTonalButtonColors(
+                        containerColor = scheme.surfaceContainerHighest,
+                        contentColor = scheme.onSurface,
+                    ),
+            ) {
+                Icon(if (canSnooze) Icons.Rounded.Alarm else Icons.Rounded.Schedule, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(if (canSnooze) R.string.notif_quick_snooze_title else R.string.widget_overlay_reschedule))
+            }
+            Button(
+                onClick = onMarkDone,
+                interactionSource = doneInteraction,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp).mintPressScale(doneInteraction, 0.96f),
+            ) {
+                Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(stringResource(R.string.widget_overlay_parcel_done))
+            }
         }
     }
 
@@ -1644,323 +1660,395 @@ private fun OverlayTaskCard(
                 }
         } == true
 
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        MintCheck(
-            checked = done,
-            onChange = { checked ->
-                done = checked
-                if (!isDirty && checked && !task.done) {
-                    onToggleDone(task, true, true)
-                }
-            },
-            tint = colors.priorityColor(priority),
-        )
-        Box(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .padding(vertical = 8.dp)
-                    .alpha(if (done) 0.45f else 1f),
-        ) {
-            BasicTextField(
-                value = title,
-                onValueChange = { title = it },
-                modifier = Modifier.fillMaxWidth(),
-                textStyle =
-                    MaterialTheme.typography.titleLarge.copy(
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = scheme.onSurface,
-                        textDecoration = if (done) TextDecoration.LineThrough else TextDecoration.None,
-                    ),
-                cursorBrush = SolidColor(scheme.primary),
-                maxLines = 3,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { saveAndMaybe(closeAfter = true) }),
-            )
-            if (title.isEmpty()) {
-                Text(
-                    stringResource(R.string.quick_add_prompt),
-                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Normal),
-                    color = scheme.onSurfaceVariant,
-                    modifier = Modifier.clearAndSetSemantics {},
-                )
-            }
-        }
-        if (task.isExam) {
-            Spacer(Modifier.width(8.dp))
-            Tag(
-                stringResource(R.string.kind_exam),
-                scheme.tertiaryContainer,
-                scheme.onTertiaryContainer,
-            )
-        }
-    }
+    val canSnooze = reminder != null && !done
+    var snoozeOpen by remember(task.id, reminder?.notifId) { mutableStateOf(false) }
+    BackHandler(enabled = snoozeOpen && canSnooze) { snoozeOpen = false }
 
-    if (reminder != null && !done) {
-        QuickSnoozeSection(
+    if (snoozeOpen && reminder != null && !done) {
+        QuickSnoozePanel(
             snap = snap,
             task = task,
             reminder = reminder,
+            onBack = { snoozeOpen = false },
             onSnooze = onSnooze,
         )
-    }
-
-    OverlayFieldRow(
-        icon = Icons.Rounded.Schedule,
-        iconTint =
-            when {
-                overdue -> scheme.error
-                hasWhenInfo -> scheme.primary
-                else -> scheme.onSurfaceVariant.copy(alpha = 0.7f)
-            },
-        onClick = { whenPanel = true },
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                whenPrimary,
-                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
-                fontWeight = if (hasWhenInfo) FontWeight.Medium else FontWeight.Normal,
-                color =
-                    when {
-                        overdue -> scheme.error
-                        hasWhenInfo -> scheme.primary
-                        else -> scheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    },
+    } else {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            MintCheck(
+                checked = done,
+                onChange = { checked ->
+                    done = checked
+                    if (!isDirty && checked && !task.done) {
+                        onToggleDone(task, true, true)
+                    }
+                },
+                tint = colors.priorityColor(priority),
             )
-            if (whenSecondary != null) {
-                Text(
-                    whenSecondary,
-                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
-                    color = scheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-
-    val locationHint = stringResource(R.string.field_location)
-    OverlayFieldRow(
-        icon = Icons.Rounded.Place,
-        iconTint = if (location.isNotBlank()) scheme.onSurfaceVariant else scheme.onSurfaceVariant.copy(alpha = 0.6f),
-    ) {
-        Box(modifier = Modifier.weight(1f)) {
-            BasicTextField(
-                value = location,
-                onValueChange = { location = it },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = locationHint },
-                textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurface),
-                cursorBrush = SolidColor(scheme.primary),
-            )
-            if (location.isEmpty()) {
-                Text(
-                    locationHint,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.clearAndSetSemantics {},
-                )
-            }
-        }
-    }
-
-    val noteHint = stringResource(R.string.label_note)
-    OverlayFieldRow(
-        icon = Icons.Rounded.Notes,
-        iconTint = if (note.isNotBlank()) scheme.onSurfaceVariant else scheme.onSurfaceVariant.copy(alpha = 0.6f),
-        alignTop = true,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .heightIn(max = 160.dp)
-                    .verticalScroll(rememberScrollState()),
-        ) {
-            BasicTextField(
-                value = note,
-                onValueChange = { note = it },
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = noteHint },
-                textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurfaceVariant),
-                cursorBrush = SolidColor(scheme.primary),
-            )
-            if (note.isEmpty()) {
-                Text(
-                    noteHint,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.clearAndSetSemantics {},
-                )
-            }
-        }
-    }
-
-    var prioMenu by remember { mutableStateOf(false) }
-    val noFocusPopup = rememberNoFocusPopup()
-    val prioOptions = listOf(3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1, 0 to R.string.priority_0)
-    Box {
-        OverlayFieldRow(
-            icon = Icons.Rounded.Flag,
-            iconTint = colors.priorityColor(priority) ?: scheme.onSurfaceVariant.copy(alpha = 0.6f),
-            onClick = { prioMenu = true },
-        ) {
-            Text(
-                if (priority > 0) stringResource(prioOptions.first { it.first == priority }.second) else stringResource(R.string.label_priority),
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (priority > 0) scheme.onSurface else scheme.onSurfaceVariant.copy(alpha = 0.7f),
-                maxLines = 1,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        DropdownMenu(prioMenu, { prioMenu = false }, offset = DpOffset(OverlayLeadW, 0.dp), properties = noFocusPopup) {
-            prioOptions.forEach { (v, label) ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(label)) },
-                    leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = colors.priorityColor(v) ?: scheme.onSurfaceVariant) },
-                    trailingIcon = if (v == priority) ({ Icon(Icons.Rounded.Check, null, tint = scheme.primary, modifier = Modifier.size(18.dp)) }) else null,
-                    onClick = {
-                        priority = v
-                        prioMenu = false
-                    },
-                )
-            }
-        }
-    }
-
-    if (snap.lists.isNotEmpty()) {
-        OverlayFieldRow(
-            icon = Icons.Rounded.Inbox,
-            iconTint = if (listName != null) scheme.primary else scheme.onSurfaceVariant.copy(alpha = 0.7f),
-            onClick = { listPanel = !listPanel },
-        ) {
-            Text(
-                listName?.let { "#$it" } ?: stringResource(R.string.label_list),
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (listName != null) scheme.primary else scheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-        }
-
-        AnimatedVisibility(
-            visible = listPanel,
-            enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
-            exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
-        ) {
-            FlowRow(
+            Box(
                 modifier =
                     Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 132.dp)
-                        .verticalScroll(rememberScrollState())
-                        .padding(start = OverlayLeadW, bottom = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                        .weight(1f)
+                        .padding(vertical = 8.dp)
+                        .alpha(if (done) 0.45f else 1f),
             ) {
-                ChipPill(stringResource(R.string.widget_overlay_no_list), on = listId == null) {
-                    listId = null
-                    listPanel = false
+                BasicTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle =
+                        MaterialTheme.typography.titleLarge.copy(
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = scheme.onSurface,
+                            textDecoration = if (done) TextDecoration.LineThrough else TextDecoration.None,
+                        ),
+                    cursorBrush = SolidColor(scheme.primary),
+                    maxLines = 3,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { saveAndMaybe(closeAfter = true) }),
+                )
+                if (title.isEmpty()) {
+                    Text(
+                        stringResource(R.string.quick_add_prompt),
+                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Normal),
+                        color = scheme.onSurfaceVariant,
+                        modifier = Modifier.clearAndSetSemantics {},
+                    )
                 }
-                snap.lists.sortedBy { it.sort }.forEach { l ->
-                    ChipPill("#${l.name}", on = listId == l.id) {
-                        listId = l.id
+            }
+            if (task.isExam) {
+                Spacer(Modifier.width(8.dp))
+                Tag(
+                    stringResource(R.string.kind_exam),
+                    scheme.tertiaryContainer,
+                    scheme.onTertiaryContainer,
+                )
+            }
+            if (canSnooze) {
+                OverlayIconBtn(
+                    icon = Icons.Rounded.DeleteOutline,
+                    contentDescription = stringResource(R.string.delete),
+                    tint = scheme.onSurfaceVariant,
+                    iconSize = 19.dp,
+                    onClick = onDelete,
+                )
+                OverlayIconBtn(
+                    icon = Icons.Rounded.OpenInFull,
+                    contentDescription = stringResource(R.string.widget_overlay_expand_app),
+                    tint = scheme.onSurfaceVariant,
+                    iconSize = 19.dp,
+                    onClick = { saveAndMaybe(closeAfter = false, thenOpenUri = DeepLinks.taskUri(task.id)) },
+                )
+            }
+        }
+
+        OverlayFieldRow(
+            icon = Icons.Rounded.Schedule,
+            iconTint =
+                when {
+                    overdue -> scheme.error
+                    hasWhenInfo -> scheme.primary
+                    else -> scheme.onSurfaceVariant.copy(alpha = 0.7f)
+                },
+            onClick = { whenPanel = true },
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    whenPrimary,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                    fontWeight = if (hasWhenInfo) FontWeight.Medium else FontWeight.Normal,
+                    color =
+                        when {
+                            overdue -> scheme.error
+                            hasWhenInfo -> scheme.primary
+                            else -> scheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        },
+                )
+                if (whenSecondary != null) {
+                    Text(
+                        whenSecondary,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        val locationHint = stringResource(R.string.field_location)
+        OverlayFieldRow(
+            icon = Icons.Rounded.Place,
+            iconTint = if (location.isNotBlank()) scheme.onSurfaceVariant else scheme.onSurfaceVariant.copy(alpha = 0.6f),
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                BasicTextField(
+                    value = location,
+                    onValueChange = { location = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = locationHint },
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurface),
+                    cursorBrush = SolidColor(scheme.primary),
+                )
+                if (location.isEmpty()) {
+                    Text(
+                        locationHint,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.clearAndSetSemantics {},
+                    )
+                }
+            }
+        }
+
+        val noteHint = stringResource(R.string.label_note)
+        OverlayFieldRow(
+            icon = Icons.Rounded.Notes,
+            iconTint = if (note.isNotBlank()) scheme.onSurfaceVariant else scheme.onSurfaceVariant.copy(alpha = 0.6f),
+            alignTop = true,
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .heightIn(max = 160.dp)
+                        .verticalScroll(rememberScrollState()),
+            ) {
+                BasicTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = noteHint },
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = scheme.onSurfaceVariant),
+                    cursorBrush = SolidColor(scheme.primary),
+                )
+                if (note.isEmpty()) {
+                    Text(
+                        noteHint,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.clearAndSetSemantics {},
+                    )
+                }
+            }
+        }
+
+        var prioMenu by remember { mutableStateOf(false) }
+        val noFocusPopup = rememberNoFocusPopup()
+        val prioOptions = listOf(3 to R.string.priority_3, 2 to R.string.priority_2, 1 to R.string.priority_1, 0 to R.string.priority_0)
+        Box {
+            OverlayFieldRow(
+                icon = Icons.Rounded.Flag,
+                iconTint = colors.priorityColor(priority) ?: scheme.onSurfaceVariant.copy(alpha = 0.6f),
+                onClick = { prioMenu = true },
+            ) {
+                Text(
+                    if (priority > 0) stringResource(prioOptions.first { it.first == priority }.second) else stringResource(R.string.label_priority),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (priority > 0) scheme.onSurface else scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            DropdownMenu(prioMenu, { prioMenu = false }, offset = DpOffset(OverlayLeadW, 0.dp), properties = noFocusPopup) {
+                prioOptions.forEach { (v, label) ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(label)) },
+                        leadingIcon = { Icon(Icons.Rounded.Flag, null, tint = colors.priorityColor(v) ?: scheme.onSurfaceVariant) },
+                        trailingIcon = if (v == priority) ({ Icon(Icons.Rounded.Check, null, tint = scheme.primary, modifier = Modifier.size(18.dp)) }) else null,
+                        onClick = {
+                            priority = v
+                            prioMenu = false
+                        },
+                    )
+                }
+            }
+        }
+
+        if (snap.lists.isNotEmpty()) {
+            OverlayFieldRow(
+                icon = Icons.Rounded.Inbox,
+                iconTint = if (listName != null) scheme.primary else scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                onClick = { listPanel = !listPanel },
+            ) {
+                Text(
+                    listName?.let { "#$it" } ?: stringResource(R.string.label_list),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (listName != null) scheme.primary else scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            AnimatedVisibility(
+                visible = listPanel,
+                enter = expandVertically(MintTheme.spec()) + fadeIn(MintTheme.spec()),
+                exit = shrinkVertically(MintTheme.spec()) + fadeOut(MintTheme.spec()),
+            ) {
+                FlowRow(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 132.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(start = OverlayLeadW, bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ChipPill(stringResource(R.string.widget_overlay_no_list), on = listId == null) {
+                        listId = null
                         listPanel = false
+                    }
+                    snap.lists.sortedBy { it.sort }.forEach { l ->
+                        ChipPill("#${l.name}", on = listId == l.id) {
+                            listId = l.id
+                            listPanel = false
+                        }
                     }
                 }
             }
         }
-    }
 
-    if (course != null) {
-        OverlayFieldRow(
-            icon = null,
-            iconTint = Color.Unspecified,
-            lead = {
-                Box(
-                    Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(colors.fg(course.colorIndex)),
-                )
-            },
-        ) {
-            Text(
-                course.name,
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-
-    if (subtasks.isNotEmpty()) {
-        Text(
-            stringResource(R.string.widget_overlay_subtasks),
-            style = MaterialTheme.typography.labelMedium,
-            color = scheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = OverlayLeadW, top = 8.dp, bottom = 2.dp),
-        )
-        subtasks.forEach { sub ->
-            Row(
-                Modifier.fillMaxWidth().alpha(if (sub.done) 0.45f else 1f),
-                verticalAlignment = Alignment.CenterVertically,
+        if (course != null) {
+            OverlayFieldRow(
+                icon = null,
+                iconTint = Color.Unspecified,
+                lead = {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(colors.fg(course.colorIndex)),
+                    )
+                },
             ) {
-                MintCheck(
-                    checked = sub.done,
-                    onChange = { onToggleDone(sub, it, false) },
-                    tint = colors.priorityColor(sub.priority),
-                )
                 Text(
-                    sub.title,
+                    course.name,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = scheme.onSurface,
-                    textDecoration = if (sub.done) TextDecoration.LineThrough else TextDecoration.None,
+                    color = scheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
             }
         }
-    }
 
-    Spacer(Modifier.height(12.dp))
-
-    val primaryInteraction = remember { MutableInteractionSource() }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        OverlayIconBtn(
-            icon = Icons.Rounded.DeleteOutline,
-            contentDescription = stringResource(R.string.delete),
-            tint = scheme.error,
-            iconSize = 20.dp,
-            onClick = onDelete,
-        )
-        Spacer(Modifier.weight(1f))
-        OverlayIconBtn(
-            icon = Icons.Rounded.OpenInFull,
-            contentDescription = stringResource(R.string.widget_overlay_expand_app),
-            tint = scheme.onSurfaceVariant,
-            iconSize = 20.dp,
-            onClick = { saveAndMaybe(closeAfter = false, thenOpenUri = DeepLinks.taskUri(task.id)) },
-        )
-        AnimatedVisibility(
-            visible = isDirty,
-            enter = fadeIn(MintTheme.spec()) + expandHorizontally(MintTheme.spec()),
-            exit = fadeOut(MintTheme.spec()) + shrinkHorizontally(MintTheme.spec()),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Spacer(Modifier.width(6.dp))
-                val canSave = title.trim().isNotEmpty()
-                Button(
-                    onClick = { saveAndMaybe(closeAfter = true) },
-                    enabled = canSave,
-                    interactionSource = primaryInteraction,
-                    modifier = Modifier.heightIn(min = 44.dp).mintPressScale(primaryInteraction, 0.96f, enabled = canSave),
+        if (subtasks.isNotEmpty()) {
+            Text(
+                stringResource(R.string.widget_overlay_subtasks),
+                style = MaterialTheme.typography.labelMedium,
+                color = scheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = OverlayLeadW, top = 8.dp, bottom = 2.dp),
+            )
+            subtasks.forEach { sub ->
+                Row(
+                    Modifier.fillMaxWidth().alpha(if (sub.done) 0.45f else 1f),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(stringResource(R.string.save))
+                    MintCheck(
+                        checked = sub.done,
+                        onChange = { onToggleDone(sub, it, false) },
+                        tint = colors.priorityColor(sub.priority),
+                    )
+                    Text(
+                        sub.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurface,
+                        textDecoration = if (sub.done) TextDecoration.LineThrough else TextDecoration.None,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        val primaryInteraction = remember { MutableInteractionSource() }
+        if (canSnooze) {
+            val snoozeInteraction = remember { MutableInteractionSource() }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                FilledTonalButton(
+                    onClick = { snoozeOpen = true },
+                    interactionSource = snoozeInteraction,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp).mintPressScale(snoozeInteraction, 0.96f),
+                    colors =
+                        ButtonDefaults.filledTonalButtonColors(
+                            containerColor = scheme.surfaceContainerHighest,
+                            contentColor = scheme.onSurface,
+                        ),
+                ) {
+                    Text(stringResource(R.string.notif_quick_snooze_title))
+                }
+                if (isDirty) {
+                    val canSave = title.trim().isNotEmpty()
+                    Button(
+                        onClick = { saveAndMaybe(closeAfter = true) },
+                        enabled = canSave,
+                        interactionSource = primaryInteraction,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp).mintPressScale(primaryInteraction, 0.96f, enabled = canSave),
+                    ) {
+                        Text(stringResource(R.string.save))
+                    }
+                } else {
+                    FilledTonalButton(
+                        onClick = {
+                            done = true
+                            onToggleDone(task, true, true)
+                        },
+                        interactionSource = primaryInteraction,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp).mintPressScale(primaryInteraction, 0.96f),
+                        colors =
+                            ButtonDefaults.filledTonalButtonColors(
+                                containerColor = scheme.primaryContainer,
+                                contentColor = scheme.onPrimaryContainer,
+                            ),
+                    ) {
+                        Text(stringResource(R.string.notif_action_done))
+                    }
+                }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                OverlayIconBtn(
+                    icon = Icons.Rounded.DeleteOutline,
+                    contentDescription = stringResource(R.string.delete),
+                    tint = scheme.error,
+                    iconSize = 20.dp,
+                    onClick = onDelete,
+                )
+                Spacer(Modifier.weight(1f))
+                OverlayIconBtn(
+                    icon = Icons.Rounded.OpenInFull,
+                    contentDescription = stringResource(R.string.widget_overlay_expand_app),
+                    tint = scheme.onSurfaceVariant,
+                    iconSize = 20.dp,
+                    onClick = { saveAndMaybe(closeAfter = false, thenOpenUri = DeepLinks.taskUri(task.id)) },
+                )
+                AnimatedVisibility(
+                    visible = isDirty,
+                    enter = fadeIn(MintTheme.spec()) + expandHorizontally(MintTheme.spec()),
+                    exit = fadeOut(MintTheme.spec()) + shrinkHorizontally(MintTheme.spec()),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(Modifier.width(6.dp))
+                        val canSave = title.trim().isNotEmpty()
+                        Button(
+                            onClick = { saveAndMaybe(closeAfter = true) },
+                            enabled = canSave,
+                            interactionSource = primaryInteraction,
+                            modifier = Modifier.heightIn(min = 44.dp).mintPressScale(primaryInteraction, 0.96f, enabled = canSave),
+                        ) {
+                            Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.save))
+                        }
+                    }
                 }
             }
         }
@@ -1995,12 +2083,13 @@ private fun OverlayTaskCard(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun QuickSnoozeSection(
+private fun QuickSnoozePanel(
     snap: Snapshot,
     task: Task,
     reminder: ReminderOverlayContext,
+    onBack: () -> Unit,
+    onReschedule: (() -> Unit)? = null,
     onSnooze: (LocalDateTime, LocalDateTime?) -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -2021,83 +2110,124 @@ private fun QuickSnoozeSection(
 
     val customMinutes = customText.toIntOrNull()
     val customValid = customMinutes != null && customMinutes in 1..SnoozePlanner.MAX_CUSTOM_MINUTES
-
-    val modeCaption =
-        when (plan.mode) {
-            SnoozeScaleMode.LINEAR -> {
-                val span = formatSnoozeSpan(ctx, plan.remainingMinutes ?: 1)
-                stringResource(R.string.notif_snooze_mode_linear, span)
-            }
-
-            SnoozeScaleMode.EXPONENTIAL -> {
-                val span = formatSnoozeSpan(ctx, plan.remainingMinutes ?: 1)
-                stringResource(R.string.notif_snooze_mode_exp, span)
-            }
-
-            SnoozeScaleMode.STANDARD -> {
-                if (plan.targetAt != null) {
-                    stringResource(R.string.notif_snooze_mode_past)
-                } else {
-                    stringResource(R.string.notif_snooze_mode_standard)
-                }
-            }
+    val totalItems = plan.options.size + 1
+    val cols =
+        when {
+            totalItems <= 4 -> totalItems
+            totalItems <= 6 -> 3
+            else -> 4
         }
 
-    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-        OverlayFieldRow(
-            icon = Icons.Rounded.Alarm,
-            iconTint = scheme.primary,
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
         ) {
+            Box(modifier = Modifier.align(Alignment.CenterStart)) {
+                OverlayIconBtn(
+                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = stringResource(R.string.back),
+                    tint = scheme.onSurfaceVariant,
+                    iconSize = 22.dp,
+                    onClick = onBack,
+                )
+            }
             Text(
                 stringResource(R.string.notif_quick_snooze_title),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = scheme.primary,
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                modeCaption,
-                style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
-                color = scheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = scheme.onSurface,
+                modifier = Modifier.align(Alignment.Center),
             )
         }
 
-        FlowRow(
-            modifier = Modifier.fillMaxWidth().padding(start = OverlayLeadW, top = 2.dp, bottom = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        val items: List<SnoozeOption?> = plan.options + listOf<SnoozeOption?>(null)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            plan.options.forEach { opt ->
-                val label = formatSnoozeOptionLabel(opt)
-                val desc = "$label（${ctx.dueLabel(opt.triggerAt, true, today)}）"
-                ChipPill(
-                    label = label,
-                    on = false,
-                    role = Role.Button,
-                    modifier = Modifier.semantics { contentDescription = desc },
+            items.chunked(cols).forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    val liveNow = LocalDateTime.now()
-                    val fireAt =
-                        when {
-                            opt.isAtTarget || opt.isTomorrowMorning -> {
-                                if (opt.triggerAt.isAfter(liveNow)) opt.triggerAt else liveNow.plusMinutes(1)
+                    rowItems.forEach { opt ->
+                        if (opt == null) {
+                            SnoozeGridTile(
+                                label = stringResource(R.string.detail_editor_remind_custom),
+                                selected = customOpen,
+                                modifier = Modifier.weight(1f),
+                                onClick = { customOpen = !customOpen },
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Edit,
+                                    contentDescription = null,
+                                    tint = scheme.primary,
+                                    modifier = Modifier.size(26.dp),
+                                )
                             }
+                        } else {
+                            val a11yLabel = formatSnoozeOptionLabel(opt)
+                            val subLabel =
+                                if (opt.isTomorrowMorning) {
+                                    a11yLabel
+                                } else {
+                                    formatSnoozeSubLabel(ctx, opt, today)
+                                }
+                            val desc = "$a11yLabel（${ctx.dueLabel(opt.triggerAt, true, today)}）"
+                            SnoozeGridTile(
+                                label = subLabel,
+                                contentDescription = desc,
+                                modifier = Modifier.weight(1f),
+                                onClick = {
+                                    val liveNow = LocalDateTime.now()
+                                    val fireAt =
+                                        when {
+                                            opt.isAtTarget || opt.isTomorrowMorning -> {
+                                                if (opt.triggerAt.isAfter(liveNow)) opt.triggerAt else liveNow.plusMinutes(1)
+                                            }
 
-                            else -> {
-                                liveNow.plusMinutes(opt.delayMinutes.toLong())
+                                            else -> {
+                                                liveNow.plusMinutes(opt.delayMinutes.toLong())
+                                            }
+                                        }
+                                    onSnooze(fireAt, targetAt)
+                                },
+                            ) {
+                                when {
+                                    opt.isAtTarget -> {
+                                        Icon(
+                                            Icons.Rounded.Alarm,
+                                            contentDescription = null,
+                                            tint = scheme.primary,
+                                            modifier = Modifier.size(28.dp),
+                                        )
+                                    }
+
+                                    opt.isTomorrowMorning -> {
+                                        Icon(
+                                            Icons.Rounded.Bedtime,
+                                            contentDescription = null,
+                                            tint = scheme.primary,
+                                            modifier = Modifier.size(28.dp),
+                                        )
+                                    }
+
+                                    else -> {
+                                        SnoozeClockBadge(
+                                            text = formatSnoozeShortBadge(opt),
+                                            tint = scheme.primary,
+                                        )
+                                    }
+                                }
                             }
                         }
-                    onSnooze(fireAt, targetAt)
+                    }
+                    repeat(cols - rowItems.size) {
+                        Spacer(Modifier.weight(1f))
+                    }
                 }
-            }
-            ChipPill(
-                label = stringResource(R.string.detail_editor_remind_custom),
-                on = customOpen,
-                role = Role.Button,
-            ) {
-                customOpen = !customOpen
             }
         }
 
@@ -2109,21 +2239,15 @@ private fun QuickSnoozeSection(
             val previewText =
                 if (customValid) {
                     val previewAt = openedAt.plusMinutes(customMinutes.toLong())
-                    val whenStr = ctx.dueLabel(previewAt, true, today)
-                    val remainAfter = targetAt?.let { ChronoUnit.MINUTES.between(previewAt, it).toInt() }
-                    if (remainAfter != null && remainAfter > 0) {
-                        stringResource(R.string.notif_snooze_preview_before_start, whenStr, formatSnoozeSpan(ctx, remainAfter))
-                    } else {
-                        stringResource(R.string.notif_snooze_preview, whenStr)
-                    }
+                    stringResource(R.string.notif_snooze_preview, ctx.dueLabel(previewAt, true, today))
                 } else if (customText.isNotEmpty()) {
                     stringResource(R.string.notif_snooze_custom_invalid, SnoozePlanner.MAX_CUSTOM_MINUTES)
                 } else {
-                    stringResource(R.string.notif_snooze_custom_hint, SnoozePlanner.MAX_CUSTOM_MINUTES)
+                    null
                 }
 
             Column(
-                modifier = Modifier.fillMaxWidth().padding(start = OverlayLeadW, top = 6.dp, bottom = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 TonalField(
@@ -2174,11 +2298,20 @@ private fun QuickSnoozeSection(
             }
         }
 
-        HorizontalDivider(
-            modifier = Modifier.padding(top = 8.dp),
-            thickness = 0.5.dp,
-            color = scheme.outlineVariant.copy(alpha = 0.45f),
-        )
+        if (onReschedule != null) {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                TextButton(onClick = onReschedule) {
+                    Text(
+                        stringResource(R.string.widget_overlay_reschedule),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = scheme.primary,
+                    )
+                }
+            }
+        }
     }
 
     if (timeDialOpen) {
@@ -2196,6 +2329,139 @@ private fun QuickSnoozeSection(
 }
 
 @Composable
+private fun SnoozeGridTile(
+    label: String,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    contentDescription: String? = null,
+    onClick: () -> Unit,
+    badge: @Composable () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Column(
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(if (selected) scheme.primaryContainer.copy(alpha = 0.45f) else Color.Transparent)
+                .let { mod ->
+                    if (contentDescription != null) {
+                        mod.semantics { this.contentDescription = contentDescription }
+                    } else {
+                        mod
+                    }
+                }.mintClickable(pressedScale = 0.94f, role = Role.Button, onClick = onClick)
+                .padding(vertical = 10.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            modifier = Modifier.height(38.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            badge()
+        }
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            color = if (selected) scheme.primary else scheme.onSurfaceVariant,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun SnoozeClockBadge(
+    text: String,
+    tint: Color,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        Canvas(modifier = Modifier.size(width = 30.dp, height = 16.dp)) {
+            val stroke = 2.dp.toPx()
+            val radius = (size.width - stroke * 3f) / 2f
+            val cx = size.width / 2f
+            val cy = radius + stroke
+            drawArc(
+                color = tint,
+                startAngle = 188f,
+                sweepAngle = 164f,
+                useCenter = false,
+                topLeft = Offset(cx - radius, cy - radius),
+                size = Size(radius * 2f, radius * 2f),
+                style = Stroke(width = stroke, cap = StrokeCap.Round),
+            )
+            // Clockwise arrowhead at the right end of the arc (~352°)
+            val endRad = Math.toRadians(352.0)
+            val tipX = cx + (radius * kotlin.math.cos(endRad)).toFloat()
+            val tipY = cy + (radius * kotlin.math.sin(endRad)).toFloat()
+            val headLen = 3.6.dp.toPx()
+            drawLine(
+                color = tint,
+                start = Offset(tipX, tipY),
+                end = Offset(tipX - headLen * 0.95f, tipY - headLen * 0.25f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = tint,
+                start = Offset(tipX, tipY),
+                end = Offset(tipX + headLen * 0.25f, tipY - headLen * 0.95f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            // Tiny clock hands inside the arc
+            val handBaseY = cy - 1.5.dp.toPx()
+            drawLine(
+                color = tint,
+                start = Offset(cx, handBaseY),
+                end = Offset(cx, handBaseY - 4.8.dp.toPx()),
+                strokeWidth = stroke * 0.9f,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = tint,
+                start = Offset(cx, handBaseY),
+                end = Offset(cx + 3.2.dp.toPx(), handBaseY),
+                strokeWidth = stroke * 0.9f,
+                cap = StrokeCap.Round,
+            )
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, lineHeight = 16.sp, fontFeatureSettings = "tnum"),
+            fontWeight = FontWeight.SemiBold,
+            color = tint,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
+}
+
+private fun formatSnoozeShortBadge(opt: SnoozeOption): String =
+    when {
+        opt.delayMinutes < 60 -> "${opt.delayMinutes} m"
+        opt.delayMinutes % 1440 == 0 -> "${opt.delayMinutes / 1440} d"
+        opt.delayMinutes % 60 == 0 -> "${opt.delayMinutes / 60} h"
+        else -> "${opt.delayMinutes} m"
+    }
+
+private fun formatSnoozeSubLabel(
+    ctx: Context,
+    opt: SnoozeOption,
+    today: LocalDate,
+): String =
+    if (opt.triggerAt.toLocalDate() == today) {
+        opt.triggerAt.hm()
+    } else {
+        ctx.dueLabel(opt.triggerAt, true, today)
+    }
+
+@Composable
 private fun formatSnoozeOptionLabel(opt: SnoozeOption): String =
     when {
         opt.isAtTarget -> stringResource(R.string.notif_snooze_at_target, opt.triggerAt.hm())
@@ -2204,28 +2470,6 @@ private fun formatSnoozeOptionLabel(opt: SnoozeOption): String =
         opt.delayMinutes % 1440 == 0 -> stringResource(R.string.notif_snooze_after_days, opt.delayMinutes / 1440)
         opt.delayMinutes % 60 == 0 -> stringResource(R.string.notif_snooze_after_hours, opt.delayMinutes / 60)
         else -> stringResource(R.string.notif_snooze_after_minutes, opt.delayMinutes)
-    }
-
-private fun formatSnoozeSpan(
-    ctx: Context,
-    minutes: Int,
-): String =
-    when {
-        minutes < 60 -> {
-            ctx.getString(R.string.dur_min, minutes)
-        }
-
-        minutes < 1440 -> {
-            val h = minutes / 60
-            val m = minutes % 60
-            if (m == 0) ctx.getString(R.string.dur_h, h) else ctx.getString(R.string.dur_h_m, h, m)
-        }
-
-        else -> {
-            val d = minutes / 1440
-            val h = (minutes % 1440) / 60
-            if (h == 0) ctx.getString(R.string.notif_snooze_span_days, d) else ctx.getString(R.string.notif_snooze_span_days_hours, d, h)
-        }
     }
 
 @Composable
