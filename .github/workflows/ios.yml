@@ -19,13 +19,15 @@ concurrency:
 jobs:
   ios:
     runs-on: macos-26
+    env:
+      ADAPTERS_SSH_KEY: ${{ secrets.ADAPTERS_SSH_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Checkout private adapters (optional)
-        if: ${{ secrets.ADAPTERS_SSH_KEY != '' }}
+        if: ${{ env.ADAPTERS_SSH_KEY != '' }}
         uses: actions/checkout@v4
         with:
           repository: xihale/goke-adapters
