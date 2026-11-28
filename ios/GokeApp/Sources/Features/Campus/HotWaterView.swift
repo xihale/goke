@@ -687,26 +687,42 @@ public struct HotWaterView: View {
     }
 
     private func errorBanner(code: HotWaterErrorCode, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(theme.error)
-                .font(.subheadline)
-            Text(HotWaterUIFormat.errorMessage(code: code, detail: detail))
-                .font(.subheadline)
-                .foregroundStyle(theme.error)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 4)
-            Button {
-                dismissedErrorKey = currentErrorKey
-            } label: {
-                Image(systemName: "xmark.circle.fill")
+        let message = HotWaterUIFormat.errorMessage(code: code, detail: detail)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(theme.error)
                     .font(.subheadline)
-                    .foregroundStyle(theme.muted)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(theme.error)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                Button {
+                    dismissedErrorKey = currentErrorKey
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(theme.muted)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.mintCompact)
+                .accessibilityLabel("关闭错误提示")
             }
-            .buttonStyle(.mintCompact)
-            .accessibilityLabel("关闭错误提示")
+            if code == .networkError || code == .bleError {
+                Button {
+                    #if canImport(UIKit)
+                    UIPasteboard.general.string = "\(message) [\(code.rawValue):\(detail)]"
+                    #endif
+                    actions.showToast(message: "已复制报错信息，可粘贴发给开发者")
+                } label: {
+                    Label("复制报错信息", systemImage: "doc.on.doc")
+                        .font(.caption.weight(.medium))
+                }
+                .buttonStyle(.mintCompact)
+            }
         }
         .padding(10)
         .background(theme.errorContainer, in: RoundedRectangle(cornerRadius: GokeRadius.sm, style: .continuous))

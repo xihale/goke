@@ -331,6 +331,13 @@ open class GokeApp : Application() {
                 errors.record(tag, throwable)
             }
 
+            override fun recordBreadcrumb(
+                tag: String,
+                message: String,
+            ) {
+                errors.breadcrumb(tag, message)
+            }
+
             override fun postWeeklyJxfwNotification(
                 title: String,
                 body: String,

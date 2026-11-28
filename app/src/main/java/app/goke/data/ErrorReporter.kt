@@ -1,6 +1,8 @@
 package app.goke.data
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import app.goke.BuildConfig
 import kotlinx.coroutines.CancellationException
@@ -40,6 +42,8 @@ class ErrorReporter(
     private val json = Json { ignoreUnknownKeys = true }
     private val listSerializer = ListSerializer(ErrorReport.serializer())
     private var reportFile: File? = null
+    private var appContext: Context? = null
+    private val breadcrumbs = ArrayDeque<String>(MAX_BREADCRUMBS)
 
     private val _reports = MutableStateFlow<List<ErrorReport>>(emptyList())
     val reports: StateFlow<List<ErrorReport>> = _reports.asStateFlow()
@@ -56,12 +60,26 @@ class ErrorReporter(
         val appCtx = context.applicationContext ?: context
         val file = File(appCtx.filesDir, FILE_NAME)
         synchronized(lock) {
+            appContext = appCtx
             reportFile = file
             val loaded = readLocked(file)
             _reports.value = loaded
             _pendingModal.value = loaded.firstOrNull { !it.acknowledged }
         }
         installUncaughtHandler()
+    }
+
+    /** 记录脱敏的运行步骤面包屑，异常上报时附带最近轨迹以便排查。 */
+    fun breadcrumb(
+        tag: String,
+        message: String,
+    ) {
+        val time = SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date(clock()))
+        val line = "$time [$tag] ${message.replace('\n', ' ').take(240)}"
+        synchronized(lock) {
+            if (breadcrumbs.size >= MAX_BREADCRUMBS) breadcrumbs.removeFirst()
+            breadcrumbs.addLast(line)
+        }
     }
 
     fun record(
@@ -180,17 +198,44 @@ class ErrorReporter(
                     raw
                 }
             }
+        val recentCrumbs = synchronized(lock) { breadcrumbs.toList() }
+        val networkInfo = currentNetworkSummary()
         return buildString {
             appendLine("=== Goke Error Report ===")
             appendLine("Version: v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}, ${BuildConfig.BUILD_TYPE})")
             appendLine("Device: $device ($abi)")
             appendLine("Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+            appendLine("Network: $networkInfo")
             appendLine("Time: $timeText")
             appendLine("Source: $source (${if (fatal) "fatal" else "non-fatal"})")
             appendLine("Thread: $threadName")
+            if (recentCrumbs.isNotEmpty()) {
+                appendLine()
+                appendLine("=== Recent Breadcrumbs ===")
+                recentCrumbs.forEach { appendLine(it) }
+            }
             appendLine()
             append(stack.trimEnd())
         }
+    }
+
+    private fun currentNetworkSummary(): String {
+        val ctx = appContext ?: return "unknown"
+        return runCatching {
+            val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return "unavailable"
+            val network = cm.activeNetwork ?: return "none"
+            val caps = cm.getNetworkCapabilities(network) ?: return "none"
+            val transports =
+                buildList {
+                    if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) add("WIFI")
+                    if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) add("CELLULAR")
+                    if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) add("VPN")
+                    if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) add("ETHERNET")
+                }
+            val validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            val base = if (transports.isEmpty()) "OTHER" else transports.joinToString("+")
+            if (validated) "$base (validated)" else "$base (unvalidated)"
+        }.getOrElse { "unknown (${it.javaClass.simpleName})" }
     }
 
     private class GokeUncaughtHandler(
@@ -219,6 +264,7 @@ class ErrorReporter(
     companion object {
         private const val FILE_NAME = "error_reports.json"
         private const val MAX_REPORTS = 20
+        private const val MAX_BREADCRUMBS = 40
         private const val MAX_STACK_CHARS = 24_000
         private const val DEDUP_WINDOW_MS = 1_500L
     }

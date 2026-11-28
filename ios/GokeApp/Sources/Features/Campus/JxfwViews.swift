@@ -65,6 +65,30 @@ private enum CampusHelpers {
         }
         return error.localizedDescription
     }
+
+    static func isUnexpectedJxfwError(_ error: Error) -> Bool {
+        guard let err = error as? JxfwError else { return true }
+        switch err.kind {
+        case .network, .protocolError, .other:
+            return true
+        case .credentials, .captcha, .sms, .session, .unsupported:
+            return false
+        }
+    }
+
+    static func isUnexpectedBannerMessage(_ message: String) -> Bool {
+        let expectedPrefixes = [
+            "学号或密码错误",
+            "统一认证触发了图形验证码",
+            "统一认证需要短信二次验证",
+            "教务会话已过期",
+            "当前开源构建",
+            "需连接校园网",
+            "连接校园网方可使用",
+            "体测会话已过期",
+        ]
+        return !expectedPrefixes.contains { message.hasPrefix($0) }
+    }
 }
 
 struct CampusUnsupportedBanner: View {
@@ -87,17 +111,34 @@ struct CampusUnsupportedBanner: View {
 
 private struct CampusErrorRow: View {
     let message: String
+    var allowCopy: Bool = false
 
+    @Environment(ActionDispatcher.self) private var actions
     @Environment(\.gokeTheme) private var theme
 
     var body: some View {
-        Label {
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(theme.error)
-        } icon: {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(theme.error)
+        VStack(alignment: .leading, spacing: GokeSpacing.xs) {
+            Label {
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(theme.error)
+                    .textSelection(.enabled)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(theme.error)
+            }
+            if allowCopy {
+                Button {
+                    #if canImport(UIKit)
+                    UIPasteboard.general.string = message
+                    #endif
+                    actions.showToast(message: "已复制报错信息，可粘贴发给开发者")
+                } label: {
+                    Label("复制报错信息", systemImage: "doc.on.doc")
+                        .font(.caption.weight(.medium))
+                }
+                .buttonStyle(.mintCompact)
+            }
         }
     }
 }
@@ -172,7 +213,10 @@ public struct JxfwImportView: View {
 
             if let errorMessage {
                 Section {
-                    CampusErrorRow(message: errorMessage)
+                    CampusErrorRow(
+                        message: errorMessage,
+                        allowCopy: CampusHelpers.isUnexpectedBannerMessage(errorMessage)
+                    )
                 }
                 .listRowBackground(theme.errorContainer)
             }
@@ -506,6 +550,9 @@ public struct JxfwImportView: View {
             }
         } catch {
             errorMessage = CampusHelpers.jxfwErrorMessage(error)
+            if CampusHelpers.isUnexpectedJxfwError(error) {
+                container.recordError(source: "Jxfw.import", error: error)
+            }
         }
     }
 
@@ -647,7 +694,10 @@ public struct GradesView: View {
 
                     if let errorMessage {
                         Section {
-                            CampusErrorRow(message: errorMessage)
+                            CampusErrorRow(
+                                message: errorMessage,
+                                allowCopy: CampusHelpers.isUnexpectedBannerMessage(errorMessage)
+                            )
                         }
                         .listRowBackground(theme.errorContainer)
                     }
@@ -1107,6 +1157,9 @@ public struct GradesView: View {
             actions.showToast(message: "已更新 \(fetched.count) 门课程成绩")
         } catch {
             errorMessage = CampusHelpers.jxfwErrorMessage(error)
+            if CampusHelpers.isUnexpectedJxfwError(error) {
+                container.recordError(source: "Jxfw.grades", error: error)
+            }
         }
     }
 
@@ -1171,7 +1224,10 @@ public struct PhysicalTestView: View {
 
             if let errorMessage {
                 Section {
-                    CampusErrorRow(message: errorMessage)
+                    CampusErrorRow(
+                        message: errorMessage,
+                        allowCopy: CampusHelpers.isUnexpectedBannerMessage(errorMessage)
+                    )
                 }
                 .listRowBackground(theme.errorContainer)
             }
@@ -1735,7 +1791,10 @@ public struct EmptyClassroomsView: View {
 
             if let errorMessage {
                 Section {
-                    CampusErrorRow(message: errorMessage)
+                    CampusErrorRow(
+                        message: errorMessage,
+                        allowCopy: CampusHelpers.isUnexpectedBannerMessage(errorMessage)
+                    )
                 }
                 .listRowBackground(theme.errorContainer)
             }
@@ -2125,6 +2184,9 @@ public struct EmptyClassroomsView: View {
             await loadBuildings()
         } catch {
             errorMessage = CampusHelpers.jxfwErrorMessage(error)
+            if CampusHelpers.isUnexpectedJxfwError(error) {
+                container.recordError(source: "Jwcwx.login", error: error)
+            }
         }
     }
 
@@ -2143,6 +2205,9 @@ public struct EmptyClassroomsView: View {
             }
         } catch {
             errorMessage = CampusHelpers.jxfwErrorMessage(error)
+            if CampusHelpers.isUnexpectedJxfwError(error) {
+                container.recordError(source: "Jwcwx.buildings", error: error)
+            }
         }
     }
 
@@ -2174,6 +2239,9 @@ public struct EmptyClassroomsView: View {
         } catch {
             guard gen == loadGeneration else { return }
             errorMessage = CampusHelpers.jxfwErrorMessage(error)
+            if CampusHelpers.isUnexpectedJxfwError(error) {
+                container.recordError(source: "Jwcwx.rooms", error: error)
+            }
         }
     }
 }

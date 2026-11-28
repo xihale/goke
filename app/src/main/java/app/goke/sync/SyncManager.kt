@@ -210,6 +210,9 @@ class SyncManager(
                         store.lastError = "登录已失效，请重新登录"
                     } else {
                         store.lastError = e.message
+                        if (e.status >= 500) {
+                            errors?.record("Sync.syncNow", e)
+                        }
                     }
                     publish()
                     throw e

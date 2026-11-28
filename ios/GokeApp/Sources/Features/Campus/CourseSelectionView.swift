@@ -162,6 +162,15 @@ public struct CourseSelectionView: View {
                                     GokeMintActionPill("重新登录", style: .surface) {
                                         activeSheet = .login
                                     }
+
+                                    if CampusHelpers.isUnexpectedBannerMessage(errorMessage) {
+                                        GokeMintActionPill("复制报错信息", style: .surface) {
+                                            #if canImport(UIKit)
+                                            UIPasteboard.general.string = errorMessage
+                                            #endif
+                                            actions.showToast(message: "已复制报错信息，可粘贴发给开发者")
+                                        }
+                                    }
                                 }
                             }
                             .padding(.vertical, 2)

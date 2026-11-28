@@ -51,6 +51,7 @@ import app.goke.ui.FeedbackEvent
 import app.goke.ui.LocalActions
 import app.goke.ui.LocalApp
 import app.goke.ui.components.ComingSoonScreen
+import app.goke.ui.components.CopyErrorButton
 import app.goke.ui.components.FormSection
 import app.goke.ui.components.MintCheck
 import app.goke.ui.components.MintScreen
@@ -280,6 +281,8 @@ private fun SystemCalendarSection() {
                 }
                 state.lastError?.let { err ->
                     Text(err, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp))
+                    val reports by app.errors.reports.collectAsState()
+                    CopyErrorButton(errorSummary = err, reports = reports)
                 }
             }
         }

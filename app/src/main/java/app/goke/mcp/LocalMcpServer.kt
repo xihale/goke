@@ -79,7 +79,8 @@ internal class LocalMcpServer(
                             socket.accept()
                         } catch (_: SocketException) {
                             break
-                        } catch (_: Throwable) {
+                        } catch (e: Throwable) {
+                            android.util.Log.w("LocalMcpServer", "accept loop error", e)
                             continue
                         }
                     launch { handleClient(client) }
@@ -106,7 +107,8 @@ internal class LocalMcpServer(
                 } catch (_: PayloadTooLargeException) {
                     writeResponse(output, 413, "Payload Too Large", contentType = "text/plain; charset=utf-8", body = "Payload Too Large".toByteArray())
                     return
-                } catch (_: Throwable) {
+                } catch (e: Throwable) {
+                    android.util.Log.w("LocalMcpServer", "handleClient failed", e)
                     return
                 } ?: return
 

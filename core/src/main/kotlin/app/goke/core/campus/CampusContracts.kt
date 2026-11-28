@@ -110,6 +110,11 @@ interface CampusHost {
         throwable: Throwable,
     )
 
+    fun recordBreadcrumb(
+        tag: String,
+        message: String,
+    ) {}
+
     fun postWeeklyJxfwNotification(
         title: String,
         body: String,

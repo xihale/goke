@@ -217,8 +217,9 @@ class UpdateChecker(
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 // 网络、解析或 captive portal 异常一律降级，避免冷启动或手动检查崩溃
+                android.util.Log.w("UpdateChecker", "checkForUpdate failed", e)
                 UpdateCheckResult.Error
             } finally {
                 _checking.value = false
@@ -308,7 +309,8 @@ class UpdateChecker(
                 partFile.delete()
                 _downloadState.value = UpdateDownloadState.Idle
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                android.util.Log.w("UpdateChecker", "downloadUpdate failed", e)
                 partFile.delete()
                 _downloadState.value = UpdateDownloadState.Failed(info.version, DownloadError.NETWORK)
                 null
