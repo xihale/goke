@@ -1,0 +1,126 @@
+name: Goke
+options:
+  bundleIdPrefix: app.goke
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+packages:
+  GokeCore:
+    path: GokeCore
+  GokeShared:
+    path: GokeShared
+  GokeAdapterLoader:
+    path: GokeAdapterLoader
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "0.0.1"
+    CURRENT_PROJECT_VERSION: "12099"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+  configs:
+    Release:
+      SWIFT_OPTIMIZATION_LEVEL: -Osize
+      SWIFT_COMPILATION_MODE: wholemodule
+      GCC_OPTIMIZATION_LEVEL: z
+      LLVM_LTO: YES
+      DEAD_CODE_STRIPPING: YES
+      STRIP_INSTALLED_PRODUCT: YES
+      DEPLOYMENT_POSTPROCESSING: YES
+      STRIP_STYLE: all
+      STRIP_SWIFT_SYMBOLS: YES
+      COPY_PHASE_STRIP: NO
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+      GCC_SYMBOLS_PRIVATE_EXTERN: YES
+      SWIFT_REFLECTION_METADATA_LEVEL: without-names
+      ASSETCATALOG_COMPILER_OPTIMIZATION: space
+      ENABLE_NS_ASSERTIONS: NO
+      OTHER_SWIFT_FLAGS:
+        - "$(inherited)"
+        - "-Xllvm"
+        - "-enable-machine-outliner"
+      OTHER_LDFLAGS:
+        - "$(inherited)"
+        - "-Wl,-mllvm,-enable-machine-outliner"
+
+targets:
+  GokeApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: GokeApp/Sources
+      - path: GokeApp/Resources
+        excludes:
+          - Info.plist
+          - GokeApp.entitlements
+          - AppIcon.png
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.goke.ios
+        PRODUCT_NAME: GokeApp
+        INFOPLIST_FILE: GokeApp/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: GokeApp/Resources/GokeApp.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+        GENERATE_INFOPLIST_FILE: NO
+    dependencies:
+      - package: GokeCore
+        product: GokeCore
+      - package: GokeShared
+        product: GokeShared
+      - package: GokeAdapterLoader
+        product: GokeAdapterLoader
+      - target: GokeWidgetExtension
+        embed: true
+        codeSign: true
+
+  GokeWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: GokeWidgetExtension/Sources
+      - path: GokeWidgetExtension/Resources
+        excludes:
+          - Info.plist
+          - GokeWidgetExtension.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.goke.ios.widget
+        PRODUCT_NAME: GokeWidgetExtension
+        INFOPLIST_FILE: GokeWidgetExtension/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: GokeWidgetExtension/Resources/GokeWidgetExtension.entitlements
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: NO
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/Frameworks"
+          - "@executable_path/../../Frameworks"
+    dependencies:
+      - package: GokeCore
+        product: GokeCoreModel
+      - package: GokeShared
+        product: GokeShared
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: ActivityKit.framework
+      - sdk: AppIntents.framework
+
+schemes:
+  GokeApp:
+    build:
+      targets:
+        GokeApp: all
+        GokeWidgetExtension: [build, run]
+    run:
+      config: Debug
+    archive:
+      config: Release

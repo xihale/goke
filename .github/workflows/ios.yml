@@ -1,0 +1,111 @@
+name: iOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ios/**
+      - .github/workflows/ios.yml
+  pull_request:
+    paths:
+      - ios/**
+      - .github/workflows/ios.yml
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout private adapters (optional)
+        if: ${{ secrets.ADAPTERS_SSH_KEY != '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: xihale/goke-adapters
+          ssh-key: ${{ secrets.ADAPTERS_SSH_KEY }}
+          path: adapters
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Sync iOS version from Git tag
+        run: python3 scripts/sync_ios_version.py --write
+
+      - name: Run GokeCore SwiftPM tests
+        working-directory: ios/GokeCore
+        run: swift test
+
+      - name: Run GokeAdapters SwiftPM tests (when private adapters present)
+        run: |
+          if [ -f adapters/ios/GokeAdapters/Package.swift ]; then
+            (cd adapters/ios/GokeAdapters && swift test)
+          else
+            echo "No private adapters/ios/GokeAdapters present; skipping private adapter tests."
+          fi
+
+      - name: Run GokeAdapterLoader SwiftPM tests
+        working-directory: ios/GokeAdapterLoader
+        run: swift test
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Run iOS Simulator tests and Debug build
+        run: |
+          SIM_UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, devices in sorted(data.get("devices", {}).items(), reverse=True):
+              if "iOS" not in runtime:
+                  continue
+              for d in devices:
+                  if d.get("isAvailable") and "iPhone" in d.get("name", ""):
+                      print(d["udid"])
+                      sys.exit(0)
+          sys.exit("No available iPhone Simulator found")
+          ')
+          echo "Using Simulator UDID: $SIM_UDID"
+
+          (cd ios/GokeCore && xcodebuild test \
+            -scheme GokeCore \
+            -destination "id=$SIM_UDID")
+
+          xcodebuild build \
+            -project ios/Goke.xcodeproj \
+            -scheme GokeApp \
+            -configuration Debug \
+            -destination "id=$SIM_UDID" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Archive unsigned .ipa
+        working-directory: ios
+        run: |
+          xcodebuild archive \
+            -project Goke.xcodeproj \
+            -scheme GokeApp \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/Goke.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$RUNNER_TEMP/Goke.xcarchive/Products/Applications/GokeApp.app" "$RUNNER_TEMP/Payload/"
+          (cd "$RUNNER_TEMP" && zip -9 -X -r "$GITHUB_WORKSPACE/Goke-unsigned.ipa" Payload)
+
+      - name: Upload unsigned .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: goke-ios-unsigned-ipa
+          path: Goke-unsigned.ipa

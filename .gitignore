@@ -26,3 +26,8 @@ scripts/xbuild.sh
 
 # Private reverse-engineered campus/hardware adapters (half-open-source)
 adapters/
+
+# iOS SwiftPM / Xcode build artifacts
+ios/**/.build/
+ios/**/.swiftpm/
+*.xcodeproj

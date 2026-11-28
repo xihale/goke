@@ -1,0 +1,12 @@
+version: 1
+bundleID: app.goke.ios
+product: GokeApp
+iconPath: GokeApp/Resources/AppIcon.png
+infoPath: GokeApp/Resources/Info.plist
+entitlementsPath: GokeApp/Resources/GokeApp.entitlements
+resources:
+  - GokeApp/Resources/Assets.xcassets
+extensions:
+  - product: GokeWidgetExtension
+    infoPath: GokeWidgetExtension/Resources/Info.plist
+    entitlementsPath: GokeWidgetExtension/Resources/GokeWidgetExtension.entitlements

@@ -1,0 +1,10 @@
+.build/
+.swiftpm/
+.bsp/
+.xtool/
+xtool/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+*.ipa
+*.app
