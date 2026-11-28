@@ -41,6 +41,11 @@
 	<string>12099</string>
 	<key>GokeDisplayVersion</key>
 	<string>0.0.1-beta.9</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>sidestore</string>
+		<string>altstore</string>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>

@@ -23,6 +23,7 @@ struct RootTabView: View {
     /// Tracks tabs that have been mounted at least once so cold launch only instantiates
     /// the active tab (`.timetable` by default) instead of constructing all 5 root tabs upfront.
     @State private var visitedTabs: Set<GokeTab> = [.timetable]
+    @State private var updateManager = AppUpdateManager.shared
 
     init(screens: GokeRootScreensWiring = GokeRootScreensWiring()) {
         self.screens = screens
@@ -220,6 +221,25 @@ struct RootTabView: View {
         .onAppear {
             visitedTabs.insert(router.selectedTab)
             wireFeedbackPreferences()
+        }
+        .task {
+            await updateManager.checkOnLaunchIfNeeded()
+        }
+        .sheet(isPresented: $updateManager.isSheetPresented) {
+            if let update = updateManager.availableUpdate {
+                AppUpdateSheet(
+                    update: update,
+                    currentVersion: updateManager.currentVersion,
+                    isAltStoreInstalled: updateManager.isAltStoreInstalled,
+                    onIgnore: {
+                        updateManager.ignoreCurrentUpdate()
+                    },
+                    onDismiss: {
+                        updateManager.dismissSheet()
+                    }
+                )
+                .gokePaperSheet(theme, detents: [.medium, .large])
+            }
         }
         .onChange(of: router.selectedTab) { _, newTab in
             visitedTabs.insert(newTab)

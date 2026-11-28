@@ -50,6 +50,7 @@ struct MeView: View {
     @State private var calendarSyncEnabled: Bool = false
     @State private var selectedCalendarCount: Int = 0
     @State private var hotWaterClient: HotWaterClient?
+    @State private var updateManager = AppUpdateManager.shared
 
     init() {}
 
@@ -559,6 +560,61 @@ struct MeView: View {
 
     private var moreSection: some View {
         paperSection("更多") {
+            Button {
+                if updateManager.availableUpdate != nil {
+                    updateManager.presentUpdateSheet()
+                } else {
+                    Task {
+                        let result = await updateManager.checkManually()
+                        switch result {
+                        case .upToDate:
+                            actions.showToast(message: "当前已是最新版本")
+                        case .failed(let message):
+                            actions.showToast(message: message)
+                        case .idle, .checking, .available:
+                            break
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 18, weight: .regular))
+                        .imageScale(.medium)
+                        .symbolRenderingMode(.monochrome)
+                        .foregroundStyle(updateManager.hasUnreadUpdate ? theme.accent : theme.muted)
+                        .frame(width: 22, height: 24, alignment: .center)
+
+                    Text("检查更新")
+                        .font(GokeTypography.bodyLarge)
+                        .foregroundStyle(theme.ink)
+
+                    Spacer(minLength: GokeSpacing.sm)
+
+                    if updateManager.isChecking {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else if let update = updateManager.availableUpdate {
+                        GokeBadge("v\(update.version)", tone: .accent)
+                    } else {
+                        Text(GokeAppVersion.shortLabel)
+                            .font(GokeTypography.bodyMedium)
+                            .monospacedDigit()
+                            .foregroundStyle(theme.muted)
+                            .lineLimit(1)
+                    }
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(theme.muted.opacity(0.55))
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.mintRow)
+            .disabled(updateManager.isChecking)
+
             Button {
                 router.push(.about, in: .me)
             } label: {

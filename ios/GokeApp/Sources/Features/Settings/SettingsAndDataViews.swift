@@ -3482,6 +3482,7 @@ public struct AboutView: View {
 
     @State private var activeSheet: AboutActiveSheet?
     @State private var errorLogs: [GokeErrorEntry] = []
+    @State private var updateManager = AppUpdateManager.shared
 
     public init() {}
 
@@ -3548,16 +3549,48 @@ public struct AboutView: View {
 
     private var updateCheckerSection: some View {
         Section {
-            LabeledContent {
-                GokeBadge("内测中", tone: .accent)
+            Button {
+                Task {
+                    let result = await updateManager.checkManually()
+                    switch result {
+                    case .upToDate:
+                        actions.showToast(message: "当前已是最新版本")
+                    case .failed(let message):
+                        actions.showToast(message: message)
+                    case .idle, .checking, .available:
+                        break
+                    }
+                }
             } label: {
-                HStack(spacing: 14) {
-                    GokePaperIcon(systemImage: "arrow.down.circle", color: theme.muted)
-                    Text("更新渠道")
-                        .font(.body)
-                        .foregroundStyle(theme.ink)
+                LabeledContent {
+                    if updateManager.isChecking {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else if let update = updateManager.availableUpdate {
+                        GokeBadge("有新版本 v\(update.version)", tone: .accent)
+                    } else if updateManager.status == .upToDate {
+                        Text("已是最新")
+                            .font(.subheadline)
+                            .foregroundStyle(theme.muted)
+                    } else {
+                        Text(GokeAppVersion.shortLabel)
+                            .font(.subheadline)
+                            .monospacedDigit()
+                            .foregroundStyle(theme.muted)
+                    }
+                } label: {
+                    HStack(spacing: 14) {
+                        GokePaperIcon(
+                            systemImage: "arrow.down.circle",
+                            color: updateManager.hasUnreadUpdate ? theme.accent : theme.muted
+                        )
+                        Text("检查更新")
+                            .font(.body)
+                            .foregroundStyle(theme.ink)
+                    }
                 }
             }
+            .disabled(updateManager.isChecking)
 
             if let projectURL = URL(string: Self.projectURLString) {
                 Link(destination: projectURL) {
@@ -3578,7 +3611,7 @@ public struct AboutView: View {
         } header: {
             Text("版本更新")
         } footer: {
-            Text("当前为 iOS 内测版本，暂未接入自动更新渠道。")
+            Text("通过 GitHub Releases 检查 iOS 新版本，支持 SideStore / AltStore 安装或下载 IPA。")
         }
     }
 
