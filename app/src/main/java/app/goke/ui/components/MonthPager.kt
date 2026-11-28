@@ -61,6 +61,7 @@ fun MonthPager(
     initial: YearMonth,
     onPick: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
+    scrollSignal: Int = 0,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -70,7 +71,7 @@ fun MonthPager(
 
     fun monthOf(page: Int): YearMonth = anchor.plusMonths((page - PAGE_CENTER).toLong())
 
-    LaunchedEffect(selected) {
+    LaunchedEffect(selected, scrollSignal) {
         val targetMonth = selected?.let(YearMonth::from) ?: return@LaunchedEffect
         val targetPage =
             (PAGE_CENTER + ChronoUnit.MONTHS.between(anchor, targetMonth).toInt())

@@ -209,29 +209,34 @@ internal fun WhenPanel(
         ) {
             Column(Modifier.weight(1f).clipToBounds().verticalScroll(rememberScrollState())) {
                 val isTonight = date == today && startMin == 20 * 60 && minutes == null
+                var chipScrollSignal by remember { mutableIntStateOf(0) }
                 Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     QuickChip(Icons.Rounded.CalendarToday, stringResource(R.string.today), date == today && !isTonight, Modifier.weight(1f)) {
                         date = today
                         datePicked = true
+                        chipScrollSignal++
                         if (isTonight) startMin = -1
                     }
                     QuickChip(Icons.Rounded.WbSunny, stringResource(R.string.tomorrow), date == today.plusDays(1), Modifier.weight(1f)) {
                         date = today.plusDays(1)
                         datePicked = true
+                        chipScrollSignal++
                     }
                     QuickChip(Icons.Rounded.DateRange, stringResource(R.string.date_next_monday), date == nextMonday(today), Modifier.weight(1f)) {
                         date = nextMonday(today)
                         datePicked = true
+                        chipScrollSignal++
                     }
                     QuickChip(Icons.Rounded.Bedtime, stringResource(R.string.tonight), isTonight, Modifier.weight(1f)) {
                         date = today
                         datePicked = true
+                        chipScrollSignal++
                         startMin = 20 * 60
                         minutes = null
                     }
                 }
                 val initialMonth = remember { YearMonth.from(date) }
-                MonthPager(selected = date, initial = initialMonth, onPick = {
+                MonthPager(selected = date, initial = initialMonth, scrollSignal = chipScrollSignal, onPick = {
                     date = it
                     datePicked = true
                 })

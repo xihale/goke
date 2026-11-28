@@ -1,7 +1,10 @@
 package app.goke.ui.components
 
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -86,5 +89,44 @@ class MonthPagerTest {
 
         assertEquals(dec10, pickedDate)
         rule.onNodeWithText(decHeader).assertIsDisplayed()
+    }
+
+    @Test
+    fun scrollSignalReturnsToSelectedMonthEvenWhenDateUnchanged() {
+        val startDate = LocalDate.of(2026, 11, 28)
+
+        rule.setContent {
+            val st by app.settings.flow.collectAsState()
+            var selected by remember { mutableStateOf(startDate) }
+            var signal by remember { mutableIntStateOf(0) }
+            GokeTheme(st) {
+                androidx.compose.foundation.layout.Column {
+                    Button(onClick = {
+                        selected = startDate
+                        signal++
+                    }) { Text("JumpToday") }
+                    MonthPager(
+                        selected = selected,
+                        initial = YearMonth.from(startDate),
+                        scrollSignal = signal,
+                        onPick = { selected = it },
+                    )
+                }
+            }
+        }
+        rule.waitForIdle()
+
+        val novHeader = app.yearMonth(LocalDate.of(2026, 11, 1))
+        val octHeader = app.yearMonth(LocalDate.of(2026, 10, 1))
+
+        // Swipe/page away to October without changing selected date.
+        rule.onNodeWithContentDescription(app.getString(R.string.a11y_prev_month)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(octHeader).assertIsDisplayed()
+
+        // Triggering JumpToday with the same date should scroll back to November.
+        rule.onNodeWithText("JumpToday").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(novHeader).assertIsDisplayed()
     }
 }
