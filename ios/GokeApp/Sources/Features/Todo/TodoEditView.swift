@@ -446,7 +446,17 @@ struct TodoEditView: View {
     private var currentSignature: String {
         let subSig = subtasks.map { "\($0.id):\($0.title):\($0.done)" }.joined(separator: "|")
         let attSig = attachments.map(\.file).joined(separator: ",")
-        return [
+        let whenSig: String
+        if let wp = whenPick {
+            whenSig = "\(wp.date.description):\(wp.start?.description ?? ""):\(wp.minutes ?? 0)"
+        } else {
+            whenSig = ""
+        }
+        let repeatDaysSig = repeatByDays.sorted().map(String.init).joined(separator: ",")
+        let repeatMonthsSig = repeatByMonths.sorted().map(String.init).joined(separator: ",")
+        let remindSig = remindMinutesList.map(String.init).joined(separator: ",")
+        let tagsSig = tags.joined(separator: ",")
+        let parts: [String] = [
             title,
             locationText,
             note,
@@ -457,21 +467,22 @@ struct TodoEditView: View {
             courseWeek.map(String.init) ?? "",
             "\(dueBeforeNextClass)",
             "\(isDone)",
-            whenPick.map { "\($0.date.description):\($0.start?.description ?? ""):\($0.minutes ?? 0)" } ?? "",
+            whenSig,
             preservedStartDate?.description ?? "",
             repeatFreq?.rawValue ?? "",
             "\(repeatInterval)",
-            repeatByDays.sorted().map(String.init).joined(separator: ","),
-            repeatByMonths.sorted().map(String.init).joined(separator: ","),
+            repeatDaysSig,
+            repeatMonthsSig,
             repeatUntil?.description ?? "",
-            remindMinutesList.map(String.init).joined(separator: ","),
+            remindSig,
             "\(remindPersistent)",
-            tags.joined(separator: ","),
+            tagsSig,
             attSig,
             imageCols.map(String.init) ?? "",
             subSig,
             newSubtaskTitle,
-        ].joined(separator: "§")
+        ]
+        return parts.joined(separator: "§")
     }
 
     /// Expanded QuickAdd `draft` is ALWAYS treated as dirty so backing out never silently drops it!
