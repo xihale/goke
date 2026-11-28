@@ -255,6 +255,11 @@ func (s *Store) DeleteUserTokens(userID int64) error {
 	return err
 }
 
+func (s *Store) DeleteOtherUserTokens(userID int64, keepTokenHash string) error {
+	_, err := s.db.Exec(`DELETE FROM tokens WHERE user_id=? AND token_hash<>?`, userID, keepTokenHash)
+	return err
+}
+
 // ---------- 同步 ----------
 
 // Record 按 id 取单条记录（含墓碑）。

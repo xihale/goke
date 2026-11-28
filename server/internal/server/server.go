@@ -200,11 +200,16 @@ func (s *Server) auth(admin bool, next func(http.ResponseWriter, *http.Request, 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		const prefix = "Bearer "
 		h := r.Header.Get("Authorization")
-		if !strings.HasPrefix(h, prefix) {
+		if len(h) < len(prefix) || !strings.EqualFold(h[:len(prefix)], prefix) {
 			writeErr(w, http.StatusUnauthorized, "unauthorized", "请先登录")
 			return
 		}
-		hash := HashToken(strings.TrimSpace(h[len(prefix):]))
+		raw := strings.TrimSpace(h[len(prefix):])
+		if raw == "" {
+			writeErr(w, http.StatusUnauthorized, "unauthorized", "请先登录")
+			return
+		}
+		hash := HashToken(raw)
 		u, err := s.st.UserByToken(hash)
 		if errors.Is(err, store.ErrNotFound) {
 			writeErr(w, http.StatusUnauthorized, "unauthorized", "登录已失效，请重新登录")

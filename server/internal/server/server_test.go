@@ -353,5 +353,43 @@ func TestWebAppServed(t *testing.T) {
 	}
 }
 
+func TestChangePasswordRevokesOtherTokensAndBearerCaseInsensitive(t *testing.T) {
+	e := newEnv(t)
+	dev1 := e.login("root", "rootpassword")
+	dev2 := e.login("root", "rootpassword")
+
+	// Lowercase "bearer " scheme should be accepted (RFC 7235)
+	req := httptest.NewRequest("GET", "/api/v1/me", nil)
+	req.Header.Set("Authorization", "bearer "+dev1)
+	rec := httptest.NewRecorder()
+	e.h.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("lowercase bearer want 200 got %d", rec.Code)
+	}
+
+	// Empty bearer token should be rejected
+	reqEmpty := httptest.NewRequest("GET", "/api/v1/me", nil)
+	reqEmpty.Header.Set("Authorization", "Bearer   ")
+	recEmpty := httptest.NewRecorder()
+	e.h.ServeHTTP(recEmpty, reqEmpty)
+	if recEmpty.Code != 401 {
+		t.Fatalf("empty bearer want 401 got %d", recEmpty.Code)
+	}
+
+	// Changing password revokes other devices while keeping current session valid
+	if code, _ := e.do("POST", "/api/v1/me/password", dev1, map[string]string{
+		"oldPassword": "rootpassword",
+		"newPassword": "newrootpassword",
+	}); code != 204 {
+		t.Fatalf("change password want 204 got %d", code)
+	}
+	if code, _ := e.do("GET", "/api/v1/me", dev1, nil); code != 200 {
+		t.Fatalf("current device token should remain valid, got %d", code)
+	}
+	if code, _ := e.do("GET", "/api/v1/me", dev2, nil); code != 401 {
+		t.Fatalf("other device token should be revoked after password change, got %d", code)
+	}
+}
+
 func itoa(n int64) string   { b, _ := json.Marshal(n); return string(b) }
 func mustJSON(v any) []byte { b, _ := json.Marshal(v); return b }

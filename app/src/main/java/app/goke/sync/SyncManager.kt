@@ -123,7 +123,8 @@ class SyncManager(
         new: String,
     ) {
         val acct = store.account.value ?: throw SyncException("尚未登录")
-        SyncClient(acct.serverUrl, store.token()).changePassword(old, new)
+        val token = store.token() ?: throw SyncException("尚未登录")
+        SyncClient(acct.serverUrl, token).changePassword(old, new)
     }
 
     /** 数据变化或打开 App 时调用：稍后（防抖）同步一次。未登录或登录失效时无操作。 */

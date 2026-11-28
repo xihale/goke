@@ -111,5 +111,9 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request, ss
 		internalErr(w, err)
 		return
 	}
+	if err := s.st.DeleteOtherUserTokens(ss.user.ID, ss.tokenHash); err != nil {
+		internalErr(w, err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
