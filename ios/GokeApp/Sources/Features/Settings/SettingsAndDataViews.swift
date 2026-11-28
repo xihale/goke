@@ -3462,6 +3462,7 @@ public struct AboutView: View {
     @Environment(AppSettingsStore.self) private var settingsStore
     @Environment(ActionDispatcher.self) private var actions
     @Environment(\.gokeTheme) private var theme
+    @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum AboutActiveSheet: Identifiable {
@@ -3592,6 +3593,48 @@ public struct AboutView: View {
             }
             .disabled(updateManager.isChecking)
 
+            Button {
+                if updateManager.isSideStoreInstalled, let sourceURL = updateManager.sideStoreAddSourceURL {
+                    openURL(sourceURL)
+                } else {
+                    updateManager.copySourceURLToPasteboard()
+                    actions.showToast(message: "已复制 SideStore 源地址")
+                }
+            } label: {
+                LabeledContent {
+                    Text(updateManager.isSideStoreInstalled ? "一键添加" : "复制地址")
+                        .font(.subheadline)
+                        .foregroundStyle(theme.accent)
+                } label: {
+                    HStack(spacing: 14) {
+                        GokePaperIcon(systemImage: "plus.app", color: theme.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("SideStore 软件源")
+                                .font(.body)
+                                .foregroundStyle(theme.ink)
+                            Text(updateManager.isSideStoreInstalled ? "一键订阅，后续自动检测更新" : "点击复制源地址，在 SideStore 中添加")
+                                .font(.caption)
+                                .foregroundStyle(theme.muted)
+                        }
+                    }
+                }
+            }
+            .contextMenu {
+                if let sourceURL = updateManager.sideStoreAddSourceURL {
+                    Button {
+                        openURL(sourceURL)
+                    } label: {
+                        Label("用 SideStore 打开", systemImage: "plus.app")
+                    }
+                }
+                Button {
+                    updateManager.copySourceURLToPasteboard()
+                    actions.showToast(message: "已复制 SideStore 源地址")
+                } label: {
+                    Label("复制源地址", systemImage: "doc.on.doc")
+                }
+            }
+
             if let projectURL = URL(string: Self.projectURLString) {
                 Link(destination: projectURL) {
                     LabeledContent {
@@ -3611,7 +3654,7 @@ public struct AboutView: View {
         } header: {
             Text("版本更新")
         } footer: {
-            Text("通过 GitHub Releases 检查 iOS 新版本，支持 SideStore / AltStore 安装或下载 IPA。")
+            Text("通过 GitHub Releases 检查 iOS 新版本，支持订阅 SideStore 软件源自动更新，或直接安装 / 下载 IPA。")
         }
     }
 

@@ -2,9 +2,12 @@ import Foundation
 import GokeCore
 import GokeShared
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
-/// Sideload-friendly iOS update prompt supporting SideStore, AltStore, direct IPA download,
-/// and GitHub Release inspection in the Mint Paper visual language.
+/// Sideload-friendly iOS update prompt supporting SideStore source subscription, direct IPA install,
+/// AltStore fallback, and GitHub Release inspection in the Mint Paper visual language.
 struct AppUpdateSheet: View {
     let update: AppUpdateInfo
     let currentVersion: String
@@ -14,6 +17,7 @@ struct AppUpdateSheet: View {
 
     @Environment(\.gokeTheme) private var theme
     @Environment(\.openURL) private var openURL
+    @State private var copiedSourceURL = false
 
     private var formattedSize: String? {
         guard update.ipaSizeBytes > 0 else { return nil }
@@ -121,7 +125,7 @@ struct AppUpdateSheet: View {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.down.circle.fill")
                             .font(.system(size: 16, weight: .semibold))
-                        Text("用 SideStore 安装")
+                        Text("用 SideStore 安装此版本")
                             .font(GokeTypography.bodyLarge.weight(.semibold))
                     }
                     .foregroundStyle(theme.onAccent)
@@ -134,6 +138,58 @@ struct AppUpdateSheet: View {
                 }
                 .buttonStyle(.mintCompact)
             }
+
+            if let sideStoreSourceURL = UpdateChecker.sideStoreAddSourceURL() {
+                Button {
+                    openURL(sideStoreSourceURL)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.app")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("添加到 SideStore 源（后续自动检测更新）")
+                            .font(GokeTypography.bodyMedium.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                    }
+                    .foregroundStyle(theme.accent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, GokeSpacing.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: GokeRadius.md, style: .continuous)
+                            .fill(theme.accent.opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: GokeRadius.md, style: .continuous)
+                                    .stroke(theme.accent.opacity(0.35), lineWidth: 0.75)
+                            )
+                    )
+                }
+                .buttonStyle(.mintCompact)
+            }
+
+            Button {
+                copySourceURL()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: copiedSourceURL ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 14, weight: .medium))
+                    Text(copiedSourceURL ? "已复制源地址" : "复制源地址")
+                        .font(GokeTypography.bodyMedium.weight(.medium))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(copiedSourceURL ? theme.accent : theme.ink)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: GokeRadius.md, style: .continuous)
+                        .fill(theme.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: GokeRadius.md, style: .continuous)
+                                .stroke(theme.outlineVariant.opacity(0.6), lineWidth: 0.75)
+                        )
+                )
+            }
+            .buttonStyle(.mintCompact)
 
             if isAltStoreInstalled, let altStoreURL = update.altStoreInstallURL {
                 secondaryActionButton(
@@ -161,12 +217,23 @@ struct AppUpdateSheet: View {
                 }
             }
 
-            if !isAltStoreInstalled, let altStoreURL = update.altStoreInstallURL {
+            if !isAltStoreInstalled,
+               update.altStoreInstallURL != nil || UpdateChecker.altStoreAddSourceURL() != nil
+            {
                 Menu {
-                    Button {
-                        openURL(altStoreURL)
-                    } label: {
-                        Label("用 AltStore 安装", systemImage: "square.and.arrow.down")
+                    if let altStoreURL = update.altStoreInstallURL {
+                        Button {
+                            openURL(altStoreURL)
+                        } label: {
+                            Label("用 AltStore 安装", systemImage: "square.and.arrow.down")
+                        }
+                    }
+                    if let altStoreSourceURL = UpdateChecker.altStoreAddSourceURL() {
+                        Button {
+                            openURL(altStoreSourceURL)
+                        } label: {
+                            Label("添加到 AltStore 源", systemImage: "plus.app")
+                        }
                     }
                 } label: {
                     HStack(spacing: 6) {
@@ -180,6 +247,17 @@ struct AppUpdateSheet: View {
                     .padding(.vertical, 8)
                 }
             }
+        }
+    }
+
+    private func copySourceURL() {
+        #if canImport(UIKit)
+        UIPasteboard.general.string = UpdateChecker.defaultSourceJSONURL
+        #endif
+        copiedSourceURL = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            copiedSourceURL = false
         }
     }
 

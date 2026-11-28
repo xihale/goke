@@ -124,4 +124,39 @@ struct UpdateCheckerTests {
         #expect(UpdateChecker.sideStoreInstallURL(ipaURL: "ftp://example.com/app.ipa") == nil)
         #expect(UpdateChecker.altStoreInstallURL(ipaURL: "not a url") == nil)
     }
+
+    @Test("SideStore and AltStore add-source URL builders use canonical source URL and encode properly")
+    func sideloadAddSourceURLBuilders() {
+        #expect(UpdateChecker.defaultSourceJSONURL == "https://goke.xeed.ink/altstore.json")
+        #expect(UpdateChecker.defaultSideStoreSourceJSONURL == UpdateChecker.defaultSourceJSONURL)
+
+        let defaultSideStore = UpdateChecker.sideStoreAddSourceURL()
+        #expect(defaultSideStore != nil)
+        #expect(defaultSideStore?.scheme == "sidestore")
+        #expect(defaultSideStore?.host == "source")
+        #expect(defaultSideStore?.absoluteString == "sidestore://source?url=https%3A%2F%2Fgoke.xeed.ink%2Faltstore.json")
+        let defaultSideQuery = defaultSideStore.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "url" })?.value }
+        #expect(defaultSideQuery == UpdateChecker.defaultSourceJSONURL)
+
+        let defaultAltStore = UpdateChecker.altStoreAddSourceURL()
+        #expect(defaultAltStore != nil)
+        #expect(defaultAltStore?.scheme == "altstore")
+        #expect(defaultAltStore?.host == "source")
+        #expect(defaultAltStore?.absoluteString == "altstore://source?url=https%3A%2F%2Fgoke.xeed.ink%2Faltstore.json")
+        let defaultAltQuery = defaultAltStore.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "url" })?.value }
+        #expect(defaultAltQuery == UpdateChecker.defaultSourceJSONURL)
+
+        let customSource = "https://goke.xeed.ink/altstore.json?channel=beta&v=2"
+        let customSide = UpdateChecker.sideStoreAddSourceURL(sourceURL: customSource)
+        let customSideQuery = customSide.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "url" })?.value }
+        #expect(customSideQuery == customSource)
+
+        let customAlt = UpdateChecker.altStoreAddSourceURL(sourceURL: customSource)
+        let customAltQuery = customAlt.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "url" })?.value }
+        #expect(customAltQuery == customSource)
+
+        #expect(UpdateChecker.sideStoreAddSourceURL(sourceURL: "") == nil)
+        #expect(UpdateChecker.sideStoreAddSourceURL(sourceURL: "ftp://goke.xeed.ink/altstore.json") == nil)
+        #expect(UpdateChecker.altStoreAddSourceURL(sourceURL: "not a url") == nil)
+    }
 }

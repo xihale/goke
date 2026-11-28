@@ -74,6 +74,24 @@ final class AppUpdateManager {
         #endif
     }
 
+    var sourceJSONURLString: String {
+        UpdateChecker.defaultSourceJSONURL
+    }
+
+    var sideStoreAddSourceURL: URL? {
+        UpdateChecker.sideStoreAddSourceURL(sourceURL: sourceJSONURLString)
+    }
+
+    var altStoreAddSourceURL: URL? {
+        UpdateChecker.altStoreAddSourceURL(sourceURL: sourceJSONURLString)
+    }
+
+    func copySourceURLToPasteboard() {
+        #if canImport(UIKit)
+        UIPasteboard.general.string = sourceJSONURLString
+        #endif
+    }
+
     init(
         defaults: UserDefaults = .standard,
         currentVersionProvider: @escaping @Sendable () -> String = { GokeAppVersion.displayVersion },

@@ -180,6 +180,8 @@ public struct AppUpdateInfo: Sendable, Equatable, Hashable, Codable {
 public enum UpdateChecker: Sendable {
     public static let githubReleasesAPIURLString = "https://api.github.com/repos/xihale/goke/releases?per_page=20"
     public static let githubReleasesPageURLString = "https://github.com/xihale/goke/releases"
+    public static let defaultSourceJSONURL = "https://goke.xeed.ink/altstore.json"
+    public static var defaultSideStoreSourceJSONURL: String { defaultSourceJSONURL }
     public static let iosTagPrefix = "ios-v"
 
     /// RFC 3986 unreserved characters safe in a single query parameter value without encoding.
@@ -253,16 +255,26 @@ public enum UpdateChecker: Sendable {
 
     /// Builds `sidestore://install?url=<encoded>` for direct SideStore installation.
     public static func sideStoreInstallURL(ipaURL: String) -> URL? {
-        sideloadInstallURL(scheme: "sidestore", ipaURL: ipaURL)
+        sideloadURL(scheme: "sidestore", action: "install", targetURL: ipaURL)
     }
 
     /// Builds `altstore://install?url=<encoded>` for direct AltStore installation.
     public static func altStoreInstallURL(ipaURL: String) -> URL? {
-        sideloadInstallURL(scheme: "altstore", ipaURL: ipaURL)
+        sideloadURL(scheme: "altstore", action: "install", targetURL: ipaURL)
     }
 
-    private static func sideloadInstallURL(scheme: String, ipaURL: String) -> URL? {
-        let trimmed = ipaURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Builds `sidestore://source?url=<encoded>` for 1-tap SideStore source subscription.
+    public static func sideStoreAddSourceURL(sourceURL: String = defaultSourceJSONURL) -> URL? {
+        sideloadURL(scheme: "sidestore", action: "source", targetURL: sourceURL)
+    }
+
+    /// Builds `altstore://source?url=<encoded>` for 1-tap AltStore source subscription.
+    public static func altStoreAddSourceURL(sourceURL: String = defaultSourceJSONURL) -> URL? {
+        sideloadURL(scheme: "altstore", action: "source", targetURL: sourceURL)
+    }
+
+    private static func sideloadURL(scheme: String, action: String, targetURL: String) -> URL? {
+        let trimmed = targetURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
               let parsed = URL(string: trimmed),
               let urlScheme = parsed.scheme?.lowercased(),
@@ -274,7 +286,7 @@ public enum UpdateChecker: Sendable {
         guard let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: queryValueAllowed) else {
             return nil
         }
-        return URL(string: "\(scheme)://install?url=\(encoded)")
+        return URL(string: "\(scheme)://\(action)?url=\(encoded)")
     }
 
     private static func selectIPAAsset(from assets: [GitHubAssetDTO]) -> GitHubAssetDTO? {
